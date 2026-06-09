@@ -1,0 +1,22 @@
+{
+  "name": "subsc-cli",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.5.2",
+    "cli-table3": "^0.6.5",
+    "commander": "^14.0.3",
+    "consola": "^3.4.2",
+    "fs": "^0.0.1-security",
+    "os": "^0.1.2",
+    "table": "^6.9.0",
+    "tsdown": "^0.22.2"
+  }
+}
