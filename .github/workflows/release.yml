@@ -19,6 +19,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Set package.json version
+        working-directory: ./subsc-cli
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           bun -e '
@@ -27,7 +28,10 @@ jobs:
             pkg.version = process.argv[1];
             fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
           ' "$VERSION"
+      - name: Install dependencies
+        working-directory: ./subsc-cli
+        run: bun install --frozen-lockfile
+      - name: Publish package
+        working-directory: ./subsc-cli
+        run: bun publish --access public
 
-      - run: bun install --frozen-lockfile
-
-      - run: bun publish --access public
