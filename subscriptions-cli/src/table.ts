@@ -1,6 +1,6 @@
 import Table from "cli-table3";
 import { consola } from "consola";
-import { type SharedArgs, getSubscriptions } from "./fs.ts";
+import { type SharedArgs, getSubscriptions } from "./basefs.ts";
 
 export const spreadSubscription = (): void => {
   const list = getSubscriptions();
