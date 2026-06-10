@@ -2,8 +2,8 @@ import Table from "cli-table3";
 import { consola } from "consola";
 import { type SharedArgs, getSubscriptions } from "./basefs.ts";
 
-export const spreadSubscription = (): void => {
-  const list = getSubscriptions();
+export const spreadSubscription = (get?: SharedArgs[]): void => {
+  const list = get ?? getSubscriptions();
 
   if (list.length === 0) {
     consola.info("No subscriptions found");
@@ -24,11 +24,11 @@ export const spreadSubscription = (): void => {
     ]);
   }
 
-  const jpytotal = list
+  const usdtotal = list
     .filter((n) => n.currency === "USD")
     .reduce((sum, n) => sum + n.price, 0);
 
-  const usdtotal = list
+  const jpytotal = list
     .filter((n) => n.currency === "JPY")
     .reduce((sum, n) => sum + n.price, 0);
 

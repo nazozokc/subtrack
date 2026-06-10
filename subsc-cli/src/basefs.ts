@@ -47,5 +47,6 @@ export const deleteSubscription = (id: number) => {
 
 export const tagsSubscription = (tags: string[]): SharedArgs[] => {
   const get = getSubscriptions();
-  const filter = get.filter((n) => n.tags === tags);
+  const output = get.filter((item) => tags.every((n) => item.tags.includes(n)));
+  return output;
 };

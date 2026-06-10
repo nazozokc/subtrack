@@ -6,6 +6,7 @@ import {
   deleteSubscription,
   getSubscriptions,
   writeSubscription,
+  tagsSubscription,
 } from "./basefs.ts";
 
 const runCLI = () => {
@@ -68,6 +69,14 @@ const runCLI = () => {
     .argument("<number>")
     .action((number) => {
       deleteSubscription(Number(number));
+    });
+
+  program
+    .command("tags")
+    .argument("<...text>")
+    .action((text) => {
+      const get = tagsSubscription(text);
+      spreadSubscription(get);
     });
 
   program.parse();
