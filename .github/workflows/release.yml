@@ -59,4 +59,4 @@ jobs:
 
       - name: Publish to npm
         working-directory: ./subsc-cli
-        run: bun publish 
+        run: npm publish 
