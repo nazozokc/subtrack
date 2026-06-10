@@ -29,14 +29,14 @@ jobs:
             fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
           ' "$VERSION"
 
-       - name: Install dependencies
+      - name: Install dependencies
          run: bun install --frozen-lockfile
          working-directory: ./subsc-cli
 
-       - name: Build
+      - name: Build
          run: bunx tsdown
          working-directory: ./subsc-cli
 
-       - name: Publish
+      - name: Publish
          run: bun publish --access public
          working-directory: ./subsc-cli
