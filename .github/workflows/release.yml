@@ -30,18 +30,11 @@ jobs:
         working-directory: ./subsc-cli
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-
-          node -e '
-            const fs = require("fs");
-            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-
-            pkg.version = process.argv[1];
-
-            fs.writeFileSync(
-              "package.json",
-              JSON.stringify(pkg, null, 2) + "\n"
-            );
-          ' "$VERSION"
+          node -e "const fs=require('fs');
+          const pkg=require('./package.json');
+          pkg.version='$VERSION';
+          fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2)+'\n');"
+          cat package.json
 
       - name: Install dependencies
         working-directory: ./subsc-cli
