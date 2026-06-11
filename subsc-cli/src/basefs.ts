@@ -10,6 +10,9 @@ export type SharedArgs = {
   tags: string[];
 };
 
+//Omit はSharedArgsからidだけ消した型
+export type AddSubscriptionArgs = Omit<SharedArgs, "id">;
+
 const dbdir = path.join(homedir(), ".config", "subsc-cli", "subscriptions.db");
 const db = new Database(dbdir);
 
