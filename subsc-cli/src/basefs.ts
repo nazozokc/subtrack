@@ -33,8 +33,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   );
 `);
 
-export const getSubscriptions = (): SharedArgs => {
-  return db.prepare("SELECT * FROM subscriptions").all();
+export const getSubscriptions = (): SharedArgs[] => {
+  return db.prepare("SELECT * FROM subscriptions").all() as SharedArgs[];
 };
 
 export const writeSubscription = (data: AddSharedArgs): void => {
