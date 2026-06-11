@@ -12,7 +12,7 @@ export type SharedArgs = {
 };
 
 //Omit はSharedArgsからidだけ消した型
-export type AddSubscriptionArgs = Omit<SharedArgs, "id">;
+export type AddSharedArgs = Omit<SharedArgs, "id">;
 
 const dbdir = path.join(homedir(), ".config", "subsc-cli", "subscriptions.db");
 
@@ -36,7 +36,7 @@ export const getSubscriptions = (): SharedArgs[] => {
   return db.prepare("SELECT * FROM subscriptions").all();
 };
 
-export const writeSubscription = (SharedArgs: SharedArgs[]): void => {
+export const writeSubscription = (SharedArgs: AddSharedArgs[]): void => {
   const int = db.prepare(`
     INSERT INTO subscriptions (name, price currency, cycle)
     VALUES (?, ?, ?, ?)
