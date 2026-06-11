@@ -17,7 +17,6 @@ export const spreadSubscription = (get?: SharedArgs[]): void => {
     table.push([
       String(sub.name),
       String(sub.cycle),
-      String(sub.tags.join(" | ")),
       sub.currency === "USD"
         ? String(`$${sub.price}`)
         : String(`\\${sub.price}`),
