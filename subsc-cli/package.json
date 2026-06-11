@@ -22,7 +22,6 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",
-    "better-sqlite3": "^12.10.0",
     "cli-table3": "^0.6.5",
     "commander": "^15.0.0",
     "consola": "^3.4.2",
