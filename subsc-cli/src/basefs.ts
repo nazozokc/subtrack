@@ -21,7 +21,7 @@ mkdirSync(dbdir, {
   recursive: true,
 });
 
-const db = new DatabaseSync(path.join(configDir, "subscriptions.db"));
+const db = new DatabaseSync(path.join(dbdir, "subscriptions.db"));
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS subscriptions (
