@@ -48,17 +48,3 @@ export const writeSubscription = (data: AddSharedArgs): void => {
 export const deleteSubscription = (id: number): void => {
   db.prepare(`DELETE FROM subscriptions WHERE id = ?`).run(id);
 };
-
-export const tagsSubscription = (tag: string): SharedArgs[] => {
-  const stmt = db.prepare(`
-    SELECT subscriptions.*
-    FROM subscriptions
-    JOIN subscription_tags
-      ON subscriptions.id = subscription_tags.subscription_id
-    JOIN tags
-      ON tags.id = subscription_tags.tag_id
-    WHERE tags.name = ?
-  `);
-
-  return stmt.all(tag) as SharedArgs[];
-};
