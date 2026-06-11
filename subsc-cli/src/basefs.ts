@@ -1,4 +1,4 @@
-import DatabaseSync from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 import path from "path";
 import { homedir } from "os";
 
