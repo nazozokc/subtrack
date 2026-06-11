@@ -51,17 +51,13 @@ const runCLI = () => {
       .map((tag) => tag.trim())
       .filter(Boolean);
 
-    const get = getSubscriptions();
-    get.push({
-      id: Math.max(0, ...get.map((s) => s.id)) + 1,
-      name: name,
+    addSubscription({
+      name,
       price: Number(price),
-      currency: currency,
-      cycle: cycle,
+      currency,
+      cycle,
       tags: tag,
     });
-
-    writeSubscription(get);
   });
 
   program

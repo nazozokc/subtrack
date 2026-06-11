@@ -3,7 +3,6 @@ import path from "path";
 import { homedir } from "os";
 
 export type SharedArgs = {
-  id: number;
   name: string;
   price: number;
   currency: "JPY" | "USD";
