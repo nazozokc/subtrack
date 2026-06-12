@@ -9,6 +9,7 @@ export type SharedArgs = {
   price: number;
   currency: "JPY" | "USD";
   cycle: "monthly" | "yearly";
+  tags: string[];
 };
 
 //Omit はSharedArgsからidだけ消した型
@@ -32,6 +33,28 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS tags (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS subscription_tags (
+  subscription_id INTEGER NOT NULL,
+  tag_id INTEGER NOT NULL,
+
+  PRIMARY KEY (subscription_id, tag_id),
+
+  FOREIGN KEY (subscription_id)
+    REFERENCES subscriptions(id),
+
+  FOREIGN KEY (tag_id)
+    REFERENCES tags(id)
+  );
+`);
+
 export const getSubscriptions = (): SharedArgs[] => {
   return db.prepare("SELECT * FROM subscriptions").all() as SharedArgs[];
 };
@@ -47,4 +70,22 @@ export const writeSubscription = (data: AddSharedArgs): void => {
 
 export const deleteSubscription = (id: number): void => {
   db.prepare(`DELETE FROM subscriptions WHERE id = ?`).run(id);
+};
+
+export const tagsSubscription = (tag: string[]): SharedArgs[] => {
+  const placeholders = tag.map(() => "?").join(",");
+
+  const stmt = db.prepare(`
+    SELECT subscriptions.*
+    FROM subscriptions
+    JOIN subscription_tags
+      ON subscriptions.id = subscription_tags.subscription_id
+    JOIN tags
+      ON tags.id = subscription_tags.tag_id
+    WHERE tags.name IN (${placeholders})
+    GROUP BY subscriptions.id
+    HAVING COUNT(DISTINCT tags.name) = ?
+  `);
+
+  return stmt.all(...tag, tag.length) as SharedArgs[];
 };

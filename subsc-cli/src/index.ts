@@ -6,6 +6,7 @@ import {
   deleteSubscription,
   getSubscriptions,
   writeSubscription,
+  tagsSubscription,
 } from "./basefs.ts";
 
 const runCLI = () => {
@@ -41,11 +42,21 @@ const runCLI = () => {
       ],
     });
 
+    const tagsInput = await input({
+      message: "tags",
+    });
+
+    const tag = tagsInput
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
     writeSubscription({
       name,
       price: Number(price),
       currency,
       cycle,
+      tag,
     });
   });
 
@@ -56,6 +67,13 @@ const runCLI = () => {
       deleteSubscription(Number(number));
     });
 
+  program
+    .command("tags")
+    .argument("<...taglist>")
+    .action((taglist) => {
+      const list = tagsSubscription(taglist);
+      spreadSubscription(list);
+    });
   program.parse();
 };
 
