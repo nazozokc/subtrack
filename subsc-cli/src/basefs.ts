@@ -72,8 +72,10 @@ export const deleteSubscription = (id: number): void => {
   db.prepare(`DELETE FROM subscriptions WHERE id = ?`).run(id);
 };
 
-export const tagsSubscription = (tag: string[]): SharedArgs[] => {
-  const placeholders = tag.map(() => "?").join(",");
+export const tagsSubscription = (tag: string[] | string) => {
+  const tags = Array.isArray(tag) ? tag : [tag];
+
+  const placeholders = tags.map(() => "?").join(",");
 
   const stmt = db.prepare(`
     SELECT subscriptions.*
@@ -87,5 +89,5 @@ export const tagsSubscription = (tag: string[]): SharedArgs[] => {
     HAVING COUNT(DISTINCT tags.name) = ?
   `);
 
-  return stmt.all(...tag, tag.length) as SharedArgs[];
+  return stmt.all(...tags, tags.length) as SharedArgs[];
 };

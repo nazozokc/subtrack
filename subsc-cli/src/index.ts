@@ -71,9 +71,9 @@ const runCLI = () => {
     .command("tags")
     .argument("<taglist...>")
     .action((taglist) => {
-      const list = tagsSubscription(taglist);
-      spreadSubscription(list);
+      console.log(taglist, Array.isArray(taglist));
     });
+
   program.parse();
 };
 
