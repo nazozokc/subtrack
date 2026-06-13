@@ -4,7 +4,6 @@ import { input, select } from "@inquirer/prompts";
 import { spreadSubscription } from "./table.ts";
 import {
   deleteSubscription,
-  getSubscriptions,
   writeSubscription,
   tagsSubscription,
 } from "./basefs.ts";
@@ -23,22 +22,28 @@ const runCLI = () => {
     });
 
     const price = await input({
-      message: "payment subscribe service",
+      message: "monthly payment amount",
+      validate: (value) => {
+        if (isNaN(Number(value)) || Number(value) < 0) {
+          return "Please enter a valid positive number";
+        }
+        return true;
+      },
     });
 
     const currency = await select({
       message: "currency",
       choices: [
-        { label: "JPY", value: "JPY" },
-        { label: "USD", value: "USD" },
+        { name: "JPY", value: "JPY" },
+        { name: "USD", value: "USD" },
       ],
     });
 
     const cycle = await select({
       message: "cycle",
       choices: [
-        { label: "monthly", value: "monthly" },
-        { label: "yearly", value: "yearly" },
+        { name: "monthly", value: "monthly" },
+        { name: "yearly", value: "yearly" },
       ],
     });
 
