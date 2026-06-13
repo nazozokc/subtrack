@@ -18,7 +18,7 @@ jobs:
   test:
     strategy:
       matrix:
-        node-version: [20, 22, 23]
+        node-version: [22, 23]
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
 
