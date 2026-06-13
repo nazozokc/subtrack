@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { input, select, checkbox } from "@inquirer/prompts";
+import { input, select } from "@inquirer/prompts"
 import { spreadSubscription } from "./table.ts";
 import {
   deleteSubscription,
-  getSubscriptions,
   writeSubscription,
   tagsSubscription,
 } from "./basefs.ts";
@@ -23,22 +22,31 @@ const runCLI = () => {
     });
 
     const price = await input({
-      message: "payment subscribe service",
+      message: "monthly payment amount",
+      validate: (value) => {
+        if (value.trim() === "") {
+          return "Please enter a valid number";
+        }
+        if (isNaN(Number(value)) || Number(value) < 0) {
+          return "Please enter a valid non-negative number";
+        }
+        return true;
+      },
     });
 
     const currency = await select({
       message: "currency",
       choices: [
-        { label: "JPY", value: "JPY" },
-        { label: "USD", value: "USD" },
+        { name: "JPY", value: "JPY" },
+        { name: "USD", value: "USD" },
       ],
     });
 
     const cycle = await select({
       message: "cycle",
       choices: [
-        { label: "monthly", value: "monthly" },
-        { label: "yearly", value: "yearly" },
+        { name: "monthly", value: "monthly" },
+        { name: "yearly", value: "yearly" },
       ],
     });
 
@@ -51,17 +59,13 @@ const runCLI = () => {
       .map((tag) => tag.trim())
       .filter(Boolean);
 
-    const get = getSubscriptions();
-    get.push({
-      id: Math.max(0, ...get.map((s) => s.id)) + 1,
-      name: name,
+    writeSubscription({
+      name,
       price: Number(price),
-      currency: currency,
-      cycle: cycle,
+      currency,
+      cycle,
       tags: tag,
     });
-
-    writeSubscription(get);
   });
 
   program
@@ -73,10 +77,10 @@ const runCLI = () => {
 
   program
     .command("tags")
-    .argument("<...text>")
-    .action((text) => {
-      const get = tagsSubscription(text);
-      spreadSubscription(get);
+    .argument("<taglist...>")
+    .action((taglist) => {
+      const list = tagsSubscription(taglist);
+      spreadSubscription(list);
     });
 
   program.parse();

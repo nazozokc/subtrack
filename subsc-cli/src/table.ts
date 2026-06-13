@@ -17,10 +17,10 @@ export const spreadSubscription = (get?: SharedArgs[]): void => {
     table.push([
       String(sub.name),
       String(sub.cycle),
-      String(sub.tags.join(" | ")),
+      sub.tags.length > 0 ? sub.tags.join(", ") : "-",
       sub.currency === "USD"
         ? String(`$${sub.price}`)
-        : String(`\\${sub.price}`),
+        : String(`¥${sub.price}`),
     ]);
   }
 
@@ -33,7 +33,7 @@ export const spreadSubscription = (get?: SharedArgs[]): void => {
     .reduce((sum, n) => sum + n.price, 0);
 
   table.push(
-    ["", "", "JPY TOTAL", `\\${jpytotal}`],
+    ["", "", "JPY TOTAL", `¥${jpytotal}`],
     ["", "", "USD TOTAL", `$${usdtotal}`],
   );
 
