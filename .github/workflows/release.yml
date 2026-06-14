@@ -27,7 +27,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Set package.json version from release tag
-        working-directory: ./subsc-cli
+        working-directory: ./subtrack
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           node -e "const fs=require('fs');
@@ -37,19 +37,19 @@ jobs:
           cat package.json
 
       - name: Install dependencies
-        working-directory: ./subsc-cli
+        working-directory: ./subtrack
         run: bun install --frozen-lockfile
 
       - name: Build
-        working-directory: ./subsc-cli
+        working-directory: ./subtrack
         run: bunx tsdown
 
       - name: Verify build output
-        working-directory: ./subsc-cli
+        working-directory: ./subtrack
         run: |
           test -f dist/index.mjs
           ls -R dist
 
       - name: Publish to npm
-        working-directory: ./subsc-cli
+        working-directory: ./subtrack
         run: npm publish 
