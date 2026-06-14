@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { input, select } from "@inquirer/prompts"
+import { input, select } from "@inquirer/prompts";
 import { spreadSubscription } from "./table.ts";
 import {
   deleteSubscription,
@@ -10,7 +10,7 @@ import {
 
 const runCLI = () => {
   const program = new Command();
-  program.name("subsc-cli");
+  program.name("subtrack");
 
   program.command("list").action(() => {
     spreadSubscription();
