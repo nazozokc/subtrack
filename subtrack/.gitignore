@@ -1,7 +1,5 @@
 # dependencies
 node_modules
-bun.lock
-bun.lockb
 
 # output
 out
