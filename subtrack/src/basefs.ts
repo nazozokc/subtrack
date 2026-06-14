@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
-import { mkdirSync, existsSync } from "node:fs";
-import path from "node:path";
-import { homedir } from "node:os";
+import { mkdirSync, existsSync } from "fs";
+import path from "path";
+import { homedir } from "os";
 import { consola } from "consola";
 
 export type SharedArgs = {
