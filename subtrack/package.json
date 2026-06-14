@@ -1,6 +1,6 @@
 {
   "name": "subtrack",
-  "version": "0.3.3",
+  "version": "1.0.1",
   "type": "module",
   "license": "MIT",
   "packageManager": "pnpm@11.5.1",
