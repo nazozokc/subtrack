@@ -3,25 +3,42 @@ import { consola } from "consola"
 import { spreadSubscription } from "./table"
 import type { SharedArgs } from "./basefs"
 
-const logMessages: string[] = [];
-const infoMessages: string[] = [];
+const logMessages: string[] = []
+const infoMessages: string[] = []
+const errorMessages: string[] = []
+
+let originalFetch: typeof globalThis.fetch
 
 beforeEach(() => {
-  logMessages.length = 0;
-  infoMessages.length = 0;
+  logMessages.length = 0
+  infoMessages.length = 0
+  errorMessages.length = 0
 
   consola.mockTypes((_type: string, _defaults: object) => {
     return (...args: unknown[]) => {
-      const str = args.map((a) => String(a)).join(" ");
-      if (_type === "log") logMessages.push(str);
-      if (_type === "info") infoMessages.push(str);
-    };
-  });
-});
+      const str = args.map((a) => String(a)).join(" ")
+      if (_type === "log") logMessages.push(str)
+      if (_type === "info") infoMessages.push(str)
+      if (_type === "error") errorMessages.push(str)
+    }
+  })
+
+  originalFetch = globalThis.fetch
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        base: "USD",
+        target: "JPY",
+        rate: 160,
+        timestamp: "2026-06-15T00:00:00Z",
+      }),
+    )
+})
 
 afterEach(() => {
-  consola.mockTypes();
-});
+  consola.mockTypes()
+  globalThis.fetch = originalFetch
+})
 
 function makeSub(overrides: Partial<SharedArgs> = {}): SharedArgs {
   return {
@@ -35,111 +52,200 @@ function makeSub(overrides: Partial<SharedArgs> = {}): SharedArgs {
   }
 }
 
-test("shows info message when no subscriptions", () => {
-  spreadSubscription([]);
-  expect(infoMessages).toContain("No subscriptions found");
-  expect(logMessages).toHaveLength(0);
-});
+test("shows info message when no subscriptions", async () => {
+  await spreadSubscription([])
+  expect(infoMessages).toContain("No subscriptions found")
+  expect(logMessages).toHaveLength(0)
+})
 
-test("displays table with single subscription", () => {
-  spreadSubscription([makeSub({ name: "Netflix", price: 1500 })]);
+test("displays table with single subscription", async () => {
+  await spreadSubscription([makeSub({ name: "Netflix", price: 1500 })])
 
-  expect(logMessages).toHaveLength(1);
-  const table = logMessages[0];
-  expect(table).toContain("Netflix");
-  expect(table).toContain("¥1500");
-  expect(table).toContain("monthly");
-  expect(table).toContain("JPY TOTAL");
-  expect(table).toContain("USD TOTAL");
-});
+  expect(logMessages).toHaveLength(1)
+  const table = logMessages[0]
+  expect(table).toContain("Netflix")
+  expect(table).toContain("¥1500")
+  expect(table).toContain("monthly")
+  expect(table).toContain("JPY TOTAL")
+  expect(table).toContain("USD TOTAL")
+})
 
-test("displays table with JPY currency symbol", () => {
-  spreadSubscription([
+test("displays table with JPY currency symbol", async () => {
+  await spreadSubscription([
     makeSub({ name: "iCloud+", price: 400, currency: "JPY" }),
-  ]);
+  ])
 
-  const table = logMessages[0];
-  expect(table).toContain("¥400");
-});
+  const table = logMessages[0]
+  expect(table).toContain("¥400")
+})
 
-test("displays table with USD currency symbol", () => {
-  spreadSubscription([
+test("displays table with USD currency symbol", async () => {
+  await spreadSubscription([
     makeSub({ name: "GitHub", price: 10, currency: "USD" }),
-  ]);
+  ])
 
-  const table = logMessages[0];
-  expect(table).toContain("$10");
-});
+  const table = logMessages[0]
+  expect(table).toContain("$10")
+})
 
-test("displays tags column", () => {
-  spreadSubscription([
+test("displays tags column", async () => {
+  await spreadSubscription([
     makeSub({ name: "Netflix", tags: ["video", "entertainment"] }),
-  ]);
+  ])
 
-  const table = logMessages[0];
-  expect(table).toContain("video, entertainment");
-});
+  const table = logMessages[0]
+  expect(table).toContain("video, entertainment")
+})
 
-test("displays dash when no tags", () => {
-  spreadSubscription([makeSub({ name: "Dropbox", tags: [] })]);
+test("displays dash when no tags", async () => {
+  await spreadSubscription([makeSub({ name: "Dropbox", tags: [] })])
 
-  const table = logMessages[0];
-  expect(table).toContain("Dropbox");
-  expect(table).toContain("-");
-});
+  const table = logMessages[0]
+  expect(table).toContain("Dropbox")
+  expect(table).toContain("-")
+})
 
-test("shows correct JPY total", () => {
-  spreadSubscription([
+test("shows correct JPY total", async () => {
+  await spreadSubscription([
     makeSub({ name: "A", price: 500, currency: "JPY" }),
     makeSub({ name: "B", price: 1500, currency: "JPY" }),
-  ]);
+  ])
 
-  const table = logMessages[0];
-  expect(table).toContain("¥2000");
-  expect(table).toContain("$0");
-});
+  const table = logMessages[0]
+  expect(table).toContain("¥2000")
+  expect(table).toContain("$0")
+})
 
-test("shows correct USD total", () => {
-  spreadSubscription([
+test("shows correct USD total", async () => {
+  await spreadSubscription([
     makeSub({ name: "A", price: 10, currency: "USD" }),
     makeSub({ name: "B", price: 20, currency: "USD" }),
-  ]);
+  ])
 
-  const table = logMessages[0];
-  expect(table).toContain("$30");
-  expect(table).toContain("¥0");
-});
+  const table = logMessages[0]
+  expect(table).toContain("$30")
+  expect(table).toContain("¥0")
+})
 
-test("shows mixed currency totals correctly", () => {
-  spreadSubscription([
+test("shows mixed currency totals correctly", async () => {
+  await spreadSubscription([
     makeSub({ name: "JP", price: 1000, currency: "JPY" }),
     makeSub({ name: "US", price: 15, currency: "USD" }),
-  ]);
+  ])
 
-  const table = logMessages[0];
-  expect(table).toContain("¥1000");
-  expect(table).toContain("$15");
-});
+  const table = logMessages[0]
+  expect(table).toContain("¥1000")
+  expect(table).toContain("$15")
+})
 
-test("shows yearly cycle", () => {
-  spreadSubscription([makeSub({ name: "Annual", cycle: "yearly" })]);
+test("shows yearly cycle", async () => {
+  await spreadSubscription([makeSub({ name: "Annual", cycle: "yearly" })])
 
-  const table = logMessages[0];
-  expect(table).toContain("yearly");
-});
+  const table = logMessages[0]
+  expect(table).toContain("yearly")
+})
 
-test("displays multiple subscriptions", () => {
+test("displays multiple subscriptions", async () => {
   const subs = [
     makeSub({ id: 1, name: "A", price: 10, currency: "USD", tags: ["x"] }),
     makeSub({ id: 2, name: "B", price: 20, currency: "USD", tags: ["y"] }),
     makeSub({ id: 3, name: "C", price: 30, currency: "USD", tags: ["z"] }),
-  ];
+  ]
 
-  spreadSubscription(subs);
+  await spreadSubscription(subs)
 
-  const table = logMessages[0];
-  expect(table).toContain("A");
-  expect(table).toContain("B");
-  expect(table).toContain("C");
-  expect(table).toContain("$60");
-});
+  const table = logMessages[0]
+  expect(table).toContain("A")
+  expect(table).toContain("B")
+  expect(table).toContain("C")
+  expect(table).toContain("$60")
+})
+
+// --- --currency filter tests ---
+
+test("currency JPY converts USD prices and shows single total", async () => {
+  await spreadSubscription(
+    [
+      makeSub({ name: "Local", price: 1000, currency: "JPY" }),
+      makeSub({ name: "Foreign", price: 10, currency: "USD" }),
+    ],
+    "JPY",
+  )
+
+  const table = logMessages[0]
+  // JPY 1000 stays 1000
+  expect(table).toContain("￥1,000")
+  // USD 10 × 160 = 1600
+  expect(table).toContain("￥1,600")
+  // Single JPY TOTAL
+  expect(table).toContain("JPY TOTAL")
+  expect(table).toContain("￥2,600")
+  // No USD TOTAL
+  expect(table).not.toContain("USD TOTAL")
+})
+
+test("currency USD converts JPY prices and shows single total", async () => {
+  await spreadSubscription(
+    [
+      makeSub({ name: "Local", price: 10, currency: "USD" }),
+      makeSub({ name: "Foreign", price: 1600, currency: "JPY" }),
+    ],
+    "USD",
+  )
+
+  const table = logMessages[0]
+  // USD 10 stays 10
+  expect(table).toContain("$10.00")
+  // JPY 1600 → 1600 / 160 = 10
+  expect(table).toContain("$10.00")
+  // Single USD TOTAL
+  expect(table).toContain("USD TOTAL")
+  // No JPY TOTAL
+  expect(table).not.toContain("JPY TOTAL")
+})
+
+test("currency JPY with all JPY items shows correctly", async () => {
+  await spreadSubscription(
+    [
+      makeSub({ name: "A", price: 500, currency: "JPY" }),
+      makeSub({ name: "B", price: 1500, currency: "JPY" }),
+    ],
+    "JPY",
+  )
+
+  const table = logMessages[0]
+  expect(table).toContain("￥500")
+  expect(table).toContain("￥1,500")
+  expect(table).toContain("￥2,000")
+  expect(table).not.toContain("USD TOTAL")
+})
+
+test("currency falls back when fetch fails", async () => {
+  globalThis.fetch = async () => {
+    throw new Error("Network error")
+  }
+
+  await spreadSubscription(
+    [
+      makeSub({ name: "JP", price: 1000, currency: "JPY" }),
+      makeSub({ name: "US", price: 15, currency: "USD" }),
+    ],
+    "JPY",
+  )
+
+  // Should log error
+  expect(errorMessages.length).toBeGreaterThan(0)
+  expect(errorMessages[0]).toContain("Failed to fetch exchange rate")
+
+  // Should fall back to original separate display
+  const table = logMessages[0]
+  expect(table).toContain("¥1000")
+  expect(table).toContain("$15")
+  expect(table).toContain("JPY TOTAL")
+  expect(table).toContain("USD TOTAL")
+})
+
+test("currency with empty list shows info", async () => {
+  await spreadSubscription([], "JPY")
+  expect(infoMessages).toContain("No subscriptions found")
+})

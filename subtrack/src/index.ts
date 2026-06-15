@@ -12,9 +12,15 @@ const runCLI = () => {
   const program = new Command();
   program.name("subtrack");
 
-  program.command("list").action(() => {
-    spreadSubscription();
-  });
+  program
+    .command("list")
+    .option("-c, --currency <currency>", 'filter by currency (JPY|USD)')
+    .action(async (options) => {
+      await spreadSubscription(
+        undefined,
+        options.currency as "JPY" | "USD" | undefined,
+      );
+    });
 
   program.command("add").action(async () => {
     const name = await input({
@@ -78,9 +84,9 @@ const runCLI = () => {
   program
     .command("tags")
     .argument("<taglist...>")
-    .action((taglist) => {
+    .action(async (taglist) => {
       const list = tagsSubscription(taglist);
-      spreadSubscription(list);
+      await spreadSubscription(list);
     });
 
   program.parse();
