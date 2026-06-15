@@ -1,20 +1,18 @@
-name: CI
+name: app-ci
 
 on:
   push:
     branches: [main]
     paths:
       - "subtrack/**"
-      - "docs/**"
-      - ".github/workflows/**"
+      - ".github/workflows/app-ci.yml"
       - "pnpm-workspace.yaml"
       - "package.json"
   pull_request:
     branches: [main]
     paths:
       - "subtrack/**"
-      - "docs/**"
-      - ".github/workflows/**"
+      - ".github/workflows/app-ci.yml"
       - "pnpm-workspace.yaml"
       - "package.json"
 
