@@ -17,8 +17,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,11 +40,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./subtrack
-        run: bun install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         working-directory: ./subtrack
-        run: bunx tsdown
+        run: pnpm build
 
       - name: Verify build output
         working-directory: ./subtrack
