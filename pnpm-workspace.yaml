@@ -1,0 +1,7 @@
+packages:
+  - "subtrack"
+  - "docs"
+
+allowBuilds:
+  '0': esbuild
+  esbuild: true
