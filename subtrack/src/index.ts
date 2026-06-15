@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { input, select, confirm, checkbox } from "@inquirer/prompts";
+import { input, select, search, confirm, checkbox } from "@inquirer/prompts";
 import { consola } from "consola";
 import type { Currency, Cycle } from "./basefs.ts";
 import { spreadSubscription, formatPrice } from "./table.ts";
@@ -103,6 +103,7 @@ async function promptSelect<T extends string>(
   message: string,
   choices: { name: string; value: T }[],
   isValid: (v: string) => v is T,
+  opts?: { searchable?: boolean },
 ): Promise<{ value: T; prompted: boolean } | null> {
   if (flag !== undefined) {
     if (!isValid(flag)) {
@@ -111,6 +112,25 @@ async function promptSelect<T extends string>(
     }
     return { value: flag, prompted: false }
   }
+
+  if (opts?.searchable) {
+    const value = await search<T>({
+      message,
+      source: async (term) => {
+        if (!term) return choices.map((c) => ({ name: c.name, value: c.value }))
+        const lower = term.toLowerCase()
+        return choices
+          .filter((c) =>
+            c.name.toLowerCase().includes(lower)
+            || c.value.toLowerCase().includes(lower),
+          )
+          .map((c) => ({ name: c.name, value: c.value }))
+      },
+      pageSize: Math.min(choices.length, 10),
+    })
+    return { value, prompted: true }
+  }
+
   return { value: await select({ message, choices }), prompted: true }
 }
 
@@ -124,7 +144,7 @@ async function resolveAddOptions(flags: AddFlags) {
   if (!priceRes) return null
 
   const currencyRes = await promptSelect(
-    flags.currency, "currency", CURRENCY_CHOICES, isValidCurrency,
+    flags.currency, "currency", CURRENCY_CHOICES, isValidCurrency, { searchable: true },
   )
   if (!currencyRes) return null
 
