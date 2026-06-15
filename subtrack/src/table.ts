@@ -1,12 +1,11 @@
-import { consola } from "consola";
-import { type SharedArgs, type Currency, getSubscriptions } from "./basefs.ts";
+import { consola } from "consola"
+import CliTable3 from "cli-table3"
+import { type SharedArgs, type Currency, getSubscriptions } from "./basefs.ts"
 
 type FxRates = {
   base: string
   rates: Record<string, number>
 }
-
-type RowData = [string, string, string, string]
 
 async function fetchFxRates(): Promise<FxRates> {
   const res = await fetch("https://open.er-api.com/v6/latest/USD")
@@ -42,7 +41,7 @@ export function formatPrice(price: number, currency: string): string {
   }).format(price)
 }
 
-function buildRow(sub: SharedArgs, price: string): RowData {
+function buildRow(sub: SharedArgs, price: string): [string, string, string, string] {
   return [
     String(sub.name),
     String(sub.cycle),
@@ -51,45 +50,12 @@ function buildRow(sub: SharedArgs, price: string): RowData {
   ]
 }
 
-function displayWidth(s: string): number {
-  return s.replace(/\x1b\[[0-9;]*m/g, "").length
-}
-
 const HEADERS = ["name", "cycle", "tags", "price"] as const
 const MIN_WIDTHS = [10, 6, 8, 8] as const
 const MAX_WIDTHS = [40, 20, 60, 20] as const
 const BORDER_AND_PADDING = 13
 
-function wrapCell(text: string, width: number): string[] {
-  const dw = displayWidth(text)
-  if (dw === 0) return [""]
-  if (dw <= width) return [text]
-
-  const lines: string[] = []
-  let remaining = text
-
-  while (remaining.length > 0) {
-    if (remaining.length <= width) {
-      lines.push(remaining)
-      break
-    }
-
-    const slice = remaining.slice(0, width)
-    const sp = slice.lastIndexOf(" ")
-
-    if (sp > 0) {
-      lines.push(remaining.slice(0, sp))
-      remaining = remaining.slice(sp + 1)
-    } else {
-      lines.push(slice)
-      remaining = remaining.slice(width)
-    }
-  }
-
-  return lines
-}
-
-function calcColumnWidths(rows: RowData[]): number[] {
+function calcColumnWidths(rows: string[][]): number[] {
   const termWidth = process.stdout.columns ?? 80
   const avail = Math.max(40, termWidth - BORDER_AND_PADDING)
 
@@ -138,63 +104,53 @@ function calcColumnWidths(rows: RowData[]): number[] {
   return widths
 }
 
-function renderTable(rows: RowData[]): string {
+function renderTable(rows: string[][]): string {
   const widths = calcColumnWidths(rows)
 
-  // ── Render ──────────────────────────────────────────
-  const PAD = 1
-  const [H, V] = ["─", "│"]
-  const [tl, tm, tr] = ["┌", "┬", "┐"]
-  const [ml, mm, mr] = ["├", "┼", "┤"]
-  const [bl, bm, br] = ["└", "┴", "┘"]
+  const table = new CliTable3({
+    chars: {
+      top: "─",
+      "top-mid": "┬",
+      "top-left": "┌",
+      "top-right": "┐",
+      bottom: "─",
+      "bottom-mid": "┴",
+      "bottom-left": "└",
+      "bottom-right": "┘",
+      left: "│",
+      "left-mid": "├",
+      mid: "─",
+      "mid-mid": "┼",
+      right: "│",
+      "right-mid": "┤",
+      middle: "│",
+    },
+    style: {
+      border: ["\x1b[90m", "\x1b[0m"],
+      head: ["\x1b[1;36m", "\x1b[0m"],
+      "padding-left": 1,
+      "padding-right": 1,
+      compact: false,
+    },
+    colWidths: widths,
+    head: [...HEADERS],
+    wordWrap: true,
+    wrapOnWordBoundary: true,
+    colAligns: ["left", "left", "left", "right"],
+  })
 
-  function border(l: string, m: string, r: string): string {
-    const line = l + widths.map((w) => H.repeat(w + PAD * 2)).join(m) + r
-    return `\x1b[90m${line}\x1b[0m`
-  }
-
-  function dataRow(row: string[]): string[] {
-    const wrapped = row.map((text, i) => wrapCell(text, widths[i]))
-    const maxLines = Math.max(...wrapped.map((w) => w.length))
-    const lines: string[] = []
-
-    for (let li = 0; li < maxLines; li++) {
-      const parts: string[] = [V]
-      for (let ci = 0; ci < row.length; ci++) {
-        const text = wrapped[ci][li] ?? ""
-        parts.push(
-          " ".repeat(PAD),
-          ci === 3 ? text.padStart(widths[ci]) : text.padEnd(widths[ci]),
-          " ".repeat(PAD),
-          V,
-        )
-      }
-      lines.push(parts.join(""))
-    }
-
-    return lines
-  }
-
-  const out: string[] = []
-  out.push(border(tl, tm, tr))
-  out.push(...dataRow(HEADERS.map((h) => `\x1b[1;36m${h}\x1b[0m`)))
-  out.push(border(ml, mm, mr))
-
-  let totalSeparatorAdded = false
   for (const row of rows) {
     const isTotal = row[2].endsWith("TOTAL")
-    if (isTotal && !totalSeparatorAdded) {
-      out.push(border(ml, mm, mr))
-      totalSeparatorAdded = true
+    if (isTotal) {
+      table.push(row.map((cell, i) =>
+        i === 2 ? `\x1b[1m${cell}\x1b[0m` : cell,
+      ))
+    } else {
+      table.push(row)
     }
-    const renderRow = isTotal
-      ? row.map((cell, i) => (i === 2 ? `\x1b[1m${cell}\x1b[0m` : cell))
-      : row
-    out.push(...dataRow(renderRow))
   }
 
-  out.push(border(bl, bm, br))
-  return out.join("\n")
+  return table.toString()
 }
 
 export const spreadSubscription = async (
@@ -208,15 +164,15 @@ export const spreadSubscription = async (
     return
   }
 
-  const rows: RowData[] = []
+  const rows: string[][] = []
 
   if (currency) {
     // --currency specified: fetch rates and convert all to the target currency
     let rates: FxRates | null = null
     try {
-      consola.start("Fetching exchange rates...")
+      consola.info("Fetching the latest exchange rates...")
       rates = await fetchFxRates()
-      consola.success("Exchange rates fetched")
+      consola.success("Exchange rates updated")
     } catch (e) {
       consola.fail(`Failed to fetch exchange rates: ${e}`)
     }
@@ -269,7 +225,7 @@ export const spreadSubscription = async (
   const groupEntries = Object.entries(groups)
   for (let i = 0; i < groupEntries.length; i++) {
     const [currencyCode, subs] = groupEntries[i]
-    const groupRows: RowData[] = []
+    const groupRows: string[][] = []
 
     let total = 0
     for (const sub of subs) {
