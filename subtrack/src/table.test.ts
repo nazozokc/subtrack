@@ -134,7 +134,7 @@ test("shows mixed currency totals correctly", async () => {
     makeSub({ name: "US", price: 15, currency: "USD" }),
   ])
 
-  const table = logMessages[0]
+  const table = logMessages.filter(Boolean).join("\n")
   expect(table).toContain("¥1,000")
   expect(table).toContain("JPY TOTAL")
   expect(table).toContain("$15")
@@ -241,8 +241,8 @@ test("currency falls back when fetch fails", async () => {
   expect(failMessages.length).toBeGreaterThan(0)
   expect(failMessages[0]).toContain("Failed to fetch exchange rates")
 
-  // Should fall back to original separate display
-  const table = logMessages[0]
+  // Should fall back to grouped-by-currency display
+  const table = logMessages.filter(Boolean).join("\n")
   expect(table).toContain("¥1,000")
   expect(table).toContain("$15")
   expect(table).toContain("JPY TOTAL")

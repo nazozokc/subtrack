@@ -110,14 +110,6 @@ export function __setDb(db: Database): void {
   _dbPath = ""
 }
 
-// For testing: reset to use file DB
-export function __resetDb(): void {
-  if (_db) {
-    _db.close()
-    _db = null
-  }
-}
-
 function mapTags(subs: SharedArgs[]): SharedArgs[] {
   if (subs.length === 0) return subs
 
@@ -161,8 +153,9 @@ export const writeSubscription = (data: AddSharedArgs): void => {
       [data.name, data.price, data.currency, data.cycle],
     )
 
-    const idResult = execObj<Record<string, SqlValue>>(db, "SELECT last_insert_rowid() AS id")
-    const subscriptionId = Number(idResult!.id)
+    const idRow = execObj<Record<string, SqlValue>>(db, "SELECT last_insert_rowid() AS id")
+    if (!idRow) throw new Error("Failed to get last insert id")
+    const subscriptionId = Number(idRow.id)
 
     for (const t of uniqueTags) {
       db.run("INSERT OR IGNORE INTO tags (name) VALUES (?)", [t])

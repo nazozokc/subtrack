@@ -50,126 +50,109 @@ function isValidCycle(v: string): v is Cycle {
   return CYCLE_CHOICES.some((c) => c.value === v)
 }
 
+// ── Validators ──────────────────────────────────────────
+
+function validateName(v: string): string | true {
+  if (!v.trim()) return "Name cannot be empty"
+  if (v.length > 100) return "Name too long (max 100 chars)"
+  return true
+}
+
+function validatePrice(v: string): string | true {
+  if (!v.trim()) return "Please enter a valid number"
+  if (isNaN(Number(v)) || Number(v) < 0)
+    return "Please enter a valid non-negative number"
+  if (Number(v) > 99999999) return "Price too high (max 99,999,999)"
+  return true
+}
+
+function validateTags(v: string): string | true {
+  if (!v.trim()) return true
+  const tags = v.split(",").map((t) => t.trim()).filter(Boolean)
+  if (tags.length > 10) return "Maximum 10 tags allowed"
+  for (const tag of tags) {
+    if (tag.length > 50) return `Tag too long: "${tag}" (max 50 chars)`
+  }
+  return true
+}
+
+// ── Reusable prompt-or-flag helpers ─────────────────────
+
+async function promptString(
+  flag: string | undefined,
+  message: string,
+  validate: (v: string) => string | true,
+): Promise<{ value: string; prompted: boolean } | null> {
+  if (flag !== undefined) {
+    const result = validate(flag)
+    if (result !== true) {
+      consola.error(result)
+      return null
+    }
+    return { value: flag, prompted: false }
+  }
+  return { value: await input({ message, validate }), prompted: true }
+}
+
+function validChoices<T>(choices: { value: T }[]): string {
+  return choices.map((c) => c.value).join(", ")
+}
+
+async function promptSelect<T extends string>(
+  flag: string | undefined,
+  message: string,
+  choices: { name: string; value: T }[],
+  isValid: (v: string) => v is T,
+): Promise<{ value: T; prompted: boolean } | null> {
+  if (flag !== undefined) {
+    if (!isValid(flag)) {
+      consola.error(`Invalid "${flag}". Valid: ${validChoices(choices)}`)
+      return null
+    }
+    return { value: flag, prompted: false }
+  }
+  return { value: await select({ message, choices }), prompted: true }
+}
+
+// ── Add logic ───────────────────────────────────────────
+
 async function resolveAddOptions(flags: AddFlags) {
-  let prompted = false
+  const nameRes = await promptString(flags.name, "subscription name", validateName)
+  if (!nameRes) return null
 
-  // --- name ---
-  let name = flags.name
-  if (name === undefined) {
-    prompted = true
-    name = await input({
-      message: "subscription name",
-      validate: (v) => {
-        if (!v.trim()) return "Name cannot be empty"
-        if (v.length > 100) return "Name too long (max 100 chars)"
-        return true
-      },
-    })
-  } else {
-    if (!name.trim()) {
-      consola.error("Name cannot be empty")
-      return null
-    }
-    if (name.length > 100) {
-      consola.error("Name too long (max 100 chars)")
-      return null
-    }
-  }
+  const priceRes = await promptString(flags.price, "monthly payment amount", validatePrice)
+  if (!priceRes) return null
 
-  // --- price ---
-  let priceStr = flags.price
-  if (priceStr === undefined) {
-    prompted = true
-    priceStr = await input({
-      message: "monthly payment amount",
-      validate: (v) => {
-        if (!v.trim()) return "Please enter a valid number"
-        if (isNaN(Number(v)) || Number(v) < 0)
-          return "Please enter a valid non-negative number"
-        if (Number(v) > 99999999) return "Price too high (max 99,999,999)"
-        return true
-      },
-    })
-  } else {
-    if (isNaN(Number(priceStr)) || Number(priceStr) < 0) {
-      consola.error("Price must be a valid non-negative number")
-      return null
-    }
-    if (Number(priceStr) > 99999999) {
-      consola.error("Price too high (max 99,999,999)")
-      return null
-    }
-  }
+  const currencyRes = await promptSelect(
+    flags.currency, "currency", CURRENCY_CHOICES, isValidCurrency,
+  )
+  if (!currencyRes) return null
 
-  // --- currency ---
-  let currency: Currency
-  if (flags.currency === undefined) {
-    prompted = true
-    currency = await select({
-      message: "currency",
-      choices: CURRENCY_CHOICES,
-    })
-  } else {
-    if (!isValidCurrency(flags.currency)) {
-      consola.error(
-        `Invalid currency "${flags.currency}". Valid: ${CURRENCY_CHOICES.map((c) => c.value).join(", ")}`,
-      )
-      return null
-    }
-    currency = flags.currency
-  }
+  const cycleRes = await promptSelect(
+    flags.cycle, "cycle", CYCLE_CHOICES, isValidCycle,
+  )
+  if (!cycleRes) return null
 
-  // --- cycle ---
-  let cycle: Cycle
-  if (flags.cycle === undefined) {
-    prompted = true
-    cycle = await select({
-      message: "cycle",
-      choices: CYCLE_CHOICES,
-    })
-  } else {
-    if (!isValidCycle(flags.cycle)) {
-      consola.error(
-        `Invalid cycle "${flags.cycle}". Valid: ${CYCLE_CHOICES.map((c) => c.value).join(", ")}`,
-      )
-      return null
-    }
-    cycle = flags.cycle
-  }
-
-  // --- tags ---
+  // tags: special case — hint from existing tags, no flag-fallback validation needed
   let tagsStr = flags.tags
+  let prompted = nameRes.prompted || priceRes.prompted || currencyRes.prompted || cycleRes.prompted
+
   if (tagsStr === undefined) {
     prompted = true
     const existingTags = getAllTags()
-    const hint =
-      existingTags.length > 0
-        ? `existing: ${existingTags.join(", ")}`
-        : undefined
-
     tagsStr = await input({
       message: "tags",
-      hint,
-      validate: (v) => {
-        if (!v.trim()) return true
-        const tags = v.split(",").map((t) => t.trim()).filter(Boolean)
-        if (tags.length > 10) return "Maximum 10 tags allowed"
-        for (const tag of tags) {
-          if (tag.length > 50) return `Tag too long: "${tag}" (max 50 chars)`
-        }
-        return true
-      },
+      hint: existingTags.length > 0 ? `existing: ${existingTags.join(", ")}` : undefined,
+      validate: validateTags,
     })
   }
 
-  const tags = tagsStr
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean)
+  const tags = tagsStr.split(",").map((t) => t.trim()).filter(Boolean)
+  const price = Number(priceRes.value)
+  const name = nameRes.value.trim()
+  const currency = currencyRes.value
+  const cycle = cycleRes.value
 
-  const price = Number(priceStr)
-
-  // --- confirm in interactive mode ---
   if (prompted) {
     const ok = await confirm({
       message: `Save "${name}" (${formatPrice(price, currency)}, ${cycle})?`,
@@ -181,22 +164,75 @@ async function resolveAddOptions(flags: AddFlags) {
     }
   }
 
-  return { name: name.trim(), price, currency, cycle, tags }
+  return { name, price, currency, cycle, tags }
 }
 
+// ── Command handlers ────────────────────────────────────
+
+async function handleList(options: { currency?: string }) {
+  await spreadSubscription(undefined, options.currency as Currency | undefined)
+}
+
+async function handleAdd(flags: AddFlags) {
+  const result = await resolveAddOptions(flags)
+  if (!result) return
+  writeSubscription(result)
+  consola.success(`Added subscription: ${result.name}`)
+}
+
+async function handleDelete() {
+  const all = getSubscriptions()
+
+  if (all.length === 0) {
+    consola.info("No subscriptions found")
+    return
+  }
+
+  const selected = await checkbox({
+    message: "select subscriptions to delete",
+    choices: all.map((sub) => ({
+      name: `${sub.name} — ${formatPrice(sub.price, sub.currency)}/${sub.cycle}${sub.tags.length > 0 ? ` [${sub.tags.join(", ")}]` : ""}`,
+      value: sub,
+    })),
+  })
+
+  if (selected.length === 0) {
+    consola.info("Cancelled")
+    return
+  }
+
+  const names = selected.map((s) => s.name).join(", ")
+  const ok = await confirm({
+    message: `Delete ${selected.length} subscription${selected.length > 1 ? "s" : ""}? (${names})`,
+    default: false,
+  })
+
+  if (!ok) {
+    consola.info("Cancelled")
+    return
+  }
+
+  for (const sub of selected) {
+    deleteSubscription(sub.id)
+    consola.success(`Deleted: ${sub.name}`)
+  }
+}
+
+async function handleTags(taglist: string[]) {
+  const list = tagsSubscription(taglist)
+  await spreadSubscription(list)
+}
+
+// ── CLI setup ───────────────────────────────────────────
+
 const runCLI = () => {
-  const program = new Command();
-  program.name("subtrack");
+  const program = new Command()
+  program.name("subtrack")
 
   program
     .command("list")
     .option("-c, --currency <currency>", "convert all prices to currency")
-    .action(async (options) => {
-      await spreadSubscription(
-        undefined,
-        options.currency as Currency | undefined,
-      );
-    });
+    .action(handleList)
 
   program
     .command("add")
@@ -205,62 +241,16 @@ const runCLI = () => {
     .option("--currency <currency>", "currency")
     .option("--cycle <cycle>", "billing cycle")
     .option("--tags <tags>", "comma-separated tags")
-    .action(async (flags) => {
-      const result = await resolveAddOptions(flags)
-      if (!result) return
-      writeSubscription(result)
-      consola.success(`Added subscription: ${result.name}`)
-    })
+    .action(handleAdd)
 
-  program
-    .command("delete")
-    .action(async () => {
-      const all = getSubscriptions()
-
-      if (all.length === 0) {
-        consola.info("No subscriptions found")
-        return
-      }
-
-      const selected = await checkbox({
-        message: "select subscriptions to delete",
-        choices: all.map((sub) => ({
-          name: `${sub.name} — ${formatPrice(sub.price, sub.currency)}/${sub.cycle}${sub.tags.length > 0 ? ` [${sub.tags.join(", ")}]` : ""}`,
-          value: sub,
-        })),
-      })
-
-      if (selected.length === 0) {
-        consola.info("Cancelled")
-        return
-      }
-
-      const names = selected.map((s) => s.name).join(", ")
-      const ok = await confirm({
-        message: `Delete ${selected.length} subscription${selected.length > 1 ? "s" : ""}? (${names})`,
-        default: false,
-      })
-
-      if (!ok) {
-        consola.info("Cancelled")
-        return
-      }
-
-      for (const sub of selected) {
-        deleteSubscription(sub.id)
-        consola.success(`Deleted: ${sub.name}`)
-      }
-    })
+  program.command("delete").action(handleDelete)
 
   program
     .command("tags")
     .argument("<taglist...>")
-    .action(async (taglist) => {
-      const list = tagsSubscription(taglist);
-      await spreadSubscription(list);
-    });
+    .action(handleTags)
 
-  program.parse();
-};
+  program.parse()
+}
 
 runCLI();

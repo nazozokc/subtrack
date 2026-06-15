@@ -42,14 +42,28 @@ export function formatPrice(price: number, currency: string): string {
   }).format(price)
 }
 
+function buildRow(sub: SharedArgs, price: string): RowData {
+  return [
+    String(sub.name),
+    String(sub.cycle),
+    sub.tags.length > 0 ? sub.tags.join(", ") : "-",
+    price,
+  ]
+}
+
+function displayWidth(s: string): number {
+  return s.replace(/\x1b\[[0-9;]*m/g, "").length
+}
+
 const HEADERS = ["name", "cycle", "tags", "price"] as const
 const MIN_WIDTHS = [10, 6, 8, 8] as const
 const MAX_WIDTHS = [40, 20, 60, 20] as const
 const BORDER_AND_PADDING = 13
 
 function wrapCell(text: string, width: number): string[] {
-  if (!text || text.length === 0) return [""]
-  if (text.length <= width) return [text]
+  const dw = displayWidth(text)
+  if (dw === 0) return [""]
+  if (dw <= width) return [text]
 
   const lines: string[] = []
   let remaining = text
@@ -75,11 +89,10 @@ function wrapCell(text: string, width: number): string[] {
   return lines
 }
 
-function renderTable(rows: RowData[]): string {
+function calcColumnWidths(rows: RowData[]): number[] {
   const termWidth = process.stdout.columns ?? 80
   const avail = Math.max(40, termWidth - BORDER_AND_PADDING)
 
-  // Weights = max content length per column (capped at MAX_WIDTHS)
   const weights = HEADERS.map((hdr, i) => {
     let max = hdr.length
     for (const row of rows) {
@@ -97,14 +110,12 @@ function renderTable(rows: RowData[]): string {
   // Adjust to exactly fit avail
   let sum = widths.reduce((a, b) => a + b, 0)
   let diff = sum - avail
-
   let iterations = 0
+
   while (diff > 0 && iterations < 100) {
     let idx = -1
     for (let i = 0; i < widths.length; i++) {
-      if (widths[i] > MIN_WIDTHS[i] && (idx === -1 || widths[i] > widths[idx])) {
-        idx = i
-      }
+      if (widths[i] > MIN_WIDTHS[i] && (idx === -1 || widths[i] > widths[idx])) idx = i
     }
     if (idx === -1) break
     widths[idx]--
@@ -116,15 +127,19 @@ function renderTable(rows: RowData[]): string {
   while (diff < 0 && iterations < 100) {
     let idx = -1
     for (let i = 0; i < widths.length; i++) {
-      if (widths[i] < MAX_WIDTHS[i] && (idx === -1 || weights[i] > weights[idx])) {
-        idx = i
-      }
+      if (widths[i] < MAX_WIDTHS[i] && (idx === -1 || weights[i] > weights[idx])) idx = i
     }
     if (idx === -1) break
     widths[idx]++
     diff++
     iterations++
   }
+
+  return widths
+}
+
+function renderTable(rows: RowData[]): string {
+  const widths = calcColumnWidths(rows)
 
   // ── Render ──────────────────────────────────────────
   const PAD = 1
@@ -134,7 +149,8 @@ function renderTable(rows: RowData[]): string {
   const [bl, bm, br] = ["└", "┴", "┘"]
 
   function border(l: string, m: string, r: string): string {
-    return l + widths.map((w) => H.repeat(w + PAD * 2)).join(m) + r
+    const line = l + widths.map((w) => H.repeat(w + PAD * 2)).join(m) + r
+    return `\x1b[90m${line}\x1b[0m`
   }
 
   function dataRow(row: string[]): string[] {
@@ -146,7 +162,12 @@ function renderTable(rows: RowData[]): string {
       const parts: string[] = [V]
       for (let ci = 0; ci < row.length; ci++) {
         const text = wrapped[ci][li] ?? ""
-        parts.push(" ".repeat(PAD), text.padEnd(widths[ci]), " ".repeat(PAD), V)
+        parts.push(
+          " ".repeat(PAD),
+          ci === 3 ? text.padStart(widths[ci]) : text.padEnd(widths[ci]),
+          " ".repeat(PAD),
+          V,
+        )
       }
       lines.push(parts.join(""))
     }
@@ -156,10 +177,21 @@ function renderTable(rows: RowData[]): string {
 
   const out: string[] = []
   out.push(border(tl, tm, tr))
-  out.push(...dataRow([...HEADERS]))
+  out.push(...dataRow(HEADERS.map((h) => `\x1b[1;36m${h}\x1b[0m`)))
   out.push(border(ml, mm, mr))
 
-  for (const row of rows) out.push(...dataRow(row))
+  let totalSeparatorAdded = false
+  for (const row of rows) {
+    const isTotal = row[2].endsWith("TOTAL")
+    if (isTotal && !totalSeparatorAdded) {
+      out.push(border(ml, mm, mr))
+      totalSeparatorAdded = true
+    }
+    const renderRow = isTotal
+      ? row.map((cell, i) => (i === 2 ? `\x1b[1m${cell}\x1b[0m` : cell))
+      : row
+    out.push(...dataRow(renderRow))
+  }
 
   out.push(border(bl, bm, br))
   return out.join("\n")
@@ -207,20 +239,10 @@ export const spreadSubscription = async (
         try {
           const converted = convertPrice(sub.price, sub.currency, currency, rates.rates)
           total += converted
-          rows.push([
-            String(sub.name),
-            String(sub.cycle),
-            sub.tags.length > 0 ? sub.tags.join(", ") : "-",
-            fmt.format(converted),
-          ])
+          rows.push(buildRow(sub, fmt.format(converted)))
         } catch {
           hasMissingRate = true
-          rows.push([
-            String(sub.name),
-            String(sub.cycle),
-            sub.tags.length > 0 ? sub.tags.join(", ") : "-",
-            `? (${formatPrice(sub.price, sub.currency)})`,
-          ])
+          rows.push(buildRow(sub, `? (${formatPrice(sub.price, sub.currency)})`))
         }
       }
 
@@ -238,25 +260,25 @@ export const spreadSubscription = async (
     // fallback: continue to the no-currency path below
   }
 
-  // Display subscriptions with their original currencies
+  // Display subscriptions grouped by currency
+  const groups: Record<string, SharedArgs[]> = {}
   for (const sub of list) {
-    rows.push([
-      String(sub.name),
-      String(sub.cycle),
-      sub.tags.length > 0 ? sub.tags.join(", ") : "-",
-      formatPrice(sub.price, sub.currency),
-    ])
+    ;(groups[sub.currency] ??= []).push(sub)
   }
 
-  // Group totals by currency
-  const totals: Record<string, number> = {}
-  for (const sub of list) {
-    totals[sub.currency] = (totals[sub.currency] || 0) + sub.price
-  }
+  const groupEntries = Object.entries(groups)
+  for (let i = 0; i < groupEntries.length; i++) {
+    const [currencyCode, subs] = groupEntries[i]
+    const groupRows: RowData[] = []
 
-  for (const [currencyCode, total] of Object.entries(totals)) {
-    rows.push(["", "", `${currencyCode} TOTAL`, formatPrice(total, currencyCode)])
-  }
+    let total = 0
+    for (const sub of subs) {
+      groupRows.push(buildRow(sub, formatPrice(sub.price, sub.currency)))
+      total += sub.price
+    }
+    groupRows.push(["", "", `${currencyCode} TOTAL`, formatPrice(total, currencyCode)])
 
-  consola.log(renderTable(rows))
+    consola.log(renderTable(groupRows))
+    if (i < groupEntries.length - 1) consola.log("")
+  }
 }
