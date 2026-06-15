@@ -19,8 +19,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -39,7 +37,6 @@ jobs:
           cat package.json
 
       - name: Install dependencies
-        working-directory: ./subtrack
         run: pnpm install --frozen-lockfile
 
       - name: Build

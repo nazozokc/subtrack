@@ -1,16 +1,20 @@
-name: CI
+name: app-ci
 
 on:
   push:
     branches: [main]
     paths:
       - "subtrack/**"
-      - ".github/workflows/**"
+      - ".github/workflows/app-ci.yml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
   pull_request:
     branches: [main]
     paths:
       - "subtrack/**"
-      - ".github/workflows/**"
+      - ".github/workflows/app-ci.yml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
 
 jobs:
   test:
@@ -24,8 +28,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - uses: actions/setup-node@v4
         with:
@@ -39,26 +41,23 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('subtrack/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - run: pnpm install
-        working-directory: ./subtrack
+      - run: pnpm install --frozen-lockfile
 
       - run: pnpm build
-        working-directory: ./subtrack
 
       - run: pnpm test
-        working-directory: ./subtrack
 
       - name: Verify CLI starts (built binary)
-        run: node dist/index.mjs --help
         working-directory: ./subtrack
+        run: node dist/index.mjs --help
 
       - name: Verify CLI list command (dev mode)
-        run: pnpm start list
         working-directory: ./subtrack
+        run: pnpm start list
 
       - name: Spell check with typos
         if: runner.os == 'Linux'
