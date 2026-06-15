@@ -1,6 +1,6 @@
 {
   "name": "subtrack",
-  "version": "1.0.7",
+  "version": "1.0.9",
   "type": "module",
   "license": "MIT",
   "packageManager": "pnpm@11.5.1",
@@ -23,13 +23,13 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",
-    "better-sqlite3": "^11.0.0",
     "cli-table3": "^0.6.5",
     "commander": "^15.0.0",
-    "consola": "^3.4.2"
+    "consola": "^3.4.2",
+    "sql.js": "^1.14.1"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
+    "@types/sql.js": "^1.4.11",
     "tsdown": "^0.22.2",
     "tsx": "^4.19.0",
     "typescript": "^6",
