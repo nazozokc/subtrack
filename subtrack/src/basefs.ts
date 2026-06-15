@@ -5,12 +5,21 @@ import path from "node:path"
 import { homedir } from "node:os"
 import { consola } from "consola"
 
+export type Currency =
+  | "JPY" | "USD" | "EUR" | "GBP"
+  | "AUD" | "CAD" | "KRW" | "CNY"
+  | "SGD" | "HKD"
+
+export type Cycle =
+  | "weekly" | "bi-weekly" | "monthly"
+  | "quarterly" | "semi-annual" | "yearly"
+
 export type SharedArgs = {
   id: number
   name: string
   price: number
-  currency: "JPY" | "USD"
-  cycle: "monthly" | "yearly"
+  currency: Currency
+  cycle: Cycle
   tags: string[]
 }
 
@@ -191,6 +200,17 @@ export const deleteSubscription = (id: number): void => {
     }
   } catch (error) {
     consola.error("Failed to delete subscription:", error)
+    throw error
+  }
+}
+
+export const getAllTags = (): string[] => {
+  try {
+    const db = getDb()
+    const rows = execObjs<{ name: string }>(db, "SELECT name FROM tags ORDER BY name")
+    return rows.map(r => r.name)
+  } catch (error) {
+    consola.error("Failed to fetch tags:", error)
     throw error
   }
 }
