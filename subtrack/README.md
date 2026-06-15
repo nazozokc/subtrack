@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/subtrack-cli-logo.png" alt="subtrack" width="400"/>
+  <img src="images/subtrack-cli-logo.jpg" alt="subtrack" width="400"/>
 </p>
 
 # subtrack
@@ -60,6 +60,28 @@ subtrack delete
 # Filter subscriptions by tags (AND)
 subtrack tags music video
 ```
+
+## npx usage
+```bash
+# List all subscriptions (grouped by currency)
+npx subtrack list
+
+# List with currency conversion
+npx subtrack list --currency JPY
+
+# Add a subscription (interactive)
+npx subtrack add
+
+# Add a subscription non-interactively
+npx subtrack add --name Spotify --price 980 --currency JPY --cycle monthly --tags music
+
+# Delete subscriptions (interactive checkbox)
+npx subtrack delete
+
+# Filter subscriptions by tags (AND)
+npx subtrack tags music video
+```
+
 
 ### Commands
 
