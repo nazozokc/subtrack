@@ -5,6 +5,7 @@ import type { SharedArgs } from "./basefs"
 
 const logMessages: string[] = []
 const infoMessages: string[] = []
+const failMessages: string[] = []
 const errorMessages: string[] = []
 
 let originalFetch: typeof globalThis.fetch
@@ -12,6 +13,7 @@ let originalFetch: typeof globalThis.fetch
 beforeEach(() => {
   logMessages.length = 0
   infoMessages.length = 0
+  failMessages.length = 0
   errorMessages.length = 0
 
   consola.mockTypes((_type: string, _defaults: object) => {
@@ -19,6 +21,7 @@ beforeEach(() => {
       const str = args.map((a) => String(a)).join(" ")
       if (_type === "log") logMessages.push(str)
       if (_type === "info") infoMessages.push(str)
+      if (_type === "fail") failMessages.push(str)
       if (_type === "error") errorMessages.push(str)
     }
   })
@@ -28,9 +31,7 @@ beforeEach(() => {
     new Response(
       JSON.stringify({
         base: "USD",
-        target: "JPY",
-        rate: 160,
-        timestamp: "2026-06-15T00:00:00Z",
+        rates: { JPY: 160, USD: 1 },
       }),
     )
 })
@@ -64,10 +65,9 @@ test("displays table with single subscription", async () => {
   expect(logMessages).toHaveLength(1)
   const table = logMessages[0]
   expect(table).toContain("Netflix")
-  expect(table).toContain("¥1500")
+  expect(table).toContain("¥1,500")
   expect(table).toContain("monthly")
   expect(table).toContain("JPY TOTAL")
-  expect(table).toContain("USD TOTAL")
 })
 
 test("displays table with JPY currency symbol", async () => {
@@ -77,6 +77,7 @@ test("displays table with JPY currency symbol", async () => {
 
   const table = logMessages[0]
   expect(table).toContain("¥400")
+  expect(table).toContain("JPY TOTAL")
 })
 
 test("displays table with USD currency symbol", async () => {
@@ -112,8 +113,8 @@ test("shows correct JPY total", async () => {
   ])
 
   const table = logMessages[0]
-  expect(table).toContain("¥2000")
-  expect(table).toContain("$0")
+  expect(table).toContain("¥2,000")
+  expect(table).toContain("JPY TOTAL")
 })
 
 test("shows correct USD total", async () => {
@@ -124,7 +125,7 @@ test("shows correct USD total", async () => {
 
   const table = logMessages[0]
   expect(table).toContain("$30")
-  expect(table).toContain("¥0")
+  expect(table).toContain("USD TOTAL")
 })
 
 test("shows mixed currency totals correctly", async () => {
@@ -133,9 +134,11 @@ test("shows mixed currency totals correctly", async () => {
     makeSub({ name: "US", price: 15, currency: "USD" }),
   ])
 
-  const table = logMessages[0]
-  expect(table).toContain("¥1000")
+  const table = logMessages.filter(Boolean).join("\n")
+  expect(table).toContain("¥1,000")
+  expect(table).toContain("JPY TOTAL")
   expect(table).toContain("$15")
+  expect(table).toContain("USD TOTAL")
 })
 
 test("shows yearly cycle", async () => {
@@ -159,6 +162,7 @@ test("displays multiple subscriptions", async () => {
   expect(table).toContain("B")
   expect(table).toContain("C")
   expect(table).toContain("$60")
+  expect(table).toContain("USD TOTAL")
 })
 
 // --- --currency filter tests ---
@@ -233,13 +237,13 @@ test("currency falls back when fetch fails", async () => {
     "JPY",
   )
 
-  // Should log error
-  expect(errorMessages.length).toBeGreaterThan(0)
-  expect(errorMessages[0]).toContain("Failed to fetch exchange rate")
+  // Should log fail message
+  expect(failMessages.length).toBeGreaterThan(0)
+  expect(failMessages[0]).toContain("Failed to fetch exchange rates")
 
-  // Should fall back to original separate display
-  const table = logMessages[0]
-  expect(table).toContain("¥1000")
+  // Should fall back to grouped-by-currency display
+  const table = logMessages.filter(Boolean).join("\n")
+  expect(table).toContain("¥1,000")
   expect(table).toContain("$15")
   expect(table).toContain("JPY TOTAL")
   expect(table).toContain("USD TOTAL")

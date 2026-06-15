@@ -5,12 +5,21 @@ import path from "node:path"
 import { homedir } from "node:os"
 import { consola } from "consola"
 
+export type Currency =
+  | "JPY" | "USD" | "EUR" | "GBP"
+  | "AUD" | "CAD" | "KRW" | "CNY"
+  | "SGD" | "HKD"
+
+export type Cycle =
+  | "weekly" | "bi-weekly" | "monthly"
+  | "quarterly" | "semi-annual" | "yearly"
+
 export type SharedArgs = {
   id: number
   name: string
   price: number
-  currency: "JPY" | "USD"
-  cycle: "monthly" | "yearly"
+  currency: Currency
+  cycle: Cycle
   tags: string[]
 }
 
@@ -101,14 +110,6 @@ export function __setDb(db: Database): void {
   _dbPath = ""
 }
 
-// For testing: reset to use file DB
-export function __resetDb(): void {
-  if (_db) {
-    _db.close()
-    _db = null
-  }
-}
-
 function mapTags(subs: SharedArgs[]): SharedArgs[] {
   if (subs.length === 0) return subs
 
@@ -152,8 +153,9 @@ export const writeSubscription = (data: AddSharedArgs): void => {
       [data.name, data.price, data.currency, data.cycle],
     )
 
-    const idResult = execObj<Record<string, SqlValue>>(db, "SELECT last_insert_rowid() AS id")
-    const subscriptionId = Number(idResult!.id)
+    const idRow = execObj<Record<string, SqlValue>>(db, "SELECT last_insert_rowid() AS id")
+    if (!idRow) throw new Error("Failed to get last insert id")
+    const subscriptionId = Number(idRow.id)
 
     for (const t of uniqueTags) {
       db.run("INSERT OR IGNORE INTO tags (name) VALUES (?)", [t])
@@ -191,6 +193,17 @@ export const deleteSubscription = (id: number): void => {
     }
   } catch (error) {
     consola.error("Failed to delete subscription:", error)
+    throw error
+  }
+}
+
+export const getAllTags = (): string[] => {
+  try {
+    const db = getDb()
+    const rows = execObjs<{ name: string }>(db, "SELECT name FROM tags ORDER BY name")
+    return rows.map(r => r.name)
+  } catch (error) {
+    consola.error("Failed to fetch tags:", error)
     throw error
   }
 }

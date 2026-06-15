@@ -1,5 +1,5 @@
 {
-  description = "subtrack";
+  description = "A CLI tool to manage your subscription services from the terminal";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
