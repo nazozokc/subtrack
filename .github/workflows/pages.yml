@@ -34,6 +34,7 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           static_site_generator: sveltekit
+          enablement: true
 
       - run: pnpm install --frozen-lockfile
 
