@@ -27,8 +27,8 @@ beforeAll(async () => {
     FOREIGN KEY (tag_id) REFERENCES tags(id)
   )`)
 
-  const basefs = await import("./basefs")
-  basefs.__setDb(testDb)
+  const db = await import("./db")
+  db.__setDb(testDb)
 })
 
 beforeEach(() => {
@@ -42,14 +42,14 @@ afterAll(() => {
 })
 
 test("getSubscriptions returns empty when no data exists", async () => {
-  const basefs = await import("./basefs")
-  expect(basefs.getSubscriptions()).toEqual([])
+  const db = await import("./db")
+  expect(db.getSubscriptions()).toEqual([])
 })
 
 test("writeSubscription creates a subscription with tags", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "Netflix",
     price: 1500,
     currency: "JPY",
@@ -57,7 +57,7 @@ test("writeSubscription creates a subscription with tags", async () => {
     tags: ["video", "entertainment"],
   })
 
-  const subs = basefs.getSubscriptions()
+  const subs = db.getSubscriptions()
   expect(subs).toHaveLength(1)
   expect(subs[0]).toMatchObject({
     name: "Netflix",
@@ -69,9 +69,9 @@ test("writeSubscription creates a subscription with tags", async () => {
 })
 
 test("writeSubscription handles empty tags gracefully", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "Dropbox",
     price: 10,
     currency: "USD",
@@ -79,15 +79,15 @@ test("writeSubscription handles empty tags gracefully", async () => {
     tags: [],
   })
 
-  const subs = basefs.getSubscriptions()
+  const subs = db.getSubscriptions()
   expect(subs).toHaveLength(1)
   expect(subs[0].tags).toEqual([])
 })
 
 test("writeSubscription supports USD currency", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "GitHub Copilot",
     price: 10,
     currency: "USD",
@@ -95,14 +95,14 @@ test("writeSubscription supports USD currency", async () => {
     tags: ["dev"],
   })
 
-  const subs = basefs.getSubscriptions()
+  const subs = db.getSubscriptions()
   expect(subs[0].currency).toBe("USD")
 })
 
 test("writeSubscription supports yearly cycle", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "iCloud+",
     price: 12000,
     currency: "JPY",
@@ -110,28 +110,28 @@ test("writeSubscription supports yearly cycle", async () => {
     tags: ["storage"],
   })
 
-  const subs = basefs.getSubscriptions()
+  const subs = db.getSubscriptions()
   expect(subs[0].cycle).toBe("yearly")
 })
 
 test("getSubscriptions returns all subscriptions ordered by id", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "A",
     price: 100,
     currency: "USD",
     cycle: "monthly",
     tags: [],
   })
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "B",
     price: 200,
     currency: "JPY",
     cycle: "yearly",
     tags: [],
   })
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "C",
     price: 300,
     currency: "USD",
@@ -139,7 +139,7 @@ test("getSubscriptions returns all subscriptions ordered by id", async () => {
     tags: [],
   })
 
-  const subs = basefs.getSubscriptions()
+  const subs = db.getSubscriptions()
   expect(subs).toHaveLength(3)
   expect(subs[0].name).toBe("A")
   expect(subs[1].name).toBe("B")
@@ -147,9 +147,9 @@ test("getSubscriptions returns all subscriptions ordered by id", async () => {
 })
 
 test("deleteSubscription removes a subscription", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "ToDelete",
     price: 500,
     currency: "JPY",
@@ -157,17 +157,17 @@ test("deleteSubscription removes a subscription", async () => {
     tags: [],
   })
 
-  const subsBefore = basefs.getSubscriptions()
+  const subsBefore = db.getSubscriptions()
   expect(subsBefore).toHaveLength(1)
 
-  basefs.deleteSubscription(subsBefore[0].id)
-  expect(basefs.getSubscriptions()).toHaveLength(0)
+  db.deleteSubscription(subsBefore[0].id)
+  expect(db.getSubscriptions()).toHaveLength(0)
 })
 
 test("deleteSubscription cascades to subscription_tags", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "WithTags",
     price: 999,
     currency: "USD",
@@ -175,7 +175,7 @@ test("deleteSubscription cascades to subscription_tags", async () => {
     tags: ["tag1", "tag2"],
   })
 
-  const subs = basefs.getSubscriptions()
+  const subs = db.getSubscriptions()
   expect(subs).toHaveLength(1)
   expect(subs[0].tags).toHaveLength(2)
 
@@ -187,8 +187,8 @@ test("deleteSubscription cascades to subscription_tags", async () => {
   const relCountBefore = Number(rows[0].values[0][0])
   expect(relCountBefore).toBe(2)
 
-  basefs.deleteSubscription(subId)
-  expect(basefs.getSubscriptions()).toHaveLength(0)
+  db.deleteSubscription(subId)
+  expect(db.getSubscriptions()).toHaveLength(0)
 
   const rowsAfter = testDb.exec(
     "SELECT COUNT(*) as cnt FROM subscription_tags WHERE subscription_id = ?",
@@ -199,21 +199,21 @@ test("deleteSubscription cascades to subscription_tags", async () => {
 })
 
 test("deleteSubscription does not throw when id does not exist", async () => {
-  const basefs = await import("./basefs")
-  expect(() => basefs.deleteSubscription(99999)).not.toThrow()
+  const db = await import("./db")
+  expect(() => db.deleteSubscription(99999)).not.toThrow()
 })
 
 test("tagsSubscription filters by single tag", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "Netflix",
     price: 1500,
     currency: "JPY",
     cycle: "monthly",
     tags: ["video", "entertainment"],
   })
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "Spotify",
     price: 980,
     currency: "JPY",
@@ -221,29 +221,29 @@ test("tagsSubscription filters by single tag", async () => {
     tags: ["music"],
   })
 
-  const results = basefs.tagsSubscription("video")
+  const results = db.tagsSubscription("video")
   expect(results).toHaveLength(1)
   expect(results[0].name).toBe("Netflix")
 })
 
 test("tagsSubscription filters by multiple tags with AND logic", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "Netflix",
     price: 1500,
     currency: "JPY",
     cycle: "monthly",
     tags: ["video", "entertainment"],
   })
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "YouTube Premium",
     price: 1280,
     currency: "JPY",
     cycle: "monthly",
     tags: ["video", "entertainment"],
   })
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "Spotify",
     price: 980,
     currency: "JPY",
@@ -251,7 +251,7 @@ test("tagsSubscription filters by multiple tags with AND logic", async () => {
     tags: ["music"],
   })
 
-  const results = basefs.tagsSubscription(["video", "entertainment"])
+  const results = db.tagsSubscription(["video", "entertainment"])
   expect(results).toHaveLength(2)
 
   const names = results.map((r) => r.name).sort()
@@ -259,16 +259,16 @@ test("tagsSubscription filters by multiple tags with AND logic", async () => {
 })
 
 test("tagsSubscription returns only subscriptions matching ALL specified tags", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "Netflix",
     price: 1500,
     currency: "JPY",
     cycle: "monthly",
     tags: ["video", "entertainment"],
   })
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "YouTube Premium",
     price: 1280,
     currency: "JPY",
@@ -276,15 +276,15 @@ test("tagsSubscription returns only subscriptions matching ALL specified tags", 
     tags: ["video"],
   })
 
-  const results = basefs.tagsSubscription(["video", "entertainment"])
+  const results = db.tagsSubscription(["video", "entertainment"])
   expect(results).toHaveLength(1)
   expect(results[0].name).toBe("Netflix")
 })
 
 test("tagsSubscription returns empty for non-matching tag", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "Netflix",
     price: 1500,
     currency: "JPY",
@@ -292,26 +292,26 @@ test("tagsSubscription returns empty for non-matching tag", async () => {
     tags: ["video"],
   })
 
-  expect(basefs.tagsSubscription("nonexistent")).toEqual([])
+  expect(db.tagsSubscription("nonexistent")).toEqual([])
 })
 
 test("tagsSubscription returns empty array for empty input", async () => {
-  const basefs = await import("./basefs")
-  expect(basefs.tagsSubscription([])).toEqual([])
-  expect(basefs.tagsSubscription("")).toEqual([])
+  const db = await import("./db")
+  expect(db.tagsSubscription([])).toEqual([])
+  expect(db.tagsSubscription("")).toEqual([])
 })
 
 test("works with multiple subscriptions sharing the same tag", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "S1",
     price: 100,
     currency: "USD",
     cycle: "monthly",
     tags: ["shared"],
   })
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "S2",
     price: 200,
     currency: "JPY",
@@ -319,14 +319,14 @@ test("works with multiple subscriptions sharing the same tag", async () => {
     tags: ["shared"],
   })
 
-  const results = basefs.tagsSubscription("shared")
+  const results = db.tagsSubscription("shared")
   expect(results).toHaveLength(2)
 })
 
 test("getSubscriptions returns correct data types", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "Test",
     price: 1000,
     currency: "JPY",
@@ -334,7 +334,7 @@ test("getSubscriptions returns correct data types", async () => {
     tags: ["test"],
   })
 
-  const [sub] = basefs.getSubscriptions()
+  const [sub] = db.getSubscriptions()
   expect(typeof sub.id).toBe("number")
   expect(typeof sub.name).toBe("string")
   expect(typeof sub.price).toBe("number")
@@ -344,16 +344,16 @@ test("getSubscriptions returns correct data types", async () => {
 })
 
 test("does not share tags between different subscriptions", async () => {
-  const basefs = await import("./basefs")
+  const db = await import("./db")
 
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "Netflix",
     price: 1500,
     currency: "JPY",
     cycle: "monthly",
     tags: ["video"],
   })
-  basefs.writeSubscription({
+  db.writeSubscription({
     name: "Dropbox",
     price: 10,
     currency: "USD",
@@ -361,7 +361,7 @@ test("does not share tags between different subscriptions", async () => {
     tags: ["storage"],
   })
 
-  const subs = basefs.getSubscriptions()
+  const subs = db.getSubscriptions()
   const netflix = subs.find((s) => s.name === "Netflix")
   const dropbox = subs.find((s) => s.name === "Dropbox")
   expect(netflix?.tags).toEqual(["video"])

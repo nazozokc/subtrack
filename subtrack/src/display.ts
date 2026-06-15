@@ -1,6 +1,13 @@
 import { consola } from "consola"
+<<<<<<< HEAD:subtrack/src/table.ts
 import CliTable3 from "cli-table3"
 import { type SharedArgs, type Currency, getSubscriptions } from "./basefs.ts"
+||||||| parent of 32e3dae (edit):subtrack/src/table.ts
+import { consola } from "consola";
+import { type SharedArgs, type Currency, getSubscriptions } from "./basefs.ts";
+=======
+import { type SharedArgs, type Currency, getSubscriptions } from "./db.ts"
+>>>>>>> 32e3dae (edit):subtrack/src/display.ts
 
 type FxRates = {
   base: string
@@ -70,7 +77,10 @@ function calcColumnWidths(rows: string[][]): number[] {
 
   const totalWeight = weights.reduce((a, b) => a + b, 0)
   const widths = weights.map((w, i) =>
-    Math.max(MIN_WIDTHS[i], Math.min(MAX_WIDTHS[i], Math.round(avail * w / totalWeight))),
+    Math.max(
+      MIN_WIDTHS[i],
+      Math.min(MAX_WIDTHS[i], Math.round((avail * w) / totalWeight)),
+    ),
   )
 
   // Adjust to exactly fit avail
@@ -81,7 +91,8 @@ function calcColumnWidths(rows: string[][]): number[] {
   while (diff > 0 && iterations < 100) {
     let idx = -1
     for (let i = 0; i < widths.length; i++) {
-      if (widths[i] > MIN_WIDTHS[i] && (idx === -1 || widths[i] > widths[idx])) idx = i
+      if (widths[i] > MIN_WIDTHS[i] && (idx === -1 || widths[i] > widths[idx]))
+        idx = i
     }
     if (idx === -1) break
     widths[idx]--
@@ -93,7 +104,8 @@ function calcColumnWidths(rows: string[][]): number[] {
   while (diff < 0 && iterations < 100) {
     let idx = -1
     for (let i = 0; i < widths.length; i++) {
-      if (widths[i] < MAX_WIDTHS[i] && (idx === -1 || weights[i] > weights[idx])) idx = i
+      if (widths[i] < MAX_WIDTHS[i] && (idx === -1 || weights[i] > weights[idx]))
+        idx = i
     }
     if (idx === -1) break
     widths[idx]++
@@ -148,6 +160,20 @@ function renderTable(rows: string[][]): string {
     } else {
       table.push(row)
     }
+<<<<<<< HEAD:subtrack/src/table.ts
+||||||| parent of 32e3dae (edit):subtrack/src/table.ts
+    const renderRow = isTotal
+      ? row.map((cell, i) => (i === 2 ? `\x1b[1m${cell}\x1b[0m` : cell))
+      : row
+    out.push(...dataRow(renderRow))
+=======
+    const renderRow = isTotal
+      ? row.map((cell, i) =>
+          i === 2 ? `\x1b[1m${cell}\x1b[0m` : cell,
+        )
+      : row
+    out.push(...dataRow(renderRow))
+>>>>>>> 32e3dae (edit):subtrack/src/display.ts
   }
 
   return table.toString()
@@ -193,12 +219,19 @@ export const spreadSubscription = async (
 
       for (const sub of list) {
         try {
-          const converted = convertPrice(sub.price, sub.currency, currency, rates.rates)
+          const converted = convertPrice(
+            sub.price,
+            sub.currency,
+            currency,
+            rates.rates,
+          )
           total += converted
           rows.push(buildRow(sub, fmt.format(converted)))
         } catch {
           hasMissingRate = true
-          rows.push(buildRow(sub, `? (${formatPrice(sub.price, sub.currency)})`))
+          rows.push(
+            buildRow(sub, `? (${formatPrice(sub.price, sub.currency)})`),
+          )
         }
       }
 
@@ -232,7 +265,12 @@ export const spreadSubscription = async (
       groupRows.push(buildRow(sub, formatPrice(sub.price, sub.currency)))
       total += sub.price
     }
-    groupRows.push(["", "", `${currencyCode} TOTAL`, formatPrice(total, currencyCode)])
+    groupRows.push([
+      "",
+      "",
+      `${currencyCode} TOTAL`,
+      formatPrice(total, currencyCode),
+    ])
 
     consola.log(renderTable(groupRows))
     if (i < groupEntries.length - 1) consola.log("")

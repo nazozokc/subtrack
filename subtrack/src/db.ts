@@ -3,7 +3,6 @@ import type { Database, SqlValue, BindParams } from "sql.js"
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { homedir } from "node:os"
-import { consola } from "consola"
 
 export type Currency =
   | "JPY" | "USD" | "EUR" | "GBP"
@@ -104,7 +103,7 @@ function getDb(): Database {
   return _db
 }
 
-// For testing: replace the DB instance (e.g. with in-memory)
+/** Replace the DB instance for testing (e.g. with in-memory). */
 export function __setDb(db: Database): void {
   _db = db
   _dbPath = ""
@@ -129,31 +128,29 @@ function mapTags(subs: SharedArgs[]): SharedArgs[] {
 }
 
 export const getSubscriptions = (): SharedArgs[] => {
-  try {
-    const db = getDb()
-    const subs = execObjs<SharedArgs>(
-      db,
-      "SELECT id, name, price, currency, cycle FROM subscriptions ORDER BY id",
-    )
-    return mapTags(subs)
-  } catch (error) {
-    consola.error("Failed to fetch subscriptions:", error)
-    throw error
-  }
+  const db = getDb()
+  const subs = execObjs<SharedArgs>(
+    db,
+    "SELECT id, name, price, currency, cycle FROM subscriptions ORDER BY id",
+  )
+  return mapTags(subs)
 }
 
 export const writeSubscription = (data: AddSharedArgs): void => {
   const db = getDb()
   const uniqueTags = Array.from(new Set(data.tags))
 
+  db.run("BEGIN TRANSACTION")
   try {
-    db.run("BEGIN TRANSACTION")
     db.run(
       "INSERT INTO subscriptions (name, price, currency, cycle) VALUES (?, ?, ?, ?)",
       [data.name, data.price, data.currency, data.cycle],
     )
 
-    const idRow = execObj<Record<string, SqlValue>>(db, "SELECT last_insert_rowid() AS id")
+    const idRow = execObj<Record<string, SqlValue>>(
+      db,
+      "SELECT last_insert_rowid() AS id",
+    )
     if (!idRow) throw new Error("Failed to get last insert id")
     const subscriptionId = Number(idRow.id)
 
@@ -175,72 +172,60 @@ export const writeSubscription = (data: AddSharedArgs): void => {
     db.run("COMMIT")
     saveDb()
   } catch (error) {
-    try { db.run("ROLLBACK") } catch {}
-    consola.error("Failed to add subscription:", error)
+    try {
+      db.run("ROLLBACK")
+    } catch {
+      /* rollback failed, nothing to do */
+    }
     throw error
   }
 }
 
-export const deleteSubscription = (id: number): void => {
-  try {
-    const db = getDb()
-    db.run("DELETE FROM subscriptions WHERE id = ?", [id])
-
-    if (db.getRowsModified() === 0) {
-      consola.warn(`No subscription found with id ${id}`)
-    } else {
-      saveDb()
-    }
-  } catch (error) {
-    consola.error("Failed to delete subscription:", error)
-    throw error
-  }
+export const deleteSubscription = (id: number): boolean => {
+  const db = getDb()
+  db.run("DELETE FROM subscriptions WHERE id = ?", [id])
+  const modified = db.getRowsModified() > 0
+  if (modified) saveDb()
+  return modified
 }
 
 export const getAllTags = (): string[] => {
-  try {
-    const db = getDb()
-    const rows = execObjs<{ name: string }>(db, "SELECT name FROM tags ORDER BY name")
-    return rows.map(r => r.name)
-  } catch (error) {
-    consola.error("Failed to fetch tags:", error)
-    throw error
-  }
+  const db = getDb()
+  const rows = execObjs<{ name: string }>(
+    db,
+    "SELECT name FROM tags ORDER BY name",
+  )
+  return rows.map((r) => r.name)
 }
 
 export const tagsSubscription = (tag: string[] | string): SharedArgs[] => {
-  try {
-    const db = getDb()
-    const tags = Array.from(new Set(Array.isArray(tag) ? tag : [tag]))
-    if (tags.length === 0) return []
+  const db = getDb()
+  const tags = Array.from(new Set(Array.isArray(tag) ? tag : [tag]))
+  if (tags.length === 0) return []
 
-    const placeholders = tags.map(() => "?").join(",")
+  const placeholders = tags.map(() => "?").join(",")
 
-    const rows = execObjs<{ subscription_id: number }>(
-      db,
-      `SELECT subscription_tags.subscription_id
-       FROM subscription_tags
-       JOIN tags ON tags.id = subscription_tags.tag_id
-       WHERE tags.name IN (${placeholders})
-       GROUP BY subscription_tags.subscription_id
-       HAVING COUNT(DISTINCT tags.name) = ?`,
-      [...tags, tags.length],
-    )
+  const rows = execObjs<{ subscription_id: number }>(
+    db,
+    `SELECT subscription_tags.subscription_id
+     FROM subscription_tags
+     JOIN tags ON tags.id = subscription_tags.tag_id
+     WHERE tags.name IN (${placeholders})
+     GROUP BY subscription_tags.subscription_id
+     HAVING COUNT(DISTINCT tags.name) = ?`,
+    [...tags, tags.length],
+  )
 
-    const ids = rows.map((r) => r.subscription_id)
-    if (ids.length === 0) return []
+  const ids = rows.map((r) => r.subscription_id)
+  if (ids.length === 0) return []
 
-    const idPlaceholders = ids.map(() => "?").join(",")
-    const subs = execObjs<SharedArgs>(
-      db,
-      `SELECT id, name, price, currency, cycle FROM subscriptions
-       WHERE id IN (${idPlaceholders})`,
-      ids,
-    )
+  const idPlaceholders = ids.map(() => "?").join(",")
+  const subs = execObjs<SharedArgs>(
+    db,
+    `SELECT id, name, price, currency, cycle FROM subscriptions
+     WHERE id IN (${idPlaceholders})`,
+    ids,
+  )
 
-    return mapTags(subs)
-  } catch (error) {
-    consola.error("Failed to filter by tags:", error)
-    throw error
-  }
+  return mapTags(subs)
 }

@@ -1,7 +1,7 @@
 import { test, expect, beforeEach, afterEach } from "vitest"
 import { consola } from "consola"
-import { spreadSubscription } from "./table"
-import type { SharedArgs } from "./basefs"
+import { spreadSubscription } from "./display"
+import type { SharedArgs } from "./db"
 
 const logMessages: string[] = []
 const infoMessages: string[] = []
