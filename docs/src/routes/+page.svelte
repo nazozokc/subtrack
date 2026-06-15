@@ -1,5 +1,6 @@
 <script lang="ts">
   import { dev } from "$app/environment"
+  import { base } from "$app/paths"
 </script>
 
 <svelte:head>
@@ -8,6 +9,13 @@
 </svelte:head>
 
 <section class="hero">
+  <img
+    class="logo-img"
+    src="{base}/subtrack-cli-logo.png"
+    alt="subtrack"
+    width="320"
+    height="auto"
+  />
   <h1>subtrack</h1>
   <p class="tagline">Manage your subscription services from&nbsp;the&nbsp;terminal.</p>
   <div class="install">
@@ -55,6 +63,14 @@ subtrack tui</pre>
   .hero {
     text-align: center;
     padding: 4rem 0 3rem;
+  }
+
+  .logo-img {
+    display: block;
+    margin: 0 auto 1.5rem;
+    max-width: 320px;
+    width: 100%;
+    height: auto;
   }
 
   h1 {

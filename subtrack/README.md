@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/subtrack-cli-logo.png" alt="subtrack" width="400"/>
+</p>
+
 # subtrack
 
 A CLI tool to manage your subscription services from the terminal.
