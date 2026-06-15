@@ -54,4 +54,4 @@ jobs:
 
       - name: Publish to npm
         working-directory: ./subtrack
-        run: npm publish 
+        run: pnpm publish 
