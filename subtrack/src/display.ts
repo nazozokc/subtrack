@@ -1,13 +1,6 @@
 import { consola } from "consola"
-<<<<<<< HEAD:subtrack/src/table.ts
 import CliTable3 from "cli-table3"
-import { type SharedArgs, type Currency, getSubscriptions } from "./basefs.ts"
-||||||| parent of 32e3dae (edit):subtrack/src/table.ts
-import { consola } from "consola";
-import { type SharedArgs, type Currency, getSubscriptions } from "./basefs.ts";
-=======
 import { type SharedArgs, type Currency, getSubscriptions } from "./db.ts"
->>>>>>> 32e3dae (edit):subtrack/src/display.ts
 
 type FxRates = {
   base: string
@@ -160,20 +153,6 @@ function renderTable(rows: string[][]): string {
     } else {
       table.push(row)
     }
-<<<<<<< HEAD:subtrack/src/table.ts
-||||||| parent of 32e3dae (edit):subtrack/src/table.ts
-    const renderRow = isTotal
-      ? row.map((cell, i) => (i === 2 ? `\x1b[1m${cell}\x1b[0m` : cell))
-      : row
-    out.push(...dataRow(renderRow))
-=======
-    const renderRow = isTotal
-      ? row.map((cell, i) =>
-          i === 2 ? `\x1b[1m${cell}\x1b[0m` : cell,
-        )
-      : row
-    out.push(...dataRow(renderRow))
->>>>>>> 32e3dae (edit):subtrack/src/display.ts
   }
 
   return table.toString()
