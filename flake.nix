@@ -12,6 +12,7 @@
       systems = [
         "x86_64-linux"
         "aarch64-linux"
+        "x86_64-darwin"
         "aarch64-darwin"
       ];
       perSystem =
@@ -20,16 +21,39 @@
           pkgs = import inputs.nixpkgs { inherit system; };
         in
         {
-          devShells.default = pkgs.mkShell {
-            name = "subtrack-dev";
-            packages = with pkgs; [
-              typos
-              nodejs
-              pnpm
-            ];
-            shellHook = ''
-              echo "[subtrack devShell] typos available"
-            '';
+          formatter = pkgs.nixfmt-rfc-style;
+
+          devShells = {
+            default = pkgs.mkShell {
+              name = "subtrack-dev";
+              packages = with pkgs; [
+                nodejs
+                pnpm
+                typos
+                typescript
+                nixfmt-rfc-style
+              ];
+              shellHook = ''
+                echo "[subtrack devShell]"
+                echo "  node $(node --version)  pnpm $(pnpm --version)"
+                echo ""
+                echo "  Tasks:"
+                echo "    pnpm install    install dependencies"
+                echo "    pnpm build      build packages"
+                echo "    pnpm test       run tests"
+                echo "    pnpm start      run CLI (dev mode)"
+                echo "    typos           check typos"
+                echo "    nix fmt         format nix files"
+              '';
+            };
+
+            ci = pkgs.mkShell {
+              name = "subtrack-ci";
+              packages = with pkgs; [
+                nodejs
+                pnpm
+              ];
+            };
           };
         };
     };
