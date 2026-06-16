@@ -35,9 +35,14 @@ function getDbDir(): string {
   )
 }
 
-function saveDb(): void {
+export function saveDb(): void {
   if (!_db || !_dbPath) return
   writeFileSync(_dbPath, Buffer.from(_db.export()))
+}
+
+export function getDbPath(): string {
+  getDb()
+  return _dbPath
 }
 
 function makeObj(columns: string[], row: SqlValue[]): Record<string, unknown> {
