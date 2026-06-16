@@ -1,5 +1,7 @@
 import { input, confirm, checkbox } from "@inquirer/prompts"
 import { consola } from "consola"
+import { copyFileSync, statSync, constants } from "node:fs"
+import { join } from "node:path"
 import type { Currency } from "./db.ts"
 import {
   getSubscriptions,
@@ -7,6 +9,8 @@ import {
   deleteSubscription,
   getAllTags,
   tagsSubscription,
+  getDbPath,
+  saveDb,
 } from "./db.ts"
 import { formatPrice, spreadSubscription } from "./display.ts"
 import {
@@ -161,4 +165,41 @@ export async function handleDelete() {
 export async function handleTags(taglist: string[]) {
   const list = tagsSubscription(taglist)
   await spreadSubscription(list)
+}
+
+export async function handleBackup(destination: string) {
+  // flush in-memory state to disk
+  saveDb()
+
+  // validate destination
+  let destStat
+  try {
+    destStat = statSync(destination)
+  } catch {
+    consola.error(`Backup destination does not exist: ${destination}`)
+    process.exit(1)
+  }
+  if (!destStat.isDirectory()) {
+    consola.error(`Backup destination must be a directory: ${destination}`)
+    process.exit(1)
+  }
+
+  // generate timestamped filename
+  const now = new Date()
+  const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`
+  const destPath = join(destination, `subtrack_${ts}.db`)
+
+  // copy with exclusive create to prevent overwrite
+  try {
+    copyFileSync(getDbPath(), destPath, constants.COPYFILE_EXCL)
+    consola.success(`Backup created: ${destPath}`)
+  } catch (err) {
+    const nodeErr = err as NodeJS.ErrnoException
+    if (nodeErr.code === "EEXIST") {
+      consola.error(`Backup file already exists: ${destPath}`)
+    } else {
+      consola.error(`Backup failed: ${nodeErr.message}`)
+    }
+    process.exit(1)
+  }
 }

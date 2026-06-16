@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander"
-import { handleList, handleAdd, handleDelete, handleTags } from "./commands.ts"
+import { handleList, handleAdd, handleDelete, handleTags, handleBackup } from "./commands.ts"
 
 const runCLI = () => {
   const program = new Command()
@@ -26,6 +26,11 @@ const runCLI = () => {
     .command("tags")
     .argument("<taglist...>")
     .action(handleTags)
+
+  program
+    .command("backup")
+    .argument("<destination>", "backup destination directory")
+    .action(handleBackup)
 
   program.parse()
 }
