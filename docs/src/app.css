@@ -234,6 +234,9 @@ aside nav {
   display: flex;
   flex-direction: column;
   height: auto;
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }
 
 .sidebar-section {
@@ -297,17 +300,31 @@ main {
 @media (min-width: 769px) {
   aside {
     transform: translateX(0);
-    position: sticky;
+    position: fixed;
+    left: 0;
     top: var(--header-height);
     height: calc(100vh - var(--header-height));
+    z-index: 50;
   }
 
   .sidebar-overlay {
     display: none !important;
   }
 
+  .layout {
+    max-width: none;
+    margin: 0;
+    padding-left: var(--sidebar-width);
+  }
+
   main {
-    margin-left: var(--sidebar-width);
+    margin-left: 0;
+  }
+
+  nav {
+    max-width: none;
+    margin: 0;
+    padding-left: var(--sidebar-width);
   }
 }
 
