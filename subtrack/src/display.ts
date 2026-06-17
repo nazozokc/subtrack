@@ -132,7 +132,7 @@ function renderTable(rows: string[][]): string {
     },
     style: {
       border: ["\x1b[90m", "\x1b[0m"],
-      head: ["\x1b[1;36m", "\x1b[0m"],
+      head: ["\x1b[38;5;73m", "\x1b[0m"],
       "padding-left": 1,
       "padding-right": 1,
       compact: false,
@@ -144,14 +144,19 @@ function renderTable(rows: string[][]): string {
     colAligns: ["left", "left", "left", "right"],
   })
 
-  for (const row of rows) {
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
     const isTotal = row[2].endsWith("TOTAL")
     if (isTotal) {
-      table.push(row.map((cell, i) =>
-        i === 2 ? `\x1b[1m${cell}\x1b[0m` : cell,
+      table.push(row.map((cell, j) =>
+        j === 2 ? `\x1b[1m${cell}\x1b[0m` : cell,
       ))
     } else {
-      table.push(row)
+      if (i % 2 === 0) {
+        table.push(row.map(cell => `\x1b[48;5;236m${cell}\x1b[0m`))
+      } else {
+        table.push(row)
+      }
     }
   }
 
