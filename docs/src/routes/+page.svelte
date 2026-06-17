@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { dev } from "$app/environment"
   import { base } from "$app/paths"
 </script>
 
@@ -25,39 +24,38 @@
 
 <section class="features">
   <div class="feature">
-    <h2>🕹️ TUI &amp; CLI</h2>
+    <h2>CLI &amp; TUI</h2>
     <p>Interactive terminal UI for browsing subscriptions, plus a full CLI for scripting and automation.</p>
   </div>
   <div class="feature">
-    <h2>💾 Local SQLite</h2>
+    <h2>Local SQLite</h2>
     <p>All data is stored locally. No servers, no accounts, no telemetry.</p>
   </div>
   <div class="feature">
-    <h2>🔔 Notifications</h2>
-    <p>Get reminded when subscriptions are about to renew. Never get surprised by a bill again.</p>
+    <h2>Currency Conversion</h2>
+    <p>Live exchange rates from open.er-api.com. View totals in any of 10 supported currencies.</p>
   </div>
 </section>
 
-<section class="usage">
+<section class="home-usage">
   <h2>Quick Start</h2>
   <pre># List all subscriptions
 subtrack list
 
 # Add a subscription
-subtrack add --name Netflix --price 19.99 --period monthly
+subtrack add --name Netflix --price 19.99 --cycle monthly
 
-# Check upcoming renewals
-subtrack upcoming
+# Show monthly payment total
+subtrack payment
 
-# Open interactive TUI
-subtrack tui</pre>
-</section>
-
-{#if !dev}
-  <p class="outdated-note">
-    This page may be outdated. Check the <a href="https://github.com/nazozokc/subtrack">repository</a> for the latest documentation.
+# Filter by tags
+subtrack tags music video</pre>
+  <p style="margin-top: 1rem;">
+    <a href={base + "/installation"}>Installation guide &rarr;</a>
+    &nbsp;&middot;&nbsp;
+    <a href={base + "/commands"}>Full command reference &rarr;</a>
   </p>
-{/if}
+</section>
 
 <style>
   .hero {
@@ -125,19 +123,4 @@ subtrack tui</pre>
     line-height: 1.5;
   }
 
-  .usage {
-    padding: 2rem 0;
-  }
-
-  .usage h2 {
-    font-size: 1.25rem;
-    margin-bottom: 1rem;
-  }
-
-  .outdated-note {
-    text-align: center;
-    font-size: 0.8rem;
-    color: var(--muted);
-    margin-top: 2rem;
-  }
 </style>
