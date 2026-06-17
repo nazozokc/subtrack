@@ -4,6 +4,10 @@
 
 # subtrack
 
+<p align="center">
+  <img src="images/subtrack-demo.png" alt="subtrack demo" width="700"/>
+</p>
+
 A CLI tool to manage your subscription services from the terminal.
 
 **subtrack** lets you add, list, filter, and delete subscriptions with an interactive CLI. Data is stored locally in SQLite.
