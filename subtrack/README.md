@@ -23,6 +23,8 @@ A CLI tool to manage your subscription services from the terminal.
 - **Delete** multiple subscriptions at once with a checkbox selector
 - **Filter by tags** — AND-based filtering with multiple tags
 - **Tag autocomplete hints** — shows existing tags during input
+- **Payment totals** — see how much you pay per month, year, or any cycle with `subtrack payment`
+- **Cycle-aware calculation** — automatically converts weekly, quarterly, yearly etc. to any period
 - **10 currencies** supported: JPY, USD, EUR, GBP, AUD, CAD, KRW, CNY, SGD, HKD
 - **6 billing cycles**: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly
 - **SQLite** storage — portable, zero-config, lives in `~/.config/subtrack/subtrack.db`
@@ -66,6 +68,15 @@ subtrack delete
 
 # Filter subscriptions by tags (AND)
 subtrack tags music video
+
+# Show monthly payment total
+subtrack payment
+
+# Show yearly payment total (converts all cycles automatically)
+subtrack payment yearly
+
+# Show monthly payment in a specific currency
+subtrack payment monthly --currency JPY
 ```
 
 ## npx usage
@@ -87,6 +98,12 @@ npx subtrack delete
 
 # Filter subscriptions by tags (AND)
 npx subtrack tags music video
+
+# Show monthly payment total
+npx subtrack payment
+
+# Show yearly payment total
+npx subtrack payment yearly
 ```
 
 
@@ -126,6 +143,33 @@ Shows an interactive checkbox list of all subscriptions. Select one or more
 to delete. Confirmation is required before deletion.
 
 > **Note:** The `delete` command is always interactive — no non-interactive mode.
+
+#### `payment [period]`
+
+Calculates and displays how much you pay over a given billing period. All
+subscriptions are converted to the target period automatically based on their
+billing cycle.
+
+| Option              | Description                                       |
+| ------------------- | ------------------------------------------------- |
+| `-c, --currency <C>` | Convert all prices to the given currency using live exchange rates |
+
+When `--currency` is used, the total is displayed as a single amount in the
+target currency. Without it, totals are grouped by currency.
+
+```bash
+# Monthly total (default)
+subtrack payment
+
+# Yearly total
+subtrack payment yearly
+
+# Weekly total in JPY
+subtrack payment weekly --currency JPY
+```
+
+When exchange rates cannot be fetched (e.g. offline), the command falls back to
+per-currency display without conversion.
 
 #### `tags <taglist...>`
 

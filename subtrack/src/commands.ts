@@ -2,7 +2,7 @@ import { input, confirm, checkbox } from "@inquirer/prompts"
 import { consola } from "consola"
 import { copyFileSync, statSync, constants } from "node:fs"
 import { join } from "node:path"
-import type { Currency } from "./db.ts"
+import type { Currency, Cycle } from "./db.ts"
 import {
   getSubscriptions,
   writeSubscription,
@@ -12,7 +12,7 @@ import {
   getDbPath,
   saveDb,
 } from "./db.ts"
-import { formatPrice, spreadSubscription } from "./display.ts"
+import { formatPrice, spreadSubscription, showPayment } from "./display.ts"
 import {
   CURRENCY_CHOICES,
   CYCLE_CHOICES,
@@ -202,4 +202,11 @@ export async function handleBackup(destination: string) {
     }
     process.exit(1)
   }
+}
+
+export async function handlePayment(
+  period: Cycle,
+  options: { currency?: string },
+) {
+  await showPayment(period, options.currency as Currency | undefined)
 }

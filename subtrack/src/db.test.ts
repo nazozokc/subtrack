@@ -323,6 +323,65 @@ test("works with multiple subscriptions sharing the same tag", async () => {
   expect(results).toHaveLength(2)
 })
 
+test("periodFactor returns correct factor for monthly to monthly", async () => {
+  const { periodFactor } = await import("./db")
+  expect(periodFactor("monthly", "monthly")).toBe(1)
+})
+
+test("periodFactor returns correct factor for yearly to monthly", async () => {
+  const { periodFactor } = await import("./db")
+  expect(periodFactor("yearly", "monthly")).toBe(1 / 12)
+})
+
+test("periodFactor returns correct factor for monthly to yearly", async () => {
+  const { periodFactor } = await import("./db")
+  expect(periodFactor("monthly", "yearly")).toBe(12)
+})
+
+test("periodFactor returns correct factor for weekly to monthly", async () => {
+  const { periodFactor } = await import("./db")
+  expect(periodFactor("weekly", "monthly")).toBe(52 / 12)
+})
+
+test("periodFactor returns correct factor for bi-weekly to monthly", async () => {
+  const { periodFactor } = await import("./db")
+  expect(periodFactor("bi-weekly", "monthly")).toBe(26 / 12)
+})
+
+test("periodFactor returns correct factor for quarterly to monthly", async () => {
+  const { periodFactor } = await import("./db")
+  expect(periodFactor("quarterly", "monthly")).toBe(4 / 12)
+})
+
+test("periodFactor returns correct factor for semi-annual to monthly", async () => {
+  const { periodFactor } = await import("./db")
+  expect(periodFactor("semi-annual", "monthly")).toBe(2 / 12)
+})
+
+test("periodFactor defaults to monthly when to is omitted", async () => {
+  const { periodFactor } = await import("./db")
+  expect(periodFactor("yearly")).toBe(1 / 12)
+  expect(periodFactor("monthly")).toBe(1)
+})
+
+test("periodFactor returns correct factor for quarterly to yearly", async () => {
+  const { periodFactor } = await import("./db")
+  expect(periodFactor("quarterly", "yearly")).toBe(4)
+})
+
+test("periodFactor handles all cycle-to-cycle combinations without throwing", async () => {
+  const { periodFactor, OCCURRENCES_PER_YEAR } = await import("./db")
+  const cycles = Object.keys(OCCURRENCES_PER_YEAR) as Array<keyof typeof OCCURRENCES_PER_YEAR>
+  for (const from of cycles) {
+    for (const to of cycles) {
+      const factor = periodFactor(from, to)
+      expect(typeof factor).toBe("number")
+      expect(factor).not.toBeNaN()
+      expect(factor).toBeGreaterThan(0)
+    }
+  }
+})
+
 test("getSubscriptions returns correct data types", async () => {
   const db = await import("./db")
 
