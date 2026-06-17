@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander"
-import { handleList, handleAdd, handleDelete, handleTags, handleBackup } from "./commands.ts"
+import { handleList, handleAdd, handleDelete, handleTags, handleBackup, handlePayment } from "./commands.ts"
 
 const runCLI = () => {
   const program = new Command()
@@ -31,6 +31,12 @@ const runCLI = () => {
     .command("backup")
     .argument("<destination>", "backup destination directory")
     .action(handleBackup)
+
+  program
+    .command("payment")
+    .argument("[period]", "billing period (weekly, bi-weekly, monthly, quarterly, semi-annual, yearly)", "monthly")
+    .option("-c, --currency <currency>", "convert all prices to currency")
+    .action(handlePayment)
 
   program.parse()
 }

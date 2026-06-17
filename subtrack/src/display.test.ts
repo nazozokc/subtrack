@@ -253,3 +253,99 @@ test("currency with empty list shows info", async () => {
   await spreadSubscription([], "JPY")
   expect(infoMessages).toContain("No subscriptions found")
 })
+
+// ── showPayment tests ────────────────────────────────────
+
+test("showPayment shows info when no subscriptions", async () => {
+  const { showPayment } = await import("./display")
+  await showPayment("monthly", undefined, [])
+  expect(infoMessages).toContain("No subscriptions found")
+})
+
+test("showPayment shows monthly total for single currency", async () => {
+  const { showPayment } = await import("./display")
+  await showPayment("monthly", undefined, [
+    makeSub({ name: "Netflix", price: 1500, currency: "JPY" }),
+  ])
+  expect(logMessages).toHaveLength(1)
+  expect(logMessages[0]).toContain("¥1,500")
+  expect(logMessages[0]).toContain("/month")
+})
+
+test("showPayment shows yearly total for single currency", async () => {
+  const { showPayment } = await import("./display")
+  await showPayment("yearly", undefined, [
+    makeSub({ name: "Netflix", price: 1500, currency: "JPY" }),
+  ])
+  expect(logMessages).toHaveLength(1)
+  expect(logMessages[0]).toContain("¥18,000")
+  expect(logMessages[0]).toContain("/year")
+})
+
+test("showPayment shows per-currency totals for mixed currencies", async () => {
+  const { showPayment } = await import("./display")
+  await showPayment("monthly", undefined, [
+    makeSub({ name: "Netflix", price: 1500, currency: "JPY" }),
+    makeSub({ name: "GitHub", price: 10, currency: "USD" }),
+  ])
+  expect(logMessages).toHaveLength(2)
+  const combined = logMessages.join("\n")
+  expect(combined).toContain("JPY")
+  expect(combined).toContain("¥1,500")
+  expect(combined).toContain("USD")
+  expect(combined).toContain("$10")
+})
+
+test("showPayment yearly converts all cycles correctly", async () => {
+  const { showPayment } = await import("./display")
+  await showPayment("yearly", undefined, [
+    makeSub({ name: "Monthly", price: 1000, currency: "JPY", cycle: "monthly" }),
+    makeSub({ name: "Yearly", price: 12000, currency: "JPY", cycle: "yearly" }),
+  ])
+  expect(logMessages).toHaveLength(1)
+  // monthly 1000 => yearly 12000, yearly 12000 => yearly 12000 => total 24000
+  expect(logMessages[0]).toContain("¥24,000")
+})
+
+test("showPayment weekly converts correctly", async () => {
+  const { showPayment } = await import("./display")
+  await showPayment("weekly", undefined, [
+    makeSub({ name: "WeeklySub", price: 100, currency: "USD", cycle: "weekly" }),
+  ])
+  expect(logMessages[0]).toContain("$100")
+  expect(logMessages[0]).toContain("/week")
+})
+
+test("showPayment with --currency converts all to target currency", async () => {
+  const { showPayment } = await import("./display")
+  await showPayment("monthly", "JPY", [
+    makeSub({ name: "Local", price: 1000, currency: "JPY" }),
+    makeSub({ name: "Foreign", price: 10, currency: "USD" }),
+  ])
+  // JPY 1000 stays 1000, USD 10 * 160 = 1600 => total 2600
+  expect(logMessages).toHaveLength(1)
+  expect(logMessages[0]).toContain("￥2,600")
+})
+
+test("showPayment --currency falls back when fetch fails", async () => {
+  globalThis.fetch = async () => {
+    throw new Error("Network error")
+  }
+
+  const { showPayment } = await import("./display")
+  await showPayment("monthly", "JPY", [
+    makeSub({ name: "JP", price: 1000, currency: "JPY" }),
+    makeSub({ name: "US", price: 10, currency: "USD" }),
+  ])
+
+  // Should log fail message
+  expect(failMessages.length).toBeGreaterThan(0)
+  expect(failMessages[0]).toContain("Failed to fetch exchange rates")
+
+  // Should fall back to per-currency display
+  const combined = logMessages.join("\n")
+  expect(combined).toContain("JPY")
+  expect(combined).toContain("¥1,000")
+  expect(combined).toContain("USD")
+  expect(combined).toContain("$10")
+})

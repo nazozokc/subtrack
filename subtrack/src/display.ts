@@ -1,7 +1,13 @@
 import { consola } from "consola"
 import pc from "picocolors"
 import CliTable3 from "cli-table3"
-import { type SharedArgs, type Currency, getSubscriptions } from "./db.ts"
+import {
+  type SharedArgs,
+  type Currency,
+  type Cycle,
+  getSubscriptions,
+  periodFactor,
+} from "./db.ts"
 
 type FxRates = {
   base: string
@@ -260,5 +266,85 @@ export const spreadSubscription = async (
 
     consola.log(renderTable(groupRows))
     if (i < groupEntries.length - 1) consola.log("")
+  }
+}
+
+export const showPayment = async (
+  period: Cycle = "monthly",
+  currency?: Currency,
+  subs?: SharedArgs[],
+): Promise<void> => {
+  const list = subs ?? getSubscriptions()
+
+  if (list.length === 0) {
+    consola.info("No subscriptions found")
+    return
+  }
+
+  // Calculate per-subscription converted price
+  type Entry = { convertedPrice: number; currency: Currency }
+  const entries: Entry[] = list.map((sub) => ({
+    convertedPrice: sub.price * periodFactor(sub.cycle, period),
+    currency: sub.currency,
+  }))
+
+  const fmtPeriod = period === "monthly" ? "month" : period === "bi-weekly" ? "bi-week" : period === "semi-annual" ? "6 months" : period
+
+  if (currency) {
+    // Convert all to the target currency
+    let rates: FxRates | null = null
+    try {
+      rates = await fetchFxRates()
+    } catch {
+      consola.fail("Failed to fetch exchange rates; falling back to per-currency display")
+    }
+
+    if (rates) {
+      const fmt = new Intl.NumberFormat(
+        currency === "JPY" ? "ja-JP" : "en-US",
+        {
+          style: "currency",
+          currency,
+          minimumFractionDigits: currency === "JPY" ? 0 : 2,
+          maximumFractionDigits: currency === "JPY" ? 0 : 2,
+        },
+      )
+
+      let total = 0
+      let hasMissingRate = false
+      for (const entry of entries) {
+        try {
+          total += convertPrice(
+            entry.convertedPrice,
+            entry.currency,
+            currency,
+            rates.rates,
+          )
+        } catch {
+          hasMissingRate = true
+        }
+      }
+
+      if (hasMissingRate) {
+        consola.warn("Some prices could not be converted (missing rate)")
+      }
+
+      consola.log(`${fmt.format(total)}/${fmtPeriod}`)
+      return
+    }
+    // fallback: continue to per-currency display
+  }
+
+  // Group by currency
+  const groups: Record<string, number> = {}
+  for (const entry of entries) {
+    groups[entry.currency] = (groups[entry.currency] ?? 0) + entry.convertedPrice
+  }
+
+  for (const ccy of Object.keys(groups).sort()) {
+    const total = groups[ccy]
+    // Round to integer for display (prices are stored as integers)
+    const rounded = Math.round(total)
+    consola.log(`${ccy} ${formatPrice(rounded, ccy)}/${fmtPeriod}`)
   }
 }
