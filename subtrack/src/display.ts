@@ -1,4 +1,5 @@
 import { consola } from "consola"
+import pc from "picocolors"
 import CliTable3 from "cli-table3"
 import { type SharedArgs, type Currency, getSubscriptions } from "./db.ts"
 
@@ -132,7 +133,7 @@ function renderTable(rows: string[][]): string {
     },
     style: {
       border: ["\x1b[90m", "\x1b[0m"],
-      head: ["\x1b[38;5;73m", "\x1b[0m"],
+      head: ["\x1b[1m\x1b[38;5;75m", "\x1b[0m"],
       "padding-left": 1,
       "padding-right": 1,
       compact: false,
@@ -148,9 +149,10 @@ function renderTable(rows: string[][]): string {
     const row = rows[i]
     const isTotal = row[2].endsWith("TOTAL")
     if (isTotal) {
-      table.push(row.map((cell, j) =>
-        j === 2 ? `\x1b[1m${cell}\x1b[0m` : cell,
-      ))
+      table.push(row.map((cell, j) => {
+        if (j === 2 || j === 3) return pc.bold(pc.yellow(cell))
+        return cell
+      }))
     } else {
       if (i % 2 === 0) {
         table.push(row.map(cell => `\x1b[48;5;236m${cell}\x1b[0m`))
