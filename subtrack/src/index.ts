@@ -49,7 +49,7 @@ const editCommand = define({
   name: "edit",
   description: "Edit a subscription",
   args: {
-    id: { type: "positional", description: "Subscription ID (omit for interactive selection)" },
+    id: { type: "positional", description: "Subscription ID (omit for interactive selection)", required: false },
     name: { type: "string", description: "Subscription name" },
     price: { type: "string", description: "Monthly payment amount" },
     currency: { type: "string", description: "Currency" },
@@ -175,20 +175,28 @@ const mainCommand = define({
   run: () => consola.info('Run "subtrack --help" for available commands'),
 })
 
-await cli(process.argv.slice(2), mainCommand, {
-  name: "subtrack",
-  version: "2.2.0",
-  subCommands: {
-    list: listCommand,
-    add: addCommand,
-    edit: editCommand,
-    delete: deleteCommand,
-    tags: tagsCommand,
-    tag: tagCommand,
-    export: exportCommand,
-    import: importCommand,
-    summary: summaryCommand,
-    backup: backupCommand,
-    payment: paymentCommand,
-  },
-})
+try {
+  await cli(process.argv.slice(2), mainCommand, {
+    name: "subtrack",
+    version: "2.2.0",
+    subCommands: {
+      list: listCommand,
+      add: addCommand,
+      edit: editCommand,
+      delete: deleteCommand,
+      tags: tagsCommand,
+      tag: tagCommand,
+      export: exportCommand,
+      import: importCommand,
+      summary: summaryCommand,
+      backup: backupCommand,
+      payment: paymentCommand,
+    },
+  })
+} catch (error) {
+  if (error instanceof Error && error.name === "ExitPromptError") {
+    // User cancelled the prompt (Ctrl+C/D) — exit gracefully
+    process.exit(0)
+  }
+  throw error
+}
