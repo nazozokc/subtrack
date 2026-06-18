@@ -5,16 +5,43 @@ import type { Currency, Cycle } from "./db.ts"
 export type { Currency, Cycle }
 
 export const CURRENCY_CHOICES: { name: string; value: Currency }[] = [
-  { name: "JPY (日本円)", value: "JPY" },
-  { name: "USD (US Dollar)", value: "USD" },
+  { name: "AED (UAE Dirham)", value: "AED" },
+  { name: "ARS (Argentine Peso)", value: "ARS" },
+  { name: "AUD (Australian Dollar)", value: "AUD" },
+  { name: "BRL (Brazilian Real)", value: "BRL" },
+  { name: "CAD (Canadian Dollar)", value: "CAD" },
+  { name: "CHF (Swiss Franc)", value: "CHF" },
+  { name: "CLP (Chilean Peso)", value: "CLP" },
+  { name: "CNY (Chinese Yuan)", value: "CNY" },
+  { name: "COP (Colombian Peso)", value: "COP" },
+  { name: "CZK (Czech Koruna)", value: "CZK" },
+  { name: "DKK (Danish Krone)", value: "DKK" },
+  { name: "EGP (Egyptian Pound)", value: "EGP" },
   { name: "EUR (Euro)", value: "EUR" },
   { name: "GBP (British Pound)", value: "GBP" },
-  { name: "AUD (Australian Dollar)", value: "AUD" },
-  { name: "CAD (Canadian Dollar)", value: "CAD" },
-  { name: "KRW (South Korean Won)", value: "KRW" },
-  { name: "CNY (Chinese Yuan)", value: "CNY" },
-  { name: "SGD (Singapore Dollar)", value: "SGD" },
   { name: "HKD (Hong Kong Dollar)", value: "HKD" },
+  { name: "HUF (Hungarian Forint)", value: "HUF" },
+  { name: "IDR (Indonesian Rupiah)", value: "IDR" },
+  { name: "ILS (Israeli Shekel)", value: "ILS" },
+  { name: "INR (Indian Rupee)", value: "INR" },
+  { name: "JPY (日本円)", value: "JPY" },
+  { name: "KRW (South Korean Won)", value: "KRW" },
+  { name: "MXN (Mexican Peso)", value: "MXN" },
+  { name: "MYR (Malaysian Ringgit)", value: "MYR" },
+  { name: "NGN (Nigerian Naira)", value: "NGN" },
+  { name: "NOK (Norwegian Krone)", value: "NOK" },
+  { name: "NZD (New Zealand Dollar)", value: "NZD" },
+  { name: "PHP (Philippine Peso)", value: "PHP" },
+  { name: "PLN (Polish Zloty)", value: "PLN" },
+  { name: "SAR (Saudi Riyal)", value: "SAR" },
+  { name: "SEK (Swedish Krona)", value: "SEK" },
+  { name: "SGD (Singapore Dollar)", value: "SGD" },
+  { name: "THB (Thai Baht)", value: "THB" },
+  { name: "TRY (Turkish Lira)", value: "TRY" },
+  { name: "TWD (Taiwan Dollar)", value: "TWD" },
+  { name: "USD (US Dollar)", value: "USD" },
+  { name: "VND (Vietnamese Dong)", value: "VND" },
+  { name: "ZAR (South African Rand)", value: "ZAR" },
 ]
 
 export const CYCLE_CHOICES: { name: string; value: Cycle }[] = [
@@ -26,8 +53,12 @@ export const CYCLE_CHOICES: { name: string; value: Cycle }[] = [
   { name: "yearly", value: "yearly" },
 ]
 
+/**
+ * Validate a currency code format (ISO 4217 3-letter).
+ * --currency flag accepts any valid 3-letter code; interactive prompt restricts to CURRENCY_CHOICES.
+ */
 export function isValidCurrency(v: string): v is Currency {
-  return CURRENCY_CHOICES.some((c) => c.value === v)
+  return /^[A-Z]{3}$/.test(v)
 }
 
 export function isValidCycle(v: string): v is Cycle {

@@ -4,10 +4,7 @@ import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { homedir } from "node:os"
 
-export type Currency =
-  | "JPY" | "USD" | "EUR" | "GBP"
-  | "AUD" | "CAD" | "KRW" | "CNY"
-  | "SGD" | "HKD"
+export type Currency = string
 
 export type Cycle =
   | "weekly" | "bi-weekly" | "monthly"
@@ -120,7 +117,7 @@ function getDb(): Database {
     tag_id INTEGER NOT NULL,
     PRIMARY KEY (subscription_id, tag_id),
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
-    FOREIGN KEY (tag_id) REFERENCES tags(id)
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
   )`)
 
   return _db
@@ -136,25 +133,43 @@ function mapTags(subs: SharedArgs[]): SharedArgs[] {
   if (subs.length === 0) return subs
 
   const db = getDb()
+  const ids = subs.map((s) => s.id)
+  const placeholders = ids.map(() => "?").join(",")
+  const rows = execObjs<{ subscription_id: number; name: string }>(
+    db,
+    `SELECT subscription_tags.subscription_id, tags.name FROM tags
+     JOIN subscription_tags ON subscription_tags.tag_id = tags.id
+     WHERE subscription_tags.subscription_id IN (${placeholders})`,
+    ids,
+  )
+
+  // Group tags by subscription id
+  const tagMap = new Map<number, string[]>()
+  for (const row of rows) {
+    const list = tagMap.get(row.subscription_id)
+    if (list) {
+      list.push(row.name)
+    } else {
+      tagMap.set(row.subscription_id, [row.name])
+    }
+  }
+
   for (const sub of subs) {
-    const rows = execObjs<{ name: string }>(
-      db,
-      `SELECT tags.name FROM tags
-       JOIN subscription_tags ON subscription_tags.tag_id = tags.id
-       WHERE subscription_tags.subscription_id = ?`,
-      [sub.id],
-    )
-    sub.tags = rows.map((r) => r.name)
+    sub.tags = tagMap.get(sub.id) ?? []
   }
 
   return subs
 }
 
-export const getSubscriptions = (): SharedArgs[] => {
+const SORT_FIELDS = ["id", "name", "price", "currency", "cycle"] as const
+
+export const getSubscriptions = (sort?: string, desc?: boolean): SharedArgs[] => {
   const db = getDb()
+  const field = sort && (SORT_FIELDS as readonly string[]).includes(sort) ? sort : "id"
+  const order = desc ? "DESC" : "ASC"
   const subs = execObjs<SharedArgs>(
     db,
-    "SELECT id, name, price, currency, cycle FROM subscriptions ORDER BY id",
+    `SELECT id, name, price, currency, cycle FROM subscriptions ORDER BY ${field} ${order}`,
   )
   return mapTags(subs)
 }
@@ -251,4 +266,127 @@ export const tagsSubscription = (tag: string[] | string): SharedArgs[] => {
   )
 
   return mapTags(subs)
+}
+
+export const getSubscription = (id: number): SharedArgs | undefined => {
+  const db = getDb()
+  const sub = execObj<SharedArgs>(
+    db,
+    "SELECT id, name, price, currency, cycle FROM subscriptions WHERE id = ?",
+    [id],
+  )
+  if (!sub) return undefined
+  return mapTags([sub])[0]
+}
+
+export const updateSubscription = (
+  id: number,
+  fields: Partial<AddSharedArgs>,
+): boolean => {
+  const db = getDb()
+
+  db.run("BEGIN TRANSACTION")
+  try {
+    const sets: string[] = []
+    const params: SqlValue[] = []
+
+    if (fields.name !== undefined) { sets.push("name = ?"); params.push(fields.name) }
+    if (fields.price !== undefined) { sets.push("price = ?"); params.push(fields.price) }
+    if (fields.currency !== undefined) { sets.push("currency = ?"); params.push(fields.currency) }
+    if (fields.cycle !== undefined) { sets.push("cycle = ?"); params.push(fields.cycle) }
+
+    if (sets.length > 0) {
+      params.push(id)
+      db.run(`UPDATE subscriptions SET ${sets.join(", ")} WHERE id = ?`, params)
+    }
+
+    if (fields.tags !== undefined) {
+      const uniqueTags = Array.from(new Set(fields.tags))
+      db.run("DELETE FROM subscription_tags WHERE subscription_id = ?", [id])
+      for (const t of uniqueTags) {
+        db.run("INSERT OR IGNORE INTO tags (name) VALUES (?)", [t])
+        const tagRow = execObj<{ id: number }>(
+          db,
+          "SELECT id FROM tags WHERE name = ?",
+          [t],
+        )
+        if (tagRow) {
+          db.run(
+            "INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)",
+            [id, tagRow.id],
+          )
+        }
+      }
+    }
+
+    db.run("COMMIT")
+    saveDb()
+    return true
+  } catch (error) {
+    try { db.run("ROLLBACK") } catch { /* ok */ }
+    throw error
+  }
+}
+
+export const getTagsWithCount = (): { name: string; count: number }[] => {
+  const db = getDb()
+  return execObjs<{ name: string; count: number }>(
+    db,
+    `SELECT tags.name, (SELECT COUNT(*) FROM subscription_tags WHERE subscription_tags.tag_id = tags.id) AS count FROM tags ORDER BY name`,
+  )
+}
+
+export const renameTag = (oldName: string, newName: string): boolean => {
+  const db = getDb()
+  if (oldName === newName) return true
+  db.run("BEGIN TRANSACTION")
+  try {
+    const oldRow = execObj<{ id: number }>(
+      db,
+      "SELECT id FROM tags WHERE name = ?",
+      [oldName],
+    )
+    if (!oldRow) { db.run("ROLLBACK"); return false }
+
+    const existingRow = execObj<{ id: number }>(
+      db,
+      "SELECT id FROM tags WHERE name = ?",
+      [newName],
+    )
+    if (existingRow) {
+      // Merge: point all references to the existing tag, delete old
+      db.run(
+        "UPDATE OR IGNORE subscription_tags SET tag_id = ? WHERE tag_id = ?",
+        [existingRow.id, oldRow.id],
+      )
+      db.run("DELETE FROM subscription_tags WHERE tag_id = ?", [oldRow.id])
+      db.run("DELETE FROM tags WHERE id = ?", [oldRow.id])
+    } else {
+      db.run("UPDATE tags SET name = ? WHERE id = ?", [newName, oldRow.id])
+    }
+    db.run("COMMIT")
+    saveDb()
+    return true
+  } catch (error) {
+    try { db.run("ROLLBACK") } catch { /* ok */ }
+    throw error
+  }
+}
+
+export const deleteTag = (name: string): boolean => {
+  const db = getDb()
+  db.run("DELETE FROM tags WHERE name = ?", [name])
+  const modified = db.getRowsModified() > 0
+  if (modified) saveDb()
+  return modified
+}
+
+export const pruneTags = (): number => {
+  const db = getDb()
+  db.run(
+    "DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM subscription_tags)",
+  )
+  const count = db.getRowsModified()
+  if (count > 0) saveDb()
+  return count
 }
