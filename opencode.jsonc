@@ -1,0 +1,53 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": [
+    {
+      "name": "subtrack-rules",
+      "description": "When working on the subtrack project, editing source code, running tests, or managing dependencies",
+      "location": "file:///home/nazozokc/ghq/github.com/nazozokc/subtrack/.agents/skills/subtrack-rules/SKILL.md"
+    },
+    {
+      "name": "subtrack-commit",
+      "description": "When committing changes to subtrack, creating PRs, or pushing to remote",
+      "location": "file:///home/nazozokc/ghq/github.com/nazozokc/subtrack/.agents/skills/subtrack-commit/SKILL.md"
+    }
+  ],
+  "permissions": [
+    {
+      "type": "read",
+      "path": "."
+    },
+    {
+      "type": "write",
+      "path": "subtrack/src/**"
+    },
+    {
+      "type": "write",
+      "path": ".github/**"
+    },
+    {
+      "type": "write",
+      "path": ".agents/**"
+    },
+    {
+      "type": "write",
+      "path": ".claude/**"
+    },
+    {
+      "type": "exec",
+      "command": "pnpm *"
+    },
+    {
+      "type": "exec",
+      "command": "nix *"
+    },
+    {
+      "type": "exec",
+      "command": "git *"
+    },
+    {
+      "type": "exec",
+      "command": "typos"
+    }
+  ]
+}

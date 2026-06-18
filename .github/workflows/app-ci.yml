@@ -5,14 +5,20 @@ on:
     branches: [main]
     paths:
       - "subtrack/**"
-      - ".github/workflows/app-ci.yml"
+      - ".github/**"
+      - ".agents/**"
+      - ".claude/**"
+      - "opencode.jsonc"
       - "pnpm-workspace.yaml"
       - "package.json"
   pull_request:
     branches: [main]
     paths:
       - "subtrack/**"
-      - ".github/workflows/app-ci.yml"
+      - ".github/**"
+      - ".agents/**"
+      - ".claude/**"
+      - "opencode.jsonc"
       - "pnpm-workspace.yaml"
       - "package.json"
 
@@ -20,7 +26,7 @@ jobs:
   test:
     strategy:
       matrix:
-        node-version: [22, 23]
+        node-version: [22, 23, 24]
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
 
@@ -47,6 +53,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Type check
+        working-directory: ./subtrack
+        run: npx tsc --noEmit
+
       - run: pnpm build
 
       - run: pnpm test
@@ -59,9 +69,21 @@ jobs:
         working-directory: ./subtrack
         run: pnpm start list
 
+      - name: Verify CLI export csv command
+        working-directory: ./subtrack
+        run: pnpm start export csv
+
+      - name: Verify CLI export md command
+        working-directory: ./subtrack
+        run: pnpm start export md
+
       - name: Spell check with typos
         if: runner.os == 'Linux'
         uses: crate-ci/typos@v1.47.2
         with:
           files: subtrack/
           config: typos.toml
+
+      - name: Audit dependencies
+        if: runner.os == 'Linux'
+        run: pnpm audit --audit-level=high

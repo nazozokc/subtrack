@@ -254,6 +254,96 @@ test("currency with empty list shows info", async () => {
   expect(infoMessages).toContain("No subscriptions found")
 })
 
+// ── exportCsv tests ──────────────────────────────────────
+
+test("exportCsv returns header-only when no subscriptions", async () => {
+  const { exportCsv } = await import("./display")
+  const csv = exportCsv([])
+  expect(csv).toBe("\uFEFFname,cycle,tags,price,currency")
+})
+
+test("exportCsv produces correct csv for single subscription", async () => {
+  const { exportCsv } = await import("./display")
+  const csv = exportCsv([makeSub({ name: "Netflix", price: 1500, currency: "JPY" })])
+  const lines = csv.split("\n")
+  expect(lines).toHaveLength(2)
+  expect(lines[0]).toBe("\uFEFFname,cycle,tags,price,currency")
+  expect(lines[1]).toBe("Netflix,monthly,,1500,JPY")
+})
+
+test("exportCsv handles tags correctly", async () => {
+  const { exportCsv } = await import("./display")
+  const csv = exportCsv([
+    makeSub({ name: "Netflix", tags: ["video", "entertainment"] }),
+  ])
+  const lines = csv.split("\n")
+  expect(lines[1]).toBe("Netflix,monthly,video;entertainment,1000,JPY")
+})
+
+test("exportCsv escapes commas in name", async () => {
+  const { exportCsv } = await import("./display")
+  const csv = exportCsv([
+    makeSub({ name: "Service, Inc.", price: 100 }),
+  ])
+  const lines = csv.split("\n")
+  expect(lines[1]).toBe('"Service, Inc.",monthly,,100,JPY')
+})
+
+test("exportCsv handles multiple subscriptions", async () => {
+  const { exportCsv } = await import("./display")
+  const csv = exportCsv([
+    makeSub({ id: 1, name: "A", price: 10, currency: "USD", tags: ["x"] }),
+    makeSub({ id: 2, name: "B", price: 20, currency: "USD", tags: ["y"] }),
+  ])
+  const lines = csv.split("\n")
+  expect(lines).toHaveLength(3)
+  expect(lines[1]).toBe("A,monthly,x,10,USD")
+  expect(lines[2]).toBe("B,monthly,y,20,USD")
+})
+
+test("exportCsv begins with BOM", async () => {
+  const { exportCsv } = await import("./display")
+  const csv = exportCsv([makeSub()])
+  expect(csv.charCodeAt(0)).toBe(0xfeff)
+})
+
+// ── exportMd tests ───────────────────────────────────────
+
+test("exportMd returns header and separator when no subscriptions", async () => {
+  const { exportMd } = await import("./display")
+  const md = exportMd([])
+  expect(md).toBe("| name | cycle | tags | price | currency |\n| --- | --- | --- | --- | --- |")
+})
+
+test("exportMd produces correct markdown for single subscription", async () => {
+  const { exportMd } = await import("./display")
+  const md = exportMd([makeSub({ name: "Netflix", price: 1500, currency: "JPY" })])
+  const lines = md.split("\n")
+  expect(lines).toHaveLength(3)
+  expect(lines[2]).toBe("| Netflix | monthly | - | ¥1,500 | JPY |")
+})
+
+test("exportMd handles tags correctly", async () => {
+  const { exportMd } = await import("./display")
+  const md = exportMd([
+    makeSub({ name: "Netflix", tags: ["video", "entertainment"] }),
+  ])
+  const lines = md.split("\n")
+  expect(lines[2]).toBe("| Netflix | monthly | video, entertainment | ¥1,000 | JPY |")
+})
+
+test("exportMd handles multiple subscriptions", async () => {
+  const { exportMd } = await import("./display")
+  const md = exportMd([
+    makeSub({ id: 1, name: "A", price: 10, currency: "USD", tags: ["x"] }),
+    makeSub({ id: 2, name: "B", price: 20, currency: "USD", tags: [] }),
+  ])
+  const lines = md.split("\n")
+  expect(lines).toHaveLength(4)
+  expect(lines[2]).toBe("| A | monthly | x | $10 | USD |")
+  expect(lines[3]).toBe("| B | monthly | - | $20 | USD |")
+})
+
 // ── showPayment tests ────────────────────────────────────
 
 test("showPayment shows info when no subscriptions", async () => {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander"
-import { handleList, handleAdd, handleDelete, handleTags, handleBackup, handlePayment } from "./commands.ts"
+import { handleList, handleAdd, handleDelete, handleTags, handleBackup, handlePayment, handleExport } from "./commands.ts"
 
 const runCLI = () => {
   const program = new Command()
@@ -26,6 +26,13 @@ const runCLI = () => {
     .command("tags")
     .argument("<taglist...>")
     .action(handleTags)
+
+  program
+    .command("export")
+    .argument("<format>", "export format: csv, md")
+    .option("-c, --currency <currency>", "convert all prices to currency")
+    .option("--tags <tags>", "filter by comma-separated tags")
+    .action(handleExport)
 
   program
     .command("backup")
