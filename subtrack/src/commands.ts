@@ -86,11 +86,11 @@ async function resolveAddOptions(flags: AddFlags) {
     prompted = true
     const existingTags = getAllTags()
     tagsStr = await input({
-      message: "tags",
-      hint:
-        existingTags.length > 0
-          ? `existing: ${existingTags.join(", ")}`
-          : undefined,
+      message:
+        "tags" +
+        (existingTags.length > 0
+          ? ` (existing: ${existingTags.join(", ")})`
+          : ""),
       validate: validateTags,
     })
   }

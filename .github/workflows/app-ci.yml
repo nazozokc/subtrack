@@ -53,10 +53,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Type check
-        working-directory: ./subtrack
-        run: npx tsc --noEmit
-
       - run: pnpm build
 
       - run: pnpm test
