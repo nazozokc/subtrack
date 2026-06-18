@@ -1,42 +1,75 @@
+# subtrack
 
-Use pnpm for package management and Node.js for runtime.
+CLI tool to manage subscription services from the terminal. Node.js + TypeScript.
+
+## Tech Stack
+
+- **Runtime**: Node.js (not Bun or Deno)
+- **Language**: TypeScript (strict mode, ESM, `verbatimModuleSyntax`)
+- **Database**: `sql.js` (SQLite via WASM)
+- **CLI**: `commander`
+- **Prompts**: `@inquirer/prompts`
+- **Logging**: `consola`
+- **Tables**: `cli-table3`
+- **Build**: `tsdown`
+- **Test**: `vitest`
 
 ## Package Management
 
-- Use `pnpm add <package>` instead of `npm install <package>` or `bun add <package>`
-- Use `pnpm remove <package>` instead of `npm uninstall <package>` or `bun remove <package>`
-- Use `pnpm update` instead of `npm update` or `bun update`
-- Use `pnpm run <script>` or `pnpm <script>` instead of `npm run` or `bun run`
+- Use `pnpm add <package>`
+- Use `pnpm remove <package>`
+- Use `pnpm update`
+- Use `pnpm run <script>` or `pnpm <script>`
 - Use `pnpmx <package>` instead of `npx` or `bunx`
 
 ## Running
 
-- Use `tsx src/index.ts` for development (TypeScript execution)
-- Use `tsdown` for building (already configured in scripts.build)
-- Don't use `bun` or `node --loader` for running TypeScript directly
+- Development: `pnpm start` (tsx src/index.ts)
+- Build: `pnpm build` (tsdown)
+- Output: `dist/index.mjs`
 
 ## Testing
 
-- Use `vitest` for running tests (`pnpm test` or `vitest run`)
-- Test files are co-located next to source files as `*.test.ts`
-- Use `pnpm test:watch` for watch mode
+- `pnpm test` (vitest)
+- Test files co-located as `*.test.ts`
+- Use `__setDb()` from `db.ts` to inject in-memory SQLite for tests
+- Mock `consola` via `consola.mockTypes()`
+- Mock `globalThis.fetch` for FX rate API
 
-## SQLite
+## Architecture (4 layers)
 
-- Use `better-sqlite3` for SQLite
-- Don't use `sqlite` (the npm package) or `bun:sqlite`
-- Import: `import Database from "better-sqlite3"`
+| Layer | File | Responsibility |
+|---|---|---|
+| Entry | `src/index.ts` | CLI definition (commander), command routing |
+| Commands | `src/commands.ts` | Command handlers, workflow logic |
+| Database | `src/db.ts` | SQLite CRUD, schema, persistence |
+| Display | `src/display.ts` | Table rendering, FX rate conversion |
+| Prompts | `src/prompts.ts` | Input validation, interactive prompts |
 
-## APIs
+## Key Conventions
 
-- Prefer `node:fs` for file system operations
-- Prefer `node:path` for path operations
-- Prefer `node:os` for OS-level operations
-- Prefer native `fetch` for HTTP requests
-- Prefer native `WebSocket` for WebSocket connections
+- **Local imports**: `.ts` extension (`import { x } from "./foo.ts"`)
+- **Node built-ins**: `node:` prefix (`node:fs`, `node:path`, `node:os`)
+- **Type imports**: `type` prefix (`import type { X } from "./foo.ts"`)
+- **No semicolons** in imports/exports
+- **Prices**: integers (smallest unit — JPY no decimal, USD cents)
+- **Cycles**: weekly / bi-weekly / monthly / quarterly / semi-annual / yearly
+- **DB**: `sql.js` with `PRAGMA foreign_keys = ON`, use transactions for multi-step writes
 
-## Code Style
+## Environment Variables
 
-- TypeScript with strict mode enabled
-- ESM modules (`"type": "module"` in package.json)
-- No semicolons in imports/exports
+| Variable | Description |
+|---|---|
+| `SUBSC_CLI_DB_DIR` | Override database directory (default: `~/.config/subtrack`) |
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `subtrack list` | List all subscriptions |
+| `subtrack add` | Add a subscription |
+| `subtrack delete` | Delete subscriptions (interactive) |
+| `subtrack tags <taglist...>` | Filter by tags |
+| `subtrack backup <destination>` | Backup database |
+| `subtrack payment [period]` | Show payment totals |
+| `subtrack export csv` | Export subscriptions as CSV |

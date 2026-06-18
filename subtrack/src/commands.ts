@@ -12,7 +12,15 @@ import {
   getDbPath,
   saveDb,
 } from "./db.ts"
-import { formatPrice, spreadSubscription, showPayment } from "./display.ts"
+import {
+  formatPrice,
+  spreadSubscription,
+  showPayment,
+  exportCsv,
+  exportMd,
+  fetchFxRates,
+  convertPrice,
+} from "./display.ts"
 import {
   CURRENCY_CHOICES,
   CYCLE_CHOICES,
@@ -78,11 +86,11 @@ async function resolveAddOptions(flags: AddFlags) {
     prompted = true
     const existingTags = getAllTags()
     tagsStr = await input({
-      message: "tags",
-      hint:
-        existingTags.length > 0
-          ? `existing: ${existingTags.join(", ")}`
-          : undefined,
+      message:
+        "tags" +
+        (existingTags.length > 0
+          ? ` (existing: ${existingTags.join(", ")})`
+          : ""),
       validate: validateTags,
     })
   }
@@ -202,6 +210,45 @@ export async function handleBackup(destination: string) {
     }
     process.exit(1)
   }
+}
+
+export async function handleExport(
+  format: string,
+  options: { currency?: string; tags?: string },
+) {
+  if (format !== "csv" && format !== "md") {
+    consola.error(`Unsupported export format: "${format}". Supported: csv, md`)
+    process.exit(1)
+  }
+
+  let list = options.tags
+    ? tagsSubscription(options.tags.split(",").map((t) => t.trim()))
+    : getSubscriptions()
+
+  if (list.length === 0) {
+    consola.info("No subscriptions found")
+    return
+  }
+
+  if (options.currency) {
+    try {
+      const rates = await fetchFxRates()
+      list = list.map((sub) => ({
+        ...sub,
+        price: Math.round(
+          convertPrice(sub.price, sub.currency, options.currency!, rates.rates),
+        ),
+        currency: options.currency! as Currency,
+      }))
+    } catch (e) {
+      consola.fail(
+        `Failed to fetch exchange rates; exporting in original currencies: ${e}`,
+      )
+    }
+  }
+
+  const output = format === "csv" ? exportCsv(list) : exportMd(list)
+  consola.log(output)
 }
 
 export async function handlePayment(
