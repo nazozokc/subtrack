@@ -37,7 +37,7 @@ This provides `node`, `pnpm`, `typescript`, `typos`, and `nixfmt`.
 |----------|--------|
 | Runtime | Node.js |
 | Language | TypeScript (strict mode, ESM) |
-| CLI framework | `commander` |
+| CLI framework | `gunshi` |
 | Interactive prompts | `@inquirer/prompts` |
 | Terminal output | `consola`, `picocolors`, `cli-table3` |
 | Database | `sql.js` (SQLite via WASM) |
@@ -66,7 +66,7 @@ Make sure both pass and CI is green.
 subtrack/
 ├── subtrack/         # CLI tool (TypeScript/ESM)
 │   ├── src/
-│   │   ├── index.ts      # Entry point, commander setup
+│   │   ├── index.ts      # Entry point, CLI definitions (gunshi)
 │   │   ├── commands.ts   # Command handlers
 │   │   ├── db.ts         # SQLite database layer
 │   │   ├── display.ts    # Table rendering, currency conversion

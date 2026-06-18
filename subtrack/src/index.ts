@@ -49,7 +49,7 @@ const editCommand = define({
   name: "edit",
   description: "Edit a subscription",
   args: {
-    id: { type: "positional", description: "Subscription ID (omit for interactive selection)" },
+    id: { type: "positional", description: "Subscription ID (omit for interactive selection)", required: false },
     name: { type: "string", description: "Subscription name" },
     price: { type: "string", description: "Monthly payment amount" },
     currency: { type: "string", description: "Currency" },

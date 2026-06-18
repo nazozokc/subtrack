@@ -30,6 +30,44 @@ subtrack add \
   --tags "video,entertainment"
 ```
 
+## Editing subscriptions
+
+Update existing subscriptions with `subtrack edit`. Run it interactively to pick a subscription and choose which fields to change:
+
+```bash
+subtrack edit
+```
+
+For non-interactive use, specify the subscription ID and the fields to update:
+
+```bash
+subtrack edit 3 --price 2500 --tags "video,entertainment,4k"
+```
+
+To see subscription IDs, run `subtrack list`.
+
+## Importing from CSV
+
+Bulk-import subscriptions from a CSV file:
+
+```bash
+subtrack import subscriptions.csv
+```
+
+The CSV must have the header `name,cycle,tags,price,currency`. Tags are separated by semicolons:
+
+```csv
+name,cycle,tags,price,currency
+Netflix,monthly,video;entertainment,1980,JPY
+GitHub Copilot,monthly,development,10,USD
+```
+
+Use `--dry-run` to validate without importing:
+
+```bash
+subtrack import subscriptions.csv --dry-run
+```
+
 ## Tag-based organization
 
 Tags are a powerful way to categorize subscriptions. Examples:
@@ -51,6 +89,32 @@ subtrack tags work personal
 
 Tags use AND logic — only subscriptions matching **all** specified tags are shown.
 
+### Managing tags
+
+View all tags and their usage count:
+
+```bash
+subtrack tag list
+```
+
+Rename a tag (merges if the new name already exists):
+
+```bash
+subtrack tag rename entertainment fun
+```
+
+Delete a tag and its associations:
+
+```bash
+subtrack tag delete fun
+```
+
+Clean up orphaned tags (tags no longer attached to any subscription):
+
+```bash
+subtrack tag prune
+```
+
 ## Understanding your spending
 
 Use `subtrack payment` to see your total spending across different periods:
@@ -68,6 +132,16 @@ subtrack payment weekly --currency USD
 
 `payment` automatically converts all billing cycles to the target period. A yearly subscription will be divided into monthly cost, and a weekly subscription will be multiplied accordingly.
 
+### Summary statistics
+
+Get a quick overview of all your subscriptions:
+
+```bash
+subtrack summary
+```
+
+This shows total count, the most expensive subscription, monthly spending broken down by currency, and monthly spending broken down by tag.
+
 ## Managing multi-currency subscriptions
 
 If you have subscriptions in different currencies (e.g., JPY for local services and USD for international ones), subtrack handles this natively:
@@ -81,6 +155,24 @@ subtrack list
 ```
 
 Without `--currency`, subscriptions are grouped by their original currency with per-group subtotals.
+
+## Exporting data
+
+Export subscriptions for use in spreadsheets or other tools:
+
+```bash
+# CSV (for Excel / Google Sheets)
+subtrack export csv
+
+# JSON (for programmatic use)
+subtrack export json
+
+# Markdown (for documentation)
+subtrack export md
+
+# Filter by tags and convert currency
+subtrack export csv --tags video --currency JPY
+```
 
 ## Regular backups
 

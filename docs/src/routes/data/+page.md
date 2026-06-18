@@ -35,7 +35,7 @@ subscription_tags
 │                    PRIMARY KEY (subscription_id, tag_id)
 ```
 
-Deleting a subscription automatically removes its tag associations via `ON DELETE CASCADE`. Orphaned tags (with no subscriptions) are not automatically cleaned up.
+Deleting a subscription automatically removes its tag associations via `ON DELETE CASCADE`. Orphaned tags (with no subscriptions) can be cleaned up with `subtrack tag prune`.
 
 ## Prices are stored as integers
 
