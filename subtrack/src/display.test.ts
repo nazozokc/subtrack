@@ -16,13 +16,16 @@ beforeEach(() => {
   failMessages.length = 0
   errorMessages.length = 0
 
+  const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "")
+
   consola.mockTypes((_type: string, _defaults: object) => {
     return (...args: unknown[]) => {
       const str = args.map((a) => String(a)).join(" ")
-      if (_type === "log") logMessages.push(str)
-      if (_type === "info") infoMessages.push(str)
-      if (_type === "fail") failMessages.push(str)
-      if (_type === "error") errorMessages.push(str)
+      const clean = stripAnsi(str)
+      if (_type === "log") logMessages.push(clean)
+      if (_type === "info") infoMessages.push(clean)
+      if (_type === "fail") failMessages.push(clean)
+      if (_type === "error") errorMessages.push(clean)
     }
   })
 
