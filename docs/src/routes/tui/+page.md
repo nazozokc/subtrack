@@ -8,9 +8,14 @@ subtrack offers both **interactive** and **non-interactive** modes. The interact
 | Command | Interactive | Non-interactive |
 |---------|-------------|-----------------|
 | `add` | ✅ (default) | ✅ (all flags provided) |
+| `edit` | ✅ (default) | ✅ (flags + optional ID) |
 | `delete` | ✅ (always) | ❌ |
+| `import` | ❌ | ✅ |
 | `list` | ❌ | ✅ |
 | `tags` | ❌ | ✅ |
+| `tag` | ❌ | ✅ |
+| `summary` | ❌ | ✅ |
+| `export` | ❌ | ✅ |
 | `payment` | ❌ | ✅ |
 | `backup` | ❌ | ✅ |
 
@@ -59,7 +64,7 @@ Running `subtrack add` without flags starts a step-by-step prompt session.
    HKD (Hong Kong Dollar)
 ```
 
-- Select from 10 supported currencies
+- Select from 36 supported currencies
 - Navigate with arrow keys, confirm with Enter
 
 ### 4. Cycle
@@ -128,6 +133,73 @@ subtrack add --name Netflix
 
 This prompts for price, currency, cycle, and tags — and shows the confirmation dialog since some fields were interactive.
 
+## `subtrack edit` — interactive walkthrough
+
+Running `subtrack edit` without arguments interactively selects a subscription and lets you pick which fields to update.
+
+### 1. Select subscription
+
+```
+? select subscription to edit (Use arrow keys)
+❯ Netflix — ¥1,980/month [video, entertainment]
+  Spotify — ¥980/month [music]
+  AWS — $50/month [cloud]
+```
+
+- Single-select with arrow keys
+- Each subscription shows: `name — price/cycle [tags]`
+- If no subscriptions exist, shows "No subscriptions found" and exits
+
+### 2. Select fields to edit
+
+```
+? Select fields to edit: (Use arrow keys, space to select)
+❯◯ name (Netflix)
+ ◯ price (¥1,980)
+ ◯ currency (JPY)
+ ◯ cycle (monthly)
+ ◯ tags (video, entertainment)
+```
+
+- **Multi-select** with checkbox (space to toggle, enter to confirm)
+- Current values are shown next to each field
+- Select one or more fields to update
+
+### 3. Edit each field
+
+Each selected field prompts for a new value with the current value as default:
+
+```
+? New name: Netflix
+? New price: 2500
+? New tags (comma-separated) (existing: music, video) video, entertainment, 4k
+```
+
+### 4. Confirmation
+
+```
+? Save changes? (Y/n)
+```
+
+- **Default is `Yes`** — pressing Enter saves
+- Type `n` to cancel
+
+After saving:
+
+```
+✔ Updated: Netflix Premium — ¥2,500/month
+```
+
+### Non-interactive mode
+
+Provide a subscription ID and flags to update without prompts:
+
+```bash
+subtrack edit 3 --price 1500 --tags "music"
+```
+
+This updates only the specified fields and skips all prompts.
+
 ## `subtrack delete` — interactive walkthrough
 
 `delete` is **always interactive**. There is no non-interactive mode.
@@ -165,6 +237,7 @@ After deletion, each removed subscription is confirmed:
 ## Tips
 
 - **`add` confirmation defaults to `Yes`** for quick saves, but you can cancel with `n`.
+- **`edit` confirmation defaults to `Yes`** after making changes.
 - **`delete` confirmation defaults to `No`** to prevent accidental deletion.
 - Use **arrow keys** for select menus, **space** for checkboxes, **Enter** to confirm.
 - Tags from previous sessions appear as **hints** — use consistent tag names to get autocomplete-like suggestions.
