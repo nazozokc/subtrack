@@ -68,12 +68,16 @@ const deleteCommand = define({
 const tagsCommand = define({
   name: "tags",
   description: "Filter subscriptions by tags (AND logic)",
+  args: {
+    names: { type: "positional", array: true, description: "Tag names", required: false },
+  },
   run: (ctx) => {
-    if (ctx.positionals.length === 0) {
+    const tagNames = (ctx.values.names ?? []) as string[]
+    if (tagNames.length === 0) {
       consola.error("Please specify at least one tag")
       return
     }
-    handleTags(ctx.positionals)
+    handleTags(tagNames)
   },
 })
 
@@ -134,6 +138,7 @@ const exportCommand = define({
 const importCommand = define({
   name: "import",
   description: "Import subscriptions from CSV",
+  toKebab: true,
   args: {
     file: { type: "positional", description: "CSV file to import" },
     dryRun: { type: "boolean", description: "Validate without importing" },
@@ -160,7 +165,7 @@ const paymentCommand = define({
   name: "payment",
   description: "Show payment totals",
   args: {
-    period: { type: "positional", description: "Billing period (default: monthly)" },
+    period: { type: "positional", description: "Billing period (default: monthly)", required: false },
     currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
   },
   run: (ctx) => {
@@ -175,20 +180,34 @@ const mainCommand = define({
   run: () => consola.info('Run "subtrack --help" for available commands'),
 })
 
-await cli(process.argv.slice(2), mainCommand, {
-  name: "subtrack",
-  version: "2.2.0",
-  subCommands: {
-    list: listCommand,
-    add: addCommand,
-    edit: editCommand,
-    delete: deleteCommand,
-    tags: tagsCommand,
-    tag: tagCommand,
-    export: exportCommand,
-    import: importCommand,
-    summary: summaryCommand,
-    backup: backupCommand,
-    payment: paymentCommand,
-  },
-})
+try {
+  await cli(process.argv.slice(2), mainCommand, {
+    name: "subtrack",
+    version: "3.0.1",
+    subCommands: {
+      list: listCommand,
+      add: addCommand,
+      edit: editCommand,
+      delete: deleteCommand,
+      tags: tagsCommand,
+      tag: tagCommand,
+      export: exportCommand,
+      import: importCommand,
+      summary: summaryCommand,
+      backup: backupCommand,
+      payment: paymentCommand,
+    },
+  })
+} catch (error) {
+  if (error instanceof Error && error.name === "ExitPromptError") {
+    // User cancelled the prompt (Ctrl+C/D) — exit gracefully
+    process.exit(0)
+  }
+  if (error instanceof AggregateError) {
+    for (const e of error.errors) {
+      consola.error(String(e))
+    }
+    process.exit(1)
+  }
+  throw error
+}
