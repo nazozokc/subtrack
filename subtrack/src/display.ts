@@ -196,16 +196,6 @@ export const spreadSubscription = async (
     }
 
     if (rates) {
-      const fmt = new Intl.NumberFormat(
-        currency === "JPY" ? "ja-JP" : "en-US",
-        {
-          style: "currency",
-          currency,
-          minimumFractionDigits: currency === "JPY" ? 0 : 2,
-          maximumFractionDigits: currency === "JPY" ? 0 : 2,
-        },
-      )
-
       let total = 0
       let hasMissingRate = false
 
@@ -218,7 +208,7 @@ export const spreadSubscription = async (
             rates.rates,
           )
           total += converted
-          rows.push(buildRow(sub, fmt.format(converted)))
+          rows.push(buildRow(sub, formatPrice(Math.round(converted), currency)))
         } catch {
           hasMissingRate = true
           rows.push(
@@ -227,7 +217,7 @@ export const spreadSubscription = async (
         }
       }
 
-      rows.push(["", "", `${currency} TOTAL`, fmt.format(total)])
+      rows.push(["", "", `${currency} TOTAL`, formatPrice(Math.round(total), currency)])
 
       if (hasMissingRate) {
         consola.warn(
@@ -293,6 +283,12 @@ export function exportCsv(subs: SharedArgs[]): string {
   return "\uFEFF" + [header, ...rows].join("\n")
 }
 
+// ── JSON export ──────────────────────────────────────────
+
+export function exportJson(subs: SharedArgs[]): string {
+  return JSON.stringify(subs, null, 2) + "\n"
+}
+
 // ── Markdown export ──────────────────────────────────────
 
 export function exportMd(subs: SharedArgs[]): string {
@@ -337,16 +333,6 @@ export const showPayment = async (
     }
 
     if (rates) {
-      const fmt = new Intl.NumberFormat(
-        currency === "JPY" ? "ja-JP" : "en-US",
-        {
-          style: "currency",
-          currency,
-          minimumFractionDigits: currency === "JPY" ? 0 : 2,
-          maximumFractionDigits: currency === "JPY" ? 0 : 2,
-        },
-      )
-
       let total = 0
       let hasMissingRate = false
       for (const entry of entries) {
@@ -366,7 +352,7 @@ export const showPayment = async (
         consola.warn("Some prices could not be converted (missing rate)")
       }
 
-      consola.log(`${fmt.format(total)}/${fmtPeriod}`)
+      consola.log(`${formatPrice(Math.round(total), currency)}/${fmtPeriod}`)
       return
     }
     // fallback: continue to per-currency display
@@ -383,5 +369,79 @@ export const showPayment = async (
     // Round to integer for display (prices are stored as integers)
     const rounded = Math.round(total)
     consola.log(`${ccy} ${formatPrice(rounded, ccy)}/${fmtPeriod}`)
+  }
+}
+
+// ── Summary ──────────────────────────────────────────────
+
+export type SummaryData = {
+  totalCount: number
+  monthlyByCurrency: Record<string, number>
+  monthlyByTag: Record<string, { count: number; monthly: number }>
+  mostExpensive: SharedArgs | undefined
+}
+
+export function calcSummary(subs: SharedArgs[]): SummaryData {
+  const monthlyByCurrency: Record<string, number> = {}
+  const monthlyByTag: Record<string, { count: number; monthly: number }> = {}
+
+  for (const sub of subs) {
+    const monthly = sub.price * periodFactor(sub.cycle, "monthly")
+
+    monthlyByCurrency[sub.currency] = (monthlyByCurrency[sub.currency] ?? 0) + monthly
+
+    for (const tag of sub.tags) {
+      if (!monthlyByTag[tag]) monthlyByTag[tag] = { count: 0, monthly: 0 }
+      monthlyByTag[tag].count++
+      monthlyByTag[tag].monthly += monthly
+    }
+  }
+
+  const mostExpensive = subs.length > 0
+    ? subs.reduce((max, sub) => sub.price > max.price ? sub : max)
+    : undefined
+
+  return {
+    totalCount: subs.length,
+    monthlyByCurrency,
+    monthlyByTag,
+    mostExpensive,
+  }
+}
+
+export function showSummary(subs?: SharedArgs[]): void {
+  const list = subs ?? getSubscriptions()
+
+  if (list.length === 0) {
+    consola.info("No subscriptions found")
+    return
+  }
+
+  const data = calcSummary(list)
+
+  consola.log(`Total subscriptions:  ${pc.bold(String(data.totalCount))}`)
+
+  if (data.mostExpensive) {
+    const me = data.mostExpensive
+    consola.log(
+      `Most expensive:       ${pc.bold(me.name)} (${formatPrice(me.price, me.currency)}/${me.cycle})`,
+    )
+  }
+
+  consola.log("")
+  consola.log(pc.bold("Monthly by currency:"))
+  for (const [ccy, total] of Object.entries(data.monthlyByCurrency).sort()) {
+    consola.log(`  ${ccy}    ${formatPrice(Math.round(total), ccy)}`)
+  }
+
+  if (Object.keys(data.monthlyByTag).length > 0) {
+    consola.log("")
+    consola.log(pc.bold("Monthly by tag:"))
+    const sorted = Object.entries(data.monthlyByTag).sort((a, b) => b[1].monthly - a[1].monthly)
+    for (const [tag, info] of sorted) {
+      consola.log(
+        `  ${tag.padEnd(16)} ${formatPrice(Math.round(info.monthly), "USD")}/month (${info.count} sub${info.count > 1 ? "s" : ""})`,
+      )
+    }
   }
 }

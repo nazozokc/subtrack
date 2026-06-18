@@ -1,51 +1,194 @@
 #!/usr/bin/env node
-import { Command } from "commander"
-import { handleList, handleAdd, handleDelete, handleTags, handleBackup, handlePayment, handleExport } from "./commands.ts"
+import { cli, define } from "gunshi"
+import { consola } from "consola"
+import {
+  handleList,
+  handleAdd,
+  handleEdit,
+  handleDelete,
+  handleTags,
+  handleTagList,
+  handleTagRename,
+  handleTagDelete,
+  handleTagPrune,
+  handleExport,
+  handleImport,
+  handleSummary,
+  handleBackup,
+  handlePayment,
+} from "./commands.ts"
+import type { Cycle } from "./db.ts"
 
-const runCLI = () => {
-  const program = new Command()
-  program.name("subtrack")
+// ── Command definitions ──────────────────────────────────
 
-  program
-    .command("list")
-    .option("-c, --currency <currency>", "convert all prices to currency")
-    .action(handleList)
+const listCommand = define({
+  name: "list",
+  description: "List all subscriptions",
+  args: {
+    currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
+    sort: { type: "string", description: "Sort field: name, price, currency, cycle" },
+    desc: { type: "boolean", short: "d", description: "Sort descending" },
+  },
+  run: (ctx) => handleList(ctx.values),
+})
 
-  program
-    .command("add")
-    .option("--name <name>", "subscription name")
-    .option("--price <price>", "monthly payment amount")
-    .option("--currency <currency>", "currency")
-    .option("--cycle <cycle>", "billing cycle")
-    .option("--tags <tags>", "comma-separated tags")
-    .action(handleAdd)
+const addCommand = define({
+  name: "add",
+  description: "Add a subscription",
+  args: {
+    name: { type: "string", description: "Subscription name" },
+    price: { type: "string", description: "Monthly payment amount" },
+    currency: { type: "string", description: "Currency" },
+    cycle: { type: "string", description: "Billing cycle" },
+    tags: { type: "string", description: "Comma-separated tags" },
+  },
+  run: (ctx) => handleAdd(ctx.values),
+})
 
-  program.command("delete").action(handleDelete)
+const editCommand = define({
+  name: "edit",
+  description: "Edit a subscription",
+  args: {
+    id: { type: "positional", description: "Subscription ID (omit for interactive selection)" },
+    name: { type: "string", description: "Subscription name" },
+    price: { type: "string", description: "Monthly payment amount" },
+    currency: { type: "string", description: "Currency" },
+    cycle: { type: "string", description: "Billing cycle" },
+    tags: { type: "string", description: "Comma-separated tags" },
+  },
+  run: (ctx) => handleEdit(ctx.values.id, ctx.values),
+})
 
-  program
-    .command("tags")
-    .argument("<taglist...>")
-    .action(handleTags)
+const deleteCommand = define({
+  name: "delete",
+  description: "Delete subscriptions (interactive)",
+  run: () => handleDelete(),
+})
 
-  program
-    .command("export")
-    .argument("<format>", "export format: csv, md")
-    .option("-c, --currency <currency>", "convert all prices to currency")
-    .option("--tags <tags>", "filter by comma-separated tags")
-    .action(handleExport)
+const tagsCommand = define({
+  name: "tags",
+  description: "Filter subscriptions by tags (AND logic)",
+  run: (ctx) => {
+    if (ctx.positionals.length === 0) {
+      consola.error("Please specify at least one tag")
+      return
+    }
+    handleTags(ctx.positionals)
+  },
+})
 
-  program
-    .command("backup")
-    .argument("<destination>", "backup destination directory")
-    .action(handleBackup)
+const tagListCmd = define({
+  name: "list",
+  description: "List all tags with usage count",
+  run: () => handleTagList(),
+})
 
-  program
-    .command("payment")
-    .argument("[period]", "billing period (weekly, bi-weekly, monthly, quarterly, semi-annual, yearly)", "monthly")
-    .option("-c, --currency <currency>", "convert all prices to currency")
-    .action(handlePayment)
+const tagRenameCmd = define({
+  name: "rename",
+  description: "Rename a tag",
+  args: {
+    old: { type: "positional", description: "Current tag name" },
+    "new": { type: "positional", description: "New tag name" },
+  },
+  run: (ctx) => handleTagRename(ctx.values.old, ctx.values["new"]),
+})
 
-  program.parse()
-}
+const tagDeleteCmd = define({
+  name: "delete",
+  description: "Delete a tag and its associations",
+  args: {
+    name: { type: "positional", description: "Tag name to delete" },
+  },
+  run: (ctx) => handleTagDelete(ctx.values.name),
+})
 
-runCLI()
+const tagPruneCmd = define({
+  name: "prune",
+  description: "Remove orphaned tags",
+  run: () => handleTagPrune(),
+})
+
+const tagCommand = define({
+  name: "tag",
+  description: "Manage tags",
+  subCommands: {
+    list: tagListCmd,
+    rename: tagRenameCmd,
+    delete: tagDeleteCmd,
+    prune: tagPruneCmd,
+  },
+  run: () => consola.info("Usage: subtrack tag list|rename|delete|prune"),
+})
+
+const exportCommand = define({
+  name: "export",
+  description: "Export subscriptions",
+  args: {
+    format: { type: "positional", description: "Export format: csv, json, md" },
+    currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
+    tags: { type: "string", description: "Filter by comma-separated tags" },
+  },
+  run: (ctx) => handleExport(ctx.values.format, { currency: ctx.values.currency, tags: ctx.values.tags }),
+})
+
+const importCommand = define({
+  name: "import",
+  description: "Import subscriptions from CSV",
+  args: {
+    file: { type: "positional", description: "CSV file to import" },
+    dryRun: { type: "boolean", description: "Validate without importing" },
+  },
+  run: (ctx) => handleImport(ctx.values.file, { dryRun: ctx.values.dryRun }),
+})
+
+const summaryCommand = define({
+  name: "summary",
+  description: "Show subscription summary statistics",
+  run: () => handleSummary(),
+})
+
+const backupCommand = define({
+  name: "backup",
+  description: "Backup database",
+  args: {
+    destination: { type: "positional", description: "Backup destination directory" },
+  },
+  run: (ctx) => handleBackup(ctx.values.destination),
+})
+
+const paymentCommand = define({
+  name: "payment",
+  description: "Show payment totals",
+  args: {
+    period: { type: "positional", description: "Billing period (default: monthly)" },
+    currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
+  },
+  run: (ctx) => {
+    const period = (ctx.values.period || "monthly") as Cycle
+    handlePayment(period, { currency: ctx.values.currency })
+  },
+})
+
+const mainCommand = define({
+  name: "subtrack",
+  description: "Manage subscription services from your terminal",
+  run: () => consola.info('Run "subtrack --help" for available commands'),
+})
+
+await cli(process.argv.slice(2), mainCommand, {
+  name: "subtrack",
+  version: "2.2.0",
+  subCommands: {
+    list: listCommand,
+    add: addCommand,
+    edit: editCommand,
+    delete: deleteCommand,
+    tags: tagsCommand,
+    tag: tagCommand,
+    export: exportCommand,
+    import: importCommand,
+    summary: summaryCommand,
+    backup: backupCommand,
+    payment: paymentCommand,
+  },
+})
