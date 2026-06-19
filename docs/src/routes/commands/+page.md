@@ -191,6 +191,7 @@ The `period` argument defaults to `monthly`. Valid values:
 | Option | Description |
 |--------|-------------|
 | `-c, --currency <C>` | Convert all prices to the given currency using live exchange rates |
+| `-a, --api` | Include LLM API usage costs in the total |
 
 ### Examples
 
@@ -203,9 +204,17 @@ subtrack payment yearly
 
 # Weekly total in JPY
 subtrack payment weekly --currency JPY
+
+# Include LLM API usage costs
+subtrack payment monthly --api
+
+# API costs in a specific currency
+subtrack payment monthly --api --currency JPY
 ```
 
 When `--currency` is used, the total is displayed as a single amount in the target currency. Without it, totals are grouped by currency.
+
+When `--api` is used, API usage costs for the current period are fetched from the `llm_usage` table and added to the subscription totals. API costs are stored in USD cents and are shown both individually and as part of the grand total.
 
 If exchange rates cannot be fetched (e.g. offline), the command falls back to per-currency display without conversion.
 
@@ -307,4 +316,75 @@ subtrack backup .
 
 # Backup to ~/backups
 subtrack backup ~/backups
+```
+
+## `usage`
+
+Tracks LLM API usage costs. Costs are auto-calculated from model pricing when available, with manual fallback.
+
+### `usage add`
+
+Records an LLM API usage entry. Without flags, prompts for all fields interactively.
+
+| Option | Description |
+|--------|-------------|
+| `--provider <name>` | Provider: `openai`, `anthropic`, `google-ai`, `mistral`, `groq`, `together`, `deepseek`, `cohere`, or custom |
+| `--model <name>` | Model name (e.g. `gpt-4o`, `claude-3-opus-20240229`) |
+| `--inputTokens <n>` | Input token count |
+| `--outputTokens <n>` | Output token count |
+| `--date <YYYY-MM-DD>` | Date of usage (default: today) |
+| `--description <text>` | Optional description |
+
+```bash
+# Interactive mode
+subtrack usage add
+
+# Non-interactive
+subtrack usage add \
+  --provider openai \
+  --model gpt-4o \
+  --inputTokens 500 \
+  --outputTokens 200 \
+  --date 2026-06-19 \
+  --description "Chat completion"
+```
+
+Cost is calculated automatically via the LiteLLM pricing cache (fetched from GitHub, cached for 24 hours). If pricing is not found, the tool falls back to querying the LiteLLM Model Catalog API, then prompts for manual cost input.
+
+### `usage list`
+
+Lists LLM API usage entries with optional filtering.
+
+| Option | Description |
+|--------|-------------|
+| `--provider <name>` | Filter by provider |
+| `--from <YYYY-MM-DD>` | Start date (inclusive) |
+| `--to <YYYY-MM-DD>` | End date (inclusive) |
+
+```bash
+# List all entries
+subtrack usage list
+
+# Filter by provider and date range
+subtrack usage list --provider openai --from 2026-01-01 --to 2026-06-30
+```
+
+Shows up to 100 entries with provider, model, token counts, cost, date, and description. Displays a total cost at the bottom.
+
+### `usage delete`
+
+Interactively selects and deletes LLM API usage entries.
+
+```bash
+subtrack usage delete
+```
+
+Multi-select via checkbox → confirm → batch delete.
+
+### `usage refresh`
+
+Force-refreshes the LiteLLM pricing cache from GitHub.
+
+```bash
+subtrack usage refresh
 ```

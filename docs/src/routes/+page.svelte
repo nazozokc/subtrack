@@ -43,10 +43,10 @@
 subtrack list
 
 # Add a subscription
-subtrack add --name Netflix --price 19.99 --cycle monthly
+subtrack add --name Netflix --price 1999 --currency USD --cycle monthly
 
 # Edit a subscription
-subtrack edit 3 --price 25.00
+subtrack edit 3 --price 2500
 
 # Show monthly payment total
 subtrack payment

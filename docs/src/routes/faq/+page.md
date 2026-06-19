@@ -45,6 +45,16 @@ CMD ["subtrack", "list"]
 
 Use `SUBSC_CLI_DB_DIR` to control where the database is stored in containerized environments.
 
+## How does LLM API cost tracking work?
+
+The `subtrack usage` command uses [LiteLLM](https://github.com/BerriAI/litellm) pricing data to automatically calculate costs based on model name and token counts. Pricing is cached locally for 24 hours and can be refreshed with `subtrack usage refresh`. If a model is not found in the cache, it falls back to the LiteLLM Model Catalog API, then prompts for manual cost input.
+
+API costs are stored in USD cents (as a real number, allowing fractional cents for precise billing) and can be included in payment totals with `subtrack payment --api`.
+
+## Where does the pricing data come from?
+
+Model pricing is fetched from the [LiteLLM GitHub repository](https://github.com/BerriAI/litellm) (`model_prices_and_context_window.json`). The data is cached locally for 24 hours to avoid excessive network requests. You can force a refresh with `subtrack usage refresh`.
+
 ## How do I update subtrack?
 
 ```bash

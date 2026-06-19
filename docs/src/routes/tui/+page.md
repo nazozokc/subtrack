@@ -18,6 +18,10 @@ subtrack offers both **interactive** and **non-interactive** modes. The interact
 | `export` | ❌ | ✅ |
 | `payment` | ❌ | ✅ |
 | `backup` | ❌ | ✅ |
+| `usage add` | ✅ (default) | ✅ (all flags provided) |
+| `usage list` | ❌ | ✅ |
+| `usage delete` | ✅ (always) | ❌ |
+| `usage refresh` | ❌ | ✅ |
 
 ## `subtrack add` — interactive walkthrough
 

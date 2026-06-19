@@ -5,7 +5,7 @@ description: Install subtrack via npm, pnpm, or build from source.
 
 ## Requirements
 
-**subtrack** requires **Node.js 18 or later**. It is a pure Node.js package and does not require any system-level dependencies.
+**subtrack** requires **Node.js 22 or later**. It is a pure Node.js package and does not require any system-level dependencies.
 
 ## Install via npm (recommended)
 

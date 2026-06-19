@@ -132,6 +132,16 @@ subtrack payment weekly --currency USD
 
 `payment` automatically converts all billing cycles to the target period. A yearly subscription will be divided into monthly cost, and a weekly subscription will be multiplied accordingly.
 
+You can also include LLM API usage costs in the payment calculation:
+
+```bash
+# Monthly subscription + API costs
+subtrack payment monthly --api
+
+# API costs converted to JPY
+subtrack payment monthly --api --currency JPY
+```
+
 ### Summary statistics
 
 Get a quick overview of all your subscriptions:
@@ -184,3 +194,52 @@ Set up a cron job (or Task Scheduler on Windows) for automatic backups:
 ```
 
 Backups are timestamped and will never overwrite previous files. See [Data & Storage](/data) for restore instructions.
+
+## Tracking LLM API costs
+
+subtrack can track LLM API usage costs alongside subscription costs. This is useful if you use paid LLM APIs (OpenAI, Anthropic, etc.) and want to see total AI spending.
+
+### Adding usage entries
+
+```bash
+# Interactive mode
+subtrack usage add
+
+# Non-interactive
+subtrack usage add \
+  --provider openai \
+  --model gpt-4o \
+  --inputTokens 5000 \
+  --outputTokens 1500 \
+  --date 2026-06-19 \
+  --description "Code review"
+```
+
+Cost is automatically calculated using LiteLLM pricing data. If a model is not recognized, you'll be prompted to enter the cost manually.
+
+### Listing and filtering
+
+```bash
+# All entries
+subtrack usage list
+
+# Filter by provider and date range
+subtrack usage list --provider anthropic --from 2026-06-01
+```
+
+### Including API costs in payment totals
+
+```bash
+# See subscription + API costs together
+subtrack payment monthly --api
+```
+
+API costs for the current period are fetched and added to the subscription totals. They are stored in USD cents and automatically converted if you use `--currency`.
+
+### Refreshing pricing data
+
+The LiteLLM pricing cache is automatically refreshed every 24 hours. To force a refresh:
+
+```bash
+subtrack usage refresh
+```

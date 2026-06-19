@@ -15,7 +15,7 @@ The database is created automatically on first use. No database server or config
 
 ## Database structure
 
-Three tables with a many-to-many relationship:
+Four tables — three for subscriptions with a many-to-many relationship, and one for LLM API usage tracking:
 
 ```
 subscriptions
@@ -33,6 +33,16 @@ subscription_tags
 ├── subscription_id  INTEGER NOT NULL (FK → subscriptions.id)
 └── tag_id           INTEGER NOT NULL (FK → tags.id)
 │                    PRIMARY KEY (subscription_id, tag_id)
+
+llm_usage
+├── id             INTEGER PRIMARY KEY AUTOINCREMENT
+├── provider       TEXT NOT NULL
+├── model          TEXT NOT NULL
+├── input_tokens   INTEGER NOT NULL DEFAULT 0
+├── output_tokens  INTEGER NOT NULL DEFAULT 0
+├── cost           REAL NOT NULL
+├── date           TEXT NOT NULL
+└── description    TEXT
 ```
 
 Deleting a subscription automatically removes its tag associations via `ON DELETE CASCADE`. Orphaned tags (with no subscriptions) can be cleaned up with `subtrack tag prune`.
