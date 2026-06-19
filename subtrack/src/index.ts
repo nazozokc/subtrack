@@ -12,11 +12,17 @@ import {
   handleTagDelete,
   handleTagPrune,
   handleExport,
-  handleImport,
   handleSummary,
   handleBackup,
   handlePayment,
 } from "./commands.ts"
+import {
+  handleUsageAdd,
+  handleUsageList,
+  handleUsageDelete,
+  handleUsageRefresh,
+} from "./usage.ts"
+import { handleImport } from "./import-csv.ts"
 import type { Cycle } from "./db.ts"
 
 // ── Command definitions ──────────────────────────────────
@@ -72,7 +78,7 @@ const tagsCommand = define({
     names: { type: "positional", array: true, description: "Tag names", required: false },
   },
   run: (ctx) => {
-    const tagNames = (ctx.values.names ?? []) as string[]
+    const tagNames = ctx.positionals.slice(1) as string[]
     if (tagNames.length === 0) {
       consola.error("Please specify at least one tag")
       return
@@ -167,11 +173,64 @@ const paymentCommand = define({
   args: {
     period: { type: "positional", description: "Billing period (default: monthly)", required: false },
     currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
+    api: { type: "boolean", short: "a", description: "Include LLM API usage costs" },
   },
   run: (ctx) => {
     const period = (ctx.values.period || "monthly") as Cycle
-    handlePayment(period, { currency: ctx.values.currency })
+    handlePayment(period, { currency: ctx.values.currency, api: ctx.values.api })
   },
+})
+
+// ── Usage commands ───────────────────────────────────────
+
+const usageAddCommand = define({
+  name: "add",
+  description: "Add an LLM API usage entry",
+  toKebab: true,
+  args: {
+    provider: { type: "string", description: "Provider name (openai, anthropic, ...)" },
+    model: { type: "string", description: "Model name (e.g. gpt-4o)" },
+    inputTokens: { type: "string", description: "Input tokens used" },
+    outputTokens: { type: "string", description: "Output tokens used" },
+    date: { type: "string", description: "Date (YYYY-MM-DD, default: today)" },
+    description: { type: "string", description: "Optional description" },
+  },
+  run: (ctx) => handleUsageAdd(ctx.values),
+})
+
+const usageListCommand = define({
+  name: "list",
+  description: "List LLM API usage entries",
+  args: {
+    provider: { type: "string", description: "Filter by provider" },
+    from: { type: "string", description: "Start date (YYYY-MM-DD)" },
+    to: { type: "string", description: "End date (YYYY-MM-DD)" },
+  },
+  run: (ctx) => handleUsageList(ctx.values),
+})
+
+const usageDeleteCommand = define({
+  name: "delete",
+  description: "Delete LLM API usage entries (interactive)",
+  run: () => handleUsageDelete(),
+})
+
+const usageRefreshCommand = define({
+  name: "refresh",
+  description: "Refresh LiteLLM pricing cache",
+  run: () => handleUsageRefresh(),
+})
+
+const usageCommand = define({
+  name: "usage",
+  description: "Track LLM API usage costs",
+  subCommands: {
+    add: usageAddCommand,
+    list: usageListCommand,
+    delete: usageDeleteCommand,
+    refresh: usageRefreshCommand,
+  },
+  run: () => consola.info("Usage: subtrack usage add|list|delete|refresh"),
 })
 
 const mainCommand = define({
@@ -196,6 +255,7 @@ try {
       summary: summaryCommand,
       backup: backupCommand,
       payment: paymentCommand,
+      usage: usageCommand,
     },
   })
 } catch (error) {

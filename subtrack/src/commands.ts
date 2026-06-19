@@ -1,8 +1,8 @@
 import { input, confirm, checkbox, select } from "@inquirer/prompts"
 import { consola } from "consola"
-import { copyFileSync, statSync, constants, readFileSync, existsSync } from "node:fs"
+import { copyFileSync, statSync, constants } from "node:fs"
 import { join } from "node:path"
-import type { Currency, Cycle, SharedArgs, AddSharedArgs } from "./db.ts"
+import type { Currency, Cycle, SharedArgs, AddSharedArgs, AddFlags } from "./types.ts"
 import {
   getSubscriptions,
   getSubscription,
@@ -21,14 +21,10 @@ import {
 import {
   formatPrice,
   spreadSubscription,
-  showPayment,
-  showSummary,
-  exportCsv,
-  exportMd,
-  exportJson,
-  fetchFxRates,
-  convertPrice,
 } from "./display.ts"
+import { showPayment, showSummary } from "./payment.ts"
+import { exportCsv, exportMd, exportJson } from "./export.ts"
+import { fetchFxRates, convertPrice } from "./fx.ts"
 import {
   CURRENCY_CHOICES,
   CYCLE_CHOICES,
@@ -40,14 +36,6 @@ import {
   promptString,
   promptSelect,
 } from "./prompts.ts"
-
-export type AddFlags = {
-  name?: string
-  price?: string
-  currency?: string
-  cycle?: string
-  tags?: string
-}
 
 // ── Add workflow ────────────────────────────────────────
 
@@ -194,11 +182,11 @@ export async function handleBackup(destination: string) {
     destStat = statSync(destination)
   } catch {
     consola.error(`Backup destination does not exist: ${destination}`)
-    process.exit(1)
+    return
   }
   if (!destStat.isDirectory()) {
     consola.error(`Backup destination must be a directory: ${destination}`)
-    process.exit(1)
+    return
   }
 
   // generate timestamped filename
@@ -217,7 +205,6 @@ export async function handleBackup(destination: string) {
     } else {
       consola.error(`Backup failed: ${nodeErr.message}`)
     }
-    process.exit(1)
   }
 }
 
@@ -227,7 +214,7 @@ export async function handleExport(
 ) {
   if (format !== "csv" && format !== "json" && format !== "md") {
     consola.error(`Unsupported export format: "${format}". Supported: csv, json, md`)
-    process.exit(1)
+    return
   }
 
   let list = options.tags
@@ -263,9 +250,9 @@ export async function handleExport(
 
 export async function handlePayment(
   period: Cycle,
-  options: { currency?: string },
+  options: { currency?: string; api?: boolean },
 ) {
-  await showPayment(period, options.currency as Currency | undefined)
+  await showPayment(period, options.currency as Currency | undefined, undefined, options.api)
 }
 
 // ── Edit workflow ────────────────────────────────────────
@@ -457,133 +444,6 @@ export function handleTagPrune() {
     consola.success(`Removed ${count} orphaned tag${count > 1 ? "s" : ""}`)
   } else {
     consola.info("No orphaned tags found")
-  }
-}
-
-// ── Import CSV ────────────────────────────────────────────
-
-export function parseCsvLine(line: string): string[] {
-  const fields: string[] = []
-  let current = ""
-  let inQuotes = false
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
-    if (inQuotes) {
-      if (ch === '"') {
-        if (i + 1 < line.length && line[i + 1] === '"') {
-          current += '"'
-          i++
-        } else {
-          inQuotes = false
-        }
-      } else {
-        current += ch
-      }
-    } else if (ch === ",") {
-      fields.push(current)
-      current = ""
-    } else if (ch === '"') {
-      inQuotes = true
-    } else {
-      current += ch
-    }
-  }
-  fields.push(current)
-  return fields
-}
-
-export async function handleImport(
-  file: string,
-  options: { dryRun?: boolean },
-) {
-  if (!file) {
-    consola.error("Usage: subtrack import <file> [--dry-run]")
-    return
-  }
-
-  if (!existsSync(file)) {
-    consola.error(`File not found: ${file}`)
-    return
-  }
-
-  const content = readFileSync(file, "utf-8")
-  // Strip BOM
-  const clean = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
-  const lines = clean.split("\n").map((l) => l.trim()).filter(Boolean)
-
-  if (lines.length < 2) {
-    consola.error("CSV file must have a header row and at least one data row")
-    return
-  }
-
-  // Validate header
-  const header = parseCsvLine(lines[0]).map((h) => h.toLowerCase().trim())
-  if (header.join(",") !== "name,cycle,tags,price,currency") {
-    consola.error(
-      `Invalid CSV header. Expected: name,cycle,tags,price,currency`,
-    )
-    return
-  }
-
-  let success = 0
-  let failed = 0
-
-  for (let i = 1; i < lines.length; i++) {
-    const fields = parseCsvLine(lines[i])
-    if (fields.length < 5) {
-      consola.warn(`Line ${i + 1}: skipping (expected 5 fields, got ${fields.length})`)
-      failed++
-      continue
-    }
-
-    const [name, cycle, tagsStr, priceStr, currency] = fields
-
-    // Validate
-    const nameErr = validateName(name)
-    if (nameErr !== true) { consola.warn(`Line ${i + 1}: ${nameErr}`); failed++; continue }
-
-    const priceErr = validatePrice(priceStr)
-    if (priceErr !== true) { consola.warn(`Line ${i + 1}: ${priceErr}`); failed++; continue }
-
-    if (!isValidCurrency(currency)) {
-      consola.warn(`Line ${i + 1}: invalid currency "${currency}"`)
-      failed++
-      continue
-    }
-    if (!isValidCycle(cycle)) {
-      consola.warn(`Line ${i + 1}: invalid cycle "${cycle}"`)
-      failed++
-      continue
-    }
-
-    const tags = tagsStr.split(";").map((t) => t.trim()).filter(Boolean)
-    const tagsErr = validateTags(tags.join(","))
-    if (tagsErr !== true) { consola.warn(`Line ${i + 1}: ${tagsErr}`); failed++; continue }
-
-    if (options.dryRun) {
-      consola.info(`[dry-run] Would import: ${name} (${priceStr} ${currency}, ${cycle})`)
-      success++
-    } else {
-      try {
-        writeSubscription({
-          name: name.trim(),
-          price: Number(priceStr),
-          currency,
-          cycle,
-          tags,
-        })
-        success++
-      } catch (e) {
-        consola.warn(`Line ${i + 1}: failed to import: ${e}`)
-        failed++
-      }
-    }
-  }
-
-  if (options.dryRun) {
-    consola.success(`Dry-run complete: ${success} valid, ${failed} invalid`)
-  } else {
-    consola.success(`Import complete: ${success} imported, ${failed} failed`)
   }
 }
 

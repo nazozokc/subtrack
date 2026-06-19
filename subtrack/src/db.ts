@@ -1,43 +1,17 @@
 import initSqlJs from "sql.js"
-import type { Database, SqlValue, BindParams } from "sql.js"
+import type { Database, SqlValue } from "sql.js"
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { homedir } from "node:os"
-
-export type Currency = string
-
-export type Cycle =
-  | "weekly" | "bi-weekly" | "monthly"
-  | "quarterly" | "semi-annual" | "yearly"
-
-export const OCCURRENCES_PER_YEAR: Record<Cycle, number> = {
-  weekly: 52,
-  "bi-weekly": 26,
-  monthly: 12,
-  quarterly: 4,
-  "semi-annual": 2,
-  yearly: 1,
-}
-
-/**
- * Returns the multiplier to convert a price from one cycle to another.
- * e.g. periodFactor("yearly", "monthly") => 1/12
- *      periodFactor("monthly", "yearly") => 12
- */
-export function periodFactor(from: Cycle, to: Cycle = "monthly"): number {
-  return OCCURRENCES_PER_YEAR[from] / OCCURRENCES_PER_YEAR[to]
-}
-
-export type SharedArgs = {
-  id: number
-  name: string
-  price: number
-  currency: Currency
-  cycle: Cycle
-  tags: string[]
-}
-
-export type AddSharedArgs = Omit<SharedArgs, "id">
+import type {
+  Currency,
+  Cycle,
+  SharedArgs,
+  AddSharedArgs,
+  LlmUsageEntry,
+  AddLlmUsageArgs,
+  GetLlmUsageOptions,
+} from "./types.ts"
 
 let _db: Database | null = null
 let _dbPath = ""
@@ -118,6 +92,16 @@ function getDb(): Database {
     PRIMARY KEY (subscription_id, tag_id),
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+  )`)
+  _db.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cost REAL NOT NULL,
+    date TEXT NOT NULL,
+    description TEXT
   )`)
 
   return _db
@@ -389,4 +373,101 @@ export const pruneTags = (): number => {
   const count = db.getRowsModified()
   if (count > 0) saveDb()
   return count
+}
+
+// ── LLM Usage ──────────────────────────────────────────────
+
+export const addLlmUsage = (data: AddLlmUsageArgs): void => {
+  const db = getDb()
+  db.run(
+    `INSERT INTO llm_usage (provider, model, input_tokens, output_tokens, cost, date, description)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      data.provider,
+      data.model,
+      data.input_tokens,
+      data.output_tokens,
+      data.cost,
+      data.date,
+      data.description,
+    ],
+  )
+  saveDb()
+}
+
+export type GetLlmUsageOptions = {
+  provider?: string
+  from?: string
+  to?: string
+  limit?: number
+  offset?: number
+}
+
+export const getLlmUsage = (options?: GetLlmUsageOptions): LlmUsageEntry[] => {
+  const db = getDb()
+
+  const conditions: string[] = []
+  const params: SqlValue[] = []
+
+  if (options?.provider) {
+    conditions.push("provider = ?")
+    params.push(options.provider)
+  }
+  if (options?.from) {
+    conditions.push("date >= ?")
+    params.push(options.from)
+  }
+  if (options?.to) {
+    conditions.push("date <= ?")
+    params.push(options.to)
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
+  const limitClause = options?.limit ? ` LIMIT ?` : ""
+  if (options?.limit) params.push(options.limit)
+  const offsetClause = options?.offset ? ` OFFSET ?` : ""
+  if (options?.offset) params.push(options.offset)
+
+  return execObjs<LlmUsageEntry>(
+    db,
+    `SELECT id, provider, model, input_tokens, output_tokens, cost, date, description
+     FROM llm_usage ${where} ORDER BY date DESC, id DESC${limitClause}${offsetClause}`,
+    params,
+  )
+}
+
+export const deleteLlmUsage = (id: number): boolean => {
+  const db = getDb()
+  db.run("DELETE FROM llm_usage WHERE id = ?", [id])
+  const modified = db.getRowsModified() > 0
+  if (modified) saveDb()
+  return modified
+}
+
+/** Sum `cost` for all entries whose `date` falls within [from, to]. Returns USD cents. */
+export const getLlmUsageTotal = (from: string, to: string): number => {
+  const db = getDb()
+  const row = execObj<{ total: number }>(
+    db,
+    "SELECT COALESCE(SUM(cost), 0) AS total FROM llm_usage WHERE date >= ? AND date <= ?",
+    [from, to],
+  )
+  return row?.total ?? 0
+}
+
+/** Get the sum of `cost` grouped by provider for a date range. */
+export const getLlmUsageTotalByProvider = (
+  from: string,
+  to: string,
+): { provider: string; total: number }[] => {
+  const db = getDb()
+  return execObjs<{ provider: string; total: number }>(
+    db,
+    `SELECT provider, SUM(cost) AS total
+     FROM llm_usage
+     WHERE date >= ? AND date <= ?
+     GROUP BY provider
+     ORDER BY total DESC`,
+    [from, to],
+  )
 }

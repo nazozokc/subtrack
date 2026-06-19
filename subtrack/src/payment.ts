@@ -1,0 +1,247 @@
+import { consola } from "consola"
+import pc from "picocolors"
+import type { SharedArgs, Currency, Cycle } from "./types.ts"
+import { periodFactor } from "./types.ts"
+import { getSubscriptions, getLlmUsageTotal, getLlmUsageTotalByProvider } from "./db.ts"
+import { formatPrice } from "./display.ts"
+import { fetchFxRates, convertPrice } from "./fx.ts"
+import type { FxRates } from "./fx.ts"
+
+/**
+ * Returns the [from, to] date range (inclusive, YYYY-MM-DD) for a given period.
+ * The range covers the current calendar period (month / quarter / year etc.)
+ * up to today.
+ */
+function getPeriodDateRange(period: Cycle): { from: string; to: string } {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = now.getMonth() // 0‑based
+  const d = now.getDate()
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const to = `${y}-${pad(m + 1)}-${pad(d)}`
+
+  switch (period) {
+    case "monthly":
+      return { from: `${y}-${pad(m + 1)}-01`, to }
+    case "yearly":
+      return { from: `${y}-01-01`, to }
+    case "weekly": {
+      const day = now.getDay()
+      const diff = day === 0 ? 6 : day - 1 // Monday = 0
+      const mon = new Date(now)
+      mon.setDate(d - diff)
+      return {
+        from: `${mon.getFullYear()}-${pad(mon.getMonth() + 1)}-${pad(mon.getDate())}`,
+        to,
+      }
+    }
+    case "bi-weekly": {
+      const twoWeeksAgo = new Date(now)
+      twoWeeksAgo.setDate(d - 14)
+      return {
+        from: `${twoWeeksAgo.getFullYear()}-${pad(twoWeeksAgo.getMonth() + 1)}-${pad(twoWeeksAgo.getDate())}`,
+        to,
+      }
+    }
+    case "quarterly": {
+      const qs = Math.floor(m / 3) * 3
+      return { from: `${y}-${pad(qs + 1)}-01`, to }
+    }
+    case "semi-annual": {
+      const hs = Math.floor(m / 6) * 6
+      return { from: `${y}-${pad(hs + 1)}-01`, to }
+    }
+  }
+}
+
+export const showPayment = async (
+  period: Cycle = "monthly",
+  currency?: Currency,
+  subs?: SharedArgs[],
+  includeApi?: boolean,
+): Promise<void> => {
+  const list = subs ?? getSubscriptions()
+
+  if (list.length === 0) {
+    consola.info("No subscriptions found")
+    return
+  }
+
+  // Calculate per-subscription converted price
+  type Entry = { convertedPrice: number; currency: Currency }
+  const entries: Entry[] = list.map((sub) => ({
+    convertedPrice: sub.price * periodFactor(sub.cycle, period),
+    currency: sub.currency,
+  }))
+
+  const fmtPeriod = period === "monthly" ? "month" : period === "bi-weekly" ? "bi-week" : period === "semi-annual" ? "6 months" : period
+
+  // ── API usage (when --api is set) ──────────────────────
+  let apiTotal = 0
+  let apiByProvider: { provider: string; total: number }[] = []
+  if (includeApi) {
+    const { from, to } = getPeriodDateRange(period)
+    apiTotal = getLlmUsageTotal(from, to)
+    apiByProvider = getLlmUsageTotalByProvider(from, to)
+  }
+
+  if (currency) {
+    // Convert all to the target currency
+    let rates: FxRates | null = null
+    try {
+      rates = await fetchFxRates()
+    } catch {
+      consola.fail("Failed to fetch exchange rates; falling back to per-currency display")
+    }
+
+    if (rates) {
+      let subTotal = 0
+      let hasMissingRate = false
+      for (const entry of entries) {
+        try {
+          subTotal += convertPrice(
+            entry.convertedPrice,
+            entry.currency,
+            currency,
+            rates.rates,
+          )
+        } catch {
+          hasMissingRate = true
+        }
+      }
+
+      if (hasMissingRate) {
+        consola.warn("Some prices could not be converted (missing rate)")
+      }
+
+      if (includeApi && apiTotal > 0) {
+        // Convert API cost (USD) to target currency
+        let apiConverted = 0
+        try {
+          apiConverted = convertPrice(
+            Math.round(apiTotal),
+            "USD",
+            currency,
+            rates.rates,
+          )
+        } catch {
+          consola.warn("Could not convert API cost to target currency")
+        }
+        const grandTotal = subTotal + apiConverted
+        consola.log(
+          `${formatPrice(Math.round(subTotal), currency)}/${fmtPeriod}  ${pc.dim(`+ API ${formatPrice(Math.round(apiConverted), currency)} = ${pc.bold(formatPrice(Math.round(grandTotal), currency))}/${fmtPeriod}`)}`,
+        )
+      } else {
+        consola.log(`${formatPrice(Math.round(subTotal), currency)}/${fmtPeriod}`)
+      }
+      if (includeApi && apiTotal <= 0) {
+        consola.info("No API usage found for this period")
+      }
+      return
+    }
+    // fallback: continue to per-currency display
+  }
+
+  // Group by currency
+  const groups: Record<string, number> = {}
+  for (const entry of entries) {
+    groups[entry.currency] = (groups[entry.currency] ?? 0) + entry.convertedPrice
+  }
+
+  for (const ccy of Object.keys(groups).sort()) {
+    const total = groups[ccy]
+    // Round to integer for display (prices are stored as integers)
+    const rounded = Math.round(total)
+    consola.log(`${ccy} ${formatPrice(rounded, ccy)}/${fmtPeriod}`)
+  }
+
+  if (includeApi) {
+    if (apiTotal <= 0) {
+      consola.info("No API usage found for this period")
+    } else {
+      // Show API usage in USD with provider breakdown
+      const providerDetails = apiByProvider
+        .map((p) => `${p.provider}: $${(p.total / 100).toFixed(2)}`)
+        .join(", ")
+      consola.log(
+        pc.dim(
+          `${pc.bold("API usage:")} $${(apiTotal / 100).toFixed(2)}/${fmtPeriod}  ${pc.dim(`(${providerDetails})`)}`,
+        ),
+      )
+    }
+  }
+}
+
+// ── Summary ──────────────────────────────────────────────
+
+export type SummaryData = {
+  totalCount: number
+  monthlyByCurrency: Record<string, number>
+  monthlyByTag: Record<string, { count: number; monthly: number }>
+  mostExpensive: SharedArgs | undefined
+}
+
+export function calcSummary(subs: SharedArgs[]): SummaryData {
+  const monthlyByCurrency: Record<string, number> = {}
+  const monthlyByTag: Record<string, { count: number; monthly: number }> = {}
+
+  for (const sub of subs) {
+    const monthly = sub.price * periodFactor(sub.cycle, "monthly")
+
+    monthlyByCurrency[sub.currency] = (monthlyByCurrency[sub.currency] ?? 0) + monthly
+
+    for (const tag of sub.tags) {
+      if (!monthlyByTag[tag]) monthlyByTag[tag] = { count: 0, monthly: 0 }
+      monthlyByTag[tag].count++
+      monthlyByTag[tag].monthly += monthly
+    }
+  }
+
+  const mostExpensive = subs.length > 0
+    ? subs.reduce((max, sub) => sub.price > max.price ? sub : max)
+    : undefined
+
+  return {
+    totalCount: subs.length,
+    monthlyByCurrency,
+    monthlyByTag,
+    mostExpensive,
+  }
+}
+
+export function showSummary(subs?: SharedArgs[]): void {
+  const list = subs ?? getSubscriptions()
+
+  if (list.length === 0) {
+    consola.info("No subscriptions found")
+    return
+  }
+
+  const data = calcSummary(list)
+
+  consola.log(`Total subscriptions:  ${pc.bold(String(data.totalCount))}`)
+
+  if (data.mostExpensive) {
+    const me = data.mostExpensive
+    consola.log(
+      `Most expensive:       ${pc.bold(me.name)} (${formatPrice(me.price, me.currency)}/${me.cycle})`,
+    )
+  }
+
+  consola.log("")
+  consola.log(pc.bold("Monthly by currency:"))
+  for (const [ccy, total] of Object.entries(data.monthlyByCurrency).sort()) {
+    consola.log(`  ${ccy}    ${formatPrice(Math.round(total), ccy)}`)
+  }
+
+  if (Object.keys(data.monthlyByTag).length > 0) {
+    consola.log("")
+    consola.log(pc.bold("Monthly by tag:"))
+    const sorted = Object.entries(data.monthlyByTag).sort((a, b) => b[1].monthly - a[1].monthly)
+    for (const [tag, info] of sorted) {
+      consola.log(
+        `  ${tag.padEnd(16)} ${formatPrice(Math.round(info.monthly), "USD")}/month (${info.count} sub${info.count > 1 ? "s" : ""})`,
+      )
+    }
+  }
+}

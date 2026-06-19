@@ -1,6 +1,6 @@
 import { input, select } from "@inquirer/prompts"
 import { consola } from "consola"
-import type { Currency, Cycle } from "./db.ts"
+import type { Currency, Cycle } from "./types.ts"
 
 export type { Currency, Cycle }
 
@@ -123,4 +123,40 @@ export async function promptSelect<T extends string>(
     return { value: flag, prompted: false }
   }
   return { value: await select({ message, choices }), prompted: true }
+}
+
+// ── LLM API usage prompts ─────────────────────────────────
+
+export const LLM_PROVIDER_CHOICES: { name: string; value: string }[] = [
+  { name: "OpenAI", value: "openai" },
+  { name: "Anthropic", value: "anthropic" },
+  { name: "Google AI (Gemini)", value: "google-ai" },
+  { name: "Mistral AI", value: "mistral" },
+  { name: "Groq", value: "groq" },
+  { name: "Together AI", value: "together" },
+  { name: "DeepSeek", value: "deepseek" },
+  { name: "Cohere", value: "cohere" },
+  { name: "Other...", value: "__other__" },
+]
+
+export function validateTokens(v: string): string | true {
+  if (!v.trim()) return "Please enter a number"
+  const n = Number(v)
+  if (!Number.isInteger(n) || n < 0) return "Please enter a non-negative integer"
+  if (n > 9_999_999_999) return "Number too large (max 9,999,999,999)"
+  return true
+}
+
+export function validateDate(v: string): string | true {
+  if (!v.trim()) return true // empty means today
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return "Use YYYY-MM-DD format"
+  const d = new Date(v)
+  if (isNaN(d.getTime())) return "Invalid date"
+  return true
+}
+
+export function validateModelName(v: string): string | true {
+  if (!v.trim()) return "Model name cannot be empty"
+  if (v.length > 200) return "Model name too long (max 200 chars)"
+  return true
 }

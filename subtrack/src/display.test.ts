@@ -1,7 +1,9 @@
-import { test, expect, beforeEach, afterEach } from "vitest"
+import { test, expect, beforeAll, afterAll, beforeEach, afterEach, describe } from "vitest"
 import { consola } from "consola"
+import initSqlJs from "sql.js"
+import type { Database } from "sql.js"
 import { spreadSubscription } from "./display"
-import type { SharedArgs } from "./db"
+import type { SharedArgs } from "./types.ts"
 
 const logMessages: string[] = []
 const infoMessages: string[] = []
@@ -260,13 +262,13 @@ test("currency with empty list shows info", async () => {
 // ── exportCsv tests ──────────────────────────────────────
 
 test("exportCsv returns header-only when no subscriptions", async () => {
-  const { exportCsv } = await import("./display.ts")
+  const { exportCsv } = await import("./export.ts")
   const csv = exportCsv([])
   expect(csv).toBe("\uFEFFname,cycle,tags,price,currency")
 })
 
 test("exportCsv produces correct csv for single subscription", async () => {
-  const { exportCsv } = await import("./display.ts")
+  const { exportCsv } = await import("./export.ts")
   const csv = exportCsv([makeSub({ name: "Netflix", price: 1500, currency: "JPY" })])
   const lines = csv.split("\n")
   expect(lines).toHaveLength(2)
@@ -275,7 +277,7 @@ test("exportCsv produces correct csv for single subscription", async () => {
 })
 
 test("exportCsv handles tags correctly", async () => {
-  const { exportCsv } = await import("./display.ts")
+  const { exportCsv } = await import("./export.ts")
   const csv = exportCsv([
     makeSub({ name: "Netflix", tags: ["video", "entertainment"] }),
   ])
@@ -284,7 +286,7 @@ test("exportCsv handles tags correctly", async () => {
 })
 
 test("exportCsv escapes commas in name", async () => {
-  const { exportCsv } = await import("./display.ts")
+  const { exportCsv } = await import("./export.ts")
   const csv = exportCsv([
     makeSub({ name: "Service, Inc.", price: 100 }),
   ])
@@ -293,7 +295,7 @@ test("exportCsv escapes commas in name", async () => {
 })
 
 test("exportCsv handles multiple subscriptions", async () => {
-  const { exportCsv } = await import("./display.ts")
+  const { exportCsv } = await import("./export.ts")
   const csv = exportCsv([
     makeSub({ id: 1, name: "A", price: 10, currency: "USD", tags: ["x"] }),
     makeSub({ id: 2, name: "B", price: 20, currency: "USD", tags: ["y"] }),
@@ -305,7 +307,7 @@ test("exportCsv handles multiple subscriptions", async () => {
 })
 
 test("exportCsv begins with BOM", async () => {
-  const { exportCsv } = await import("./display.ts")
+  const { exportCsv } = await import("./export.ts")
   const csv = exportCsv([makeSub()])
   expect(csv.charCodeAt(0)).toBe(0xfeff)
 })
@@ -313,13 +315,13 @@ test("exportCsv begins with BOM", async () => {
 // ── exportMd tests ───────────────────────────────────────
 
 test("exportMd returns header and separator when no subscriptions", async () => {
-  const { exportMd } = await import("./display.ts")
+  const { exportMd } = await import("./export.ts")
   const md = exportMd([])
   expect(md).toBe("| name | cycle | tags | price | currency |\n| --- | --- | --- | --- | --- |")
 })
 
 test("exportMd produces correct markdown for single subscription", async () => {
-  const { exportMd } = await import("./display.ts")
+  const { exportMd } = await import("./export.ts")
   const md = exportMd([makeSub({ name: "Netflix", price: 1500, currency: "JPY" })])
   const lines = md.split("\n")
   expect(lines).toHaveLength(3)
@@ -327,7 +329,7 @@ test("exportMd produces correct markdown for single subscription", async () => {
 })
 
 test("exportMd handles tags correctly", async () => {
-  const { exportMd } = await import("./display.ts")
+  const { exportMd } = await import("./export.ts")
   const md = exportMd([
     makeSub({ name: "Netflix", tags: ["video", "entertainment"] }),
   ])
@@ -336,7 +338,7 @@ test("exportMd handles tags correctly", async () => {
 })
 
 test("exportMd handles multiple subscriptions", async () => {
-  const { exportMd } = await import("./display.ts")
+  const { exportMd } = await import("./export.ts")
   const md = exportMd([
     makeSub({ id: 1, name: "A", price: 10, currency: "USD", tags: ["x"] }),
     makeSub({ id: 2, name: "B", price: 20, currency: "USD", tags: [] }),
@@ -350,13 +352,13 @@ test("exportMd handles multiple subscriptions", async () => {
 // ── showPayment tests ────────────────────────────────────
 
 test("showPayment shows info when no subscriptions", async () => {
-  const { showPayment } = await import("./display.ts")
+  const { showPayment } = await import("./payment.ts")
   await showPayment("monthly", undefined, [])
   expect(infoMessages).toContain("No subscriptions found")
 })
 
 test("showPayment shows monthly total for single currency", async () => {
-  const { showPayment } = await import("./display.ts")
+  const { showPayment } = await import("./payment.ts")
   await showPayment("monthly", undefined, [
     makeSub({ name: "Netflix", price: 1500, currency: "JPY" }),
   ])
@@ -366,7 +368,7 @@ test("showPayment shows monthly total for single currency", async () => {
 })
 
 test("showPayment shows yearly total for single currency", async () => {
-  const { showPayment } = await import("./display.ts")
+  const { showPayment } = await import("./payment.ts")
   await showPayment("yearly", undefined, [
     makeSub({ name: "Netflix", price: 1500, currency: "JPY" }),
   ])
@@ -376,7 +378,7 @@ test("showPayment shows yearly total for single currency", async () => {
 })
 
 test("showPayment shows per-currency totals for mixed currencies", async () => {
-  const { showPayment } = await import("./display.ts")
+  const { showPayment } = await import("./payment.ts")
   await showPayment("monthly", undefined, [
     makeSub({ name: "Netflix", price: 1500, currency: "JPY" }),
     makeSub({ name: "GitHub", price: 10, currency: "USD" }),
@@ -390,7 +392,7 @@ test("showPayment shows per-currency totals for mixed currencies", async () => {
 })
 
 test("showPayment yearly converts all cycles correctly", async () => {
-  const { showPayment } = await import("./display.ts")
+  const { showPayment } = await import("./payment.ts")
   await showPayment("yearly", undefined, [
     makeSub({ name: "Monthly", price: 1000, currency: "JPY", cycle: "monthly" }),
     makeSub({ name: "Yearly", price: 12000, currency: "JPY", cycle: "yearly" }),
@@ -401,7 +403,7 @@ test("showPayment yearly converts all cycles correctly", async () => {
 })
 
 test("showPayment weekly converts correctly", async () => {
-  const { showPayment } = await import("./display.ts")
+  const { showPayment } = await import("./payment.ts")
   await showPayment("weekly", undefined, [
     makeSub({ name: "WeeklySub", price: 100, currency: "USD", cycle: "weekly" }),
   ])
@@ -410,7 +412,7 @@ test("showPayment weekly converts correctly", async () => {
 })
 
 test("showPayment with --currency converts all to target currency", async () => {
-  const { showPayment } = await import("./display.ts")
+  const { showPayment } = await import("./payment.ts")
   await showPayment("monthly", "JPY", [
     makeSub({ name: "Local", price: 1000, currency: "JPY" }),
     makeSub({ name: "Foreign", price: 10, currency: "USD" }),
@@ -425,7 +427,7 @@ test("showPayment --currency falls back when fetch fails", async () => {
     throw new Error("Network error")
   }
 
-  const { showPayment } = await import("./display.ts")
+  const { showPayment } = await import("./payment.ts")
   await showPayment("monthly", "JPY", [
     makeSub({ name: "JP", price: 1000, currency: "JPY" }),
     makeSub({ name: "US", price: 10, currency: "USD" }),
@@ -446,13 +448,13 @@ test("showPayment --currency falls back when fetch fails", async () => {
 // ── exportJson tests ──────────────────────────────────────
 
 test("exportJson returns empty array for no subscriptions", async () => {
-  const { exportJson } = await import("./display.ts")
+  const { exportJson } = await import("./export.ts")
   const json = exportJson([])
   expect(json).toBe("[]\n")
 })
 
 test("exportJson produces valid JSON for single subscription", async () => {
-  const { exportJson } = await import("./display.ts")
+  const { exportJson } = await import("./export.ts")
   const json = exportJson([makeSub({ name: "Netflix", price: 1500 })])
   const parsed = JSON.parse(json)
   expect(parsed).toHaveLength(1)
@@ -461,14 +463,14 @@ test("exportJson produces valid JSON for single subscription", async () => {
 })
 
 test("exportJson includes tags array", async () => {
-  const { exportJson } = await import("./display.ts")
+  const { exportJson } = await import("./export.ts")
   const json = exportJson([makeSub({ name: "Netflix", tags: ["video", "entertainment"] })])
   const parsed = JSON.parse(json)
   expect(parsed[0].tags).toEqual(["video", "entertainment"])
 })
 
 test("exportJson handles multiple subscriptions", async () => {
-  const { exportJson } = await import("./display.ts")
+  const { exportJson } = await import("./export.ts")
   const json = exportJson([
     makeSub({ id: 1, name: "A", price: 10, currency: "USD", tags: [] }),
     makeSub({ id: 2, name: "B", price: 20, currency: "JPY", tags: ["x"] }),
@@ -482,7 +484,7 @@ test("exportJson handles multiple subscriptions", async () => {
 // ── calcSummary tests ─────────────────────────────────────
 
 test("calcSummary returns zero values for empty list", async () => {
-  const { calcSummary } = await import("./display.ts")
+  const { calcSummary } = await import("./payment.ts")
   const result = calcSummary([])
   expect(result.totalCount).toBe(0)
   expect(result.monthlyByCurrency).toEqual({})
@@ -491,7 +493,7 @@ test("calcSummary returns zero values for empty list", async () => {
 })
 
 test("calcSummary totals by currency", async () => {
-  const { calcSummary } = await import("./display.ts")
+  const { calcSummary } = await import("./payment.ts")
   const result = calcSummary([
     makeSub({ name: "A", price: 1000, currency: "JPY" }),
     makeSub({ name: "B", price: 2000, currency: "JPY" }),
@@ -505,7 +507,7 @@ test("calcSummary totals by currency", async () => {
 })
 
 test("calcSummary converts cycles to monthly", async () => {
-  const { calcSummary } = await import("./display.ts")
+  const { calcSummary } = await import("./payment.ts")
   const result = calcSummary([
     makeSub({ name: "A", price: 12000, currency: "JPY", cycle: "yearly" }),
   ])
@@ -514,7 +516,7 @@ test("calcSummary converts cycles to monthly", async () => {
 })
 
 test("calcSummary totals by tag", async () => {
-  const { calcSummary } = await import("./display.ts")
+  const { calcSummary } = await import("./payment.ts")
   const result = calcSummary([
     makeSub({ name: "A", price: 1500, currency: "JPY", cycle: "monthly", tags: ["video"] }),
     makeSub({ name: "B", price: 500, currency: "JPY", cycle: "monthly", tags: ["video"] }),
@@ -525,7 +527,7 @@ test("calcSummary totals by tag", async () => {
 })
 
 test("calcSummary identifies most expensive subscription", async () => {
-  const { calcSummary } = await import("./display.ts")
+  const { calcSummary } = await import("./payment.ts")
   const result = calcSummary([
     makeSub({ name: "A", price: 500, currency: "JPY" }),
     makeSub({ name: "B", price: 3000, currency: "JPY" }),
@@ -538,13 +540,13 @@ test("calcSummary identifies most expensive subscription", async () => {
 // ── showSummary tests ─────────────────────────────────────
 
 test("showSummary shows info when no subscriptions", async () => {
-  const { showSummary } = await import("./display.ts")
+  const { showSummary } = await import("./payment.ts")
   showSummary([])
   expect(infoMessages).toContain("No subscriptions found")
 })
 
 test("showSummary displays count and most expensive", async () => {
-  const { showSummary } = await import("./display.ts")
+  const { showSummary } = await import("./payment.ts")
   showSummary([
     makeSub({ name: "Premium", price: 3000, currency: "JPY", cycle: "monthly" }),
     makeSub({ name: "Basic", price: 500, currency: "JPY", cycle: "monthly" }),
@@ -559,7 +561,7 @@ test("showSummary displays count and most expensive", async () => {
 })
 
 test("showSummary displays breakdown by tag", async () => {
-  const { showSummary } = await import("./display.ts")
+  const { showSummary } = await import("./payment.ts")
   showSummary([
     makeSub({ name: "A", price: 1500, currency: "JPY", cycle: "monthly", tags: ["video"] }),
     makeSub({ name: "B", price: 1000, currency: "JPY", cycle: "monthly", tags: ["video"] }),
@@ -574,11 +576,89 @@ test("showSummary displays breakdown by tag", async () => {
 })
 
 test("showSummary does not show tag section when no tags exist", async () => {
-  const { showSummary } = await import("./display.ts")
+  const { showSummary } = await import("./payment.ts")
   showSummary([
     makeSub({ name: "Alone", price: 1000, currency: "JPY", cycle: "monthly", tags: [] }),
   ])
   const combined = logMessages.join("\n")
   expect(combined).toContain("Total subscriptions:  1")
   expect(combined).not.toContain("Monthly by tag:")
+})
+
+// ── showPayment with --api ────────────────────────────────
+
+describe("showPayment with --api", () => {
+  let testDb: Database
+
+  beforeAll(async () => {
+    const SQL = await initSqlJs()
+    testDb = new SQL.Database()
+    testDb.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      provider TEXT NOT NULL,
+      model TEXT NOT NULL,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      cost REAL NOT NULL,
+      date TEXT NOT NULL,
+      description TEXT
+    )`)
+    const db = await import("./db.ts")
+    db.__setDb(testDb)
+  })
+
+  afterAll(() => {
+    testDb?.close()
+  })
+
+  beforeEach(() => {
+    testDb!.run("DELETE FROM llm_usage")
+  })
+
+  test("shows API usage note when no data", async () => {
+    const { showPayment } = await import("./payment.ts")
+    // Pass one subscription so we get past the empty-list check
+    await showPayment("monthly", undefined, [makeSub({ name: "Sub", price: 1000, currency: "JPY" })], true)
+    expect(infoMessages.some((m) => m.toLowerCase().includes("no api usage"))).toBe(true)
+  })
+
+  test("shows API usage in USD without --currency", async () => {
+    const db = await import("./db.ts")
+    db.addLlmUsage({
+      provider: "openai",
+      model: "gpt-4o",
+      input_tokens: 1000,
+      output_tokens: 500,
+      cost: 50, // 50 cents = $0.50
+      date: new Date().toISOString().split("T")[0],
+      description: null,
+    })
+
+    const { showPayment } = await import("./payment.ts")
+    await showPayment("monthly", undefined, [makeSub({ name: "Sub", price: 1000, currency: "JPY" })], true)
+    const combined = logMessages.join("\n")
+    expect(combined).toContain("API usage:")
+    expect(combined).toContain("$0.50")
+    expect(combined).toContain("openai")
+  })
+
+  test("shows API usage in target currency with --currency", async () => {
+    const db = await import("./db.ts")
+    db.addLlmUsage({
+      provider: "anthropic",
+      model: "claude-3",
+      input_tokens: 2000,
+      output_tokens: 1000,
+      cost: 100, // 100 cents = $1.00
+      date: new Date().toISOString().split("T")[0],
+      description: null,
+    })
+
+    const { showPayment } = await import("./payment.ts")
+    await showPayment("monthly", "JPY", [makeSub({ name: "Sub", price: 1000, currency: "JPY" })], true)
+    const combined = logMessages.join("\n")
+    // --currency path shows "+ API ¥..." inline instead of separate "API usage:" line
+    expect(combined).toContain("+ API")
+    expect(combined).toContain("¥16,000")
+  })
 })
