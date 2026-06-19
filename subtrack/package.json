@@ -11,10 +11,28 @@
   "publishConfig": {
     "access": "public"
   },
+  "description": "CLI tool to manage subscription services from the terminal",
+  "keywords": [
+    "cli",
+    "subscription",
+    "finance",
+    "tracker",
+    "terminal",
+    "sqlite",
+    "budget"
+  ],
+  "homepage": "https://github.com/nazozokc/subtrack",
+  "bugs": {
+    "url": "https://github.com/nazozokc/subtrack/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/nazozokc/subtrack.git"
   },
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": false,
   "scripts": {
     "build": "tsdown",
     "start": "tsx src/index.ts",
