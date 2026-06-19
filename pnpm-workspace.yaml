@@ -2,5 +2,5 @@ packages:
   - "subtrack"
   - "docs"
 
-onlyBuiltDependencies:
-  - esbuild
+allowBuilds:
+  esbuild: true
