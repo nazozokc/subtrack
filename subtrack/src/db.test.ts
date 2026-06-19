@@ -26,6 +26,16 @@ beforeAll(async () => {
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
   )`)
+  testDb.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cost REAL NOT NULL,
+    date TEXT NOT NULL,
+    description TEXT
+  )`)
 
   const db = await import("./db.ts")
   db.__setDb(testDb)
@@ -35,6 +45,7 @@ beforeEach(() => {
   testDb.run("DELETE FROM subscription_tags")
   testDb.run("DELETE FROM tags")
   testDb.run("DELETE FROM subscriptions")
+  testDb.run("DELETE FROM llm_usage")
 })
 
 afterAll(() => {
@@ -324,53 +335,53 @@ test("works with multiple subscriptions sharing the same tag", async () => {
 })
 
 test("periodFactor returns correct factor for monthly to monthly", async () => {
-  const { periodFactor } = await import("./db.ts")
+  const { periodFactor } = await import("./types.ts")
   expect(periodFactor("monthly", "monthly")).toBe(1)
 })
 
 test("periodFactor returns correct factor for yearly to monthly", async () => {
-  const { periodFactor } = await import("./db.ts")
+  const { periodFactor } = await import("./types.ts")
   expect(periodFactor("yearly", "monthly")).toBe(1 / 12)
 })
 
 test("periodFactor returns correct factor for monthly to yearly", async () => {
-  const { periodFactor } = await import("./db.ts")
+  const { periodFactor } = await import("./types.ts")
   expect(periodFactor("monthly", "yearly")).toBe(12)
 })
 
 test("periodFactor returns correct factor for weekly to monthly", async () => {
-  const { periodFactor } = await import("./db.ts")
+  const { periodFactor } = await import("./types.ts")
   expect(periodFactor("weekly", "monthly")).toBe(52 / 12)
 })
 
 test("periodFactor returns correct factor for bi-weekly to monthly", async () => {
-  const { periodFactor } = await import("./db.ts")
+  const { periodFactor } = await import("./types.ts")
   expect(periodFactor("bi-weekly", "monthly")).toBe(26 / 12)
 })
 
 test("periodFactor returns correct factor for quarterly to monthly", async () => {
-  const { periodFactor } = await import("./db.ts")
+  const { periodFactor } = await import("./types.ts")
   expect(periodFactor("quarterly", "monthly")).toBe(4 / 12)
 })
 
 test("periodFactor returns correct factor for semi-annual to monthly", async () => {
-  const { periodFactor } = await import("./db.ts")
+  const { periodFactor } = await import("./types.ts")
   expect(periodFactor("semi-annual", "monthly")).toBe(2 / 12)
 })
 
 test("periodFactor defaults to monthly when to is omitted", async () => {
-  const { periodFactor } = await import("./db.ts")
+  const { periodFactor } = await import("./types.ts")
   expect(periodFactor("yearly")).toBe(1 / 12)
   expect(periodFactor("monthly")).toBe(1)
 })
 
 test("periodFactor returns correct factor for quarterly to yearly", async () => {
-  const { periodFactor } = await import("./db.ts")
+  const { periodFactor } = await import("./types.ts")
   expect(periodFactor("quarterly", "yearly")).toBe(4)
 })
 
 test("periodFactor handles all cycle-to-cycle combinations without throwing", async () => {
-  const { periodFactor, OCCURRENCES_PER_YEAR } = await import("./db.ts")
+  const { periodFactor, OCCURRENCES_PER_YEAR } = await import("./types.ts")
   const cycles = Object.keys(OCCURRENCES_PER_YEAR) as Array<keyof typeof OCCURRENCES_PER_YEAR>
   for (const from of cycles) {
     for (const to of cycles) {
@@ -647,4 +658,121 @@ test("pruneTags does not remove tags still in use", async () => {
   const tags = db.getTagsWithCount()
   expect(tags).toHaveLength(1)
   expect(tags[0].name).toBe("active")
+})
+
+// ── LLM Usage ─────────────────────────────────────────────
+
+test("addLlmUsage creates a usage entry", async () => {
+  const db = await import("./db.ts")
+  db.addLlmUsage({
+    provider: "openai",
+    model: "gpt-4o",
+    input_tokens: 1000,
+    output_tokens: 500,
+    cost: 0.5,
+    date: "2026-06-19",
+    description: "test",
+  })
+
+  const entries = db.getLlmUsage()
+  expect(entries).toHaveLength(1)
+  expect(entries[0]).toMatchObject({
+    provider: "openai",
+    model: "gpt-4o",
+    input_tokens: 1000,
+    output_tokens: 500,
+    cost: 0.5,
+    date: "2026-06-19",
+    description: "test",
+  })
+})
+
+test("addLlmUsage allows null description", async () => {
+  const db = await import("./db.ts")
+  db.addLlmUsage({
+    provider: "anthropic",
+    model: "claude-3-opus-20240229",
+    input_tokens: 2000,
+    output_tokens: 1000,
+    cost: 3.0,
+    date: "2026-06-18",
+    description: null,
+  })
+
+  const entries = db.getLlmUsage()
+  expect(entries).toHaveLength(1)
+  expect(entries[0].description).toBeNull()
+})
+
+test("getLlmUsage filters by provider", async () => {
+  const db = await import("./db.ts")
+  db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 100, output_tokens: 50, cost: 0.1, date: "2026-06-01", description: null })
+  db.addLlmUsage({ provider: "anthropic", model: "claude-3", input_tokens: 200, output_tokens: 100, cost: 0.2, date: "2026-06-02", description: null })
+
+  const entries = db.getLlmUsage({ provider: "openai" })
+  expect(entries).toHaveLength(1)
+  expect(entries[0].provider).toBe("openai")
+})
+
+test("getLlmUsage filters by date range", async () => {
+  const db = await import("./db.ts")
+  db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 100, output_tokens: 50, cost: 0.1, date: "2026-06-01", description: null })
+  db.addLlmUsage({ provider: "openai", model: "gpt-4o-mini", input_tokens: 200, output_tokens: 100, cost: 0.2, date: "2026-06-15", description: null })
+
+  const entries = db.getLlmUsage({ from: "2026-06-10", to: "2026-06-20" })
+  expect(entries).toHaveLength(1)
+  expect(entries[0].model).toBe("gpt-4o-mini")
+})
+
+test("getLlmUsage returns entries ordered by date desc", async () => {
+  const db = await import("./db.ts")
+  db.addLlmUsage({ provider: "openai", model: "a", input_tokens: 1, output_tokens: 1, cost: 0.01, date: "2026-06-01", description: null })
+  db.addLlmUsage({ provider: "openai", model: "b", input_tokens: 1, output_tokens: 1, cost: 0.01, date: "2026-06-15", description: null })
+  db.addLlmUsage({ provider: "openai", model: "c", input_tokens: 1, output_tokens: 1, cost: 0.01, date: "2026-06-10", description: null })
+
+  const entries = db.getLlmUsage()
+  expect(entries[0].model).toBe("b") // latest first
+  expect(entries[1].model).toBe("c")
+  expect(entries[2].model).toBe("a")
+})
+
+test("deleteLlmUsage removes an entry", async () => {
+  const db = await import("./db.ts")
+  db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 100, output_tokens: 50, cost: 0.5, date: "2026-06-19", description: null })
+
+  const before = db.getLlmUsage()
+  expect(before).toHaveLength(1)
+
+  const result = db.deleteLlmUsage(before[0].id)
+  expect(result).toBe(true)
+  expect(db.getLlmUsage()).toHaveLength(0)
+})
+
+test("deleteLlmUsage returns false for non-existent id", async () => {
+  const db = await import("./db.ts")
+  expect(db.deleteLlmUsage(99999)).toBe(false)
+})
+
+test("getLlmUsageTotal sums cost in date range", async () => {
+  const db = await import("./db.ts")
+  db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 100, output_tokens: 50, cost: 1.0, date: "2026-06-01", description: null })
+  db.addLlmUsage({ provider: "openai", model: "gpt-4o-mini", input_tokens: 200, output_tokens: 100, cost: 2.0, date: "2026-06-15", description: null })
+  db.addLlmUsage({ provider: "anthropic", model: "claude-3", input_tokens: 300, output_tokens: 150, cost: 3.0, date: "2026-07-01", description: null })
+
+  const total = db.getLlmUsageTotal("2026-06-01", "2026-06-30")
+  expect(total).toBe(3.0) // 1.0 + 2.0
+})
+
+test("getLlmUsageTotalByProvider groups cost by provider", async () => {
+  const db = await import("./db.ts")
+  db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 100, output_tokens: 50, cost: 1.0, date: "2026-06-01", description: null })
+  db.addLlmUsage({ provider: "openai", model: "gpt-4o-mini", input_tokens: 200, output_tokens: 100, cost: 2.0, date: "2026-06-15", description: null })
+  db.addLlmUsage({ provider: "anthropic", model: "claude-3", input_tokens: 300, output_tokens: 150, cost: 3.0, date: "2026-06-10", description: null })
+
+  const byProvider = db.getLlmUsageTotalByProvider("2026-06-01", "2026-06-30")
+  expect(byProvider).toHaveLength(2)
+  const openai = byProvider.find((p) => p.provider === "openai")
+  const anthropic = byProvider.find((p) => p.provider === "anthropic")
+  expect(openai?.total).toBe(3.0)
+  expect(anthropic?.total).toBe(3.0)
 })

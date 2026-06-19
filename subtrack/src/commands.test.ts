@@ -43,6 +43,33 @@ vi.mock("consola", () => {
   }
 })
 
+// Mock pricing module for LLM usage tests
+vi.mock("./pricing.ts", () => ({
+  ensurePricingCache: vi.fn().mockResolvedValue({
+    "gpt-4o": {
+      input_cost_per_token: 2.5e-6,
+      output_cost_per_token: 1e-5,
+      litellm_provider: "openai",
+    },
+  }),
+  matchModel: vi.fn().mockImplementation(
+    (_cache: Record<string, unknown>, _provider: string, model: string) => {
+      // Simple lookup for test cache
+      const cache: Record<string, unknown> = {
+        "gpt-4o": {
+          input_cost_per_token: 2.5e-6,
+          output_cost_per_token: 1e-5,
+          litellm_provider: "openai",
+        },
+      }
+      return cache[model] ?? null
+    },
+  ),
+  calculateCostCents: vi.fn().mockReturnValue(0.75),
+  getModelPricingDirect: vi.fn().mockResolvedValue(null),
+  refreshPricingCache: vi.fn().mockResolvedValue(null),
+}))
+
 // Mock @inquirer/prompts to avoid interactive prompts
 vi.mock("@inquirer/prompts", () => ({
   input: vi.fn(),
@@ -82,6 +109,16 @@ beforeAll(async () => {
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
   )`)
+  testDb.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cost REAL NOT NULL,
+    date TEXT NOT NULL,
+    description TEXT
+  )`)
 
   const db = await import("./db.ts")
   db.__setDb(testDb)
@@ -101,6 +138,7 @@ beforeEach(() => {
   testDb.run("DELETE FROM subscription_tags")
   testDb.run("DELETE FROM tags")
   testDb.run("DELETE FROM subscriptions")
+  testDb.run("DELETE FROM llm_usage")
 
   logMessages.length = 0
   infoMessages.length = 0
@@ -139,25 +177,25 @@ function writeTempFile(filename: string, content: string): string {
 // ── parseCsvLine ─────────────────────────────────────────
 
 test("parseCsvLine parses simple fields", async () => {
-  const { parseCsvLine } = await import("./commands.ts")
+  const { parseCsvLine } = await import("./import-csv.ts")
   const result = parseCsvLine("a,b,c")
   expect(result).toEqual(["a", "b", "c"])
 })
 
 test("parseCsvLine handles quoted fields with commas", async () => {
-  const { parseCsvLine } = await import("./commands.ts")
+  const { parseCsvLine } = await import("./import-csv.ts")
   const result = parseCsvLine('"a,b",c')
   expect(result).toEqual(["a,b", "c"])
 })
 
 test("parseCsvLine handles escaped quotes", async () => {
-  const { parseCsvLine } = await import("./commands.ts")
+  const { parseCsvLine } = await import("./import-csv.ts")
   const result = parseCsvLine('"say ""hello""",end')
   expect(result).toEqual(['say "hello"', "end"])
 })
 
 test("parseCsvLine handles empty fields", async () => {
-  const { parseCsvLine } = await import("./commands.ts")
+  const { parseCsvLine } = await import("./import-csv.ts")
   const result = parseCsvLine("a,,c,")
   expect(result).toEqual(["a", "", "c", ""])
 })
@@ -467,21 +505,21 @@ test("handleEdit interactive: cancels when confirm is declined", async () => {
 // ── handleImport ─────────────────────────────────────────
 
 test("handleImport shows error when no file argument", async () => {
-  const { handleImport } = await import("./commands.ts")
+  const { handleImport } = await import("./import-csv.ts")
   await handleImport("", {})
   expect(errorMessages.length).toBeGreaterThan(0)
   expect(errorMessages[0].toLowerCase()).toContain("usage")
 })
 
 test("handleImport shows error for non-existent file", async () => {
-  const { handleImport } = await import("./commands.ts")
+  const { handleImport } = await import("./import-csv.ts")
   await handleImport("/nonexistent/file.csv", {})
   expect(errorMessages.some((m) => m.includes("not found"))).toBe(true)
 })
 
 test("handleImport shows error for invalid CSV header", async () => {
   const filePath = writeTempFile("bad-header.csv", "name,price\na,100")
-  const { handleImport } = await import("./commands.ts")
+  const { handleImport } = await import("./import-csv.ts")
   await handleImport(filePath, {})
   expect(errorMessages.length).toBeGreaterThan(0)
   expect(errorMessages[0].toLowerCase()).toContain("invalid csv header")
@@ -491,7 +529,7 @@ test("handleImport imports valid CSV data", async () => {
   const csv = "\uFEFFname,cycle,tags,price,currency\nNetflix,monthly,video;entertainment,1500,JPY\nDropbox,monthly,storage,10,USD"
   const filePath = writeTempFile("valid.csv", csv)
 
-  const { handleImport } = await import("./commands.ts")
+  const { handleImport } = await import("./import-csv.ts")
   await handleImport(filePath, {})
 
   const db = await import("./db.ts")
@@ -509,7 +547,7 @@ test("handleImport supports dry-run mode", async () => {
   const csv = "name,cycle,tags,price,currency\nNetflix,monthly,,1500,JPY"
   const filePath = writeTempFile("dryrun.csv", csv)
 
-  const { handleImport } = await import("./commands.ts")
+  const { handleImport } = await import("./import-csv.ts")
   await handleImport(filePath, { dryRun: true })
 
   const db = await import("./db.ts")
@@ -521,7 +559,7 @@ test("handleImport skips invalid rows", async () => {
   const csv = "name,cycle,tags,price,currency\nValid,monthly,,100,JPY\n,monthly,,abc,JPY\nBadPrice,monthly,,notanumber,JPY\nBadCurrency,monthly,,100,ZZ" // ZZ fails regex /^[A-Z]{3}$/
   const filePath = writeTempFile("partial.csv", csv)
 
-  const { handleImport } = await import("./commands.ts")
+  const { handleImport } = await import("./import-csv.ts")
   await handleImport(filePath, {})
 
   const db = await import("./db.ts")
@@ -702,4 +740,138 @@ test("handleDelete cancels when confirm is declined", async () => {
 
   expect(infoMessages.some((m) => m.includes("Cancelled"))).toBe(true)
   expect(db.getSubscriptions()).toHaveLength(1) // unchanged
+})
+
+// ── handleUsageAdd (non-interactive) ─────────────────────
+
+test("handleUsageAdd creates entry with all flags", async () => {
+  const db = await import("./db.ts")
+  const { handleUsageAdd } = await import("./usage.ts")
+
+  await handleUsageAdd({
+    provider: "openai",
+    model: "gpt-4o",
+    inputTokens: "1000",
+    outputTokens: "500",
+    date: "2026-06-19",
+    description: "test run",
+  })
+
+  const entries = db.getLlmUsage()
+  expect(entries).toHaveLength(1)
+  expect(entries[0].provider).toBe("openai")
+  expect(entries[0].model).toBe("gpt-4o")
+  expect(entries[0].input_tokens).toBe(1000)
+  expect(entries[0].output_tokens).toBe(500)
+  expect(entries[0].date).toBe("2026-06-19")
+  expect(entries[0].description).toBe("test run")
+  expect(entries[0].cost).toBeGreaterThan(0) // auto-calculated
+})
+
+test("handleUsageAdd with invalid provider shows error", async () => {
+  const { handleUsageAdd } = await import("./usage.ts")
+  await handleUsageAdd({
+    provider: "nonexistent",
+    model: "gpt-4o",
+    inputTokens: "100",
+    outputTokens: "50",
+  })
+  expect(errorMessages.length).toBeGreaterThan(0)
+  expect(errorMessages[0].toLowerCase()).toContain("invalid provider")
+})
+
+test("handleUsageAdd with invalid tokens shows error", async () => {
+  const { handleUsageAdd } = await import("./usage.ts")
+  await handleUsageAdd({
+    provider: "openai",
+    model: "gpt-4o",
+    inputTokens: "abc",
+    outputTokens: "50",
+  })
+  expect(errorMessages.length).toBeGreaterThan(0)
+})
+
+test("handleUsageAdd with invalid date shows error", async () => {
+  const { handleUsageAdd } = await import("./usage.ts")
+  await handleUsageAdd({
+    provider: "openai",
+    model: "gpt-4o",
+    inputTokens: "100",
+    outputTokens: "50",
+    date: "not-a-date",
+  })
+  expect(errorMessages.length).toBeGreaterThan(0)
+})
+
+// ── handleUsageList ──────────────────────────────────────
+
+test("handleUsageList shows info when no entries", async () => {
+  const { handleUsageList } = await import("./usage.ts")
+  await handleUsageList({})
+  expect(infoMessages.some((m) => m.includes("No usage entries"))).toBe(true)
+})
+
+test("handleUsageList displays entries", async () => {
+  const db = await import("./db.ts")
+  db.addLlmUsage({
+    provider: "openai",
+    model: "gpt-4o",
+    input_tokens: 1000,
+    output_tokens: 500,
+    cost: 0.5,
+    date: "2026-06-19",
+    description: null,
+  })
+
+  const { handleUsageList } = await import("./usage.ts")
+  await handleUsageList({})
+  const combined = logMessages.join("\n")
+  expect(combined).toContain("openai")
+  expect(combined).toContain("gpt-4o")
+  expect(combined).toContain("Total:")
+})
+
+// ── handleUsageDelete ─────────────────────────────────────
+
+test("handleUsageDelete shows info when no entries", async () => {
+  const { handleUsageDelete } = await import("./usage.ts")
+  await handleUsageDelete()
+  expect(infoMessages.some((m) => m.includes("No usage entries"))).toBe(true)
+})
+
+test("handleUsageDelete deletes selected entries", async () => {
+  const db = await import("./db.ts")
+  db.addLlmUsage({
+    provider: "openai",
+    model: "gpt-4o",
+    input_tokens: 100,
+    output_tokens: 50,
+    cost: 0.1,
+    date: "2026-06-19",
+    description: null,
+  })
+  const entries = db.getLlmUsage()
+
+  vi.mocked(checkbox).mockResolvedValue(entries)
+  vi.mocked(confirm).mockResolvedValue(true)
+
+  const { handleUsageDelete } = await import("./usage.ts")
+  await handleUsageDelete()
+
+  expect(db.getLlmUsage()).toHaveLength(0)
+  expect(successMessages.some((m) => m.includes("openai"))).toBe(true)
+})
+
+// ── handleUsageRefresh ───────────────────────────────────
+
+test("handleUsageRefresh shows failure when fetch fails", async () => {
+  globalThis.fetch = async () => { throw new Error("Network error") }
+
+  const { handleUsageRefresh } = await import("./usage.ts")
+  await handleUsageRefresh()
+
+  expect(failMessages.some((m) => m.includes("Failed to fetch"))).toBe(true)
+
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ base: "USD", rates: { JPY: 160, USD: 1 } }))
 })

@@ -49,6 +49,9 @@ jobs:
           test -f dist/index.mjs
           ls -R dist
 
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=high
+
       - name: Publish to npm
         working-directory: ./subtrack
         run: pnpm publish --no-git-checks --provenance
