@@ -21,6 +21,15 @@ import { renderUsageTable } from "./display.ts"
 // ── Workflow ──────────────────────────────────────────────
 
 async function resolveUsageAddOptions(flags: UsageAddFlags) {
+  let manualCostCents: number | null = null
+  if (flags.cost !== undefined) {
+    const costNum = Number(flags.cost)
+    if (isNaN(costNum) || costNum < 0) {
+      consola.error("Invalid cost. Enter a non-negative number (e.g. 0.50 for 50 cents)")
+      return null
+    }
+    manualCostCents = Math.round(costNum * 100)
+  }
   // Provider
   let provider = flags.provider
   let prompted = false
@@ -124,23 +133,27 @@ async function resolveUsageAddOptions(flags: UsageAddFlags) {
   }
 
   if (costCents === null) {
-    // Fallback: ask user for manual cost
-    if (!prompted) {
+    // Fallback: use --cost flag if provided
+    if (manualCostCents !== null) {
+      costCents = manualCostCents
+      manualCost = true
+    } else if (!prompted) {
       consola.error(
-        `Could not find pricing for "${model}". Run interactively to enter cost manually.`,
+        `Could not find pricing for "${model}". Provide --cost to set cost manually (e.g. --cost 0.50 for 50 cents).`,
       )
       return null
+    } else {
+      consola.warn(
+        `Could not find pricing for "${model}" in LiteLLM data. Enter cost manually.`,
+      )
+      const costStr = await input({
+        message: "Total cost in USD (e.g. 0.50 for 50 cents)",
+        validate: (v) =>
+          !isNaN(Number(v)) && Number(v) >= 0 ? true : "Enter a valid non-negative number",
+      })
+      costCents = Math.round(Number(costStr) * 100)
+      manualCost = true
     }
-    consola.warn(
-      `Could not find pricing for "${model}" in LiteLLM data. Enter cost manually.`,
-    )
-    const costStr = await input({
-      message: "Total cost in USD (e.g. 0.50 for 50 cents)",
-      validate: (v) =>
-        !isNaN(Number(v)) && Number(v) >= 0 ? true : "Enter a valid non-negative number",
-    })
-    costCents = Math.round(Number(costStr) * 100)
-    manualCost = true
   }
 
   // Confirm (only when interactive)
@@ -199,7 +212,19 @@ export async function handleUsageList(options: { provider?: string; from?: strin
   renderUsageTable(entries)
 }
 
-export async function handleUsageDelete() {
+export async function handleUsageDelete(ids?: number[]) {
+  if (ids && ids.length > 0) {
+    for (const id of ids) {
+      const deleted = deleteLlmUsage(id)
+      if (deleted) {
+        consola.success(`Deleted usage entry: ${id}`)
+      } else {
+        consola.error(`Usage entry with id ${id} not found`)
+      }
+    }
+    return
+  }
+
   const all = getLlmUsage({ limit: 500 })
 
   if (all.length === 0) {

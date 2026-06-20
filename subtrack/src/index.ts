@@ -14,6 +14,7 @@ import {
   handleExport,
   handleSummary,
   handleBackup,
+  handleRestore,
   handlePayment,
 } from "./commands.ts"
 import {
@@ -68,8 +69,14 @@ const editCommand = define({
 
 const deleteCommand = define({
   name: "delete",
-  description: "Delete subscriptions (interactive)",
-  run: () => handleDelete(),
+  description: "Delete subscriptions",
+  args: {
+    id: { type: "positional", array: true, description: "Subscription ID(s) to delete (omit for interactive selection)", required: false },
+  },
+  run: (ctx) => {
+    const ids = ctx.positionals.slice(1).map(Number).filter((n) => !isNaN(n))
+    handleDelete(ids.length > 0 ? ids : undefined)
+  },
 })
 
 const tagsCommand = define({
@@ -161,11 +168,22 @@ const summaryCommand = define({
 
 const backupCommand = define({
   name: "backup",
-  description: "Backup database",
+  description: "Backup database (gzip compressed)",
   args: {
-    destination: { type: "positional", description: "Backup destination directory" },
+    destination: { type: "positional", description: "Backup destination directory (default: ~/.config/subtrack/backups/)", required: false },
   },
   run: (ctx) => handleBackup(ctx.values.destination),
+})
+
+const restoreCommand = define({
+  name: "restore",
+  description: "Restore database from a backup",
+  args: {
+    file: { type: "positional", description: "Backup file to restore (omit for interactive selection)", required: false },
+    force: { type: "boolean", short: "f", description: "Skip confirmation" },
+    dir: { type: "string", description: "Directory to scan for backup files" },
+  },
+  run: (ctx) => handleRestore(ctx.values.file, { force: ctx.values.force, dir: ctx.values.dir }),
 })
 
 const paymentCommand = define({
@@ -195,6 +213,7 @@ const usageAddCommand = define({
     outputTokens: { type: "string", description: "Output tokens used" },
     date: { type: "string", description: "Date (YYYY-MM-DD, default: today)" },
     description: { type: "string", description: "Optional description" },
+    cost: { type: "string", description: "Total cost in USD (e.g. 0.50 for 50 cents; overrides auto-pricing)" },
   },
   run: (ctx) => handleUsageAdd(ctx.values),
 })
@@ -212,8 +231,14 @@ const usageListCommand = define({
 
 const usageDeleteCommand = define({
   name: "delete",
-  description: "Delete LLM API usage entries (interactive)",
-  run: () => handleUsageDelete(),
+  description: "Delete LLM API usage entries",
+  args: {
+    id: { type: "positional", array: true, description: "Entry ID(s) to delete (omit for interactive selection)", required: false },
+  },
+  run: (ctx) => {
+    const ids = ctx.positionals.slice(1).map(Number).filter((n) => !isNaN(n))
+    handleUsageDelete(ids.length > 0 ? ids : undefined)
+  },
 })
 
 const usageRefreshCommand = define({
@@ -255,6 +280,7 @@ try {
       import: importCommand,
       summary: summaryCommand,
       backup: backupCommand,
+      restore: restoreCommand,
       payment: paymentCommand,
       usage: usageCommand,
     },

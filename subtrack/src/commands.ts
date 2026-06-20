@@ -1,8 +1,12 @@
 import { input, confirm, checkbox, select } from "@inquirer/prompts"
 import { consola } from "consola"
-import { copyFileSync, statSync, constants } from "node:fs"
-import { join } from "node:path"
-import type { Currency, Cycle, SharedArgs, AddSharedArgs, AddFlags } from "./types.ts"
+import {
+  mkdirSync, existsSync, statSync, openSync, writeSync, closeSync,
+  copyFileSync, readFileSync, writeFileSync, constants,
+} from "node:fs"
+import { gzipSync } from "node:zlib"
+import path, { join } from "node:path"
+import type { Currency, Cycle, SharedArgs, AddSharedArgs, AddFlags, BackupFileInfo } from "./types.ts"
 import {
   getSubscriptions,
   getSubscription,
@@ -16,6 +20,11 @@ import {
   deleteTag,
   pruneTags,
   getDbPath,
+  getDb,
+  getDbDir,
+  getDefaultBackupDir,
+  getBackupFiles,
+  restoreDb,
   saveDb,
 } from "./db.ts"
 import {
@@ -144,7 +153,20 @@ export async function handleAdd(flags: AddFlags) {
   }
 }
 
-export async function handleDelete() {
+export async function handleDelete(ids?: number[]) {
+  if (ids && ids.length > 0) {
+    for (const id of ids) {
+      const sub = getSubscription(id)
+      if (!sub) {
+        consola.error(`Subscription with id ${id} not found`)
+        continue
+      }
+      deleteSubscription(id)
+      consola.success(`Deleted: ${sub.name}`)
+    }
+    return
+  }
+
   const all = getSubscriptions()
 
   if (all.length === 0) {
@@ -187,31 +209,34 @@ export async function handleTags(taglist: string[]) {
   await spreadSubscription(list)
 }
 
-export async function handleBackup(destination: string) {
+export async function handleBackup(destination?: string) {
   // flush in-memory state to disk
   saveDb()
 
-  // validate destination
-  let destStat
-  try {
-    destStat = statSync(destination)
-  } catch {
-    consola.error(`Backup destination does not exist: ${destination}`)
-    return
+  // resolve destination directory
+  const dest = destination ?? getDefaultBackupDir()
+  if (!existsSync(dest)) {
+    mkdirSync(dest, { recursive: true })
   }
-  if (!destStat.isDirectory()) {
-    consola.error(`Backup destination must be a directory: ${destination}`)
+  if (!statSync(dest).isDirectory()) {
+    consola.error(`Backup destination must be a directory: ${dest}`)
     return
   }
 
   // generate timestamped filename
   const now = new Date()
   const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`
-  const destPath = join(destination, `subtrack_${ts}.db`)
+  const destPath = join(dest, `subtrack_${ts}.db.gz`)
 
-  // copy with exclusive create to prevent overwrite
+  // compress and write with exclusive create
+  const compressed = gzipSync(Buffer.from(getDb().export()))
   try {
-    copyFileSync(getDbPath(), destPath, constants.COPYFILE_EXCL)
+    const fd = openSync(destPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL)
+    try {
+      writeSync(fd, compressed)
+    } finally {
+      closeSync(fd)
+    }
     consola.success(`Backup created: ${destPath}`)
   } catch (err) {
     const nodeErr = err as NodeJS.ErrnoException
@@ -220,6 +245,134 @@ export async function handleBackup(destination: string) {
     } else {
       consola.error(`Backup failed: ${nodeErr.message}`)
     }
+  }
+}
+
+function formatFileSize(bytes: number): string {
+  const units = ["B", "kB", "MB", "GB"]
+  let i = 0
+  let size = bytes
+  while (size >= 1024 && i < units.length - 1) {
+    size /= 1024
+    i++
+  }
+  return `${size.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}
+
+export async function handleRestore(
+  file?: string,
+  options: { force?: boolean; dir?: string } = {},
+) {
+  if (file) {
+    // ── Non-interactive ──────────────────────────────────
+    const resolvedPath = path.resolve(file)
+    if (!existsSync(resolvedPath)) {
+      consola.error(`Backup file not found: ${resolvedPath}`)
+      return
+    }
+
+    const currentCount = getSubscriptions().length
+    if (!options.force) {
+      const ok = await confirm({
+        message:
+          `Restore "${path.basename(resolvedPath)}"? Current data (${currentCount} subscription${currentCount !== 1 ? "s" : ""}) will be backed up automatically.`,
+        default: false,
+      })
+      if (!ok) {
+        consola.info("Cancelled")
+        return
+      }
+    }
+
+    // auto-backup current state
+    await safeAutoBackup()
+
+    try {
+      restoreDb(resolvedPath)
+      const subs = getSubscriptions()
+      consola.success(
+        `Restored ${subs.length} subscription${subs.length !== 1 ? "s" : ""} from: ${resolvedPath}`,
+      )
+    } catch (e) {
+      consola.error(`Restore failed: ${e}`)
+    }
+    return
+  }
+
+  // ── Interactive ────────────────────────────────────────
+  const searchDir = options.dir
+    ? path.resolve(options.dir)
+    : getDefaultBackupDir()
+
+  let backups: BackupFileInfo[]
+  try {
+    backups = getBackupFiles(searchDir)
+  } catch {
+    consola.error(`Cannot read directory: ${searchDir}`)
+    return
+  }
+
+  if (backups.length === 0) {
+    consola.info(`No backup files found in: ${searchDir}`)
+    return
+  }
+
+  const selected = await select({
+    message: "Select a backup to restore:",
+    loop: false,
+    pageSize: 10,
+    choices: backups.map((f) => ({
+      name: `${f.name}  (${formatFileSize(f.size)}, ${f.mtime.toLocaleString()})`,
+      value: f.path,
+    })),
+  })
+
+  const currentCount = getSubscriptions().length
+  const ok = await confirm({
+    message:
+      `Restore "${path.basename(selected)}"? Current data (${currentCount} subscription${currentCount !== 1 ? "s" : ""}) will be backed up automatically.`,
+    default: false,
+  })
+
+  if (!ok) {
+    consola.info("Cancelled")
+    return
+  }
+
+  // auto-backup current state
+  await safeAutoBackup()
+
+  try {
+    restoreDb(selected)
+    const subs = getSubscriptions()
+    consola.success(
+      `Restored ${subs.length} subscription${subs.length !== 1 ? "s" : ""} from: ${selected}`,
+    )
+  } catch (e) {
+    consola.error(`Restore failed: ${e}`)
+  }
+}
+
+async function safeAutoBackup() {
+  saveDb()
+  const backupDir = getDefaultBackupDir()
+  mkdirSync(backupDir, { recursive: true })
+  const now = new Date()
+  const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`
+  const destPath = join(backupDir, `subtrack_${ts}_before_restore.db.gz`)
+
+  const compressed = gzipSync(Buffer.from(getDb().export()))
+  try {
+    const fd = openSync(destPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL)
+    try {
+      writeSync(fd, compressed)
+    } finally {
+      closeSync(fd)
+    }
+    consola.info(`Auto-backup created: ${destPath}`)
+  } catch {
+    // auto-backup is best-effort; warn but continue
+    consola.warn("Could not create auto-backup, continuing with restore")
   }
 }
 
