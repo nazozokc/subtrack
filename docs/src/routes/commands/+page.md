@@ -14,6 +14,7 @@ Lists all subscriptions in a formatted table. Subscriptions are grouped by curre
 | `-c, --currency <C>` | Convert all prices to the given currency using live exchange rates |
 | `--sort <field>` | Sort by field: `name`, `price`, `currency`, `cycle`, `id` (default) |
 | `-d, --desc` | Sort in descending order (use with `--sort`) |
+| `-a, --api` | Include LLM API usage costs for the current month |
 
 ### Examples
 
@@ -29,9 +30,17 @@ subtrack list --sort price
 
 # Sort by name, descending
 subtrack list --sort name --desc
+
+# Include LLM API usage for current month
+subtrack list --api
+
+# Combine with currency conversion
+subtrack list --api --currency JPY
 ```
 
 When `--currency` is used, all prices are converted to the target currency (fetched from [open.er-api.com](https://open.er-api.com)) and displayed as a single group with a grand total.
+
+When `--api` is used, LLM API usage costs for the current month are fetched from the `llm_usage` table and displayed in a separate table below the subscription list, including a provider breakdown.
 
 ## `add`
 
@@ -97,18 +106,21 @@ subtrack edit 3 --name "Netflix Premium" --price 2500 --currency JPY
 
 Without flags, `edit` shows a multi-select of fields to change. Each selected field is prompted with the current value as default.
 
-## `delete`
+## `delete [ids...]`
 
 Shows an interactive checkbox list of all subscriptions. Select one or more to delete. Confirmation is required before deletion.
 
-<div class="callout warning">
-  <strong>⚠ Note:</strong> The <code>delete</code> command is always interactive. There is no non-interactive mode.
-</div>
+You can also specify subscription IDs as positional arguments for non-interactive deletion.
 
-### Example
+### Examples
 
 ```bash
+# Interactive: checkbox selection
 subtrack delete
+
+# Non-interactive: delete by ID(s)
+subtrack delete 3
+subtrack delete 2 5 7
 ```
 
 ## `import <file>`
@@ -302,20 +314,50 @@ Removes orphaned tags (tags not associated with any subscription).
 subtrack tag prune
 ```
 
-## `backup <destination>`
+## `backup [destination]`
 
-Creates a timestamped backup of the SQLite database in the specified directory. The backup filename follows the format `subtrack_YYYYMMDD_HHmmss.db`.
+Creates a timestamped gzip-compressed backup of the SQLite database. The backup filename follows the format `subtrack_YYYYMMDD_HHmmss.db.gz`.
 
-If the destination does not exist or is not a directory, the command exits with an error. The backup will not overwrite existing files (exclusive create).
+If no destination is specified, backups are saved to `~/.config/subtrack/backups/` (created automatically). Backups use exclusive file creation and will never overwrite existing files.
 
 ### Examples
 
 ```bash
+# Backup to default directory (~/.config/subtrack/backups/)
+subtrack backup
+
+# Backup to a specific directory
+subtrack backup ~/backups
+
 # Backup to current directory
 subtrack backup .
+```
 
-# Backup to ~/backups
-subtrack backup ~/backups
+## `restore [file]`
+
+Restores the database from a backup file. If no file is specified, shows an interactive list of available backups from the default backup directory (`~/.config/subtrack/backups/`).
+
+Before restoring, the current database is automatically backed up (timestamped with `_before_restore.db.gz` suffix) as a safety measure.
+
+| Option | Description |
+|--------|-------------|
+| `-f, --force` | Skip confirmation prompt |
+| `--dir <path>` | Scan a custom directory for backup files |
+
+### Examples
+
+```bash
+# Interactive: select a backup from the default directory
+subtrack restore
+
+# Restore from a specific file
+subtrack restore ~/backups/subtrack_20260617_143000.db.gz
+
+# Force restore without confirmation
+subtrack restore ~/backups/subtrack_20260617_143000.db.gz --force
+
+# List backups from a custom directory
+subtrack restore --dir ~/custom-backups
 ```
 
 ## `usage`
@@ -334,6 +376,7 @@ Records an LLM API usage entry. Without flags, prompts for all fields interactiv
 | `--outputTokens <n>` | Output token count |
 | `--date <YYYY-MM-DD>` | Date of usage (default: today) |
 | `--description <text>` | Optional description |
+| `--cost <amount>` | Total cost in USD (e.g. `0.50` for 50 cents; overrides auto-pricing) |
 
 ```bash
 # Interactive mode
@@ -347,9 +390,17 @@ subtrack usage add \
   --outputTokens 200 \
   --date 2026-06-19 \
   --description "Chat completion"
+
+# Override auto-calculated cost
+subtrack usage add \
+  --provider openai \
+  --model gpt-4o \
+  --inputTokens 500 \
+  --outputTokens 200 \
+  --cost 0.15
 ```
 
-Cost is calculated automatically via the LiteLLM pricing cache (fetched from GitHub, cached for 24 hours). If pricing is not found, the tool falls back to querying the LiteLLM Model Catalog API, then prompts for manual cost input.
+Cost is calculated automatically via the LiteLLM pricing cache (fetched from GitHub, cached for 24 hours). If pricing is not found, the tool falls back to querying the LiteLLM Model Catalog API, then prompts for manual cost input. Use `--cost` to override auto-pricing entirely.
 
 ### `usage list`
 

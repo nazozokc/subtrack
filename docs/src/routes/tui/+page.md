@@ -9,7 +9,7 @@ subtrack offers both **interactive** and **non-interactive** modes. The interact
 |---------|-------------|-----------------|
 | `add` | ✅ (default) | ✅ (all flags provided) |
 | `edit` | ✅ (default) | ✅ (flags + optional ID) |
-| `delete` | ✅ (always) | ❌ |
+| `delete` | ✅ (always) | ✅ (positional IDs) |
 | `import` | ❌ | ✅ |
 | `list` | ❌ | ✅ |
 | `tags` | ❌ | ✅ |
@@ -18,9 +18,10 @@ subtrack offers both **interactive** and **non-interactive** modes. The interact
 | `export` | ❌ | ✅ |
 | `payment` | ❌ | ✅ |
 | `backup` | ❌ | ✅ |
+| `restore` | ✅ (default) | ✅ (flags provided) |
 | `usage add` | ✅ (default) | ✅ (all flags provided) |
 | `usage list` | ❌ | ✅ |
-| `usage delete` | ✅ (always) | ❌ |
+| `usage delete` | ✅ (always) | ✅ (positional IDs) |
 | `usage refresh` | ❌ | ✅ |
 
 ## `subtrack add` — interactive walkthrough
@@ -206,7 +207,7 @@ This updates only the specified fields and skips all prompts.
 
 ## `subtrack delete` — interactive walkthrough
 
-`delete` is **always interactive**. There is no non-interactive mode.
+When run without arguments, `delete` launches an interactive session. You can also pass positional IDs for non-interactive deletion (e.g. `subtrack delete 3`).
 
 ### 1. Select subscriptions
 

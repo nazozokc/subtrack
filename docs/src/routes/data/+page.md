@@ -53,22 +53,38 @@ Prices are stored as whole numbers (integers) in the database. This avoids float
 
 ## Backup
 
-Use the `backup` command to create a timestamped copy of your database:
+Use the `backup` command to create a timestamped gzip-compressed copy of your database:
 
 ```bash
+# Backup to the default directory (~/.config/subtrack/backups/)
+subtrack backup
+# Creates: ~/.config/subtrack/backups/subtrack_20260617_143000.db.gz
+
+# Backup to a custom directory
 subtrack backup ~/backups
-# Creates: ~/backups/subtrack_20260617_143000.db
+# Creates: ~/backups/subtrack_20260617_143000.db.gz
 ```
 
-Backups use exclusive file creation, so they will never overwrite an existing file. See the [Commands](/commands) reference for full details.
+If no destination is specified, backups are saved to `~/.config/subtrack/backups/` (created automatically). Backups use exclusive file creation, so they will never overwrite an existing file. See the [Commands](/commands) reference for full details.
 
 ## Restore from backup
 
-To restore from a backup, simply copy the backup file to the database location:
+Use the `restore` command to restore from a backup. Without arguments, it interactively lists available backups:
+
+```bash
+# Interactive: select from available backups
+subtrack restore
+
+# Restore from a specific file
+subtrack restore ~/backups/subtrack_20260617_143000.db.gz
+```
+
+Before restoring, the current database is automatically backed up as a safety measure. You can also restore manually:
 
 ```bash
 # Stop subtrack (close all running instances)
-cp ~/backups/subtrack_20260617_143000.db ~/.config/subtrack/subtrack.db
+cp ~/backups/subtrack_20260617_143000.db.gz ~/.config/subtrack/subtrack.db.gz
+gunzip -k ~/.config/subtrack/subtrack.db.gz
 ```
 
 Make sure subtrack is not running when you restore, as changes are written to the database file on every command.

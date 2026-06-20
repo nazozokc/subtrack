@@ -5,7 +5,14 @@ description: Frequently asked questions and troubleshooting for subtrack.
 
 ## I lost my database. Can I recover it?
 
-If you have a backup (created with `subtrack backup`), copy it back to `~/.config/subtrack/subtrack.db`. Without a backup, the data cannot be recovered — the database is stored locally only.
+Use `subtrack restore` to restore from a backup. If you have a backup file, you can also restore it manually:
+
+```bash
+cp ~/backups/subtrack_20260617_143000.db.gz ~/.config/subtrack/subtrack.db.gz
+gunzip -k ~/.config/subtrack/subtrack.db.gz
+```
+
+Without a backup, the data cannot be recovered — the database is stored locally only.
 
 **Recommendation:** Set up regular automated backups via cron or Task Scheduler. See the [Data & Storage](/data) page for details.
 
@@ -21,13 +28,24 @@ When offline, `--currency` falls back to per-currency display without conversion
 
 ## How do I restore from a backup?
 
-Copy the backup file to the database location:
+Use the `restore` command for interactive or direct restore:
 
 ```bash
-cp ~/backups/subtrack_20260617_143000.db ~/.config/subtrack/subtrack.db
+# Interactive: select from available backups
+subtrack restore
+
+# Direct restore from a specific file
+subtrack restore ~/backups/subtrack_20260617_143000.db.gz
 ```
 
-Ensure no subtrack processes are running during the restore. The database is flushed to disk after each command.
+Alternatively, copy the backup file manually:
+
+```bash
+cp ~/backups/subtrack_20260617_143000.db.gz ~/.config/subtrack/subtrack.db.gz
+gunzip -k ~/.config/subtrack/subtrack.db.gz
+```
+
+The `restore` command automatically backs up your current data before restoring. Ensure no subtrack processes are running during the restore — the database is flushed to disk after each command.
 
 ## Is my data sent anywhere?
 
@@ -35,7 +53,7 @@ Ensure no subtrack processes are running during the restore. The database is flu
 
 ## Can I use subtrack in Docker or CI?
 
-Yes. subtrack is a standard Node.js CLI tool and works in any environment with Node.js 18+. For Docker:
+Yes. subtrack is a standard Node.js CLI tool and works in any environment with Node.js 22+. For Docker:
 
 ```dockerfile
 FROM node:22-alpine
