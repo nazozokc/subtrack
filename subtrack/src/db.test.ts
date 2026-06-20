@@ -776,3 +776,107 @@ test("getLlmUsageTotalByProvider groups cost by provider", async () => {
   expect(openai?.total).toBe(3.0)
   expect(anthropic?.total).toBe(3.0)
 })
+
+// ── Backup / Restore ─────────────────────────────────────
+
+test("getDefaultBackupDir returns path under getDbDir", async () => {
+  const db = await import("./db.ts")
+  const backupDir = db.getDefaultBackupDir()
+  expect(backupDir).toContain(db.getDbDir())
+  expect(backupDir).toContain("backups")
+})
+
+test("getBackupFiles returns empty for non-existent directory", async () => {
+  const db = await import("./db.ts")
+  const files = db.getBackupFiles("/nonexistent/path/subtrack-test-backups")
+  expect(files).toEqual([])
+})
+
+test("getBackupFiles finds .db.gz files", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  try {
+    writeFileSync(join(tmpDir, "subtrack_20260620_123456.db.gz"), "fake-gz-content")
+    writeFileSync(join(tmpDir, "subtrack_20260619_100000.db"), "fake-db-content")
+    writeFileSync(join(tmpDir, "subtrack.db"), "should-be-excluded")
+
+    const db = await import("./db.ts")
+    const files = db.getBackupFiles(tmpDir)
+
+    expect(files).toHaveLength(2)
+    expect(files.find((f) => f.name === "subtrack_20260620_123456.db.gz")).toBeDefined()
+    expect(files.find((f) => f.name === "subtrack_20260619_100000.db")).toBeDefined()
+    expect(files.find((f) => f.name === "subtrack.db")).toBeUndefined()
+  } finally {
+    if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+  }
+})
+
+test("restoreDb replaces in-memory database", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync, readFileSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+  const initSqlJs2 = await import("sql.js")
+
+  // Create a backup database with different data
+  const SQL2 = await initSqlJs2.default()
+  const backupDb = new SQL2.Database()
+  backupDb.run("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL)")
+  backupDb.run("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
+  backupDb.run("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
+  backupDb.run("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('RestoredService', 999, 'USD', 'monthly')")
+
+  const buf = Buffer.from(backupDb.export())
+  backupDb.close()
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  const backupPath = join(tmpDir, "test_backup.db")
+  writeFileSync(backupPath, buf)
+
+  // Current DB has different data
+  testDb.run("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('OldService', 500, 'JPY', 'monthly')")
+
+  const db = await import("./db.ts")
+
+  // Verify current state
+  const before = db.getSubscriptions()
+  expect(before).toHaveLength(1)
+  expect(before[0].name).toBe("OldService")
+
+  // Restore
+  db.restoreDb(backupPath)
+
+  // Verify replaced state
+  const after = db.getSubscriptions()
+  expect(after).toHaveLength(1)
+  expect(after[0].name).toBe("RestoredService")
+  expect(after[0].price).toBe(999)
+
+  // Cleanup
+  if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+})
+
+test("restoreDb throws for invalid schema", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+  const initSqlJs2 = await import("sql.js")
+
+  // Create a valid SQLite DB but without subscriptions table
+  const SQL2 = await initSqlJs2.default()
+  const badDb = new SQL2.Database()
+  badDb.run("CREATE TABLE random_stuff (id INTEGER PRIMARY KEY)")
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  const badPath = join(tmpDir, "bad_backup.db")
+  writeFileSync(badPath, Buffer.from(badDb.export()))
+  badDb.close()
+
+  const db = await import("./db.ts")
+  expect(() => db.restoreDb(badPath)).toThrow("missing 'subscriptions' table")
+
+  if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+})

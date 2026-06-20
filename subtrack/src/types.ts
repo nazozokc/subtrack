@@ -62,6 +62,7 @@ export type UsageAddFlags = {
   outputTokens?: string
   date?: string
   description?: string
+  cost?: string
 }
 
 export type AddFlags = {
@@ -70,4 +71,11 @@ export type AddFlags = {
   currency?: string
   cycle?: string
   tags?: string
+}
+
+export type BackupFileInfo = {
+  name: string
+  path: string
+  mtime: Date
+  size: number
 }

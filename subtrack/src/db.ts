@@ -1,6 +1,11 @@
 import initSqlJs from "sql.js"
 import type { Database, SqlValue } from "sql.js"
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs"
+import {
+  mkdirSync, existsSync, readFileSync, writeFileSync,
+  readdirSync, statSync, openSync, writeSync, closeSync,
+  constants,
+} from "node:fs"
+import { gzipSync, gunzipSync } from "node:zlib"
 import path from "node:path"
 import { homedir } from "node:os"
 import type {
@@ -11,6 +16,7 @@ import type {
   LlmUsageEntry,
   AddLlmUsageArgs,
   GetLlmUsageOptions,
+  BackupFileInfo,
 } from "./types.ts"
 
 let _db: Database | null = null
@@ -18,10 +24,14 @@ let _dbPath = ""
 
 const _SQL = await initSqlJs()
 
-function getDbDir(): string {
+export function getDbDir(): string {
   return (
     process.env.SUBSC_CLI_DB_DIR ?? path.join(homedir(), ".config", "subtrack")
   )
+}
+
+export function getDefaultBackupDir(): string {
+  return path.join(getDbDir(), "backups")
 }
 
 export function saveDb(): void {
@@ -60,7 +70,7 @@ function execObj<T>(
   return makeObj(columns, values[0]) as T
 }
 
-function getDb(): Database {
+export function getDb(): Database {
   if (_db) return _db
 
   const dbdir = getDbDir()
@@ -105,6 +115,65 @@ function getDb(): Database {
   )`)
 
   return _db
+}
+
+export function getBackupFiles(dir: string): BackupFileInfo[] {
+  if (!existsSync(dir)) return []
+
+  const entries = readdirSync(dir)
+  const activeDb = path.basename(getDbPath())
+  const skipNames = new Set<string>(["subtrack.db"])
+  if (activeDb) skipNames.add(activeDb)
+
+  return entries
+    .filter((f) => {
+      const lower = f.toLowerCase()
+      return (lower.endsWith(".db") || lower.endsWith(".db.gz")) &&
+        !skipNames.has(f) &&
+        !f.includes("_before_restore.db")
+    })
+    .map((f) => {
+      const fullPath = path.join(dir, f)
+      const st = statSync(fullPath)
+      return {
+        name: f,
+        path: fullPath,
+        mtime: st.mtime,
+        size: st.size,
+      }
+    })
+    .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
+}
+
+export function restoreDb(backupPath: string): void {
+  const raw = readFileSync(backupPath)
+  const isGz = backupPath.toLowerCase().endsWith(".gz")
+  const buf = isGz ? gunzipSync(raw) : raw
+
+  // Verify it's a valid SQLite DB with correct schema
+  const newDb = new _SQL.Database(buf)
+  const tables = newDb.exec(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='subscriptions'",
+  )
+  const hasSubscriptions =
+    tables.length > 0 && tables[0].values.length > 0
+  if (!hasSubscriptions) {
+    throw new Error(
+      "Invalid backup file: missing 'subscriptions' table — not a subtrack database",
+    )
+  }
+
+  // Flush current in-memory state to disk
+  saveDb()
+
+  // Overwrite the active database file (no-op in test mode with __setDb)
+  if (_dbPath) {
+    writeFileSync(_dbPath, buf)
+  }
+
+  // Replace in-memory instance
+  newDb.run("PRAGMA foreign_keys = ON")
+  _db = newDb
 }
 
 /** Replace the DB instance for testing (e.g. with in-memory). */
