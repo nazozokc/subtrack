@@ -2,9 +2,9 @@
   <img src="images/subtrack-cli-logo.jpg" alt="subtrack" width="400"/>
 </p>
 
-<p align="center">
+<div align="center">
 <h1>subtrack</h1>
-</p>
+</div>
 
 <p align="center">
   <img src="images/subtrack-demo.png" alt="subtrack demo" width="700"/>
