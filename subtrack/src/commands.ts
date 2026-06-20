@@ -21,8 +21,10 @@ import {
 import {
   formatPrice,
   spreadSubscription,
+  showApiUsage,
 } from "./display.ts"
 import { showPayment, showSummary } from "./payment.ts"
+import { getLlmUsageTotal, getLlmUsageTotalByProvider } from "./db.ts"
 import { exportCsv, exportMd, exportJson } from "./export.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import {
@@ -113,9 +115,22 @@ async function resolveAddOptions(flags: AddFlags) {
 
 // ── Command handlers ────────────────────────────────────
 
-export async function handleList(options: { currency?: string; sort?: string; desc?: boolean }) {
+export async function handleList(options: { currency?: string; sort?: string; desc?: boolean; api?: boolean }) {
   const list = getSubscriptions(options.sort, options.desc)
   await spreadSubscription(list, options.currency as Currency | undefined)
+
+  if (options.api) {
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = now.getMonth() + 1
+    const from = `${y}-${String(m).padStart(2, "0")}-01`
+    const to = `${y}-${String(m).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+    const monthLabel = `${now.toLocaleString("en-US", { month: "long" })} ${y}`
+
+    const total = getLlmUsageTotal(from, to)
+    const byProvider = getLlmUsageTotalByProvider(from, to)
+    showApiUsage(total, byProvider, monthLabel)
+  }
 }
 
 export async function handleAdd(flags: AddFlags) {

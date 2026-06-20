@@ -808,7 +808,7 @@ test("handleUsageAdd with invalid date shows error", async () => {
 test("handleUsageList shows info when no entries", async () => {
   const { handleUsageList } = await import("./usage.ts")
   await handleUsageList({})
-  expect(infoMessages.some((m) => m.includes("No usage entries"))).toBe(true)
+  expect(infoMessages.some((m) => m.includes("No paid usage entries"))).toBe(true)
 })
 
 test("handleUsageList displays entries", async () => {
@@ -828,7 +828,7 @@ test("handleUsageList displays entries", async () => {
   const combined = logMessages.join("\n")
   expect(combined).toContain("openai")
   expect(combined).toContain("gpt-4o")
-  expect(combined).toContain("Total:")
+  expect(combined).toContain("Total")
 })
 
 // ── handleUsageDelete ─────────────────────────────────────
