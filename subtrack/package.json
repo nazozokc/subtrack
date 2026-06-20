@@ -33,6 +33,12 @@
     "node": ">=22"
   },
   "sideEffects": false,
+  "files": [
+    "dist",
+    "npm-shrinkwrap.json",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsdown",
     "start": "tsx src/index.ts",
