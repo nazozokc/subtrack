@@ -34,6 +34,7 @@ const listCommand = define({
     currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
     sort: { type: "string", description: "Sort field: name, price, currency, cycle" },
     desc: { type: "boolean", short: "d", description: "Sort descending" },
+    api: { type: "boolean", short: "a", description: "Include LLM API usage for current month" },
   },
   run: (ctx) => handleList(ctx.values),
 })

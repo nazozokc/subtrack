@@ -52,6 +52,7 @@ export type GetLlmUsageOptions = {
   to?: string
   limit?: number
   offset?: number
+  minCost?: number
 }
 
 export type UsageAddFlags = {

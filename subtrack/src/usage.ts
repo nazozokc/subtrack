@@ -16,6 +16,7 @@ import {
   refreshPricingCache,
 } from "./pricing.ts"
 import type { ModelPricingEntry } from "./pricing.ts"
+import { renderUsageTable } from "./display.ts"
 
 // ── Workflow ──────────────────────────────────────────────
 
@@ -192,40 +193,10 @@ export async function handleUsageList(options: { provider?: string; from?: strin
     from: options.from,
     to: options.to,
     limit: 100,
+    minCost: 0.01,
   })
 
-  if (entries.length === 0) {
-    consola.info("No usage entries found")
-    return
-  }
-
-  // Build table
-  const rows: string[][] = []
-  for (const e of entries) {
-    rows.push([
-      e.provider,
-      e.model,
-      e.input_tokens.toLocaleString(),
-      e.output_tokens.toLocaleString(),
-      `$${(e.cost / 100).toFixed(4)}`,
-      e.date,
-      e.description ?? "",
-    ])
-  }
-
-  const totalCost = entries.reduce((sum, e) => sum + e.cost, 0)
-
-  // Simple table output
-  const header = `${"Provider".padEnd(12)} ${"Model".padEnd(30)} ${"Input".padEnd(12)} ${"Output".padEnd(12)} ${"Cost".padEnd(12)} ${"Date".padEnd(12)} Description`
-  consola.log(header)
-  consola.log("─".repeat(Math.max(header.length, 60)))
-  for (const row of rows) {
-    consola.log(
-      `${row[0].padEnd(12)} ${row[1].padEnd(30)} ${row[2].padEnd(12)} ${row[3].padEnd(12)} ${row[4].padEnd(12)} ${row[5].padEnd(12)} ${row[6]}`,
-    )
-  }
-  consola.log("")
-  consola.log(`Total: $${(totalCost / 100).toFixed(2)} (${entries.length} entr${entries.length === 1 ? "y" : "ies"})`)
+  renderUsageTable(entries)
 }
 
 export async function handleUsageDelete() {

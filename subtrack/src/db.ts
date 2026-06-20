@@ -421,6 +421,10 @@ export const getLlmUsage = (options?: GetLlmUsageOptions): LlmUsageEntry[] => {
     conditions.push("date <= ?")
     params.push(options.to)
   }
+  if (options?.minCost !== undefined) {
+    conditions.push("cost >= ?")
+    params.push(options.minCost)
+  }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
   const limitClause = options?.limit ? ` LIMIT ?` : ""
