@@ -5,9 +5,9 @@
 <div align="center">
 <h1>subtrack</h1>
 </div>
-<div align="center">
+
 [![Socket Badge](https://badge.socket.dev/npm/package/subtrack/4.0.3)](https://badge.socket.dev/npm/package/subtrack/4.0.3)
-</div>
+
 <p align="center">
   <img src="images/subtrack-demo.png" alt="subtrack demo" width="700"/>
 </p>
