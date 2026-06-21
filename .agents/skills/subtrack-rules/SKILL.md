@@ -70,23 +70,26 @@ Keep concerns separated. Don't put DB queries in display logic or prompt logic i
 ## Code Style
 
 - TypeScript strict mode enabled (see `tsconfig.json`)
+- Test files (`*.test.ts`) excluded from `tsconfig.json` — type-checked separately by vitest
 - ESM modules (`"type": "module"` in package.json)
 - No semicolons in imports/exports
 - Target: ESNext, module: Preserve, moduleResolution: bundler
 - `verbatimModuleSyntax`: enforce correct import/value separation
-- No semicolons (`"noUnusedLocals": false` and `"noUnusedParameters": false` are relaxed)
+- `noUncheckedIndexedAccess`: disabled (codebase not compatible)
 
 ## Dependencies
 
 Key packages and their purpose:
 
 | Package | Usage |
-|---|---|
-| `commander` | CLI argument parsing (`Command`, `.command()`, `.option()`, `.action()`) |
+|---|---|---|
+| `gunshi` | CLI argument parsing (`cli()`, `define()`, `.args`, `.run()`) |
 | `@inquirer/prompts` | Interactive prompts (`input`, `confirm`, `checkbox`, `select`) |
 | `consola` | Logging (`consola.info`, `consola.success`, `consola.error`, `consola.warn`, `consola.fail`) |
 | `cli-table3` | Table rendering (customizable chars, styles, column widths) |
+| `picocolors` | Terminal colors |
 | `sql.js` | SQLite via WASM (`new SQL.Database()`, `.run()`, `.exec()`) |
+| `@types/node` | Node.js type definitions (dev) |
 
 ## Linting
 
