@@ -60,7 +60,7 @@ jobs:
         run: node dist/index.mjs --help
 
       - name: Spell check
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.node-version == 22
         uses: crate-ci/typos@v1.47.2
         with:
           files: subtrack/
