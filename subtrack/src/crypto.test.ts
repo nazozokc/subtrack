@@ -70,6 +70,9 @@ test("hasEncryptionKey returns true after key creation", async () => {
 })
 
 test("key file is created with restricted permissions (0o600)", async () => {
+  // Windows does not support Unix permission bits via chmod
+  if (process.platform === "win32") return
+
   const { encryptBuffer } = await import("./crypto.ts")
   encryptBuffer(Buffer.from("perm test"))
 
