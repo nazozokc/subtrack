@@ -1,6 +1,7 @@
 name: app-ci
 
 on:
+  workflow_call:
   push:
     branches: [main]
     paths:
