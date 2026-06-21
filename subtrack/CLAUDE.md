@@ -4,13 +4,14 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 
 ## Tech Stack
 
-- **Runtime**: Node.js (not Bun or Deno)
+- **Runtime**: Node.js (>=22, not Bun or Deno)
 - **Language**: TypeScript (strict mode, ESM, `verbatimModuleSyntax`)
 - **Database**: `sql.js` (SQLite via WASM)
-- **CLI**: `commander`
+- **CLI**: `gunshi`
 - **Prompts**: `@inquirer/prompts`
 - **Logging**: `consola`
 - **Tables**: `cli-table3`
+- **Colors**: `picocolors`
 - **Build**: `tsdown`
 - **Test**: `vitest`
 
@@ -36,15 +37,23 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 - Mock `consola` via `consola.mockTypes()`
 - Mock `globalThis.fetch` for FX rate API
 
-## Architecture (4 layers)
+## Architecture
 
-| Layer | File | Responsibility |
-|---|---|---|
-| Entry | `src/index.ts` | CLI definition (commander), command routing |
-| Commands | `src/commands.ts` | Command handlers, workflow logic |
-| Database | `src/db.ts` | SQLite CRUD, schema, persistence |
-| Display | `src/display.ts` | Table rendering, FX rate conversion |
-| Prompts | `src/prompts.ts` | Input validation, interactive prompts |
+| File | Responsibility |
+|---|---|
+| `src/index.ts` | CLI definition (gunshi), command routing |
+| `src/commands.ts` | Command handlers, workflow logic |
+| `src/db.ts` | SQLite CRUD, schema, persistence |
+| `src/display.ts` | Table rendering, formatting |
+| `src/prompts.ts` | Input validation, interactive prompts |
+| `src/payment.ts` | Payment/summary calculations |
+| `src/fx.ts` | Exchange rate fetching & conversion |
+| `src/usage.ts` | LLM API usage tracking |
+| `src/export.ts` | CSV/JSON/MD export |
+| `src/import-csv.ts` | CSV import |
+| `src/crypto.ts` | Backup encryption |
+| `src/pricing.ts` | Pricing/litellm integration |
+| `src/types.ts` | Shared types |
 
 ## Key Conventions
 
@@ -53,7 +62,6 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 - **Type imports**: `type` prefix (`import type { X } from "./foo.ts"`)
 - **No semicolons** in imports/exports
 - **Prices**: integers (smallest unit — JPY no decimal, USD cents)
-- **Cycles**: weekly / bi-weekly / monthly / quarterly / semi-annual / yearly
 - **DB**: `sql.js` with `PRAGMA foreign_keys = ON`, use transactions for multi-step writes
 
 ## Environment Variables
@@ -68,8 +76,14 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 |---|---|
 | `subtrack list` | List all subscriptions |
 | `subtrack add` | Add a subscription |
-| `subtrack delete` | Delete subscriptions (interactive) |
-| `subtrack tags <taglist...>` | Filter by tags |
-| `subtrack backup <destination>` | Backup database |
+| `subtrack edit [id]` | Edit a subscription |
+| `subtrack delete [ids...]` | Delete subscriptions |
+| `subtrack tags <names...>` | Filter by tags (AND logic) |
+| `subtrack tag list\|rename\|delete\|prune` | Manage tags |
+| `subtrack export csv\|json\|md` | Export subscriptions |
+| `subtrack import <file>` | Import from CSV |
+| `subtrack summary` | Show subscription summary |
+| `subtrack backup [destination]` | Backup database |
+| `subtrack restore [file]` | Restore database |
 | `subtrack payment [period]` | Show payment totals |
-| `subtrack export csv` | Export subscriptions as CSV |
+| `subtrack usage add\|list\|delete\|refresh` | Track LLM API usage |
