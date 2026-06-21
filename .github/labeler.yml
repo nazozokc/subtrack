@@ -1,0 +1,18 @@
+subtrack:
+  - changed-files:
+      - any-glob-to-any-file: subtrack/**
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file: docs/**
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: .github/workflows/**
+      - any-glob-to-any-file: .github/labeler.yml
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file: subtrack/package.json
+      - any-glob-to-any-file: package.json
+      - any-glob-to-any-file: pnpm-lock.yaml
