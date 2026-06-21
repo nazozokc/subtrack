@@ -3,11 +3,15 @@ import type { Database, SqlValue } from "sql.js"
 import {
   mkdirSync, existsSync, readFileSync, writeFileSync,
   readdirSync, statSync, openSync, writeSync, closeSync,
+  unlinkSync, chmodSync,
   constants,
 } from "node:fs"
+import { createHash } from "node:crypto"
 import { gzipSync, gunzipSync } from "node:zlib"
 import path from "node:path"
 import { homedir } from "node:os"
+import { consola } from "consola"
+import { encryptBuffer, decryptBuffer, isEncrypted } from "./crypto.ts"
 import type {
   Currency,
   Cycle,
@@ -21,13 +25,83 @@ import type {
 
 let _db: Database | null = null
 let _dbPath = ""
+let _lockFd: number | null = null
 
 const _SQL = await initSqlJs()
 
+// ── Directory validation ──────────────────────────────────
+
+/** Validate that SUBSC_CLI_DB_DIR is safe to use. */
+function validateDbDir(dir: string): void {
+  if (!dir || typeof dir !== "string") {
+    throw new Error("SUBSC_CLI_DB_DIR must be a non-empty string")
+  }
+  if (dir.length > 4096) {
+    throw new Error("SUBSC_CLI_DB_DIR path too long")
+  }
+  const normalized = path.resolve(dir)
+  // Prevent pointing to sensitive system directories
+  const forbidden = ["/", "/etc", "/dev", "/proc", "/sys", "/tmp"]
+  if (forbidden.includes(normalized)) {
+    throw new Error(`SUBSC_CLI_DB_DIR cannot be a system directory: ${normalized}`)
+  }
+}
+
+// ── File locking ──────────────────────────────────────────
+
+function getLockPath(): string {
+  return path.join(getDbDir(), ".subtrack.lock")
+}
+
+function acquireLock(): void {
+  const lockPath = getLockPath()
+  try {
+    _lockFd = openSync(
+      lockPath,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+      0o600,
+    )
+    // Write PID for diagnostic purposes
+    writeSync(_lockFd, `${process.pid}\n`)
+  } catch (err) {
+    const nodeErr = err as NodeJS.ErrnoException
+    if (nodeErr.code === "EEXIST") {
+      // Lock exists — read PID from it
+      let existingPid = "unknown"
+      try {
+        existingPid = readFileSync(lockPath, "utf-8").trim()
+      } catch {
+        // ignore read errors
+      }
+      consola.warn(
+        `Another subtrack instance (PID ${existingPid}) may be running.\n` +
+        `  If this is incorrect, delete: ${lockPath}`,
+      )
+    } else {
+      throw err
+    }
+  }
+}
+
+function releaseLock(): void {
+  if (_lockFd !== null) {
+    try { closeSync(_lockFd) } catch { /* ignore */ }
+    _lockFd = null
+    try { unlinkSync(getLockPath()) } catch { /* ignore */ }
+  }
+}
+
+// Release lock on process exit
+process.on("exit", releaseLock)
+process.on("SIGINT", () => { releaseLock(); process.exit(0) })
+process.on("SIGTERM", () => { releaseLock(); process.exit(0) })
+
+// ── DB directory ──────────────────────────────────────────
+
 export function getDbDir(): string {
-  return (
-    process.env.SUBSC_CLI_DB_DIR ?? path.join(homedir(), ".config", "subtrack")
-  )
+  const dir = process.env.SUBSC_CLI_DB_DIR ?? path.join(homedir(), ".config", "subtrack")
+  validateDbDir(dir)
+  return dir
 }
 
 export function getDefaultBackupDir(): string {
@@ -36,7 +110,8 @@ export function getDefaultBackupDir(): string {
 
 export function saveDb(): void {
   if (!_db || !_dbPath) return
-  writeFileSync(_dbPath, Buffer.from(_db.export()))
+  const data = Buffer.from(_db.export())
+  writeFileSync(_dbPath, encryptBuffer(data), { mode: 0o600 })
 }
 
 export function getDbPath(): string {
@@ -74,17 +149,21 @@ export function getDb(): Database {
   if (_db) return _db
 
   const dbdir = getDbDir()
-  mkdirSync(dbdir, { recursive: true })
+  mkdirSync(dbdir, { recursive: true, mode: 0o700 })
   _dbPath = path.join(dbdir, "subtrack.db")
+
+  acquireLock()
 
   if (existsSync(_dbPath)) {
     const buf = readFileSync(_dbPath)
-    _db = new _SQL.Database(buf)
+    const data = isEncrypted(buf) ? decryptBuffer(buf) : buf
+    _db = new _SQL.Database(data)
   } else {
     _db = new _SQL.Database()
   }
 
   _db.run("PRAGMA foreign_keys = ON")
+  _db.run("PRAGMA secure_delete = ON")
   _db.run(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -114,6 +193,19 @@ export function getDb(): Database {
     description TEXT
   )`)
 
+  // Verify database integrity on startup
+  const integrityResult = _db.exec("PRAGMA integrity_check")
+  if (
+    integrityResult.length > 0 &&
+    integrityResult[0].values.length > 0 &&
+    String(integrityResult[0].values[0][0]) !== "ok"
+  ) {
+    consola.warn(
+      `Database integrity check failed: ${String(integrityResult[0].values[0][0])}\n` +
+      "  Run 'subtrack backup' immediately and restore from a known-good backup.",
+    )
+  }
+
   return _db
 }
 
@@ -128,7 +220,7 @@ export function getBackupFiles(dir: string): BackupFileInfo[] {
   return entries
     .filter((f) => {
       const lower = f.toLowerCase()
-      return (lower.endsWith(".db") || lower.endsWith(".db.gz")) &&
+      return (lower.endsWith(".db") || lower.endsWith(".db.gz") || lower.endsWith(".db.enc")) &&
         !skipNames.has(f) &&
         !f.includes("_before_restore.db")
     })
@@ -147,8 +239,20 @@ export function getBackupFiles(dir: string): BackupFileInfo[] {
 
 export function restoreDb(backupPath: string): void {
   const raw = readFileSync(backupPath)
-  const isGz = backupPath.toLowerCase().endsWith(".gz")
-  const buf = isGz ? gunzipSync(raw) : raw
+
+  // Step 1: Try to decrypt (in case backup is encrypted)
+  let data: Buffer
+  try {
+    data = decryptBuffer(raw)
+  } catch {
+    // Not encrypted — use as-is
+    data = raw
+  }
+
+  // Step 2: Try to decompress (in case backup is gzipped)
+  const isGz = backupPath.toLowerCase().endsWith(".gz") ||
+    (data.length >= 2 && data[0] === 0x1f && data[1] === 0x8b)
+  const buf = isGz ? gunzipSync(data) : data
 
   // Verify it's a valid SQLite DB with correct schema
   const newDb = new _SQL.Database(buf)
@@ -168,11 +272,12 @@ export function restoreDb(backupPath: string): void {
 
   // Overwrite the active database file (no-op in test mode with __setDb)
   if (_dbPath) {
-    writeFileSync(_dbPath, buf)
+    writeFileSync(_dbPath, encryptBuffer(buf), { mode: 0o600 })
   }
 
   // Replace in-memory instance
   newDb.run("PRAGMA foreign_keys = ON")
+  newDb.run("PRAGMA secure_delete = ON")
   _db = newDb
 }
 
@@ -180,6 +285,27 @@ export function restoreDb(backupPath: string): void {
 export function __setDb(db: Database): void {
   _db = db
   _dbPath = ""
+}
+
+// ── Backup integrity ──────────────────────────────────────
+
+export function getBackupHashPath(backupPath: string): string {
+  return `${backupPath}.sha256`
+}
+
+export function writeBackupHash(backupPath: string): void {
+  const content = readFileSync(backupPath)
+  const hash = createHash("sha256").update(content).digest("hex")
+  writeFileSync(getBackupHashPath(backupPath), hash + "\n")
+}
+
+export function verifyBackupHash(backupPath: string): boolean {
+  const hashPath = getBackupHashPath(backupPath)
+  if (!existsSync(hashPath)) return true // skip if no sidecar (backward compat)
+  const expected = readFileSync(hashPath, "utf-8").trim()
+  const content = readFileSync(backupPath)
+  const actual = createHash("sha256").update(content).digest("hex")
+  return expected === actual
 }
 
 function mapTags(subs: SharedArgs[]): SharedArgs[] {

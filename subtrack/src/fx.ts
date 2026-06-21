@@ -3,12 +3,22 @@ export type FxRates = {
   rates: Record<string, number>
 }
 
+const FX_FETCH_TIMEOUT_MS = 10_000
+
 export async function fetchFxRates(): Promise<FxRates> {
-  const res = await fetch("https://open.er-api.com/v6/latest/USD")
-  if (!res.ok) {
-    throw new Error(`FX API responded with ${res.status}`)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), FX_FETCH_TIMEOUT_MS)
+  try {
+    const res = await fetch("https://open.er-api.com/v6/latest/USD", {
+      signal: controller.signal,
+    })
+    if (!res.ok) {
+      throw new Error(`FX API responded with ${res.status}`)
+    }
+    return res.json() as Promise<FxRates>
+  } finally {
+    clearTimeout(timer)
   }
-  return res.json() as Promise<FxRates>
 }
 
 export function convertPrice(

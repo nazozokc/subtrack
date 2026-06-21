@@ -58,7 +58,7 @@ export const CYCLE_CHOICES: { name: string; value: Cycle }[] = [
  * --currency flag accepts any valid 3-letter code; interactive prompt restricts to CURRENCY_CHOICES.
  */
 export function isValidCurrency(v: string): v is Currency {
-  return /^[A-Z]{3}$/.test(v)
+  return /^[A-Z]{3}$/.test(v) && CURRENCY_CHOICES.some((c) => c.value === v)
 }
 
 export function isValidCycle(v: string): v is Cycle {

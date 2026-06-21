@@ -370,6 +370,39 @@ test("handleExport with currency falls back when fetch fails", async () => {
     new Response(JSON.stringify({ base: "USD", rates: { JPY: 160, USD: 1 } }))
 })
 
+// ── CSV injection prevention ─────────────────────────────
+
+test("handleExport escapes CSV injection vectors in name", async () => {
+  const db = await import("./db.ts")
+  db.writeSubscription({ name: "=CMD", price: 100, currency: "USD", cycle: "monthly", tags: [] })
+  db.writeSubscription({ name: "+SUM(1,1)", price: 200, currency: "USD", cycle: "monthly", tags: [] })
+  db.writeSubscription({ name: "-DDE", price: 300, currency: "USD", cycle: "monthly", tags: [] })
+  db.writeSubscription({ name: "@RISK", price: 400, currency: "USD", cycle: "monthly", tags: [] })
+  db.writeSubscription({ name: "Normal", price: 500, currency: "USD", cycle: "monthly", tags: [] })
+
+  const { handleExport } = await import("./commands.ts")
+  await handleExport("csv", {})
+  const combined = logMessages.join("\n")
+
+  // Dangerous prefixes should be prefixed with \t
+  expect(combined).toContain("\t=CMD")
+  expect(combined).toContain("\t+SUM(1,1)")
+  expect(combined).toContain("\t-DDE")
+  expect(combined).toContain("\t@RISK")
+  // Normal name should NOT be prefixed
+  expect(combined).toContain("Normal,")
+  // Check it's not prefixing normal names
+  expect(combined).not.toContain("\tNormal")
+})
+
+test("escapeCsv handles empty strings", async () => {
+  const { exportCsv } = await import("./export.ts")
+  const result = exportCsv([
+    { id: 1, name: "", price: 0, currency: "USD", cycle: "monthly", tags: [] },
+  ])
+  expect(result).toContain(",,")
+})
+
 // ── handleList ───────────────────────────────────────────
 
 test("handleList delegates to spreadSubscription", async () => {

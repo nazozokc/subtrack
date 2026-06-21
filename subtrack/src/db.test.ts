@@ -880,3 +880,61 @@ test("restoreDb throws for invalid schema", async () => {
 
   if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
 })
+
+// ── Backup hash ──────────────────────────────────────────
+
+test("getBackupHashPath returns path with .sha256 suffix", async () => {
+  const db = await import("./db.ts")
+  expect(db.getBackupHashPath("/backups/test.db")).toBe("/backups/test.db.sha256")
+  expect(db.getBackupHashPath("/backups/test.db.gz")).toBe("/backups/test.db.gz.sha256")
+})
+
+test("writeBackupHash and verifyBackupHash round-trip", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync, readFileSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  try {
+    const backupPath = join(tmpDir, "test_backup.db")
+    writeFileSync(backupPath, "fake database content")
+
+    const db = await import("./db.ts")
+    db.writeBackupHash(backupPath)
+
+    // Verify sidecar file exists
+    const hashPath = db.getBackupHashPath(backupPath)
+    expect(existsSync(hashPath)).toBe(true)
+
+    // Content should be a hex string
+    const hashContent = readFileSync(hashPath, "utf-8").trim()
+    expect(hashContent).toMatch(/^[a-f0-9]{64}$/)
+
+    // Verification should pass
+    expect(db.verifyBackupHash(backupPath)).toBe(true)
+
+    // Tamper with the backup — verification should fail
+    writeFileSync(backupPath, "tampered content")
+    expect(db.verifyBackupHash(backupPath)).toBe(false)
+  } finally {
+    if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+  }
+})
+
+test("verifyBackupHash returns true when no sidecar file (backward compat)", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  try {
+    const backupPath = join(tmpDir, "legacy_backup.db")
+    writeFileSync(backupPath, "some content")
+
+    const db = await import("./db.ts")
+    // No .sha256 file — should return true (skip verification)
+    expect(db.verifyBackupHash(backupPath)).toBe(true)
+  } finally {
+    if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+  }
+})

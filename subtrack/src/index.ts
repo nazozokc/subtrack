@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { cli, define } from "gunshi"
 import { consola } from "consola"
+import { saveDb } from "./db.ts"
 import {
   handleList,
   handleAdd,
@@ -171,8 +172,11 @@ const backupCommand = define({
   description: "Backup database (gzip compressed)",
   args: {
     destination: { type: "positional", description: "Backup destination directory (default: ~/.config/subtrack/backups/)", required: false },
+    encrypt: { type: "boolean", short: "e", description: "Encrypt the backup with your database key" },
   },
-  run: (ctx) => handleBackup(ctx.values.destination),
+  run: (ctx) => {
+    handleBackup(ctx.values.destination, { encrypt: ctx.values.encrypt })
+  },
 })
 
 const restoreCommand = define({
@@ -264,6 +268,18 @@ const mainCommand = define({
   description: "Manage subscription services from your terminal",
   run: () => consola.info('Run "subtrack --help" for available commands'),
 })
+
+// Signal handlers for clean shutdown
+let exiting = false
+const handleSignal = (signal: string) => {
+  if (exiting) return
+  exiting = true
+  consola.info(`Received ${signal}, saving data...`)
+  try { saveDb() } catch { /* best-effort */ }
+  process.exit(0)
+}
+process.on("SIGINT", () => handleSignal("SIGINT"))
+process.on("SIGTERM", () => handleSignal("SIGTERM"))
 
 try {
   await cli(process.argv.slice(2), mainCommand, {

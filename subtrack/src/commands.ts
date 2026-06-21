@@ -4,7 +4,8 @@ import {
   mkdirSync, existsSync, statSync, openSync, writeSync, closeSync,
   copyFileSync, readFileSync, writeFileSync, constants,
 } from "node:fs"
-import { gzipSync } from "node:zlib"
+import { gzipSync, gunzipSync } from "node:zlib"
+import { encryptBuffer, decryptBuffer, isEncrypted } from "./crypto.ts"
 import path, { join } from "node:path"
 import type { Currency, Cycle, SharedArgs, AddSharedArgs, AddFlags, BackupFileInfo } from "./types.ts"
 import {
@@ -26,6 +27,8 @@ import {
   getBackupFiles,
   restoreDb,
   saveDb,
+  writeBackupHash,
+  verifyBackupHash,
 } from "./db.ts"
 import {
   formatPrice,
@@ -149,7 +152,7 @@ export async function handleAdd(flags: AddFlags) {
     writeSubscription(result)
     consola.success(`Added subscription: ${result.name}`)
   } catch (error) {
-    consola.error("Failed to add subscription:", error)
+    consola.error(`Failed to add subscription: ${String(error)}`)
   }
 }
 
@@ -209,14 +212,14 @@ export async function handleTags(taglist: string[]) {
   await spreadSubscription(list)
 }
 
-export async function handleBackup(destination?: string) {
+export async function handleBackup(destination?: string, options: { encrypt?: boolean } = {}) {
   // flush in-memory state to disk
   saveDb()
 
   // resolve destination directory
   const dest = destination ?? getDefaultBackupDir()
   if (!existsSync(dest)) {
-    mkdirSync(dest, { recursive: true })
+    mkdirSync(dest, { recursive: true, mode: 0o700 })
   }
   if (!statSync(dest).isDirectory()) {
     consola.error(`Backup destination must be a directory: ${dest}`)
@@ -226,18 +229,34 @@ export async function handleBackup(destination?: string) {
   // generate timestamped filename
   const now = new Date()
   const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`
-  const destPath = join(dest, `subtrack_${ts}.db.gz`)
+  const destPath = options.encrypt
+    ? join(dest, `subtrack_${ts}.db.enc`)
+    : join(dest, `subtrack_${ts}.db.gz`)
 
   // compress and write with exclusive create
-  const compressed = gzipSync(Buffer.from(getDb().export()))
+  const sqliteBuf = Buffer.from(getDb().export())
+  const compressed = gzipSync(sqliteBuf)
+  const writeBuf = options.encrypt ? encryptBuffer(compressed) : compressed
+
   try {
-    const fd = openSync(destPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL)
+    const fd = openSync(
+      destPath,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+      0o600,
+    )
     try {
-      writeSync(fd, compressed)
+      writeSync(fd, writeBuf)
     } finally {
       closeSync(fd)
     }
-    consola.success(`Backup created: ${destPath}`)
+    consola.success(
+      `Backup created: ${destPath}${options.encrypt ? " (encrypted)" : ""}`,
+    )
+    try {
+      writeBackupHash(destPath)
+    } catch {
+      /* hash sidecar is best-effort */
+    }
   } catch (err) {
     const nodeErr = err as NodeJS.ErrnoException
     if (nodeErr.code === "EEXIST") {
@@ -284,6 +303,18 @@ export async function handleRestore(
       }
     }
 
+    // verify backup integrity
+    if (!verifyBackupHash(resolvedPath)) {
+      consola.warn("Backup integrity check failed (SHA256 mismatch)")
+      if (!options.force) {
+        const ok = await confirm({
+          message: "SHA256 mismatch — restore anyway?",
+          default: false,
+        })
+        if (!ok) { consola.info("Cancelled"); return }
+      }
+    }
+
     // auto-backup current state
     await safeAutoBackup()
 
@@ -294,7 +325,7 @@ export async function handleRestore(
         `Restored ${subs.length} subscription${subs.length !== 1 ? "s" : ""} from: ${resolvedPath}`,
       )
     } catch (e) {
-      consola.error(`Restore failed: ${e}`)
+      consola.error(`Restore failed: ${String(e)}`)
     }
     return
   }
@@ -339,6 +370,16 @@ export async function handleRestore(
     return
   }
 
+  // verify backup integrity
+  if (!verifyBackupHash(selected)) {
+    consola.warn("Backup integrity check failed (SHA256 mismatch)")
+    const proceed = await confirm({
+      message: "SHA256 mismatch — restore anyway?",
+      default: false,
+    })
+    if (!proceed) { consola.info("Cancelled"); return }
+  }
+
   // auto-backup current state
   await safeAutoBackup()
 
@@ -349,27 +390,36 @@ export async function handleRestore(
       `Restored ${subs.length} subscription${subs.length !== 1 ? "s" : ""} from: ${selected}`,
     )
   } catch (e) {
-    consola.error(`Restore failed: ${e}`)
+    consola.error(`Restore failed: ${String(e)}`)
   }
 }
 
 async function safeAutoBackup() {
   saveDb()
   const backupDir = getDefaultBackupDir()
-  mkdirSync(backupDir, { recursive: true })
+  mkdirSync(backupDir, { recursive: true, mode: 0o700 })
   const now = new Date()
   const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`
   const destPath = join(backupDir, `subtrack_${ts}_before_restore.db.gz`)
 
   const compressed = gzipSync(Buffer.from(getDb().export()))
   try {
-    const fd = openSync(destPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL)
+    const fd = openSync(
+      destPath,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+      0o600,
+    )
     try {
       writeSync(fd, compressed)
     } finally {
       closeSync(fd)
     }
     consola.info(`Auto-backup created: ${destPath}`)
+    try {
+      writeBackupHash(destPath)
+    } catch {
+      /* best-effort */
+    }
   } catch {
     // auto-backup is best-effort; warn but continue
     consola.warn("Could not create auto-backup, continuing with restore")
@@ -407,7 +457,7 @@ export async function handleExport(
       }))
     } catch (e) {
       consola.fail(
-        `Failed to fetch exchange rates; exporting in original currencies: ${e}`,
+        `Failed to fetch exchange rates; exporting in original currencies: ${String(e)}`,
       )
     }
   }
@@ -590,7 +640,7 @@ export function handleTagRename(oldName: string, newName: string) {
       consola.error(`Tag "${oldName}" not found`)
     }
   } catch (e) {
-    consola.error(`Failed to rename tag: ${e}`)
+    consola.error(`Failed to rename tag: ${String(e)}`)
   }
 }
 
