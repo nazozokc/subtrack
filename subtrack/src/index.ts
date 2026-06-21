@@ -25,7 +25,7 @@ import {
   handleUsageRefresh,
 } from "./usage.ts"
 import { handleImport } from "./import-csv.ts"
-import type { Cycle } from "./db.ts"
+import type { Cycle } from "./types.ts"
 
 // ── Command definitions ──────────────────────────────────
 
@@ -65,7 +65,7 @@ const editCommand = define({
     cycle: { type: "string", description: "Billing cycle" },
     tags: { type: "string", description: "Comma-separated tags" },
   },
-  run: (ctx) => handleEdit(ctx.values.id, ctx.values),
+  run: (ctx) => handleEdit(ctx.values.id ? Number(ctx.values.id) : undefined, ctx.values),
 })
 
 const deleteCommand = define({

@@ -45,7 +45,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint:typos": "typos",
-    "lint:security": "pnpm audit --audit-level=high"
+    "lint:security": "pnpm audit --audit-level=high",
+    "lint:types": "tsc --noEmit"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",
@@ -56,6 +57,7 @@
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
+    "@types/node": "^26.0.0",
     "@types/sql.js": "^1.4.11",
     "tsdown": "^0.22.2",
     "tsx": "^4.19.0",

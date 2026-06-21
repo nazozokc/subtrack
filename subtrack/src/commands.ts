@@ -517,7 +517,7 @@ export async function handleEdit(
     if (flags.name !== undefined) newData.name = flags.name
     if (flags.price !== undefined) newData.price = Number(flags.price)
     if (flags.currency !== undefined) newData.currency = flags.currency
-    if (flags.cycle !== undefined) newData.cycle = flags.cycle
+    if (flags.cycle !== undefined) newData.cycle = flags.cycle as Cycle
     if (flags.tags !== undefined) {
       newData.tags = flags.tags.split(",").map((t) => t.trim()).filter(Boolean)
     }
