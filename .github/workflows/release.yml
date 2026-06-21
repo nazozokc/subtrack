@@ -50,6 +50,7 @@ jobs:
           ls -R dist
 
       - name: Audit dependencies
+        working-directory: ./subtrack
         run: pnpm audit --audit-level=high
 
       - name: Publish to npm

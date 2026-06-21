@@ -1,14 +1,30 @@
+import { safeResponseJson } from "./safe-json.ts"
+
 export type FxRates = {
   base: string
   rates: Record<string, number>
 }
 
+const FX_FETCH_TIMEOUT_MS = 10_000
+
+/**
+ * Fetch current USD-based exchange rates from open.er-api.com.
+ * Returns a map of currency codes to their exchange rate relative to USD.
+ */
 export async function fetchFxRates(): Promise<FxRates> {
-  const res = await fetch("https://open.er-api.com/v6/latest/USD")
-  if (!res.ok) {
-    throw new Error(`FX API responded with ${res.status}`)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), FX_FETCH_TIMEOUT_MS)
+  try {
+    const res = await fetch("https://open.er-api.com/v6/latest/USD", {
+      signal: controller.signal,
+    })
+    if (!res.ok) {
+      throw new Error(`FX API responded with ${res.status}`)
+    }
+    return await safeResponseJson<FxRates>(res)
+  } finally {
+    clearTimeout(timer)
   }
-  return res.json() as Promise<FxRates>
 }
 
 export function convertPrice(

@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs"
 import path from "node:path"
 import { homedir } from "node:os"
+import { safeJsonParse } from "./safe-json.ts"
 
 export type ModelPricingEntry = {
   input_cost_per_token?: number
@@ -17,6 +18,7 @@ let _cache: PricingCache | null = null
 let _cachePromise: Promise<PricingCache | null> | null = null
 
 const CACHE_FRESHNESS_MS = 24 * 60 * 60 * 1000
+const FETCH_TIMEOUT_MS = 15_000
 const GITHUB_JSON_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
 const MODEL_CATALOG_API = "https://api.litellm.ai/model_catalog"
@@ -59,9 +61,17 @@ export async function ensurePricingCache(): Promise<PricingCache | null> {
 
     // Fetch from GitHub
     try {
-      const res = await fetch(GITHUB_JSON_URL)
-      if (!res.ok) throw new Error(`GitHub responded with ${res.status}`)
-      const data = (await res.json()) as PricingCache
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+      let data: PricingCache
+      try {
+        const res = await fetch(GITHUB_JSON_URL, { signal: controller.signal })
+        if (!res.ok) throw new Error(`GitHub responded with ${res.status}`)
+        const text = await res.text()
+        data = safeJsonParse<PricingCache>(text)
+      } finally {
+        clearTimeout(timer)
+      }
       mkdirSync(getConfigDir(), { recursive: true })
       writeFileSync(cachePath, JSON.stringify(data))
       _cache = data
@@ -162,9 +172,16 @@ export async function getModelPricingDirect(
 ): Promise<ModelPricingEntry | null> {
   try {
     const url = `${MODEL_CATALOG_API}/${encodeURIComponent(modelName)}`
-    const res = await fetch(url)
-    if (!res.ok) return null
-    return (await res.json()) as ModelPricingEntry
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+    try {
+      const res = await fetch(url, { signal: controller.signal })
+      if (!res.ok) return null
+      const text = await res.text()
+      return safeJsonParse<ModelPricingEntry>(text)
+    } finally {
+      clearTimeout(timer)
+    }
   } catch {
     return null
   }

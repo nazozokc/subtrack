@@ -1,7 +1,9 @@
 import { consola } from "consola"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, statSync, readFileSync } from "node:fs"
 import { writeSubscription } from "./db.ts"
 import { validateName, validatePrice, validateTags, isValidCurrency, isValidCycle } from "./prompts.ts"
+
+const MAX_CSV_SIZE = 10 * 1024 * 1024 // 10 MB
 
 // ── CSV Parser ────────────────────────────────────────────
 
@@ -51,7 +53,20 @@ export async function handleImport(
     return
   }
 
-  const content = readFileSync(file, "utf-8")
+  let content: string
+  try {
+    const st = statSync(file)
+    if (st.size > MAX_CSV_SIZE) {
+      consola.error(
+        `File too large (${(st.size / 1024 / 1024).toFixed(1)} MB). Maximum: ${MAX_CSV_SIZE / 1024 / 1024} MB`,
+      )
+      return
+    }
+    content = readFileSync(file, "utf-8")
+  } catch (err) {
+    consola.error(`Failed to read file: ${String(err)}`)
+    return
+  }
   // Strip BOM
   const clean = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
   const lines = clean.split("\n").map((l) => l.trim()).filter(Boolean)
@@ -119,7 +134,7 @@ export async function handleImport(
         })
         success++
       } catch (e) {
-        consola.warn(`Line ${i + 1}: failed to import: ${e}`)
+        consola.warn(`Line ${i + 1}: failed to import: ${String(e)}`)
         failed++
       }
     }
