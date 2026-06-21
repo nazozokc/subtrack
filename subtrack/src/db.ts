@@ -238,19 +238,58 @@ export function getBackupFiles(dir: string): BackupFileInfo[] {
 
 export function restoreDb(backupPath: string): void {
   const raw = readFileSync(backupPath)
+  const lower = backupPath.toLowerCase()
 
-  // Step 1: Try to decrypt (in case backup is encrypted)
+  // Determine file type by extension and content
+  const isGzipFile = lower.endsWith(".gz")
+  const isEncryptedFile = lower.endsWith(".db.enc")
+  const hasGzipMagic = raw.length >= 2 && raw[0] === 0x1f && raw[1] === 0x8b
+
   let data: Buffer
-  try {
-    data = decryptBuffer(raw)
-  } catch {
-    // Not encrypted — use as-is
+
+  if (isEncryptedFile) {
+    // Encrypted backup: decrypt -> (possibly gzipped inside)
+    try {
+      data = decryptBuffer(raw)
+    } catch {
+      throw new Error(
+        "Failed to decrypt backup. The encryption key may have changed or the backup is corrupted.\n" +
+        "  If you changed your database passphrase or .key file, restore using the old key.",
+      )
+    }
+  } else if (isGzipFile || hasGzipMagic) {
+    // Gzip backup: decompress -> (possibly encrypted inside, though unusual)
+    const decompressed = gunzipSync(raw)
+    if (isEncrypted(decompressed)) {
+      try {
+        data = decryptBuffer(decompressed)
+      } catch {
+        throw new Error(
+          "Failed to decrypt backup. The encryption key may have changed or the backup is corrupted.\n" +
+          "  If you changed your database passphrase or .key file, restore using the old key.",
+        )
+      }
+    } else {
+      data = decompressed
+    }
+  } else if (isEncrypted(raw)) {
+    // No recognized extension but looks encrypted — try decrypt
+    try {
+      data = decryptBuffer(raw)
+    } catch {
+      throw new Error(
+        "Failed to decrypt backup. The encryption key may have changed or the backup is corrupted.\n" +
+        "  If you changed your database passphrase or .key file, restore using the old key.",
+      )
+    }
+  } else {
+    // Plain SQLite
     data = raw
   }
 
-  // Step 2: Try to decompress (in case backup is gzipped)
-  const isGz = backupPath.toLowerCase().endsWith(".gz") ||
-    (data.length >= 2 && data[0] === 0x1f && data[1] === 0x8b)
+  // If the result is still gzipped (e.g. encrypted file that was gzip inside -> already decrypted)
+  // But if data is now gzip, decompress it
+  const isGz = data.length >= 2 && data[0] === 0x1f && data[1] === 0x8b
   const buf = isGz ? gunzipSync(data) : data
 
   // Verify it's a valid SQLite DB with correct schema
