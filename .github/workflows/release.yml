@@ -1,57 +1,86 @@
-name: Publish to npm
+name: Release
 
 on:
   release:
-    types:
-      - published
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Validate without publishing"
+        type: boolean
+        default: true
 
 jobs:
-  publish:
+  check:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        working-directory: ./subtrack
+        run: pnpm lint:types
+
+      - run: pnpm build
+
+      - run: pnpm test
+
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=high
+
+  publish:
+    needs: check
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           registry-url: https://registry.npmjs.org
+          cache: pnpm
 
-      - name: Set package.json version from release tag
+      - name: Set version from release tag
         working-directory: ./subtrack
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          node -e "const fs=require('fs');
-          const pkg=require('./package.json');
-          pkg.version='$VERSION';
-          fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2)+'\n');"
-          cat package.json
+          node -e "
+            const fs = require('fs')
+            const pkg = require('./package.json')
+            pkg.version = '$VERSION'
+            fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n')
+          "
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
-      - name: Build
-        working-directory: ./subtrack
-        run: pnpm build
+      - run: pnpm build
 
       - name: Verify build output
         working-directory: ./subtrack
         run: |
           test -f dist/index.mjs
-          ls -R dist
+          node -e "
+            const bytes = require('fs').readFileSync('dist/index.mjs').length
+            console.log('Build: dist/index.mjs (' + (bytes / 1024).toFixed(1) + ' KB)')
+          "
 
-      - name: Audit dependencies
+      - name: Dry run publish
         working-directory: ./subtrack
-        run: pnpm audit --audit-level=high
+        run: pnpm publish --no-git-checks --provenance --dry-run
 
       - name: Publish to npm
         working-directory: ./subtrack
