@@ -40,7 +40,7 @@
     "test:watch": "vitest",
     "lint:typos": "typos",
     "lint:security": "pnpm audit --audit-level=high",
-    "lint:types": "tsc --noEmit -p tsconfig.check.json"
+    "lint:types": "tsc --noEmit"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",
