@@ -1,5 +1,5 @@
 import initSqlJs from "sql.js"
-import type { Database, SqlValue } from "sql.js"
+import type { Database, SqlValue, BindParams } from "sql.js"
 import {
   mkdirSync, existsSync, readFileSync, writeFileSync,
   readdirSync, statSync, openSync, writeSync, closeSync,
@@ -19,7 +19,6 @@ import type {
   AddSharedArgs,
   LlmUsageEntry,
   AddLlmUsageArgs,
-  GetLlmUsageOptions,
   BackupFileInfo,
 } from "./types.ts"
 
@@ -634,6 +633,7 @@ export type GetLlmUsageOptions = {
   to?: string
   limit?: number
   offset?: number
+  minCost?: number
 }
 
 export const getLlmUsage = (options?: GetLlmUsageOptions): LlmUsageEntry[] => {
