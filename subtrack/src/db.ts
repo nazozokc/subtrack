@@ -73,10 +73,11 @@ function acquireLock(): void {
       } catch {
         // ignore read errors
       }
-      consola.warn(
+      consola.error(
         `Another subtrack instance (PID ${existingPid}) may be running.\n` +
         `  If this is incorrect, delete: ${lockPath}`,
       )
+      throw new Error(`Cannot acquire lock: another instance may be running (PID ${existingPid})`)
     } else {
       throw err
     }
@@ -91,10 +92,8 @@ function releaseLock(): void {
   }
 }
 
-// Release lock on process exit
+// Release lock on process exit (SIGINT/SIGTERM handled in index.ts for saveDb)
 process.on("exit", releaseLock)
-process.on("SIGINT", () => { releaseLock(); process.exit(0) })
-process.on("SIGTERM", () => { releaseLock(); process.exit(0) })
 
 // ── DB directory ──────────────────────────────────────────
 

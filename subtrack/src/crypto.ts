@@ -75,6 +75,10 @@ export function encryptBuffer(plaintext: Buffer): Buffer {
 }
 
 export function decryptBuffer(ciphertext: Buffer): Buffer {
+  const minLength = IV_LENGTH + TAG_LENGTH
+  if (ciphertext.length < minLength) {
+    throw new Error(`Ciphertext too short: expected at least ${minLength} bytes, got ${ciphertext.length}`)
+  }
   const key = getOrCreateKey()
   const iv = ciphertext.subarray(0, IV_LENGTH)
   const tag = ciphertext.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH)

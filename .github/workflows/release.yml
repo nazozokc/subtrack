@@ -49,15 +49,10 @@ jobs:
           test -f dist/index.mjs
           ls -R dist
 
-      - name: Generate npm-shrinkwrap.json for reproducible installs
-        working-directory: ./subtrack
-        run: |
-          npm install --package-lock-only
-          mv package-lock.json npm-shrinkwrap.json
-
       - name: Audit dependencies
+        working-directory: ./subtrack
         run: pnpm audit --audit-level=high
 
       - name: Publish to npm
         working-directory: ./subtrack
-        run: npm publish --provenance --access public
+        run: pnpm publish --no-git-checks --provenance

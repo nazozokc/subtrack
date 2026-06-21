@@ -4,7 +4,7 @@ import {
   mkdirSync, existsSync, statSync, openSync, writeSync, closeSync,
   copyFileSync, readFileSync, writeFileSync, constants,
 } from "node:fs"
-import { gzipSync, gunzipSync } from "node:zlib"
+import { gzipSync } from "node:zlib"
 import { encryptBuffer, decryptBuffer, isEncrypted } from "./crypto.ts"
 import path, { join } from "node:path"
 import type { Currency, Cycle, SharedArgs, AddSharedArgs, AddFlags, BackupFileInfo } from "./types.ts"

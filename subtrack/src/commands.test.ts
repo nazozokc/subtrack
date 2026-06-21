@@ -378,6 +378,7 @@ test("handleExport escapes CSV injection vectors in name", async () => {
   db.writeSubscription({ name: "+SUM(1,1)", price: 200, currency: "USD", cycle: "monthly", tags: [] })
   db.writeSubscription({ name: "-DDE", price: 300, currency: "USD", cycle: "monthly", tags: [] })
   db.writeSubscription({ name: "@RISK", price: 400, currency: "USD", cycle: "monthly", tags: [] })
+  db.writeSubscription({ name: "\tTab", price: 450, currency: "USD", cycle: "monthly", tags: [] })
   db.writeSubscription({ name: "Normal", price: 500, currency: "USD", cycle: "monthly", tags: [] })
 
   const { handleExport } = await import("./commands.ts")
@@ -389,6 +390,8 @@ test("handleExport escapes CSV injection vectors in name", async () => {
   expect(combined).toContain("\t+SUM(1,1)")
   expect(combined).toContain("\t-DDE")
   expect(combined).toContain("\t@RISK")
+  // Tab-prefixed name should also be escaped
+  expect(combined).toContain("\tTab")
   // Normal name should NOT be prefixed
   expect(combined).toContain("Normal,")
   // Check it's not prefixing normal names

@@ -53,15 +53,20 @@ export async function handleImport(
     return
   }
 
-  const st = statSync(file)
-  if (st.size > MAX_CSV_SIZE) {
-    consola.error(
-      `File too large (${(st.size / 1024 / 1024).toFixed(1)} MB). Maximum: ${MAX_CSV_SIZE / 1024 / 1024} MB`,
-    )
+  let content: string
+  try {
+    const st = statSync(file)
+    if (st.size > MAX_CSV_SIZE) {
+      consola.error(
+        `File too large (${(st.size / 1024 / 1024).toFixed(1)} MB). Maximum: ${MAX_CSV_SIZE / 1024 / 1024} MB`,
+      )
+      return
+    }
+    content = readFileSync(file, "utf-8")
+  } catch (err) {
+    consola.error(`Failed to read file: ${String(err)}`)
     return
   }
-
-  const content = readFileSync(file, "utf-8")
   // Strip BOM
   const clean = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
   const lines = clean.split("\n").map((l) => l.trim()).filter(Boolean)

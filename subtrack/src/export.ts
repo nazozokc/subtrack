@@ -33,8 +33,8 @@ export function exportJson(subs: SharedArgs[]): string {
 }
 
 function escapeMdCell(value: string): string {
-  // Escape pipe and newline characters to prevent table structure breakage
-  return value.replace(/\|/g, "\\|").replace(/\n/g, " ")
+  // Escape pipe and newline/carriage-return characters to prevent table structure breakage
+  return value.replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ")
 }
 
 export function exportMd(subs: SharedArgs[]): string {

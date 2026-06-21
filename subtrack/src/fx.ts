@@ -1,3 +1,5 @@
+import { safeResponseJson } from "./safe-json.ts"
+
 export type FxRates = {
   base: string
   rates: Record<string, number>
@@ -5,6 +7,10 @@ export type FxRates = {
 
 const FX_FETCH_TIMEOUT_MS = 10_000
 
+/**
+ * Fetch current USD-based exchange rates from open.er-api.com.
+ * Returns a map of currency codes to their exchange rate relative to USD.
+ */
 export async function fetchFxRates(): Promise<FxRates> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FX_FETCH_TIMEOUT_MS)
@@ -15,7 +21,7 @@ export async function fetchFxRates(): Promise<FxRates> {
     if (!res.ok) {
       throw new Error(`FX API responded with ${res.status}`)
     }
-    return res.json() as Promise<FxRates>
+    return await safeResponseJson<FxRates>(res)
   } finally {
     clearTimeout(timer)
   }
