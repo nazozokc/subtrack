@@ -11,13 +11,13 @@ on:
         default: true
 
 jobs:
-  check:
+  ci:
     permissions:
       contents: read
-    uses: ./.github/workflows/check.yml
+    uses: ./.github/workflows/app-ci.yml
 
   publish:
-    needs: check
+    needs: ci
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
