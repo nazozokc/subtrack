@@ -22,6 +22,7 @@ subtrack is a Node.js CLI tool for managing subscription services from the termi
 
 - Development execution: `tsx src/index.ts`
 - Build: `tsdown` (configured as `pnpm build`)
+- Type check: `pnpm lint:types` (`tsc --noEmit`)
 - Don't use `bun` or `node --loader` for running TypeScript directly
 - Build output is `subtrack/dist/index.mjs`
 
