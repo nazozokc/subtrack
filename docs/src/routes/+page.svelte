@@ -33,7 +33,7 @@
   </div>
   <div class="feature">
     <h2>Currency Conversion</h2>
-    <p>Live exchange rates from open.er-api.com. View totals in any of 10 supported currencies.</p>
+    <p>Live exchange rates from open.er-api.com. View totals in any of 36 supported currencies.</p>
   </div>
 </section>
 
@@ -43,10 +43,16 @@
 subtrack list
 
 # Add a subscription
-subtrack add --name Netflix --price 19.99 --cycle monthly
+subtrack add --name Netflix --price 1999 --currency USD --cycle monthly
+
+# Edit a subscription
+subtrack edit 3 --price 2500
 
 # Show monthly payment total
 subtrack payment
+
+# Show summary statistics
+subtrack summary
 
 # Filter by tags
 subtrack tags music video</pre>

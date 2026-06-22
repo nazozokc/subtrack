@@ -3,7 +3,7 @@ title: Commands
 description: Full reference for all subtrack CLI commands.
 ---
 
-subtrack provides six commands. Most support both interactive and non-interactive modes.
+subtrack provides the following commands. Most support both interactive and non-interactive modes.
 
 ## `list`
 
@@ -12,6 +12,9 @@ Lists all subscriptions in a formatted table. Subscriptions are grouped by curre
 | Option | Description |
 |--------|-------------|
 | `-c, --currency <C>` | Convert all prices to the given currency using live exchange rates |
+| `--sort <field>` | Sort by field: `name`, `price`, `currency`, `cycle`, `id` (default) |
+| `-d, --desc` | Sort in descending order (use with `--sort`) |
+| `-a, --api` | Include LLM API usage costs for the current month |
 
 ### Examples
 
@@ -21,9 +24,23 @@ subtrack list
 
 # Convert all prices to JPY
 subtrack list --currency JPY
+
+# Sort by price (cheapest first)
+subtrack list --sort price
+
+# Sort by name, descending
+subtrack list --sort name --desc
+
+# Include LLM API usage for current month
+subtrack list --api
+
+# Combine with currency conversion
+subtrack list --api --currency JPY
 ```
 
 When `--currency` is used, all prices are converted to the target currency (fetched from [open.er-api.com](https://open.er-api.com)) and displayed as a single group with a grand total.
+
+When `--api` is used, LLM API usage costs for the current month are fetched from the `llm_usage` table and displayed in a separate table below the subscription list, including a provider breakdown.
 
 ## `add`
 
@@ -33,7 +50,7 @@ Adds a new subscription. Without flags, prompts for all fields interactively. Pr
 |--------|-------------|
 | `--name <name>` | Subscription name (max 100 characters) |
 | `--price <price>` | Payment amount — integer, non-negative, max 99,999,999 |
-| `--currency <C>` | Currency code. Supported: JPY, USD, EUR, GBP, AUD, CAD, KRW, CNY, SGD, HKD |
+| `--currency <C>` | Currency code (ISO 4217). Accepts any 3-letter code; interactive mode provides a curated list |
 | `--cycle <cycle>` | Billing cycle. One of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly |
 | `--tags <tags>` | Comma-separated tags (max 10 tags, each max 50 characters) |
 
@@ -58,18 +75,114 @@ subtrack add --name Netflix
 subtrack add --name "AWS" --price 50 --currency USD --cycle monthly
 ```
 
-## `delete`
+## `edit`
+
+Edits an existing subscription. Without flags, interactively selects a subscription and fields to change. Flags can be used for non-interactive partial updates.
+
+| Option | Description |
+|--------|-------------|
+| `[id]` | Subscription ID (optional). If omitted, prompts for selection |
+| `--name <name>` | New subscription name |
+| `--price <price>` | New payment amount |
+| `--currency <C>` | New currency code |
+| `--cycle <cycle>` | New billing cycle |
+| `--tags <tags>` | New comma-separated tags |
+
+### Examples
+
+```bash
+# Interactive: select subscription, then pick fields to edit
+subtrack edit
+
+# Edit a specific subscription by ID
+subtrack edit 3
+
+# Non-interactive: update price only
+subtrack edit 3 --price 1500
+
+# Update multiple fields
+subtrack edit 3 --name "Netflix Premium" --price 2500 --currency JPY
+```
+
+Without flags, `edit` shows a multi-select of fields to change. Each selected field is prompted with the current value as default.
+
+## `delete [ids...]`
 
 Shows an interactive checkbox list of all subscriptions. Select one or more to delete. Confirmation is required before deletion.
 
-<div class="callout warning">
-  <strong>⚠ Note:</strong> The <code>delete</code> command is always interactive. There is no non-interactive mode.
-</div>
+You can also specify subscription IDs as positional arguments for non-interactive deletion.
 
-### Example
+### Examples
 
 ```bash
+# Interactive: checkbox selection
 subtrack delete
+
+# Non-interactive: delete by ID(s)
+subtrack delete 3
+subtrack delete 2 5 7
+```
+
+## `import <file>`
+
+Imports subscriptions from a CSV file. The CSV must have a header row with exactly `name,cycle,tags,price,currency`.
+
+| Argument | Description |
+|----------|-------------|
+| `<file>` | Path to the CSV file |
+| `--dry-run` | Validate rows without importing |
+
+### CSV format
+
+```
+name,cycle,tags,price,currency
+Netflix,monthly,video;entertainment,1980,JPY
+GitHub Copilot,monthly,development,10,USD
+AWS,monthly,cloud;hosting,50,USD
+```
+
+- Tags are separated by `;` (semicolon) in the CSV
+- Price is an integer (smallest currency unit)
+- Currency is an ISO 4217 code
+- Cycle must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly
+
+### Examples
+
+```bash
+# Import from file
+subtrack import subscriptions.csv
+
+# Dry-run: validate without importing
+subtrack import subscriptions.csv --dry-run
+```
+
+## `export <format>`
+
+Exports subscriptions to the specified format.
+
+| Argument | Description |
+|----------|-------------|
+| `<format>` | Export format: `csv`, `json`, or `md` |
+
+| Option | Description |
+|--------|-------------|
+| `-c, --currency <C>` | Convert all prices to the given currency before exporting |
+| `--tags <tags>` | Filter by comma-separated tags before exporting |
+
+### Examples
+
+```bash
+# Export as CSV
+subtrack export csv
+
+# Export as JSON
+subtrack export json
+
+# Export as Markdown
+subtrack export md
+
+# Export only tagged subscriptions, converted to JPY
+subtrack export csv --tags music,video --currency JPY
 ```
 
 ## `payment [period]`
@@ -90,6 +203,7 @@ The `period` argument defaults to `monthly`. Valid values:
 | Option | Description |
 |--------|-------------|
 | `-c, --currency <C>` | Convert all prices to the given currency using live exchange rates |
+| `-a, --api` | Include LLM API usage costs in the total |
 
 ### Examples
 
@@ -102,11 +216,50 @@ subtrack payment yearly
 
 # Weekly total in JPY
 subtrack payment weekly --currency JPY
+
+# Include LLM API usage costs
+subtrack payment monthly --api
+
+# API costs in a specific currency
+subtrack payment monthly --api --currency JPY
 ```
 
 When `--currency` is used, the total is displayed as a single amount in the target currency. Without it, totals are grouped by currency.
 
+When `--api` is used, API usage costs for the current period are fetched from the `llm_usage` table and added to the subscription totals. API costs are stored in USD cents and are shown both individually and as part of the grand total.
+
 If exchange rates cannot be fetched (e.g. offline), the command falls back to per-currency display without conversion.
+
+## `summary`
+
+Shows a summary of all subscriptions including:
+
+- Total number of subscriptions
+- Most expensive subscription
+- Monthly spending by currency
+- Monthly spending by tag (sorted by cost)
+
+### Example
+
+```bash
+subtrack summary
+```
+
+Output:
+
+```
+Total subscriptions:  5
+Most expensive:       AWS ($50.00/month)
+
+Monthly by currency:
+  JPY    ¥4,940
+  USD    $85.00
+
+Monthly by tag:
+  hosting           $50.00/month (1 sub)
+  video             $47.00/month (3 subs)
+  ...
+```
 
 ## `tags <taglist...>`
 
@@ -125,18 +278,164 @@ subtrack tags music video
 subtrack tags entertainment video kids
 ```
 
-## `backup <destination>`
+## `tag`
 
-Creates a timestamped backup of the SQLite database in the specified directory. The backup filename follows the format `subtrack_YYYYMMDD_HHmmss.db`.
+Manages tags with the following subcommands:
 
-If the destination does not exist or is not a directory, the command exits with an error. The backup will not overwrite existing files (exclusive create).
+### `tag list`
+
+Lists all tags with their subscription count.
+
+```bash
+subtrack tag list
+```
+
+### `tag rename <old> <new>`
+
+Renames a tag. If the new name already exists, the old tag is merged into it.
+
+```bash
+subtrack tag rename entertainment fun
+```
+
+### `tag delete <name>`
+
+Deletes a tag and removes its associations from subscriptions.
+
+```bash
+subtrack tag delete fun
+```
+
+### `tag prune`
+
+Removes orphaned tags (tags not associated with any subscription).
+
+```bash
+subtrack tag prune
+```
+
+## `backup [destination]`
+
+Creates a timestamped gzip-compressed backup of the SQLite database. The backup filename follows the format `subtrack_YYYYMMDD_HHmmss.db.gz`.
+
+If no destination is specified, backups are saved to `~/.config/subtrack/backups/` (created automatically). Backups use exclusive file creation and will never overwrite existing files.
 
 ### Examples
 
 ```bash
+# Backup to default directory (~/.config/subtrack/backups/)
+subtrack backup
+
+# Backup to a specific directory
+subtrack backup ~/backups
+
 # Backup to current directory
 subtrack backup .
+```
 
-# Backup to ~/backups
-subtrack backup ~/backups
+## `restore [file]`
+
+Restores the database from a backup file. If no file is specified, shows an interactive list of available backups from the default backup directory (`~/.config/subtrack/backups/`).
+
+Before restoring, the current database is automatically backed up (timestamped with `_before_restore.db.gz` suffix) as a safety measure.
+
+| Option | Description |
+|--------|-------------|
+| `-f, --force` | Skip confirmation prompt |
+| `--dir <path>` | Scan a custom directory for backup files |
+
+### Examples
+
+```bash
+# Interactive: select a backup from the default directory
+subtrack restore
+
+# Restore from a specific file
+subtrack restore ~/backups/subtrack_20260617_143000.db.gz
+
+# Force restore without confirmation
+subtrack restore ~/backups/subtrack_20260617_143000.db.gz --force
+
+# List backups from a custom directory
+subtrack restore --dir ~/custom-backups
+```
+
+## `usage`
+
+Tracks LLM API usage costs. Costs are auto-calculated from model pricing when available, with manual fallback.
+
+### `usage add`
+
+Records an LLM API usage entry. Without flags, prompts for all fields interactively.
+
+| Option | Description |
+|--------|-------------|
+| `--provider <name>` | Provider: `openai`, `anthropic`, `google-ai`, `mistral`, `groq`, `together`, `deepseek`, `cohere`, or custom |
+| `--model <name>` | Model name (e.g. `gpt-4o`, `claude-3-opus-20240229`) |
+| `--inputTokens <n>` | Input token count |
+| `--outputTokens <n>` | Output token count |
+| `--date <YYYY-MM-DD>` | Date of usage (default: today) |
+| `--description <text>` | Optional description |
+| `--cost <amount>` | Total cost in USD (e.g. `0.50` for 50 cents; overrides auto-pricing) |
+
+```bash
+# Interactive mode
+subtrack usage add
+
+# Non-interactive
+subtrack usage add \
+  --provider openai \
+  --model gpt-4o \
+  --inputTokens 500 \
+  --outputTokens 200 \
+  --date 2026-06-19 \
+  --description "Chat completion"
+
+# Override auto-calculated cost
+subtrack usage add \
+  --provider openai \
+  --model gpt-4o \
+  --inputTokens 500 \
+  --outputTokens 200 \
+  --cost 0.15
+```
+
+Cost is calculated automatically via the LiteLLM pricing cache (fetched from GitHub, cached for 24 hours). If pricing is not found, the tool falls back to querying the LiteLLM Model Catalog API, then prompts for manual cost input. Use `--cost` to override auto-pricing entirely.
+
+### `usage list`
+
+Lists LLM API usage entries with optional filtering.
+
+| Option | Description |
+|--------|-------------|
+| `--provider <name>` | Filter by provider |
+| `--from <YYYY-MM-DD>` | Start date (inclusive) |
+| `--to <YYYY-MM-DD>` | End date (inclusive) |
+
+```bash
+# List all entries
+subtrack usage list
+
+# Filter by provider and date range
+subtrack usage list --provider openai --from 2026-01-01 --to 2026-06-30
+```
+
+Shows up to 100 entries with provider, model, token counts, cost, date, and description. Displays a total cost at the bottom.
+
+### `usage delete`
+
+Interactively selects and deletes LLM API usage entries.
+
+```bash
+subtrack usage delete
+```
+
+Multi-select via checkbox → confirm → batch delete.
+
+### `usage refresh`
+
+Force-refreshes the LiteLLM pricing cache from GitHub.
+
+```bash
+subtrack usage refresh
 ```

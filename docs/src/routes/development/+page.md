@@ -37,7 +37,7 @@ This provides `node`, `pnpm`, `typescript`, `typos`, and `nixfmt`.
 |----------|--------|
 | Runtime | Node.js |
 | Language | TypeScript (strict mode, ESM) |
-| CLI framework | `commander` |
+| CLI framework | `gunshi` |
 | Interactive prompts | `@inquirer/prompts` |
 | Terminal output | `consola`, `picocolors`, `cli-table3` |
 | Database | `sql.js` (SQLite via WASM) |
@@ -66,12 +66,20 @@ Make sure both pass and CI is green.
 subtrack/
 ├── subtrack/         # CLI tool (TypeScript/ESM)
 │   ├── src/
-│   │   ├── index.ts      # Entry point, commander setup
+│   │   ├── index.ts      # Entry point, CLI definitions (gunshi)
 │   │   ├── commands.ts   # Command handlers
 │   │   ├── db.ts         # SQLite database layer
-│   │   ├── display.ts    # Table rendering, currency conversion
-│   │   └── prompts.ts    # Input validation, prompt helpers
-│   └── dist/             # Built output
+│   │   ├── display.ts    # Table rendering, price formatting
+│   │   ├── prompts.ts    # Input validation, prompt helpers
+│   │   ├── types.ts      # TypeScript type definitions
+│   │   ├── payment.ts    # Payment totals & summary statistics
+│   │   ├── usage.ts      # LLM API usage tracking (add/list/delete/refresh)
+│   │   ├── pricing.ts    # LiteLLM pricing cache & cost calculation
+│   │   ├── export.ts     # CSV / JSON / Markdown export formatters
+│   │   ├── import-csv.ts # CSV parser & import handler
+│   │   ├── fx.ts         # FX rate API & price conversion
+│   │   └── *.test.ts     # Co-located tests (vitest)
+│   └── dist/             # Built output (dist/index.mjs)
 ├── docs/             # Documentation site (SvelteKit)
 ├── flake.nix         # Nix devShell
 └── pnpm-workspace.yaml
