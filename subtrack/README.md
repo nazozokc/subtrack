@@ -2,7 +2,11 @@
   <img src="images/subtrack-cli-logo.jpg" alt="subtrack" width="400"/>
 </p>
 
-# subtrack
+<div align="center">
+<h1>subtrack</h1>
+</div>
+
+[![Socket Badge](https://badge.socket.dev/npm/package/subtrack)](https://socket.dev/npm/package/subtrack)
 
 <p align="center">
   <img src="images/subtrack-demo.png" alt="subtrack demo" width="700"/>

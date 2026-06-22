@@ -33,6 +33,11 @@
     "node": ">=22"
   },
   "sideEffects": false,
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsdown",
     "start": "tsx src/index.ts",
