@@ -21,7 +21,6 @@ const CACHE_FRESHNESS_MS = 24 * 60 * 60 * 1000
 const FETCH_TIMEOUT_MS = 15_000
 const GITHUB_JSON_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
-const MODEL_CATALOG_API = "https://api.litellm.ai/model_catalog"
 
 function getConfigDir(): string {
   return process.env.SUBSC_CLI_DB_DIR ?? path.join(homedir(), ".config", "subtrack")
@@ -43,7 +42,6 @@ export async function ensurePricingCache(): Promise<PricingCache | null> {
     const cachePath = getCachePath()
     let staleCache: PricingCache | null = null
 
-    // Try loading existing cache
     if (existsSync(cachePath)) {
       try {
         const data = readFileSync(cachePath, "utf-8")
@@ -59,7 +57,6 @@ export async function ensurePricingCache(): Promise<PricingCache | null> {
       }
     }
 
-    // Fetch from GitHub
     try {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
@@ -77,7 +74,6 @@ export async function ensurePricingCache(): Promise<PricingCache | null> {
       _cache = data
       return data
     } catch {
-      // GitHub unavailable — use stale cache if we have it
       if (staleCache) {
         _cache = staleCache
         return staleCache
@@ -90,61 +86,83 @@ export async function ensurePricingCache(): Promise<PricingCache | null> {
 }
 
 /**
- * Look up a model's pricing in the cached LiteLLM data.
- * Tries several matching strategies from most to least specific.
+ * Format a pricing entry into a short human-readable cost description.
  */
-export function matchModel(
+function formatPricingInfo(entry: ModelPricingEntry): string {
+  const inCost = entry.input_cost_per_token
+  const outCost = entry.output_cost_per_token
+  if (inCost == null && outCost == null) return ""
+  const parts: string[] = []
+  if (inCost != null) parts.push(`$${(inCost * 1_000_000).toFixed(2)}/1M in`)
+  if (outCost != null) parts.push(`$${(outCost * 1_000_000).toFixed(2)}/1M out`)
+  return parts.join(" · ")
+}
+
+/**
+ * Search model pricing cache by query string.
+ * Optionally filtered by provider (`litellm_provider` field).
+ * Returns choices suitable for `@inquirer/search` prompt.
+ */
+export function searchPricingModels(
   cache: PricingCache,
-  provider: string,
-  modelName: string,
-): ModelPricingEntry | null {
-  const lowerModel = modelName.toLowerCase()
+  query: string,
+  provider?: string,
+): { name: string; value: string; description: string }[] {
+  const lower = query.toLowerCase()
+  const entries = Object.entries(cache)
 
-  // 1 — exact match on key
-  if (cache[modelName]) return cache[modelName]
-  if (cache[lowerModel]) return cache[lowerModel]
+  const filtered = entries.filter(([key, val]) => {
+    if (provider && val.litellm_provider !== provider) return false
+    return key.toLowerCase().includes(lower)
+  })
 
-  // 2 — with provider prefix
-  const prefixes = [
-    `${provider}/`,
-    `${provider}.`,
-  ]
-  for (const pfx of prefixes) {
-    const k = `${pfx}${modelName}`
-    if (cache[k]) return cache[k]
-    const kl = `${pfx}${lowerModel}`
-    if (cache[kl]) return cache[kl]
+  return filtered.map(([key, val]) => ({
+    name: key,
+    value: key,
+    description: formatPricingInfo(val),
+  }))
+}
+
+/**
+ * Look up a model key in the pricing cache with simple fallbacks.
+ * Tries exact match, then provider-prefixed match, then case-insensitive match.
+ * This is for non-interactive (--model flag) lookups.
+ */
+export function lookupModelKey(
+  cache: PricingCache,
+  model: string,
+  provider?: string,
+): string | null {
+  // Exact match
+  if (cache[model]) return model
+
+  const lower = model.toLowerCase()
+
+  // Provider-prefixed exact match
+  if (provider) {
+    const prefixed = `${provider}/${model}`
+    if (cache[prefixed]) return prefixed
+    const lowerPrefixed = `${provider}/${lower}`
+    if (cache[lowerPrefixed]) return lowerPrefixed
   }
 
-  // 3 — narrow to relevant provider entries
-  const candidates = Object.entries(cache).filter(
-    ([, v]) => v.litellm_provider === provider,
-  )
-  if (candidates.length === 0) {
-    // fall back to full search
-    candidates.push(...Object.entries(cache))
-  }
-
-  // 4 — exact match on model name in value
-  for (const [, v] of candidates) {
-    if ((v as Record<string, unknown>).model_name === modelName) return v
-  }
-
-  // 5 — substring match on key
-  for (const [key, v] of candidates) {
-    if (key.includes(lowerModel)) return v
-  }
-
-  // 6 — strip common version suffixes
-  const suffixes = ["-v1:0", "-v2:0", "-v1", "-v2", "-preview"]
-  for (const suffix of suffixes) {
-    if (lowerModel.endsWith(suffix)) {
-      const base = lowerModel.slice(0, -suffix.length)
-      if (cache[base]) return cache[base]
-    }
+  // Case-insensitive key match
+  for (const key of Object.keys(cache)) {
+    if (key.toLowerCase() === lower) return key
+    if (provider && key.toLowerCase() === `${provider}/${lower}`) return key
   }
 
   return null
+}
+
+/**
+ * Get pricing entry for a specific model key.
+ */
+export function getModelPricing(
+  cache: PricingCache,
+  modelKey: string,
+): ModelPricingEntry | null {
+  return cache[modelKey] ?? null
 }
 
 /**
@@ -161,35 +179,4 @@ export function calculateCostCents(
   const reasoningCost =
     (pricing.output_cost_per_reasoning_token ?? 0) * outputTokens
   return (inputCost + outputCost + reasoningCost) * 100
-}
-
-/**
- * Query the LiteLLM Model Catalog API for a single model's pricing.
- * Used as fallback when the cached data doesn't contain the model.
- */
-export async function getModelPricingDirect(
-  modelName: string,
-): Promise<ModelPricingEntry | null> {
-  try {
-    const url = `${MODEL_CATALOG_API}/${encodeURIComponent(modelName)}`
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
-    try {
-      const res = await fetch(url, { signal: controller.signal })
-      if (!res.ok) return null
-      const text = await res.text()
-      return safeJsonParse<ModelPricingEntry>(text)
-    } finally {
-      clearTimeout(timer)
-    }
-  } catch {
-    return null
-  }
-}
-
-/** Force-refresh the pricing cache (next call to ensurePricingCache re-fetches). */
-export async function refreshPricingCache(): Promise<PricingCache | null> {
-  _cache = null
-  _cachePromise = null
-  return ensurePricingCache()
 }

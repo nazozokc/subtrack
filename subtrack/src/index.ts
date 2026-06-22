@@ -22,7 +22,6 @@ import {
   handleUsageAdd,
   handleUsageList,
   handleUsageDelete,
-  handleUsageRefresh,
 } from "./usage.ts"
 import { handleImport } from "./import-csv.ts"
 import type { Cycle } from "./types.ts"
@@ -245,12 +244,6 @@ const usageDeleteCommand = define({
   },
 })
 
-const usageRefreshCommand = define({
-  name: "refresh",
-  description: "Refresh LiteLLM pricing cache",
-  run: () => handleUsageRefresh(),
-})
-
 const usageCommand = define({
   name: "usage",
   description: "Track LLM API usage costs",
@@ -258,9 +251,8 @@ const usageCommand = define({
     add: usageAddCommand,
     list: usageListCommand,
     delete: usageDeleteCommand,
-    refresh: usageRefreshCommand,
   },
-  run: () => consola.info("Usage: subtrack usage add|list|delete|refresh"),
+  run: () => consola.info("Usage: subtrack usage add|list|delete"),
 })
 
 const mainCommand = define({

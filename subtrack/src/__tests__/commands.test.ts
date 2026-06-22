@@ -44,31 +44,20 @@ vi.mock("consola", () => {
 })
 
 // Mock pricing module for LLM usage tests
-vi.mock("../pricing.ts", () => ({
-  ensurePricingCache: vi.fn().mockResolvedValue({
-    "gpt-4o": {
-      input_cost_per_token: 2.5e-6,
-      output_cost_per_token: 1e-5,
-      litellm_provider: "openai",
-    },
-  }),
-  matchModel: vi.fn().mockImplementation(
-    (_cache: Record<string, unknown>, _provider: string, model: string) => {
-      // Simple lookup for test cache
-      const cache: Record<string, unknown> = {
-        "gpt-4o": {
-          input_cost_per_token: 2.5e-6,
-          output_cost_per_token: 1e-5,
-          litellm_provider: "openai",
-        },
-      }
-      return cache[model] ?? null
-    },
-  ),
-  calculateCostCents: vi.fn().mockReturnValue(0.75),
-  getModelPricingDirect: vi.fn().mockResolvedValue(null),
-  refreshPricingCache: vi.fn().mockResolvedValue(null),
-}))
+vi.mock("../pricing.ts", async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    ensurePricingCache: vi.fn().mockResolvedValue({
+      "gpt-4o": {
+        input_cost_per_token: 2.5e-6,
+        output_cost_per_token: 1e-5,
+        litellm_provider: "openai",
+      },
+    }),
+    calculateCostCents: vi.fn().mockReturnValue(0.75),
+  }
+})
 
 // Mock @inquirer/prompts to avoid interactive prompts
 vi.mock("@inquirer/prompts", () => ({
@@ -76,9 +65,10 @@ vi.mock("@inquirer/prompts", () => ({
   confirm: vi.fn(),
   checkbox: vi.fn(),
   select: vi.fn(),
+  search: vi.fn(),
 }))
 
-import { input, confirm, checkbox, select } from "@inquirer/prompts"
+import { input, confirm, checkbox, select, search } from "@inquirer/prompts"
 import { consola, logMessages, infoMessages, successMessages, errorMessages, failMessages, warnMessages } from "consola"
 
 let testDb: Database
@@ -151,6 +141,7 @@ beforeEach(() => {
   vi.mocked(confirm).mockReset().mockResolvedValue(true)
   vi.mocked(checkbox).mockReset().mockResolvedValue([])
   vi.mocked(select).mockReset()
+  vi.mocked(search).mockReset().mockResolvedValue("gpt-4o")
 })
 
 afterAll(() => {
@@ -982,20 +973,6 @@ test("handleUsageDelete deletes selected entries", async () => {
 
   expect(db.getLlmUsage()).toHaveLength(0)
   expect(successMessages.some((m) => m.includes("openai"))).toBe(true)
-})
-
-// ── handleUsageRefresh ───────────────────────────────────
-
-test("handleUsageRefresh shows failure when fetch fails", async () => {
-  globalThis.fetch = async () => { throw new Error("Network error") }
-
-  const { handleUsageRefresh } = await import("../usage.ts")
-  await handleUsageRefresh()
-
-  expect(failMessages.some((m) => m.includes("Failed to fetch"))).toBe(true)
-
-  globalThis.fetch = async () =>
-    new Response(JSON.stringify({ base: "USD", rates: { JPY: 160, USD: 1 } }))
 })
 
 // ── handleBackup ──────────────────────────────────────────

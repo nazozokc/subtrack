@@ -1,4 +1,4 @@
-import { input, select, confirm, checkbox } from "@inquirer/prompts"
+import { input, select, confirm, checkbox, search } from "@inquirer/prompts"
 import { consola } from "consola"
 import type { UsageAddFlags, LlmUsageEntry } from "./types.ts"
 import { addLlmUsage, getLlmUsage, deleteLlmUsage } from "./db.ts"
@@ -10,12 +10,11 @@ import {
 } from "./prompts.ts"
 import {
   ensurePricingCache,
-  matchModel,
+  searchPricingModels,
+  getModelPricing,
   calculateCostCents,
-  getModelPricingDirect,
-  refreshPricingCache,
+  lookupModelKey,
 } from "./pricing.ts"
-import type { ModelPricingEntry } from "./pricing.ts"
 import { renderUsageTable } from "./display.ts"
 
 // ── Workflow ──────────────────────────────────────────────
@@ -30,6 +29,7 @@ async function resolveUsageAddOptions(flags: UsageAddFlags) {
     }
     manualCostCents = Math.round(costNum * 100)
   }
+
   // Provider
   let provider = flags.provider
   let prompted = false
@@ -53,14 +53,45 @@ async function resolveUsageAddOptions(flags: UsageAddFlags) {
     }
   }
 
-  // Model
-  let model = flags.model
-  if (!model) {
+  // Load pricing cache for model search/lookup
+  const cache = await ensurePricingCache()
+
+  // Model — search prompt (interactive) or direct lookup (flag)
+  let model: string
+  let pricing: ReturnType<typeof getModelPricing> = null
+  let costCents: number | null = null
+
+  if (flags.model !== undefined) {
+    // Non-interactive: look up model in cache
+    model = flags.model
+    if (cache) {
+      const modelKey = lookupModelKey(cache, model, provider)
+      if (modelKey) {
+        model = modelKey
+        pricing = getModelPricing(cache, modelKey)
+      }
+    }
+  } else {
+    // Interactive: search prompt
     prompted = true
-    model = await input({
-      message: "Model name (e.g. gpt-4o, claude-3-opus-20240229)",
-      validate: validateModelName,
+    if (!cache || Object.keys(cache).length === 0) {
+      consola.error("No pricing data available. Cannot look up models.")
+      return null
+    }
+
+    const selected = await search({
+      message: "Search and select a model",
+      source: (input) => {
+        const q = (input ?? "").trim()
+        // Return models filtered by provider from cache
+        const results = searchPricingModels(cache!, q, provider === "__other__" ? undefined : provider)
+        // Limit to reasonable display
+        return results.slice(0, 50)
+      },
+      pageSize: 15,
     })
+    model = selected
+    pricing = getModelPricing(cache, model)
   }
 
   // Input tokens
@@ -116,24 +147,14 @@ async function resolveUsageAddOptions(flags: UsageAddFlags) {
     description = str.trim() || null
   }
 
-  // Pricing lookup
-  let pricing: ModelPricingEntry | null = null
-  let costCents: number | null = null
+  // Cost calculation
   let manualCost = false
-
-  const cache = await ensurePricingCache()
-  if (cache) {
-    pricing = matchModel(cache, provider, model)
-  }
-  if (!pricing) {
-    pricing = await getModelPricingDirect(model)
-  }
   if (pricing) {
     costCents = calculateCostCents(pricing, inputTokens, outputTokens)
   }
 
   if (costCents === null) {
-    // Fallback: use --cost flag if provided
+    // Fallback: --cost flag or manual input
     if (manualCostCents !== null) {
       costCents = manualCostCents
       manualCost = true
@@ -260,15 +281,5 @@ export async function handleUsageDelete(ids?: number[]) {
   for (const entry of selected) {
     deleteLlmUsage(entry.id)
     consola.success(`Deleted: ${entry.provider}/${entry.model} (${entry.date})`)
-  }
-}
-
-export async function handleUsageRefresh() {
-  consola.info("Refreshing LiteLLM pricing cache...")
-  const result = await refreshPricingCache()
-  if (result) {
-    consola.success(`Pricing cache updated (${Object.keys(result).length} models)`)
-  } else {
-    consola.fail("Failed to fetch pricing data")
   }
 }
