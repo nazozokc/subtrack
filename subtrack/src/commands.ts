@@ -236,15 +236,16 @@ function writeCompressedBackup(destPath: string, encrypt: boolean): boolean {
       0o600,
     )
     try {
-      writeSync(fd, writeBuf)
+      let offset = 0
+      while (offset < writeBuf.length) {
+        const written = writeSync(fd, writeBuf, offset, writeBuf.length - offset)
+        if (written <= 0) throw new Error(`writeSync wrote ${written} bytes at offset ${offset}`)
+        offset += written
+      }
     } finally {
       closeSync(fd)
     }
-    try {
-      writeBackupHash(destPath)
-    } catch {
-      /* hash sidecar is best-effort */
-    }
+    writeBackupHash(destPath)
     return true
   } catch (err) {
     const nodeErr = err as NodeJS.ErrnoException
@@ -257,17 +258,29 @@ function writeCompressedBackup(destPath: string, encrypt: boolean): boolean {
   }
 }
 
+/**
+ * Create a timestamped, gzip-compressed backup of the SQLite database.
+ * Optionally encrypts the backup using AES-256-GCM.
+ * @param destination - Directory to write the backup into (default: `~/.config/subtrack/backups/`)
+ * @param options.encrypt - Encrypt the backup with the database encryption key
+ */
 export async function handleBackup(destination?: string, options: { encrypt?: boolean } = {}) {
   // flush in-memory state to disk
   saveDb()
 
   // resolve destination directory
   const dest = destination ?? getDefaultBackupDir()
-  if (!existsSync(dest)) {
-    mkdirSync(dest, { recursive: true, mode: 0o700 })
-  }
-  if (!statSync(dest).isDirectory()) {
-    consola.error(`Backup destination must be a directory: ${dest}`)
+  try {
+    if (!existsSync(dest)) {
+      mkdirSync(dest, { recursive: true, mode: 0o700 })
+    }
+    if (!statSync(dest).isDirectory()) {
+      consola.error(`Backup destination must be a directory: ${dest}`)
+      return
+    }
+  } catch (err) {
+    const nodeErr = err as NodeJS.ErrnoException
+    consola.error(`Backup destination is not accessible: ${nodeErr.message}`)
     return
   }
 

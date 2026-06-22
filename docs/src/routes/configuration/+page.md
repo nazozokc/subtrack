@@ -43,7 +43,7 @@ subtrack list
 
 subtrack automatically encrypts the SQLite database file on disk using **AES-256-GCM**. On first run, a random 256-bit key is generated and stored in:
 
-```
+```text
 ~/.config/subtrack/.key
 ```
 

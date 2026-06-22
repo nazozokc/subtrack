@@ -29,7 +29,7 @@ A CLI tool to manage your subscription services from the terminal.
 - **Tag autocomplete hints** — shows existing tags during input
 - **Payment totals** — see how much you pay per month, year, or any cycle with `subtrack payment`
 - **Cycle-aware calculation** — automatically converts weekly, quarterly, yearly etc. to any period
-- **36 currencies** supported: AED, ARS, AUD, BRL, CAD, CHF, CLP, CNY, COP, CZK, DKK, EGP, EUR, GBP, HKD, HUF, IDR, ILS, INR, JPY, KRW, MXN, MYR, NGN, NOK, NZD, PHP, PLN, SAR, SEK, SGD, THB, TRY, TWD, USD, VND, ZAR
+- **37 currencies** supported: AED, ARS, AUD, BRL, CAD, CHF, CLP, CNY, COP, CZK, DKK, EGP, EUR, GBP, HKD, HUF, IDR, ILS, INR, JPY, KRW, MXN, MYR, NGN, NOK, NZD, PHP, PLN, SAR, SEK, SGD, THB, TRY, TWD, USD, VND, ZAR
 - **6 billing cycles**: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly
 - **SQLite** storage — portable, zero-config, lives in `~/.config/subtrack/subtrack.db`
 - **Input validation** — name length, price bounds, tag limits
@@ -360,7 +360,7 @@ backed up before restoration.
 
 | Option            | Description                                        |
 | ----------------- | -------------------------------------------------- |
-| `-f, --force`     | Skip confirmation                                  |
+| `-f, --force`     | Skip confirmation and integrity check warnings     |
 | `--dir <dir>`     | Directory to scan for backup files (interactive)   |
 
 ```bash
