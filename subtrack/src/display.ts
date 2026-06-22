@@ -83,34 +83,38 @@ function calcColumnWidths(rows: string[][]): number[] {
   return widths
 }
 
+const TABLE_CHARS = {
+  top: "─",
+  "top-mid": "┬",
+  "top-left": "┌",
+  "top-right": "┐",
+  bottom: "─",
+  "bottom-mid": "┴",
+  "bottom-left": "└",
+  "bottom-right": "┘",
+  left: "│",
+  "left-mid": "├",
+  mid: "─",
+  "mid-mid": "┼",
+  right: "│",
+  "right-mid": "┤",
+  middle: "│",
+} as const
+
+const TABLE_STYLE = {
+  border: ["\x1b[90m", "\x1b[0m"],
+  head: ["\x1b[1m\x1b[38;5;75m", "\x1b[0m"],
+  "padding-left": 1,
+  "padding-right": 1,
+  compact: false,
+} satisfies Record<string, unknown>
+
 function renderTable(rows: string[][]): string {
   const widths = calcColumnWidths(rows)
 
   const table = new CliTable3({
-    chars: {
-      top: "─",
-      "top-mid": "┬",
-      "top-left": "┌",
-      "top-right": "┐",
-      bottom: "─",
-      "bottom-mid": "┴",
-      "bottom-left": "└",
-      "bottom-right": "┘",
-      left: "│",
-      "left-mid": "├",
-      mid: "─",
-      "mid-mid": "┼",
-      right: "│",
-      "right-mid": "┤",
-      middle: "│",
-    },
-    style: {
-      border: ["\x1b[90m", "\x1b[0m"],
-      head: ["\x1b[1m\x1b[38;5;75m", "\x1b[0m"],
-      "padding-left": 1,
-      "padding-right": 1,
-      compact: false,
-    },
+    chars: { ...TABLE_CHARS },
+    style: { ...TABLE_STYLE },
     colWidths: widths,
     head: [...HEADERS],
     wordWrap: true,
@@ -289,30 +293,8 @@ function renderUsageTableBody(
   widths: number[],
 ): string {
   const table = new CliTable3({
-    chars: {
-      top: "─",
-      "top-mid": "┬",
-      "top-left": "┌",
-      "top-right": "┐",
-      bottom: "─",
-      "bottom-mid": "┴",
-      "bottom-left": "└",
-      "bottom-right": "┘",
-      left: "│",
-      "left-mid": "├",
-      mid: "─",
-      "mid-mid": "┼",
-      right: "│",
-      "right-mid": "┤",
-      middle: "│",
-    },
-    style: {
-      border: ["\x1b[90m", "\x1b[0m"],
-      head: ["\x1b[1m\x1b[38;5;75m", "\x1b[0m"],
-      "padding-left": 1,
-      "padding-right": 1,
-      compact: false,
-    },
+    chars: { ...TABLE_CHARS },
+    style: { ...TABLE_STYLE },
     colWidths: widths,
     head: [...USAGE_HEADERS],
     wordWrap: true,
@@ -340,6 +322,24 @@ function renderUsageTableBody(
 
   return table.toString()
 }
+
+const TABLE_CHARS_FOOTER = {
+  top: "─",
+  "top-mid": "┴",
+  "top-left": "├",
+  "top-right": "┤",
+  bottom: "─",
+  "bottom-mid": "┴",
+  "bottom-left": "└",
+  "bottom-right": "┘",
+  left: "│",
+  "left-mid": "├",
+  mid: "─",
+  "mid-mid": "┼",
+  right: "│",
+  "right-mid": "┤",
+  middle: "│",
+} as const
 
 export function renderUsageTable(entries: LlmUsageEntry[]): void {
   if (entries.length === 0) {
@@ -377,29 +377,8 @@ export function renderUsageTable(entries: LlmUsageEntry[]): void {
 
   // Render TOTAL footer row
   const table = new CliTable3({
-    chars: {
-      top: "─",
-      "top-mid": "┴",
-      "top-left": "├",
-      "top-right": "┤",
-      bottom: "─",
-      "bottom-mid": "┴",
-      "bottom-left": "└",
-      "bottom-right": "┘",
-      left: "│",
-      "left-mid": "├",
-      mid: "─",
-      "mid-mid": "┼",
-      right: "│",
-      "right-mid": "┤",
-      middle: "│",
-    },
-    style: {
-      border: ["\x1b[90m", "\x1b[0m"],
-      "padding-left": 1,
-      "padding-right": 1,
-      compact: false,
-    },
+    chars: { ...TABLE_CHARS_FOOTER },
+    style: { ...TABLE_STYLE },
     colWidths: widths,
     colAligns: ["left", "left", "right", "right", "right", "left", "left"],
   })
@@ -431,30 +410,8 @@ export function showApiUsage(
   }
 
   const apiTable = new CliTable3({
-    chars: {
-      top: "─",
-      "top-mid": "┬",
-      "top-left": "┌",
-      "top-right": "┐",
-      bottom: "─",
-      "bottom-mid": "┴",
-      "bottom-left": "└",
-      "bottom-right": "┘",
-      left: "│",
-      "left-mid": "├",
-      mid: "─",
-      "mid-mid": "┼",
-      right: "│",
-      "right-mid": "┤",
-      middle: "│",
-    },
-    style: {
-      border: ["\x1b[90m", "\x1b[0m"],
-      head: ["\x1b[1m\x1b[38;5;75m", "\x1b[0m"],
-      "padding-left": 1,
-      "padding-right": 1,
-      compact: false,
-    },
+    chars: { ...TABLE_CHARS },
+    style: { ...TABLE_STYLE },
     head: ["Provider", "Cost"],
     colAligns: ["left", "right"],
   })

@@ -284,7 +284,7 @@ process.on("SIGTERM", () => handleSignal("SIGTERM"))
 try {
   await cli(process.argv.slice(2), mainCommand, {
     name: "subtrack",
-    version: "3.0.1",
+    version: "4.0.9",
     subCommands: {
       list: listCommand,
       add: addCommand,

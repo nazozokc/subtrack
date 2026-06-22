@@ -6,7 +6,7 @@ import {
 } from "node:fs"
 import { gzipSync } from "node:zlib"
 import { encryptBuffer, decryptBuffer, isEncrypted } from "./crypto.ts"
-import path, { join } from "node:path"
+import path from "node:path"
 import type { Currency, Cycle, SharedArgs, AddSharedArgs, AddFlags, BackupFileInfo } from "./types.ts"
 import {
   getSubscriptions,
@@ -29,6 +29,8 @@ import {
   saveDb,
   writeBackupHash,
   verifyBackupHash,
+  getLlmUsageTotal,
+  getLlmUsageTotalByProvider,
 } from "./db.ts"
 import {
   formatPrice,
@@ -36,7 +38,6 @@ import {
   showApiUsage,
 } from "./display.ts"
 import { showPayment, showSummary } from "./payment.ts"
-import { getLlmUsageTotal, getLlmUsageTotalByProvider } from "./db.ts"
 import { exportCsv, exportMd, exportJson } from "./export.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import {
@@ -212,6 +213,50 @@ export async function handleTags(taglist: string[]) {
   await spreadSubscription(list)
 }
 
+/** Generate a compact timestamp string for backup filenames. */
+function getTimestamp(): string {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+}
+
+/**
+ * Compress the current DB and write to `destPath` with exclusive-create.
+ * Returns true on success, false on failure.
+ */
+function writeCompressedBackup(destPath: string, encrypt: boolean): boolean {
+  const sqliteBuf = Buffer.from(getDb().export())
+  const compressed = gzipSync(sqliteBuf)
+  const writeBuf = encrypt ? encryptBuffer(compressed) : compressed
+
+  try {
+    const fd = openSync(
+      destPath,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+      0o600,
+    )
+    try {
+      writeSync(fd, writeBuf)
+    } finally {
+      closeSync(fd)
+    }
+    try {
+      writeBackupHash(destPath)
+    } catch {
+      /* hash sidecar is best-effort */
+    }
+    return true
+  } catch (err) {
+    const nodeErr = err as NodeJS.ErrnoException
+    if (nodeErr.code === "EEXIST") {
+      consola.error(`Backup file already exists: ${destPath}`)
+    } else {
+      consola.error(`Backup failed: ${nodeErr.message}`)
+    }
+    return false
+  }
+}
+
 export async function handleBackup(destination?: string, options: { encrypt?: boolean } = {}) {
   // flush in-memory state to disk
   saveDb()
@@ -226,44 +271,15 @@ export async function handleBackup(destination?: string, options: { encrypt?: bo
     return
   }
 
-  // generate timestamped filename
-  const now = new Date()
-  const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`
+  const ts = getTimestamp()
   const destPath = options.encrypt
-    ? join(dest, `subtrack_${ts}.db.enc`)
-    : join(dest, `subtrack_${ts}.db.gz`)
+    ? path.join(dest, `subtrack_${ts}.db.enc`)
+    : path.join(dest, `subtrack_${ts}.db.gz`)
 
-  // compress and write with exclusive create
-  const sqliteBuf = Buffer.from(getDb().export())
-  const compressed = gzipSync(sqliteBuf)
-  const writeBuf = options.encrypt ? encryptBuffer(compressed) : compressed
-
-  try {
-    const fd = openSync(
-      destPath,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
-      0o600,
-    )
-    try {
-      writeSync(fd, writeBuf)
-    } finally {
-      closeSync(fd)
-    }
+  if (writeCompressedBackup(destPath, options.encrypt ?? false)) {
     consola.success(
       `Backup created: ${destPath}${options.encrypt ? " (encrypted)" : ""}`,
     )
-    try {
-      writeBackupHash(destPath)
-    } catch {
-      /* hash sidecar is best-effort */
-    }
-  } catch (err) {
-    const nodeErr = err as NodeJS.ErrnoException
-    if (nodeErr.code === "EEXIST") {
-      consola.error(`Backup file already exists: ${destPath}`)
-    } else {
-      consola.error(`Backup failed: ${nodeErr.message}`)
-    }
   }
 }
 
@@ -398,29 +414,12 @@ async function safeAutoBackup() {
   saveDb()
   const backupDir = getDefaultBackupDir()
   mkdirSync(backupDir, { recursive: true, mode: 0o700 })
-  const now = new Date()
-  const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`
-  const destPath = join(backupDir, `subtrack_${ts}_before_restore.db.gz`)
+  const ts = getTimestamp()
+  const destPath = path.join(backupDir, `subtrack_${ts}_before_restore.db.gz`)
 
-  const compressed = gzipSync(Buffer.from(getDb().export()))
-  try {
-    const fd = openSync(
-      destPath,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
-      0o600,
-    )
-    try {
-      writeSync(fd, compressed)
-    } finally {
-      closeSync(fd)
-    }
+  if (writeCompressedBackup(destPath, false)) {
     consola.info(`Auto-backup created: ${destPath}`)
-    try {
-      writeBackupHash(destPath)
-    } catch {
-      /* best-effort */
-    }
-  } catch {
+  } else {
     // auto-backup is best-effort; warn but continue
     consola.warn("Could not create auto-backup, continuing with restore")
   }
