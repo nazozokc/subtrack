@@ -320,6 +320,12 @@ Creates a timestamped gzip-compressed backup of the SQLite database. The backup 
 
 If no destination is specified, backups are saved to `~/.config/subtrack/backups/` (created automatically). Backups use exclusive file creation and will never overwrite existing files.
 
+| Option | Description |
+|--------|-------------|
+| `-e, --encrypt` | Encrypt the backup using AES-256-GCM with your database encryption key |
+
+Encrypted backups use the `.db.enc` extension and require the same derived key material to restore (either the same `.key` file, or the same passphrase **and** persisted salt).
+
 ### Examples
 
 ```bash
@@ -331,6 +337,9 @@ subtrack backup ~/backups
 
 # Backup to current directory
 subtrack backup .
+
+# Create an encrypted backup
+subtrack backup --encrypt
 ```
 
 ## `restore [file]`
@@ -339,9 +348,11 @@ Restores the database from a backup file. If no file is specified, shows an inte
 
 Before restoring, the current database is automatically backed up (timestamped with `_before_restore.db.gz` suffix) as a safety measure.
 
+Each backup has a SHA-256 hash sidecar file (`<backup>.sha256`) for integrity verification. The restore command checks this hash before proceeding and warns if it doesn't match.
+
 | Option | Description |
 |--------|-------------|
-| `-f, --force` | Skip confirmation prompt |
+| `-f, --force` | Skip confirmation prompt and hash check warnings |
 | `--dir <path>` | Scan a custom directory for backup files |
 
 ### Examples

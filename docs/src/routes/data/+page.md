@@ -51,9 +51,20 @@ Deleting a subscription automatically removes its tag associations via `ON DELET
 
 Prices are stored as whole numbers (integers) in the database. This avoids floating-point precision issues. For display, prices are formatted with the appropriate currency symbol and decimal places using `Intl.NumberFormat`.
 
+## Encryption
+
+subtrack automatically encrypts the database file on disk using **AES-256-GCM**. The encryption key is either:
+
+- Auto-generated and stored at `~/.config/subtrack/.key` (on first run)
+- Derived from `SUBSC_CLI_DB_PASSPHRASE` environment variable via scrypt
+
+This means your subscription data is encrypted at rest. Backups can also be encrypted with `subtrack backup --encrypt`.
+
+> ⚠️ **Back up your key file or remember your passphrase.** Without it, the database and encrypted backups cannot be recovered.
+
 ## Backup
 
-Use the `backup` command to create a timestamped gzip-compressed copy of your database:
+Use the `backup` command to create a timestamped copy of your database:
 
 ```bash
 # Backup to the default directory (~/.config/subtrack/backups/)
@@ -63,9 +74,13 @@ subtrack backup
 # Backup to a custom directory
 subtrack backup ~/backups
 # Creates: ~/backups/subtrack_20260617_143000.db.gz
+
+# Encrypted backup
+subtrack backup --encrypt
+# Creates: ~/.config/subtrack/backups/subtrack_20260617_143000.db.enc
 ```
 
-If no destination is specified, backups are saved to `~/.config/subtrack/backups/` (created automatically). Backups use exclusive file creation, so they will never overwrite an existing file. See the [Commands](/commands) reference for full details.
+If no destination is specified, backups are saved to `~/.config/subtrack/backups/` (created automatically). Backups use exclusive file creation, so they will never overwrite an existing file. Each backup has a SHA-256 hash sidecar (`<backup>.sha256`) for integrity verification. See the [Commands](/commands) reference for full details.
 
 ## Restore from backup
 

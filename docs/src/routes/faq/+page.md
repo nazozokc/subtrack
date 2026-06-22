@@ -51,6 +51,16 @@ The `restore` command automatically backs up your current data before restoring.
 
 **No.** All data is stored locally in a SQLite file on your machine. There are no accounts, no telemetry, and no cloud sync. The only external request subtrack makes is to [open.er-api.com](https://open.er-api.com) for currency exchange rates — and only when you use the `--currency` flag.
 
+## Is the database encrypted?
+
+Yes. subtrack automatically encrypts the SQLite database file on disk using **AES-256-GCM**. On first run, a random 256-bit key is generated and stored at `~/.config/subtrack/.key`. Alternatively, you can set `SUBSC_CLI_DB_PASSPHRASE` to derive the key from a passphrase.
+
+> ⚠️ **If you lose the key file or forget the passphrase, the database cannot be recovered.** Always back up the `.key` file or keep your passphrase in a secure location (e.g. password manager).
+
+## Can I encrypt backups?
+
+Yes. Use `subtrack backup --encrypt` to create an encrypted backup. Encrypted backups use the `.db.enc` extension and can only be restored on a machine with the same encryption key or passphrase.
+
 ## Can I use subtrack in Docker or CI?
 
 Yes. subtrack is a standard Node.js CLI tool and works in any environment with Node.js 22+. For Docker:

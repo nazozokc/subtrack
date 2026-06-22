@@ -2,8 +2,6 @@ import { input, select } from "@inquirer/prompts"
 import { consola } from "consola"
 import type { Currency, Cycle } from "./types.ts"
 
-export type { Currency, Cycle }
-
 export const CURRENCY_CHOICES: { name: string; value: Currency }[] = [
   { name: "AED (UAE Dirham)", value: "AED" },
   { name: "ARS (Argentine Peso)", value: "ARS" },

@@ -6,7 +6,7 @@ import {
 } from "node:fs"
 import { gzipSync } from "node:zlib"
 import { encryptBuffer, decryptBuffer, isEncrypted } from "./crypto.ts"
-import path, { join } from "node:path"
+import path from "node:path"
 import type { Currency, Cycle, SharedArgs, AddSharedArgs, AddFlags, BackupFileInfo } from "./types.ts"
 import {
   getSubscriptions,
@@ -29,6 +29,8 @@ import {
   saveDb,
   writeBackupHash,
   verifyBackupHash,
+  getLlmUsageTotal,
+  getLlmUsageTotalByProvider,
 } from "./db.ts"
 import {
   formatPrice,
@@ -36,7 +38,6 @@ import {
   showApiUsage,
 } from "./display.ts"
 import { showPayment, showSummary } from "./payment.ts"
-import { getLlmUsageTotal, getLlmUsageTotalByProvider } from "./db.ts"
 import { exportCsv, exportMd, exportJson } from "./export.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import {
@@ -212,31 +213,21 @@ export async function handleTags(taglist: string[]) {
   await spreadSubscription(list)
 }
 
-export async function handleBackup(destination?: string, options: { encrypt?: boolean } = {}) {
-  // flush in-memory state to disk
-  saveDb()
-
-  // resolve destination directory
-  const dest = destination ?? getDefaultBackupDir()
-  if (!existsSync(dest)) {
-    mkdirSync(dest, { recursive: true, mode: 0o700 })
-  }
-  if (!statSync(dest).isDirectory()) {
-    consola.error(`Backup destination must be a directory: ${dest}`)
-    return
-  }
-
-  // generate timestamped filename
+/** Generate a compact timestamp string for backup filenames. */
+function getTimestamp(): string {
   const now = new Date()
-  const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`
-  const destPath = options.encrypt
-    ? join(dest, `subtrack_${ts}.db.enc`)
-    : join(dest, `subtrack_${ts}.db.gz`)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+}
 
-  // compress and write with exclusive create
+/**
+ * Compress the current DB and write to `destPath` with exclusive-create.
+ * Returns true on success, false on failure.
+ */
+function writeCompressedBackup(destPath: string, encrypt: boolean): boolean {
   const sqliteBuf = Buffer.from(getDb().export())
   const compressed = gzipSync(sqliteBuf)
-  const writeBuf = options.encrypt ? encryptBuffer(compressed) : compressed
+  const writeBuf = encrypt ? encryptBuffer(compressed) : compressed
 
   try {
     const fd = openSync(
@@ -245,18 +236,17 @@ export async function handleBackup(destination?: string, options: { encrypt?: bo
       0o600,
     )
     try {
-      writeSync(fd, writeBuf)
+      let offset = 0
+      while (offset < writeBuf.length) {
+        const written = writeSync(fd, writeBuf, offset, writeBuf.length - offset)
+        if (written <= 0) throw new Error(`writeSync wrote ${written} bytes at offset ${offset}`)
+        offset += written
+      }
     } finally {
       closeSync(fd)
     }
-    consola.success(
-      `Backup created: ${destPath}${options.encrypt ? " (encrypted)" : ""}`,
-    )
-    try {
-      writeBackupHash(destPath)
-    } catch {
-      /* hash sidecar is best-effort */
-    }
+    writeBackupHash(destPath)
+    return true
   } catch (err) {
     const nodeErr = err as NodeJS.ErrnoException
     if (nodeErr.code === "EEXIST") {
@@ -264,6 +254,45 @@ export async function handleBackup(destination?: string, options: { encrypt?: bo
     } else {
       consola.error(`Backup failed: ${nodeErr.message}`)
     }
+    return false
+  }
+}
+
+/**
+ * Create a timestamped, gzip-compressed backup of the SQLite database.
+ * Optionally encrypts the backup using AES-256-GCM.
+ * @param destination - Directory to write the backup into (default: `~/.config/subtrack/backups/`)
+ * @param options.encrypt - Encrypt the backup with the database encryption key
+ */
+export async function handleBackup(destination?: string, options: { encrypt?: boolean } = {}) {
+  // flush in-memory state to disk
+  saveDb()
+
+  // resolve destination directory
+  const dest = destination ?? getDefaultBackupDir()
+  try {
+    if (!existsSync(dest)) {
+      mkdirSync(dest, { recursive: true, mode: 0o700 })
+    }
+    if (!statSync(dest).isDirectory()) {
+      consola.error(`Backup destination must be a directory: ${dest}`)
+      return
+    }
+  } catch (err) {
+    const nodeErr = err as NodeJS.ErrnoException
+    consola.error(`Backup destination is not accessible: ${nodeErr.message}`)
+    return
+  }
+
+  const ts = getTimestamp()
+  const destPath = options.encrypt
+    ? path.join(dest, `subtrack_${ts}.db.enc`)
+    : path.join(dest, `subtrack_${ts}.db.gz`)
+
+  if (writeCompressedBackup(destPath, options.encrypt ?? false)) {
+    consola.success(
+      `Backup created: ${destPath}${options.encrypt ? " (encrypted)" : ""}`,
+    )
   }
 }
 
@@ -398,29 +427,12 @@ async function safeAutoBackup() {
   saveDb()
   const backupDir = getDefaultBackupDir()
   mkdirSync(backupDir, { recursive: true, mode: 0o700 })
-  const now = new Date()
-  const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`
-  const destPath = join(backupDir, `subtrack_${ts}_before_restore.db.gz`)
+  const ts = getTimestamp()
+  const destPath = path.join(backupDir, `subtrack_${ts}_before_restore.db.gz`)
 
-  const compressed = gzipSync(Buffer.from(getDb().export()))
-  try {
-    const fd = openSync(
-      destPath,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
-      0o600,
-    )
-    try {
-      writeSync(fd, compressed)
-    } finally {
-      closeSync(fd)
-    }
+  if (writeCompressedBackup(destPath, false)) {
     consola.info(`Auto-backup created: ${destPath}`)
-    try {
-      writeBackupHash(destPath)
-    } catch {
-      /* best-effort */
-    }
-  } catch {
+  } else {
     // auto-backup is best-effort; warn but continue
     consola.warn("Could not create auto-backup, continuing with restore")
   }
