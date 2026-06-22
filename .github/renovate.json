@@ -1,23 +1,138 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "npm:unpublishSafe"],
+  "extends": [
+    "config:recommended",
+    "npm:unpublishSafe",
+    ":pinAllExceptPeerDependencies",
+    ":disableRateLimiting",
+    "helpers:disableTypesNodeMajority"
+  ],
+  "enabledManagers": ["npm", "github-actions"],
+  "schedule": ["before 9am on monday"],
+  "timezone": "Asia/Tokyo",
   "minimumReleaseAge": "7 days",
   "rangeStrategy": "bump",
   "labels": ["dependencies"],
-  "osvVulnerabilityAlerts": true,
-  "vulnerabilityAlerts": {
-    "labels": ["security"],
-    "automerge": true
-  },
+  "assignees": ["nazozokc"],
+  "reviewers": ["nazozokc"],
+  "platformAutomerge": true,
+  "dependencyDashboard": true,
+  "dependencyDashboardOSVVulnerabilitySummary": "all",
+  "configMigration": true,
+  "branchConcurrentLimit": 5,
+  "prConcurrentLimit": 10,
+  "rebaseWhen": "conflicted",
   "lockFileMaintenance": {
     "enabled": true,
-    "automerge": true
+    "automerge": true,
+    "schedule": ["before 9am on monday"]
   },
   "packageRules": [
     {
+      "description": "Auto-merge minor and patch devDependencies",
+      "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "minor and patch dependencies",
       "automerge": true
+    },
+    {
+      "description": "Major devDependencies require dashboard approval",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Group minor/patch runtime dependency updates",
+      "matchDepTypes": ["dependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "runtime dependencies",
+      "automerge": true
+    },
+    {
+      "description": "Major runtime dependencies require dashboard approval",
+      "matchDepTypes": ["dependencies"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "runtime major updates",
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Group vitest and related packages",
+      "matchPackageNames": ["vitest"],
+      "groupName": "vitest",
+      "automerge": true
+    },
+    {
+      "description": "Group build tooling",
+      "matchPackageNames": ["tsdown", "tsx"],
+      "groupName": "build tooling",
+      "automerge": true
+    },
+    {
+      "description": "Group SvelteKit documentation dependencies",
+      "matchPackageNames": [
+        "@sveltejs/kit",
+        "@sveltejs/adapter-static",
+        "svelte",
+        "vite",
+        "mdsvex"
+      ],
+      "groupName": "docs (SvelteKit)",
+      "labels": ["dependencies", "docs"]
+    },
+    {
+      "description": "Group CLI utilities (currently: consola, picocolors, cli-table3)",
+      "matchDepTypes": ["dependencies"],
+      "matchPackageNames": ["consola", "picocolors", "cli-table3"],
+      "groupName": "CLI utilities",
+      "automerge": true
+    },
+    {
+      "description": "Group and auto-merge type definition packages",
+      "matchPackageNames": ["@types/node", "@types/sql.js"],
+      "groupName": "type definitions",
+      "automerge": true,
+      "labels": ["dependencies", "types"]
+    },
+    {
+      "description": "Group and auto-merge GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "labels": ["dependencies", "ci"],
+      "automerge": true
+    },
+    {
+      "description": "sql.js (WASM SQLite) — major updates require review",
+      "matchPackageNames": ["sql.js"],
+      "labels": ["dependencies", "database"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "gunshi (CLI framework) — major updates require review",
+      "matchPackageNames": ["gunshi"],
+      "labels": ["dependencies", "cli"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Auto-merge @inquirer/prompts minor/patch updates",
+      "matchPackageNames": ["@inquirer/prompts"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Silence engine requirement bumps",
+      "matchDepTypes": ["engines"],
+      "enabled": false
+    },
+    {
+      "description": "Auto-approve typescript major updates if CI passes",
+      "matchPackageNames": ["typescript"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
     }
-  ]
+  ],
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "automerge": true,
+    "minimumReleaseAge": null
+  },
+  "osvVulnerabilityAlerts": true
 }
