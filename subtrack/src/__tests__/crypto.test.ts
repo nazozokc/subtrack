@@ -22,7 +22,7 @@ afterAll(() => {
 })
 
 test("encryptBuffer and decryptBuffer round-trip", async () => {
-  const { encryptBuffer, decryptBuffer } = await import("./crypto.ts")
+  const { encryptBuffer, decryptBuffer } = await import("../crypto.ts")
   const original = Buffer.from("Hello, subtrack! This is sensitive data.")
   const encrypted = encryptBuffer(original)
   expect(encrypted).not.toEqual(original)
@@ -33,7 +33,7 @@ test("encryptBuffer and decryptBuffer round-trip", async () => {
 })
 
 test("encryptBuffer produces different output each time (random IV)", async () => {
-  const { encryptBuffer, decryptBuffer } = await import("./crypto.ts")
+  const { encryptBuffer, decryptBuffer } = await import("../crypto.ts")
   const original = Buffer.from("same data")
   const a = encryptBuffer(original)
   const b = encryptBuffer(original)
@@ -44,27 +44,27 @@ test("encryptBuffer produces different output each time (random IV)", async () =
 })
 
 test("isEncrypted returns true for encrypted data", async () => {
-  const { encryptBuffer, isEncrypted } = await import("./crypto.ts")
+  const { encryptBuffer, isEncrypted } = await import("../crypto.ts")
   const data = Buffer.from("test data")
   const encrypted = encryptBuffer(data)
   expect(isEncrypted(encrypted)).toBe(true)
 })
 
 test("isEncrypted returns false for SQLite magic header", async () => {
-  const { isEncrypted } = await import("./crypto.ts")
+  const { isEncrypted } = await import("../crypto.ts")
   const sqliteBuf = Buffer.from("SQLite format 3\x00")
   const padded = Buffer.concat([sqliteBuf, Buffer.alloc(100)])
   expect(isEncrypted(padded)).toBe(false)
 })
 
 test("isEncrypted returns false for short buffers", async () => {
-  const { isEncrypted } = await import("./crypto.ts")
+  const { isEncrypted } = await import("../crypto.ts")
   expect(isEncrypted(Buffer.alloc(10))).toBe(false)
   expect(isEncrypted(Buffer.alloc(0))).toBe(false)
 })
 
 test("hasEncryptionKey returns true after key creation", async () => {
-  const { encryptBuffer, hasEncryptionKey } = await import("./crypto.ts")
+  const { encryptBuffer, hasEncryptionKey } = await import("../crypto.ts")
   encryptBuffer(Buffer.from("trigger key creation"))
   expect(hasEncryptionKey()).toBe(true)
 })
@@ -73,7 +73,7 @@ test("key file is created with restricted permissions (0o600)", async () => {
   // Windows does not support Unix permission bits via chmod
   if (process.platform === "win32") return
 
-  const { encryptBuffer } = await import("./crypto.ts")
+  const { encryptBuffer } = await import("../crypto.ts")
   encryptBuffer(Buffer.from("perm test"))
 
   const keyPath = join(tmpDir, ".key")
@@ -90,7 +90,7 @@ test("hasEncryptionKey returns true with SUBSC_CLI_DB_PASSPHRASE", async () => {
   try {
     // Need to use a clean import to pick up the env var
     // Since modules are cached, re-use existing module
-    const { hasEncryptionKey } = await import("./crypto.ts")
+    const { hasEncryptionKey } = await import("../crypto.ts")
     expect(hasEncryptionKey()).toBe(true)
   } finally {
     if (origPass !== undefined) {

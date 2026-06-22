@@ -6,7 +6,7 @@
 <h1>subtrack</h1>
 </div>
 
-[![Socket Badge](https://badge.socket.dev/npm/package/subtrack/4.0.3)](https://badge.socket.dev/npm/package/subtrack/4.0.3)
+[![Socket Badge](https://badge.socket.dev/npm/package/subtrack)](https://socket.dev/npm/package/subtrack)
 
 <p align="center">
   <img src="images/subtrack-demo.png" alt="subtrack demo" width="700"/>

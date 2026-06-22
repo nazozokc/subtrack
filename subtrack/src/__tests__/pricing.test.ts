@@ -1,5 +1,5 @@
 import { test, expect, vi, describe } from "vitest"
-import type { PricingCache, ModelPricingEntry } from "./pricing.ts"
+import type { PricingCache, ModelPricingEntry } from "../pricing.ts"
 
 const SAMPLE_CACHE: PricingCache = {
   "gpt-4o": {
@@ -31,14 +31,14 @@ const SAMPLE_CACHE: PricingCache = {
 // ── matchModel ────────────────────────────────────────────
 
 test("matchModel finds exact match", async () => {
-  const { matchModel } = await import("./pricing.ts")
+  const { matchModel } = await import("../pricing.ts")
   const result = matchModel(SAMPLE_CACHE, "openai", "gpt-4o")
   expect(result).not.toBeNull()
   expect(result?.litellm_provider).toBe("openai")
 })
 
 test("matchModel returns null for non-existent model", async () => {
-  const { matchModel } = await import("./pricing.ts")
+  const { matchModel } = await import("../pricing.ts")
   const result = matchModel(SAMPLE_CACHE, "openai", "nonexistent-model")
   expect(result).toBeNull()
 })
@@ -51,26 +51,26 @@ test("matchModel finds model by provider prefix", async () => {
       litellm_provider: "openai",
     },
   }
-  const { matchModel } = await import("./pricing.ts")
+  const { matchModel } = await import("../pricing.ts")
   const result = matchModel(cache, "openai", "gpt-4o")
   expect(result).not.toBeNull()
 })
 
 test("matchModel finds model by substring", async () => {
-  const { matchModel } = await import("./pricing.ts")
+  const { matchModel } = await import("../pricing.ts")
   const result = matchModel(SAMPLE_CACHE, "openai", "gpt-4o-mini")
   expect(result).not.toBeNull()
   expect(result?.input_cost_per_token).toBe(1.5e-7)
 })
 
 test("matchModel strips version suffixes", async () => {
-  const { matchModel } = await import("./pricing.ts")
+  const { matchModel } = await import("../pricing.ts")
   const result = matchModel(SAMPLE_CACHE, "openai", "gpt-4o-v1")
   expect(result).not.toBeNull()
 })
 
 test("matchModel is case-insensitive", async () => {
-  const { matchModel } = await import("./pricing.ts")
+  const { matchModel } = await import("../pricing.ts")
   const result = matchModel(SAMPLE_CACHE, "openai", "GPT-4O")
   expect(result).not.toBeNull()
   expect(result?.litellm_provider).toBe("openai")
@@ -79,7 +79,7 @@ test("matchModel is case-insensitive", async () => {
 // ── calculateCostCents ────────────────────────────────────
 
 test("calculateCostCents returns correct cost", async () => {
-  const { calculateCostCents } = await import("./pricing.ts")
+  const { calculateCostCents } = await import("../pricing.ts")
   const pricing: ModelPricingEntry = {
     input_cost_per_token: 2.5e-6,
     output_cost_per_token: 1e-5,
@@ -92,7 +92,7 @@ test("calculateCostCents returns correct cost", async () => {
 })
 
 test("calculateCostCents handles zero tokens", async () => {
-  const { calculateCostCents } = await import("./pricing.ts")
+  const { calculateCostCents } = await import("../pricing.ts")
   const pricing: ModelPricingEntry = {
     input_cost_per_token: 2.5e-6,
     output_cost_per_token: 1e-5,
@@ -101,13 +101,13 @@ test("calculateCostCents handles zero tokens", async () => {
 })
 
 test("calculateCostCents handles missing pricing fields", async () => {
-  const { calculateCostCents } = await import("./pricing.ts")
+  const { calculateCostCents } = await import("../pricing.ts")
   const pricing: ModelPricingEntry = {}
   expect(calculateCostCents(pricing, 100, 50)).toBe(0)
 })
 
 test("calculateCostCents includes reasoning tokens cost", async () => {
-  const { calculateCostCents } = await import("./pricing.ts")
+  const { calculateCostCents } = await import("../pricing.ts")
   const pricing: ModelPricingEntry = {
     input_cost_per_token: 3e-6,
     output_cost_per_token: 1.5e-5,
@@ -128,7 +128,7 @@ test("ensurePricingCache returns null when fetch fails and no cache", async () =
   globalThis.fetch = async () => { throw new Error("Network error") }
 
   // Reset module state by importing fresh
-  const pricing = await import("./pricing.ts")
+  const pricing = await import("../pricing.ts")
 
   // This should fail since there's no cache and fetch fails
   // But the implementation has caching logic, so this may need env setup
@@ -153,7 +153,7 @@ test("ensurePricingCache parses GitHub JSON correctly", async () => {
       headers: { "Content-Type": "application/json" },
     })
 
-  const pricing = await import("./pricing.ts")
+  const pricing = await import("../pricing.ts")
   // This call will try to fetch, and we can't easily reset the cache state
   // Just verifying the function doesn't throw
 

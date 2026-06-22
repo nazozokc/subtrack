@@ -37,7 +37,7 @@ beforeAll(async () => {
     description TEXT
   )`)
 
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.__setDb(testDb)
 })
 
@@ -53,12 +53,12 @@ afterAll(() => {
 })
 
 test("getSubscriptions returns empty when no data exists", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   expect(db.getSubscriptions()).toEqual([])
 })
 
 test("writeSubscription creates a subscription with tags", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "Netflix",
@@ -80,7 +80,7 @@ test("writeSubscription creates a subscription with tags", async () => {
 })
 
 test("writeSubscription handles empty tags gracefully", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "Dropbox",
@@ -96,7 +96,7 @@ test("writeSubscription handles empty tags gracefully", async () => {
 })
 
 test("writeSubscription supports USD currency", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "GitHub Copilot",
@@ -111,7 +111,7 @@ test("writeSubscription supports USD currency", async () => {
 })
 
 test("writeSubscription supports yearly cycle", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "iCloud+",
@@ -126,7 +126,7 @@ test("writeSubscription supports yearly cycle", async () => {
 })
 
 test("getSubscriptions returns all subscriptions ordered by id", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "A",
@@ -158,7 +158,7 @@ test("getSubscriptions returns all subscriptions ordered by id", async () => {
 })
 
 test("deleteSubscription removes a subscription", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "ToDelete",
@@ -176,7 +176,7 @@ test("deleteSubscription removes a subscription", async () => {
 })
 
 test("deleteSubscription cascades to subscription_tags", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "WithTags",
@@ -210,12 +210,12 @@ test("deleteSubscription cascades to subscription_tags", async () => {
 })
 
 test("deleteSubscription does not throw when id does not exist", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   expect(() => db.deleteSubscription(99999)).not.toThrow()
 })
 
 test("tagsSubscription filters by single tag", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "Netflix",
@@ -238,7 +238,7 @@ test("tagsSubscription filters by single tag", async () => {
 })
 
 test("tagsSubscription filters by multiple tags with AND logic", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "Netflix",
@@ -270,7 +270,7 @@ test("tagsSubscription filters by multiple tags with AND logic", async () => {
 })
 
 test("tagsSubscription returns only subscriptions matching ALL specified tags", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "Netflix",
@@ -293,7 +293,7 @@ test("tagsSubscription returns only subscriptions matching ALL specified tags", 
 })
 
 test("tagsSubscription returns empty for non-matching tag", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "Netflix",
@@ -307,13 +307,13 @@ test("tagsSubscription returns empty for non-matching tag", async () => {
 })
 
 test("tagsSubscription returns empty array for empty input", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   expect(db.tagsSubscription([])).toEqual([])
   expect(db.tagsSubscription("")).toEqual([])
 })
 
 test("works with multiple subscriptions sharing the same tag", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "S1",
@@ -335,53 +335,53 @@ test("works with multiple subscriptions sharing the same tag", async () => {
 })
 
 test("periodFactor returns correct factor for monthly to monthly", async () => {
-  const { periodFactor } = await import("./types.ts")
+  const { periodFactor } = await import("../types.ts")
   expect(periodFactor("monthly", "monthly")).toBe(1)
 })
 
 test("periodFactor returns correct factor for yearly to monthly", async () => {
-  const { periodFactor } = await import("./types.ts")
+  const { periodFactor } = await import("../types.ts")
   expect(periodFactor("yearly", "monthly")).toBe(1 / 12)
 })
 
 test("periodFactor returns correct factor for monthly to yearly", async () => {
-  const { periodFactor } = await import("./types.ts")
+  const { periodFactor } = await import("../types.ts")
   expect(periodFactor("monthly", "yearly")).toBe(12)
 })
 
 test("periodFactor returns correct factor for weekly to monthly", async () => {
-  const { periodFactor } = await import("./types.ts")
+  const { periodFactor } = await import("../types.ts")
   expect(periodFactor("weekly", "monthly")).toBe(52 / 12)
 })
 
 test("periodFactor returns correct factor for bi-weekly to monthly", async () => {
-  const { periodFactor } = await import("./types.ts")
+  const { periodFactor } = await import("../types.ts")
   expect(periodFactor("bi-weekly", "monthly")).toBe(26 / 12)
 })
 
 test("periodFactor returns correct factor for quarterly to monthly", async () => {
-  const { periodFactor } = await import("./types.ts")
+  const { periodFactor } = await import("../types.ts")
   expect(periodFactor("quarterly", "monthly")).toBe(4 / 12)
 })
 
 test("periodFactor returns correct factor for semi-annual to monthly", async () => {
-  const { periodFactor } = await import("./types.ts")
+  const { periodFactor } = await import("../types.ts")
   expect(periodFactor("semi-annual", "monthly")).toBe(2 / 12)
 })
 
 test("periodFactor defaults to monthly when to is omitted", async () => {
-  const { periodFactor } = await import("./types.ts")
+  const { periodFactor } = await import("../types.ts")
   expect(periodFactor("yearly")).toBe(1 / 12)
   expect(periodFactor("monthly")).toBe(1)
 })
 
 test("periodFactor returns correct factor for quarterly to yearly", async () => {
-  const { periodFactor } = await import("./types.ts")
+  const { periodFactor } = await import("../types.ts")
   expect(periodFactor("quarterly", "yearly")).toBe(4)
 })
 
 test("periodFactor handles all cycle-to-cycle combinations without throwing", async () => {
-  const { periodFactor, OCCURRENCES_PER_YEAR } = await import("./types.ts")
+  const { periodFactor, OCCURRENCES_PER_YEAR } = await import("../types.ts")
   const cycles = Object.keys(OCCURRENCES_PER_YEAR) as Array<keyof typeof OCCURRENCES_PER_YEAR>
   for (const from of cycles) {
     for (const to of cycles) {
@@ -394,7 +394,7 @@ test("periodFactor handles all cycle-to-cycle combinations without throwing", as
 })
 
 test("getSubscriptions returns correct data types", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "Test",
@@ -414,7 +414,7 @@ test("getSubscriptions returns correct data types", async () => {
 })
 
 test("does not share tags between different subscriptions", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   db.writeSubscription({
     name: "Netflix",
@@ -441,7 +441,7 @@ test("does not share tags between different subscriptions", async () => {
 // ── sort ──────────────────────────────────────────────────
 
 test("getSubscriptions sorts by name ascending", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "C", price: 100, currency: "USD", cycle: "monthly", tags: [] })
   db.writeSubscription({ name: "A", price: 200, currency: "USD", cycle: "monthly", tags: [] })
   db.writeSubscription({ name: "B", price: 300, currency: "USD", cycle: "monthly", tags: [] })
@@ -453,7 +453,7 @@ test("getSubscriptions sorts by name ascending", async () => {
 })
 
 test("getSubscriptions sorts by name descending", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "A", price: 100, currency: "USD", cycle: "monthly", tags: [] })
   db.writeSubscription({ name: "B", price: 200, currency: "USD", cycle: "monthly", tags: [] })
   db.writeSubscription({ name: "C", price: 300, currency: "USD", cycle: "monthly", tags: [] })
@@ -465,7 +465,7 @@ test("getSubscriptions sorts by name descending", async () => {
 })
 
 test("getSubscriptions sorts by price ascending", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "A", price: 300, currency: "USD", cycle: "monthly", tags: [] })
   db.writeSubscription({ name: "B", price: 100, currency: "USD", cycle: "monthly", tags: [] })
   db.writeSubscription({ name: "C", price: 200, currency: "USD", cycle: "monthly", tags: [] })
@@ -477,7 +477,7 @@ test("getSubscriptions sorts by price ascending", async () => {
 })
 
 test("getSubscriptions falls back to id order for invalid sort field", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "B", price: 100, currency: "USD", cycle: "monthly", tags: [] })
   db.writeSubscription({ name: "A", price: 200, currency: "USD", cycle: "monthly", tags: [] })
 
@@ -489,7 +489,7 @@ test("getSubscriptions falls back to id order for invalid sort field", async () 
 // ── getSubscription ───────────────────────────────────────
 
 test("getSubscription returns a single subscription by id", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "Target", price: 500, currency: "JPY", cycle: "monthly", tags: ["test"] })
 
   const [all] = db.getSubscriptions()
@@ -500,14 +500,14 @@ test("getSubscription returns a single subscription by id", async () => {
 })
 
 test("getSubscription returns undefined for non-existent id", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   expect(db.getSubscription(99999)).toBeUndefined()
 })
 
 // ── updateSubscription ────────────────────────────────────
 
 test("updateSubscription updates a single field", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "Old Name", price: 1000, currency: "JPY", cycle: "monthly", tags: [] })
 
   const [sub] = db.getSubscriptions()
@@ -519,7 +519,7 @@ test("updateSubscription updates a single field", async () => {
 })
 
 test("updateSubscription updates all fields", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "Old", price: 1000, currency: "JPY", cycle: "monthly", tags: ["old"] })
 
   const [sub] = db.getSubscriptions()
@@ -540,7 +540,7 @@ test("updateSubscription updates all fields", async () => {
 })
 
 test("updateSubscription replaces tags when specified", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "Test", price: 500, currency: "JPY", cycle: "monthly", tags: ["old1", "old2"] })
 
   const [sub] = db.getSubscriptions()
@@ -551,7 +551,7 @@ test("updateSubscription replaces tags when specified", async () => {
 })
 
 test("updateSubscription does not clear tags when not specified", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "Test", price: 500, currency: "JPY", cycle: "monthly", tags: ["keep"] })
 
   const [sub] = db.getSubscriptions()
@@ -564,7 +564,7 @@ test("updateSubscription does not clear tags when not specified", async () => {
 // ── getTagsWithCount ──────────────────────────────────────
 
 test("getTagsWithCount returns tag usage counts", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: ["shared"] })
   db.writeSubscription({ name: "S2", price: 200, currency: "JPY", cycle: "monthly", tags: ["shared", "unique"] })
 
@@ -576,14 +576,14 @@ test("getTagsWithCount returns tag usage counts", async () => {
 })
 
 test("getTagsWithCount returns empty array when no tags exist", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   expect(db.getTagsWithCount()).toEqual([])
 })
 
 // ── renameTag ─────────────────────────────────────────────
 
 test("renameTag renames a tag", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: ["old"] })
 
   const result = db.renameTag("old", "new")
@@ -595,7 +595,7 @@ test("renameTag renames a tag", async () => {
 })
 
 test("renameTag merges when target name already exists", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: ["a"] })
   db.writeSubscription({ name: "S2", price: 200, currency: "JPY", cycle: "monthly", tags: ["b"] })
 
@@ -607,14 +607,14 @@ test("renameTag merges when target name already exists", async () => {
 })
 
 test("renameTag returns false for non-existent tag", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   expect(db.renameTag("nonexistent", "new")).toBe(false)
 })
 
 // ── deleteTag ─────────────────────────────────────────────
 
 test("deleteTag removes a tag", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: ["remove"] })
 
   const result = db.deleteTag("remove")
@@ -623,14 +623,14 @@ test("deleteTag removes a tag", async () => {
 })
 
 test("deleteTag returns false for non-existent tag", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   expect(db.deleteTag("nonexistent")).toBe(false)
 })
 
 // ── pruneTags ─────────────────────────────────────────────
 
 test("pruneTags removes orphaned tags", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   // Create tags via subscription
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: ["keep"] })
   // Orphan tag by deleting subscription (CASCADE removes subscription_tags)
@@ -649,7 +649,7 @@ test("pruneTags removes orphaned tags", async () => {
 })
 
 test("pruneTags does not remove tags still in use", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: ["active"] })
 
   const count = db.pruneTags()
@@ -663,7 +663,7 @@ test("pruneTags does not remove tags still in use", async () => {
 // ── LLM Usage ─────────────────────────────────────────────
 
 test("addLlmUsage creates a usage entry", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.addLlmUsage({
     provider: "openai",
     model: "gpt-4o",
@@ -688,7 +688,7 @@ test("addLlmUsage creates a usage entry", async () => {
 })
 
 test("addLlmUsage allows null description", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.addLlmUsage({
     provider: "anthropic",
     model: "claude-3-opus-20240229",
@@ -705,7 +705,7 @@ test("addLlmUsage allows null description", async () => {
 })
 
 test("getLlmUsage filters by provider", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 100, output_tokens: 50, cost: 0.1, date: "2026-06-01", description: null })
   db.addLlmUsage({ provider: "anthropic", model: "claude-3", input_tokens: 200, output_tokens: 100, cost: 0.2, date: "2026-06-02", description: null })
 
@@ -715,7 +715,7 @@ test("getLlmUsage filters by provider", async () => {
 })
 
 test("getLlmUsage filters by date range", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 100, output_tokens: 50, cost: 0.1, date: "2026-06-01", description: null })
   db.addLlmUsage({ provider: "openai", model: "gpt-4o-mini", input_tokens: 200, output_tokens: 100, cost: 0.2, date: "2026-06-15", description: null })
 
@@ -725,7 +725,7 @@ test("getLlmUsage filters by date range", async () => {
 })
 
 test("getLlmUsage returns entries ordered by date desc", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.addLlmUsage({ provider: "openai", model: "a", input_tokens: 1, output_tokens: 1, cost: 0.01, date: "2026-06-01", description: null })
   db.addLlmUsage({ provider: "openai", model: "b", input_tokens: 1, output_tokens: 1, cost: 0.01, date: "2026-06-15", description: null })
   db.addLlmUsage({ provider: "openai", model: "c", input_tokens: 1, output_tokens: 1, cost: 0.01, date: "2026-06-10", description: null })
@@ -737,7 +737,7 @@ test("getLlmUsage returns entries ordered by date desc", async () => {
 })
 
 test("deleteLlmUsage removes an entry", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 100, output_tokens: 50, cost: 0.5, date: "2026-06-19", description: null })
 
   const before = db.getLlmUsage()
@@ -749,12 +749,12 @@ test("deleteLlmUsage removes an entry", async () => {
 })
 
 test("deleteLlmUsage returns false for non-existent id", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   expect(db.deleteLlmUsage(99999)).toBe(false)
 })
 
 test("getLlmUsageTotal sums cost in date range", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 100, output_tokens: 50, cost: 1.0, date: "2026-06-01", description: null })
   db.addLlmUsage({ provider: "openai", model: "gpt-4o-mini", input_tokens: 200, output_tokens: 100, cost: 2.0, date: "2026-06-15", description: null })
   db.addLlmUsage({ provider: "anthropic", model: "claude-3", input_tokens: 300, output_tokens: 150, cost: 3.0, date: "2026-07-01", description: null })
@@ -764,7 +764,7 @@ test("getLlmUsageTotal sums cost in date range", async () => {
 })
 
 test("getLlmUsageTotalByProvider groups cost by provider", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 100, output_tokens: 50, cost: 1.0, date: "2026-06-01", description: null })
   db.addLlmUsage({ provider: "openai", model: "gpt-4o-mini", input_tokens: 200, output_tokens: 100, cost: 2.0, date: "2026-06-15", description: null })
   db.addLlmUsage({ provider: "anthropic", model: "claude-3", input_tokens: 300, output_tokens: 150, cost: 3.0, date: "2026-06-10", description: null })
@@ -780,14 +780,14 @@ test("getLlmUsageTotalByProvider groups cost by provider", async () => {
 // ── Backup / Restore ─────────────────────────────────────
 
 test("getDefaultBackupDir returns path under getDbDir", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   const backupDir = db.getDefaultBackupDir()
   expect(backupDir).toContain(db.getDbDir())
   expect(backupDir).toContain("backups")
 })
 
 test("getBackupFiles returns empty for non-existent directory", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   const files = db.getBackupFiles("/nonexistent/path/subtrack-test-backups")
   expect(files).toEqual([])
 })
@@ -803,7 +803,7 @@ test("getBackupFiles finds .db.gz files", async () => {
     writeFileSync(join(tmpDir, "subtrack_20260619_100000.db"), "fake-db-content")
     writeFileSync(join(tmpDir, "subtrack.db"), "should-be-excluded")
 
-    const db = await import("./db.ts")
+    const db = await import("../db.ts")
     const files = db.getBackupFiles(tmpDir)
 
     expect(files).toHaveLength(2)
@@ -839,7 +839,7 @@ test("restoreDb replaces in-memory database", async () => {
   // Current DB has different data
   testDb.run("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('OldService', 500, 'JPY', 'monthly')")
 
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
 
   // Verify current state
   const before = db.getSubscriptions()
@@ -875,7 +875,7 @@ test("restoreDb throws for invalid schema", async () => {
   writeFileSync(badPath, Buffer.from(badDb.export()))
   badDb.close()
 
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   expect(() => db.restoreDb(badPath)).toThrow("missing 'subscriptions' table")
 
   if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
@@ -884,7 +884,7 @@ test("restoreDb throws for invalid schema", async () => {
 // ── Backup hash ──────────────────────────────────────────
 
 test("getBackupHashPath returns path with .sha256 suffix", async () => {
-  const db = await import("./db.ts")
+  const db = await import("../db.ts")
   expect(db.getBackupHashPath("/backups/test.db")).toBe("/backups/test.db.sha256")
   expect(db.getBackupHashPath("/backups/test.db.gz")).toBe("/backups/test.db.gz.sha256")
 })
@@ -899,7 +899,7 @@ test("writeBackupHash and verifyBackupHash round-trip", async () => {
     const backupPath = join(tmpDir, "test_backup.db")
     writeFileSync(backupPath, "fake database content")
 
-    const db = await import("./db.ts")
+    const db = await import("../db.ts")
     db.writeBackupHash(backupPath)
 
     // Verify sidecar file exists
@@ -931,7 +931,7 @@ test("verifyBackupHash returns true when no sidecar file (backward compat)", asy
     const backupPath = join(tmpDir, "legacy_backup.db")
     writeFileSync(backupPath, "some content")
 
-    const db = await import("./db.ts")
+    const db = await import("../db.ts")
     // No .sha256 file — should return true (skip verification)
     expect(db.verifyBackupHash(backupPath)).toBe(true)
   } finally {

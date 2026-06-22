@@ -2,5 +2,8 @@ packages:
   - "subtrack"
   - "docs"
 
+# Only esbuild is permitted to run install scripts.
+# All other dependencies (including transitive) are blocked from running
+# postinstall/preinstall scripts as a supply chain security measure.
 allowBuilds:
   esbuild: true
