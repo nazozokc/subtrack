@@ -4,6 +4,8 @@ import { join } from "node:path"
 import { consola } from "consola"
 import initSqlJs from "sql.js"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
+import type { Scanner, ScanResult } from "./scanner-types.ts"
+import { dateToStartOfDayMs, dateToEndOfDayMs } from "./date-utils.ts"
 
 const _SQL = await initSqlJs()
 
@@ -46,10 +48,6 @@ function parseMessage(
   const cost = (data.cost as number) ?? 0
   const model = (data.modelID as string) ?? "unknown"
   const provider = (data.providerID as string) ?? (data.provider as string) ?? "unknown"
-  const timestamp = (data.time as Record<string, unknown>)?.created as number | undefined
-  const date = timestamp
-    ? new Date(Math.floor(timestamp / 1000) * 1000).toISOString().split("T")[0]
-    : new Date().toISOString().split("T")[0]
 
   // OpenCode stores cost in cents (same unit as subtrack)
   return {
@@ -58,30 +56,37 @@ function parseMessage(
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     cost,
-    date,
+    date: extractDate(data),
     description: null,
     generation_id: msgId,
   }
 }
 
-export type ScanResult = {
-  entries: AddLlmUsageFromLogArgs[]
+/**
+ * Extract date from OpenCode message data.
+ */
+function extractDate(data: Record<string, unknown>): string {
+  const timestamp = (data.time as Record<string, unknown>)?.created as number | undefined
+  if (timestamp) {
+    return new Date(Math.floor(timestamp / 1000) * 1000).toISOString().split("T")[0]
+  }
+  return new Date().toISOString().split("T")[0]
 }
 
 /**
  * Scan the OpenCode database and extract LLM usage entries.
- * Returns an empty result if the DB is not found or cannot be read.
+ * Optionally filter by date range (YYYY-MM-DD).
  */
-export function scanOpenCodeDb(): ScanResult {
+export function scanOpenCodeDb(from?: string, to?: string): ScanResult {
   const dbPath = findOpenCodeDb()
   if (!dbPath) {
     consola.info("OpenCode DB not found — skip")
-    return { entries: [] }
+    return { source: "opencode", entries: [] }
   }
 
   if (!existsSync(dbPath)) {
     consola.info("OpenCode DB not found — skip")
-    return { entries: [] }
+    return { source: "opencode", entries: [] }
   }
 
   consola.info(`Reading OpenCode DB: ${dbPath}`)
@@ -91,7 +96,7 @@ export function scanOpenCodeDb(): ScanResult {
     data = readFileSync(dbPath)
   } catch (err) {
     consola.warn(`Cannot read OpenCode DB: ${String(err)}`)
-    return { entries: [] }
+    return { source: "opencode", entries: [] }
   }
 
   let db: ReturnType<typeof _SQL.Database> | null = null
@@ -100,13 +105,20 @@ export function scanOpenCodeDb(): ScanResult {
   try {
     db = new _SQL.Database(data)
 
-    const results = db.exec(
-      `SELECT id, data FROM message WHERE json_extract(data, '$.tokens.input') IS NOT NULL`,
-    )
+    let sql = `SELECT id, data FROM message WHERE json_extract(data, '$.tokens.input') IS NOT NULL`
+
+    if (from) {
+      sql += ` AND json_extract(data, '$.time.created') >= ${dateToStartOfDayMs(from)}`
+    }
+    if (to) {
+      sql += ` AND json_extract(data, '$.time.created') <= ${dateToEndOfDayMs(to)}`
+    }
+
+    const results = db.exec(sql)
 
     if (results.length === 0) {
       consola.info("No token usage data found in OpenCode DB")
-      return { entries: [] }
+      return { source: "opencode", entries: [] }
     }
 
     const { columns, values } = results[0]
@@ -122,11 +134,23 @@ export function scanOpenCodeDb(): ScanResult {
     }
   } catch (err) {
     consola.warn(`Error scanning OpenCode DB: ${String(err)}`)
-    return { entries: [] }
+    return { source: "opencode", entries: [] }
   } finally {
     if (db) db.close()
   }
 
   consola.info(`Found ${entries.length} usage entr${entries.length === 1 ? "y" : "ies"} in OpenCode DB`)
-  return { entries }
+  return { source: "opencode", entries }
+}
+
+/**
+ * Create a Scanner instance for OpenCode.
+ */
+export function createOpenCodeScanner(): Scanner {
+  return {
+    name: "opencode",
+    scan(from?: string, to?: string): ScanResult {
+      return scanOpenCodeDb(from, to)
+    },
+  }
 }

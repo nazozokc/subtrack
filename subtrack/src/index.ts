@@ -26,7 +26,7 @@ import {
   handleUsageRefresh,
 } from "./usage.ts"
 import { handleImport } from "./import-csv.ts"
-import type { Cycle } from "./types.ts"
+import type { Cycle, UsageRefreshFlags } from "./types.ts"
 
 // ── Command definitions ──────────────────────────────────
 
@@ -259,8 +259,13 @@ const usageImportCommand = define({
 
 const usageRefreshCommand = define({
   name: "refresh",
-  description: "Auto-scan known sources (OpenCode DB, etc.) and import usage data",
-  run: () => handleUsageRefresh(),
+  description: "Auto-scan known sources (OpenCode DB, Claude Code, Codex CLI, Cursor, Copilot, Windsurf) and import usage data — defaults to current month",
+  args: {
+    from: { type: "string", description: "Start date (YYYY-MM-DD)" },
+    to: { type: "string", description: "End date (YYYY-MM-DD)" },
+    all: { type: "boolean", description: "Scan all historical data (ignore date range)" },
+  },
+  run: (ctx) => handleUsageRefresh(ctx.values as UsageRefreshFlags),
 })
 
 const usageCommand = define({

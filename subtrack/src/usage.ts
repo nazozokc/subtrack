@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs"
 import { input, select, confirm, checkbox, search } from "@inquirer/prompts"
 import { consola } from "consola"
-import type { UsageAddFlags, UsageImportFlags, LlmUsageEntry } from "./types.ts"
+import type { UsageAddFlags, UsageImportFlags, UsageRefreshFlags, LlmUsageEntry } from "./types.ts"
 import { addLlmUsage, addLlmUsageFromLog, batchAddLlmUsageFromLog, getLlmUsage, deleteLlmUsage } from "./db.ts"
-import { scanOpenCodeDb } from "./opencode-scanner.ts"
+import { runAllScanners } from "./scanner.ts"
+import { currentMonthStart, today } from "./date-utils.ts"
 import {
   LLM_PROVIDER_CHOICES,
   validateTokens,
@@ -543,29 +544,27 @@ export async function handleUsageImport(flags: UsageImportFlags) {
 
 // ── Refresh (auto-scan known sources) ──────────────────────
 
-export async function handleUsageRefresh() {
-  // 1. Scan OpenCode DB
-  const opencode = scanOpenCodeDb()
+export async function handleUsageRefresh(flags: UsageRefreshFlags = {}) {
+  const from = flags.all ? undefined : (flags.from ?? currentMonthStart())
+  const to = flags.all ? undefined : (flags.to ?? today())
 
-  // 2. (future) scan other sources
+  const result = runAllScanners(from, to)
 
-  // Combine all entries
-  const allEntries = [...opencode.entries]
-
-  if (allEntries.length === 0) {
+  if (result.entries.length === 0) {
     consola.info("No new usage entries found")
     return
   }
 
-  // 3. Batch import (dedup by generation_id)
-  const { added, skipped } = batchAddLlmUsageFromLog(allEntries)
+  const { added, skipped } = batchAddLlmUsageFromLog(result.entries)
 
   if (added === 0 && skipped === 0) {
     consola.info("No new usage entries found")
   } else if (added > 0) {
+    const periodInfo = from && to ? ` (${from} to ${to})` : ""
     consola.success(
       `Refreshed: ${added} entr${added === 1 ? "y" : "ies"} added` +
-      (skipped > 0 ? `, ${skipped} duplicate${skipped === 1 ? "" : "s"} skipped` : ""),
+      (skipped > 0 ? `, ${skipped} duplicate${skipped === 1 ? "" : "s"} skipped` : "") +
+      periodInfo,
     )
   } else {
     consola.info(`All ${skipped} entr${skipped === 1 ? "y" : "ies"} already imported (no new data)`)

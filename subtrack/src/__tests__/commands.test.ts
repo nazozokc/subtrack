@@ -59,9 +59,11 @@ vi.mock("../pricing.ts", async (importOriginal) => {
   }
 })
 
-// Mock opencode-scanner for handleUsageRefresh tests
-vi.mock("../opencode-scanner.ts", () => ({
-  scanOpenCodeDb: vi.fn().mockReturnValue({ entries: [] }),
+// Mock scanner system for handleUsageRefresh tests
+vi.mock("../scanner.ts", () => ({
+  runAllScanners: vi.fn().mockReturnValue({ source: "combined", entries: [] }),
+  registerScanner: vi.fn(),
+  getRegisteredScanners: vi.fn().mockReturnValue([]),
 }))
 
 // Mock @inquirer/prompts to avoid interactive prompts
@@ -1171,9 +1173,9 @@ test("handleUsageRefresh shows info when no entries found", async () => {
 })
 
 test("handleUsageRefresh imports entries from scanner and deduplicates", async () => {
-  // Re-mock scanner to return test data
-  const { scanOpenCodeDb } = await import("../opencode-scanner.ts")
-  vi.mocked(scanOpenCodeDb).mockReturnValue({
+  const { runAllScanners } = await import("../scanner.ts")
+  vi.mocked(runAllScanners).mockReturnValue({
+    source: "combined",
     entries: [
       {
         provider: "opencode",
@@ -1222,8 +1224,9 @@ test("handleUsageRefresh skips already imported entries", async () => {
     generation_id: "msg_aaa",
   })
 
-  const { scanOpenCodeDb } = await import("../opencode-scanner.ts")
-  vi.mocked(scanOpenCodeDb).mockReturnValue({
+  const { runAllScanners } = await import("../scanner.ts")
+  vi.mocked(runAllScanners).mockReturnValue({
+    source: "combined",
     entries: [
       {
         provider: "opencode",

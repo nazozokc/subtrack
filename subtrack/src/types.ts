@@ -82,6 +82,12 @@ export type AddFlags = {
   tags?: string
 }
 
+export type UsageRefreshFlags = {
+  from?: string
+  to?: string
+  all?: boolean
+}
+
 export type BackupFileInfo = {
   name: string
   path: string
