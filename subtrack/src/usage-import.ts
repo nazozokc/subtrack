@@ -254,16 +254,16 @@ export async function handleUsageImport(flags: UsageImportFlags) {
   if (flags.dryRun) {
     consola.info(
       `Dry run: ${result.added} entries would be added` +
-      (result.skipped > 0 ? `, ${result.skipped} duplicates` : "") +
+      (result.skipped > 0 ? `, ${result.skipped} duplicate${result.skipped !== 1 ? "s" : ""}` : "") +
       (result.noCost > 0 ? `, ${result.noCost} skipped (no cost data)` : "") +
-      (result.errors > 0 ? `, ${result.errors} unparsable entries` : ""),
+      (result.errors > 0 ? `, ${result.errors} unparsable ${result.errors !== 1 ? "entries" : "entry"}` : ""),
     )
   } else {
     consola.success(
       `Imported: ${result.added} entries added` +
-      (result.skipped > 0 ? `, ${result.skipped} duplicates skipped` : "") +
+      (result.skipped > 0 ? `, ${result.skipped} duplicate${result.skipped !== 1 ? "s" : ""} skipped` : "") +
       (result.noCost > 0 ? `, ${result.noCost} skipped (no cost data)` : "") +
-      (result.errors > 0 ? `, ${result.errors} unparsable entries` : ""),
+      (result.errors > 0 ? `, ${result.errors} unparsable ${result.errors !== 1 ? "entries" : "entry"}` : ""),
     )
   }
 }

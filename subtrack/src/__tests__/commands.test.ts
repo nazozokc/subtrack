@@ -1033,7 +1033,7 @@ test("handleUsageImport detects duplicates by generation_id", async () => {
   const { handleUsageImport } = await import("../usage.ts")
   await handleUsageImport({ file: filePath })
 
-  expect(successMessages.some((m) => m.includes("1 entries added") && m.includes("1 duplicates skipped"))).toBe(true)
+  expect(successMessages.some((m) => m.includes("1 entries added") && m.includes("1 duplicate skipped"))).toBe(true)
 
   const db = await import("../db.ts")
   const entries = db.getLlmUsage()
