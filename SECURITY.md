@@ -43,7 +43,7 @@ subtrack takes supply chain security seriously:
 - **Dependency review**: Every pull request is scanned for new vulnerabilities via GitHub's dependency review action
 - **Renovate bot**: Dependencies are updated with a 7-day minimum release age to detect malicious releases before they reach this project
 - **Lockfile**: A `pnpm-lock.yaml` is committed and verified with `--frozen-lockfile` in CI
-- **Limited build scripts**: Only `esbuild` is permitted to run postinstall scripts (`pnpm.onlyBuiltDependencies`)
+- **Limited build scripts**: Only `esbuild` is permitted to run install scripts (`allowBuilds` in `pnpm-workspace.yaml`)
 - **CodeQL**: Static analysis runs on every push and PR
 - **pnpm audit**: Runs in CI to catch known vulnerabilities
 - **OpenSSF Scorecard**: Automated supply chain health assessment

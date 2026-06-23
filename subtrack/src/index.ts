@@ -299,6 +299,9 @@ const handleSignal = (signal: string) => {
 process.on("SIGINT", () => handleSignal("SIGINT"))
 process.on("SIGTERM", () => handleSignal("SIGTERM"))
 
+// Restrict file permissions for all created files
+process.umask(0o077)
+
 try {
   await cli(process.argv.slice(2), mainCommand, {
     name: "subtrack",

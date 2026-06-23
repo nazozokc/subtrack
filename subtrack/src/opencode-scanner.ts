@@ -6,6 +6,7 @@ import initSqlJs from "sql.js"
 import type { Database } from "sql.js"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
+import { safeJsonParse } from "./safe-json.ts"
 import { dateToStartOfDayMs, dateToEndOfDayMs } from "./date-utils.ts"
 
 const _SQL = await initSqlJs()
@@ -36,7 +37,7 @@ function parseMessage(
 ): AddLlmUsageFromLogArgs | null {
   let data: Record<string, unknown>
   try {
-    data = JSON.parse(dataJson)
+    data = safeJsonParse<Record<string, unknown>>(dataJson)
   } catch {
     return null
   }

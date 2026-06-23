@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { consola } from "consola"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
+import { safeJsonParse } from "./safe-json.ts"
 import { isInDateRange } from "./date-utils.ts"
 
 /**
@@ -43,7 +44,7 @@ function parseSessionLine(
 ): AddLlmUsageFromLogArgs | null {
   let data: Record<string, unknown>
   try {
-    data = JSON.parse(line)
+    data = safeJsonParse<Record<string, unknown>>(line)
   } catch {
     return null
   }
@@ -91,7 +92,7 @@ function parseSessionLine(
  */
 function getLineTimestampMs(line: string): number | null {
   try {
-    const data = JSON.parse(line)
+    const data = safeJsonParse<Record<string, unknown>>(line)
     const ts = data.timestamp as string | undefined
     if (ts) {
       const ms = new Date(ts).getTime()

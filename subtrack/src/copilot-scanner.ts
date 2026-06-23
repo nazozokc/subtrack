@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { consola } from "consola"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
+import { safeJsonParse } from "./safe-json.ts"
 import { isDateInRange, estimateTokenSplit } from "./date-utils.ts"
 
 /**
@@ -41,7 +42,7 @@ function parseEventLine(
 ): AddLlmUsageFromLogArgs | null {
   let data: Record<string, unknown>
   try {
-    data = JSON.parse(line)
+    data = safeJsonParse<Record<string, unknown>>(line)
   } catch {
     return null
   }

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { consola } from "consola"
 import type { UsageImportFlags } from "./types.ts"
 import { addLlmUsageFromLog } from "./db.ts"
+import { safeJsonParse } from "./safe-json.ts"
 import {
   ensurePricingCache,
   lookupModelKey,
@@ -158,7 +159,7 @@ export async function handleUsageImport(flags: UsageImportFlags) {
   if (trimmed.startsWith("[")) {
     // JSON array
     try {
-      const parsed = JSON.parse(trimmed)
+      const parsed = safeJsonParse(trimmed)
       if (!Array.isArray(parsed)) {
         consola.error("File contains a JSON object, expected an array or JSONL")
         return
@@ -176,7 +177,7 @@ export async function handleUsageImport(flags: UsageImportFlags) {
       const line = lines[i].trim()
       if (!line) continue
       try {
-        objects.push(JSON.parse(line) as Record<string, unknown>)
+        objects.push(safeJsonParse(line) as Record<string, unknown>)
       } catch {
         consola.warn(`Line ${i + 1}: Failed to parse JSON, skipping`)
       }

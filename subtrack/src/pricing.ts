@@ -45,7 +45,7 @@ export async function ensurePricingCache(): Promise<PricingCache | null> {
     if (existsSync(cachePath)) {
       try {
         const data = readFileSync(cachePath, "utf-8")
-        staleCache = JSON.parse(data) as PricingCache
+        staleCache = safeJsonParse<PricingCache>(data)
         const st = statSync(cachePath)
         const age = Date.now() - st.mtimeMs
         if (age < CACHE_FRESHNESS_MS) {
