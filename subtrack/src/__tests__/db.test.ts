@@ -34,8 +34,10 @@ beforeAll(async () => {
     output_tokens INTEGER NOT NULL DEFAULT 0,
     cost REAL NOT NULL,
     date TEXT NOT NULL,
-    description TEXT
+    description TEXT,
+    generation_id TEXT
   )`)
+  testDb.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
 
   const db = await import("../db.ts")
   db.__setDb(testDb)
@@ -937,4 +939,84 @@ test("verifyBackupHash returns true when no sidecar file (backward compat)", asy
   } finally {
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
   }
+})
+
+// ── batchAddLlmUsageFromLog ──────────────────────────────
+
+test("batchAddLlmUsageFromLog adds entries and deduplicates", async () => {
+  const db = await import("../db.ts")
+  // Re-set in-memory DB (restoreDb tests may have replaced _db)
+  db.__setDb(testDb)
+
+  const entries = [
+    {
+      provider: "opencode",
+      model: "deepseek-v4",
+      input_tokens: 100,
+      output_tokens: 50,
+      cost: 0,
+      date: "2026-06-01",
+      description: null,
+      generation_id: "msg_aaa",
+    },
+    {
+      provider: "opencode",
+      model: "deepseek-v4",
+      input_tokens: 200,
+      output_tokens: 100,
+      cost: 0.05,
+      date: "2026-06-02",
+      description: null,
+      generation_id: "msg_bbb",
+    },
+    {
+      provider: "openai",
+      model: "gpt-4o",
+      input_tokens: 300,
+      output_tokens: 150,
+      cost: 0.75,
+      date: "2026-06-03",
+      description: null,
+      generation_id: "msg_ccc",
+    },
+  ]
+
+  // First batch: all new
+  const r1 = db.batchAddLlmUsageFromLog(entries)
+  expect(r1.added).toBe(3)
+  expect(r1.skipped).toBe(0)
+
+  // Verify count
+  const all1 = db.getLlmUsage({ limit: 100, minCost: 0 })
+  expect(all1).toHaveLength(3)
+
+  // Second batch with same entries + 1 new
+  const entries2 = [
+    ...entries,
+    {
+      provider: "anthropic",
+      model: "claude-4",
+      input_tokens: 400,
+      output_tokens: 200,
+      cost: 1.5,
+      date: "2026-06-04",
+      description: null,
+      generation_id: "msg_ddd",
+    },
+  ]
+
+  const r2 = db.batchAddLlmUsageFromLog(entries2)
+  expect(r2.added).toBe(1) // only msg_ddd
+  expect(r2.skipped).toBe(3) // msg_aaa, msg_bbb, msg_ccc
+
+  // Verify final count
+  const all2 = db.getLlmUsage({ limit: 100, minCost: 0 })
+  expect(all2).toHaveLength(4)
+})
+
+test("batchAddLlmUsageFromLog with empty array returns zeroes", async () => {
+  const db = await import("../db.ts")
+  const r = db.batchAddLlmUsageFromLog([])
+  expect(r.added).toBe(0)
+  expect(r.skipped).toBe(0)
 })

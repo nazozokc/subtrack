@@ -601,8 +601,10 @@ describe("showPayment with --api", () => {
       output_tokens INTEGER NOT NULL DEFAULT 0,
       cost REAL NOT NULL,
       date TEXT NOT NULL,
-      description TEXT
+      description TEXT,
+      generation_id TEXT
     )`)
+    testDb.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
     const db = await import("../db.ts")
     db.__setDb(testDb)
   })

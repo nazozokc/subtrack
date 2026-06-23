@@ -22,10 +22,11 @@ import {
   handleUsageAdd,
   handleUsageList,
   handleUsageDelete,
+  handleUsageImport,
   handleUsageRefresh,
 } from "./usage.ts"
 import { handleImport } from "./import-csv.ts"
-import type { Cycle } from "./types.ts"
+import type { Cycle, UsageRefreshFlags } from "./types.ts"
 
 // ── Command definitions ──────────────────────────────────
 
@@ -245,10 +246,26 @@ const usageDeleteCommand = define({
   },
 })
 
+const usageImportCommand = define({
+  name: "import",
+  description: "Import LLM API usage from JSONL/JSON response log files",
+  toKebab: true,
+  args: {
+    file: { type: "positional", description: "JSONL/JSON file to import (use - for stdin)" },
+    dryRun: { type: "boolean", description: "Validate without importing" },
+  },
+  run: (ctx) => handleUsageImport(ctx.values),
+})
+
 const usageRefreshCommand = define({
   name: "refresh",
-  description: "Refresh LiteLLM pricing cache",
-  run: () => handleUsageRefresh(),
+  description: "Auto-scan known sources (OpenCode DB, Claude Code, Codex CLI, Cursor, Copilot, Windsurf) and import usage data — defaults to current month",
+  args: {
+    from: { type: "string", description: "Start date (YYYY-MM-DD)" },
+    to: { type: "string", description: "End date (YYYY-MM-DD)" },
+    all: { type: "boolean", description: "Scan all historical data (ignore date range)" },
+  },
+  run: (ctx) => handleUsageRefresh(ctx.values as UsageRefreshFlags),
 })
 
 const usageCommand = define({
@@ -258,9 +275,10 @@ const usageCommand = define({
     add: usageAddCommand,
     list: usageListCommand,
     delete: usageDeleteCommand,
+    import: usageImportCommand,
     refresh: usageRefreshCommand,
   },
-  run: () => consola.info("Usage: subtrack usage add|list|delete|refresh"),
+  run: () => consola.info("Usage: subtrack usage add|list|delete|import|refresh"),
 })
 
 const mainCommand = define({
@@ -280,6 +298,9 @@ const handleSignal = (signal: string) => {
 }
 process.on("SIGINT", () => handleSignal("SIGINT"))
 process.on("SIGTERM", () => handleSignal("SIGTERM"))
+
+// Restrict file permissions for all created files
+process.umask(0o077)
 
 try {
   await cli(process.argv.slice(2), mainCommand, {

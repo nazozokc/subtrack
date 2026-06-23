@@ -46,7 +46,19 @@
     "test:watch": "vitest",
     "lint:typos": "typos",
     "lint:security": "pnpm audit --audit-level=high",
-    "lint:types": "tsc --noEmit"
+    "lint:types": "tsc --noEmit",
+    "lint:lockfile": "node -e \"process.exit(require('fs').readFileSync('../pnpm-lock.yaml','utf8').startsWith('lockfileVersion')?0:1)\"",
+    "lint:dedupe": "pnpm dedupe --check",
+    "lint:secrets": "secretlint \"src/**/*.ts\""
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "typos --",
+      "tsc --noEmit"
+    ],
+    "*.{ts,tsx,json,md,yaml,yml}": [
+      "typos --"
+    ]
   },
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",
@@ -57,8 +69,12 @@
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
+    "secretlint": "^10.2.0",
+    "@secretlint/secretlint-rule-preset-recommend": "^13.0.2",
     "@types/node": "^26.0.0",
     "@types/sql.js": "^1.4.11",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.1",
     "tsdown": "^0.22.2",
     "tsx": "^4.19.0",
     "typescript": "^6",

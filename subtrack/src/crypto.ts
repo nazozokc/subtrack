@@ -40,7 +40,7 @@ function deriveKeyFromPassphrase(passphrase: string): Buffer {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
     writeFileSync(saltPath, salt, { mode: 0o600 })
   }
-  return scryptSync(passphrase, salt, KEY_LENGTH)
+  return scryptSync(passphrase, salt, KEY_LENGTH, { N: 131072, r: 8, p: 1 })
 }
 
 function getOrCreateKey(): Buffer {
