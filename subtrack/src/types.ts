@@ -65,6 +65,15 @@ export type UsageAddFlags = {
   cost?: string
 }
 
+export type UsageImportFlags = {
+  file?: string
+  dryRun?: boolean
+}
+
+export type AddLlmUsageFromLogArgs = AddLlmUsageArgs & {
+  generation_id: string
+}
+
 export type AddFlags = {
   name?: string
   price?: string

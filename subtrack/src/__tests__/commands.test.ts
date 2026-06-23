@@ -59,6 +59,11 @@ vi.mock("../pricing.ts", async (importOriginal) => {
   }
 })
 
+// Mock opencode-scanner for handleUsageRefresh tests
+vi.mock("../opencode-scanner.ts", () => ({
+  scanOpenCodeDb: vi.fn().mockReturnValue({ entries: [] }),
+}))
+
 // Mock @inquirer/prompts to avoid interactive prompts
 vi.mock("@inquirer/prompts", () => ({
   input: vi.fn(),
@@ -107,8 +112,10 @@ beforeAll(async () => {
     output_tokens INTEGER NOT NULL DEFAULT 0,
     cost REAL NOT NULL,
     date TEXT NOT NULL,
-    description TEXT
+    description TEXT,
+    generation_id TEXT
   )`)
+  testDb.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
 
   const db = await import("../db.ts")
   db.__setDb(testDb)
@@ -973,6 +980,282 @@ test("handleUsageDelete deletes selected entries", async () => {
 
   expect(db.getLlmUsage()).toHaveLength(0)
   expect(successMessages.some((m) => m.includes("openai"))).toBe(true)
+})
+
+// ── handleUsageImport ─────────────────────────────────────
+
+test("handleUsageImport with OpenRouter JSONL adds entries", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  const filePath = join(tmpDir, "openrouter.jsonl")
+
+  writeFileSync(filePath, [
+    JSON.stringify({ id: "gen-aaa", model: "openai/gpt-4o", usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150, cost: 0.0375 } }),
+    JSON.stringify({ id: "gen-bbb", model: "anthropic/claude-sonnet-4-20250514", usage: { prompt_tokens: 200, completion_tokens: 80, total_tokens: 280, cost: 0.42 } }),
+    JSON.stringify({ id: "gen-ccc", model: "openai/gpt-4o-mini", usage: { prompt_tokens: 50, completion_tokens: 30, total_tokens: 80, cost: 0.001 } }),
+  ].join("\n"))
+
+  const { handleUsageImport } = await import("../usage.ts")
+  await handleUsageImport({ file: filePath })
+
+  expect(successMessages.some((m) => m.includes("3 entries added"))).toBe(true)
+
+  const db = await import("../db.ts")
+  const entries = db.getLlmUsage()
+  expect(entries).toHaveLength(3)
+
+  // Ordered by id DESC, so gen-ccc first, then gen-bbb, then gen-aaa
+  const byGenId = Object.fromEntries(entries.map((e) => [e.model, e]))
+  expect(byGenId["gpt-4o"].provider).toBe("openai")
+  expect(byGenId["gpt-4o"].input_tokens).toBe(100)
+  expect(byGenId["gpt-4o"].output_tokens).toBe(50)
+  expect(byGenId["gpt-4o"].cost).toBe(0.0375)
+
+  if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+})
+
+test("handleUsageImport detects duplicates by generation_id", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  const filePath = join(tmpDir, "dupes.jsonl")
+
+  writeFileSync(filePath, [
+    JSON.stringify({ id: "gen-dup1", model: "openai/gpt-4o", usage: { prompt_tokens: 100, completion_tokens: 50, cost: 0.03 } }),
+    JSON.stringify({ id: "gen-dup1", model: "openai/gpt-4o", usage: { prompt_tokens: 100, completion_tokens: 50, cost: 0.03 } }),
+  ].join("\n"))
+
+  const { handleUsageImport } = await import("../usage.ts")
+  await handleUsageImport({ file: filePath })
+
+  expect(successMessages.some((m) => m.includes("1 entries added") && m.includes("1 duplicates skipped"))).toBe(true)
+
+  const db = await import("../db.ts")
+  const entries = db.getLlmUsage()
+  expect(entries).toHaveLength(1)
+
+  if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+})
+
+test("handleUsageImport with OpenAI JSONL calculates cost via pricing", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  const filePath = join(tmpDir, "openai.jsonl")
+
+  writeFileSync(filePath, [
+    JSON.stringify({ id: "chatcmpl-xxx", model: "gpt-4o", usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 }, created: 1719000000 }),
+  ].join("\n"))
+
+  const { handleUsageImport } = await import("../usage.ts")
+  await handleUsageImport({ file: filePath })
+
+  // Pricing mock returns calculateCostCents = 0.75
+  expect(successMessages.some((m) => m.includes("1 entries added"))).toBe(true)
+
+  const db = await import("../db.ts")
+  const entries = db.getLlmUsage()
+  expect(entries).toHaveLength(1)
+  expect(entries[0].provider).toBe("openai")
+  expect(entries[0].model).toBe("gpt-4o")
+  expect(entries[0].cost).toBe(0.75)
+
+  if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+})
+
+test("handleUsageImport dry run does not add entries", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  const filePath = join(tmpDir, "dryrun.jsonl")
+
+  writeFileSync(filePath, [
+    JSON.stringify({ id: "gen-dr1", model: "openai/gpt-4o", usage: { prompt_tokens: 100, completion_tokens: 50, cost: 0.02 } }),
+  ].join("\n"))
+
+  const { handleUsageImport } = await import("../usage.ts")
+  await handleUsageImport({ file: filePath, dryRun: true })
+
+  expect(infoMessages.some((m) => m.includes("Dry run") && m.includes("1 entries would be added"))).toBe(true)
+
+  const db = await import("../db.ts")
+  expect(db.getLlmUsage()).toHaveLength(0)
+
+  if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+})
+
+test("handleUsageImport with empty file shows warning", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  const filePath = join(tmpDir, "empty.jsonl")
+
+  writeFileSync(filePath, "")
+
+  const { handleUsageImport } = await import("../usage.ts")
+  await handleUsageImport({ file: filePath })
+
+  expect(warnMessages.some((m) => m.includes("empty"))).toBe(true)
+
+  if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+})
+
+test("handleUsageImport skips entries with no usage data", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  const filePath = join(tmpDir, "nousage.jsonl")
+
+  writeFileSync(filePath, [
+    JSON.stringify({ id: "gen-ok", model: "openai/gpt-4o", usage: { prompt_tokens: 100, completion_tokens: 50, cost: 0.02 } }),
+    JSON.stringify({ message: "Hello, world!", role: "assistant" }),
+    JSON.stringify({ id: "gen-nocost", model: "unknown/model", usage: { prompt_tokens: 10, completion_tokens: 5 } }),
+  ].join("\n"))
+
+  const { handleUsageImport } = await import("../usage.ts")
+  await handleUsageImport({ file: filePath })
+
+  expect(successMessages.some((m) => m.includes("1 entries added") && m.includes("1 unparseable") && m.includes("1 skipped (no cost"))).toBe(true)
+
+  if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+})
+
+test("handleUsageImport with JSON array format works", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  const filePath = join(tmpDir, "array.json")
+
+  writeFileSync(filePath, JSON.stringify([
+    { id: "gen-arr1", model: "openai/gpt-4o", usage: { prompt_tokens: 50, completion_tokens: 25, cost: 0.01 } },
+    { id: "gen-arr2", model: "anthropic/claude-sonnet-4-20250514", usage: { prompt_tokens: 100, completion_tokens: 40, cost: 0.08 } },
+  ]))
+
+  const { handleUsageImport } = await import("../usage.ts")
+  await handleUsageImport({ file: filePath })
+
+  expect(successMessages.some((m) => m.includes("2 entries added"))).toBe(true)
+
+  if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+})
+
+test("handleUsageImport without file shows usage error", async () => {
+  const { handleUsageImport } = await import("../usage.ts")
+  await handleUsageImport({})
+
+  expect(errorMessages.some((m) => m.includes("Usage:"))).toBe(true)
+})
+
+test("handleUsageImport with non-existent file shows error", async () => {
+  const { handleUsageImport } = await import("../usage.ts")
+  await handleUsageImport({ file: "/nonexistent/path/log.jsonl" })
+
+  expect(errorMessages.some((m) => m.includes("Cannot read file"))).toBe(true)
+})
+
+// ── handleUsageRefresh ────────────────────────────────────
+
+test("handleUsageRefresh shows info when no entries found", async () => {
+  const { handleUsageRefresh } = await import("../usage.ts")
+  await handleUsageRefresh()
+
+  expect(infoMessages.some((m) => m.includes("No new usage"))).toBe(true)
+})
+
+test("handleUsageRefresh imports entries from scanner and deduplicates", async () => {
+  // Re-mock scanner to return test data
+  const { scanOpenCodeDb } = await import("../opencode-scanner.ts")
+  vi.mocked(scanOpenCodeDb).mockReturnValue({
+    entries: [
+      {
+        provider: "opencode",
+        model: "deepseek-v4",
+        input_tokens: 100,
+        output_tokens: 50,
+        cost: 0,
+        date: "2026-06-01",
+        description: null,
+        generation_id: "msg_aaa",
+      },
+      {
+        provider: "opencode",
+        model: "deepseek-v4",
+        input_tokens: 200,
+        output_tokens: 100,
+        cost: 0.05,
+        date: "2026-06-02",
+        description: null,
+        generation_id: "msg_bbb",
+      },
+    ],
+  })
+
+  const { handleUsageRefresh } = await import("../usage.ts")
+  await handleUsageRefresh()
+
+  expect(successMessages.some((m) => m.includes("entries added"))).toBe(true)
+
+  const db = await import("../db.ts")
+  const entries = db.getLlmUsage({ limit: 100, minCost: 0 })
+  expect(entries).toHaveLength(2)
+})
+
+test("handleUsageRefresh skips already imported entries", async () => {
+  // Pre-insert an entry to simulate already-imported data
+  const db = await import("../db.ts")
+  db.addLlmUsageFromLog({
+    provider: "opencode",
+    model: "deepseek-v4",
+    input_tokens: 100,
+    output_tokens: 50,
+    cost: 0,
+    date: "2026-06-01",
+    description: null,
+    generation_id: "msg_aaa",
+  })
+
+  const { scanOpenCodeDb } = await import("../opencode-scanner.ts")
+  vi.mocked(scanOpenCodeDb).mockReturnValue({
+    entries: [
+      {
+        provider: "opencode",
+        model: "deepseek-v4",
+        input_tokens: 100,
+        output_tokens: 50,
+        cost: 0,
+        date: "2026-06-01",
+        description: null,
+        generation_id: "msg_aaa",
+      },
+      // new entry
+      {
+        provider: "openai",
+        model: "gpt-4o",
+        input_tokens: 300,
+        output_tokens: 150,
+        cost: 0.75,
+        date: "2026-06-03",
+        description: null,
+        generation_id: "msg_ccc",
+      },
+    ],
+  })
+
+  const { handleUsageRefresh } = await import("../usage.ts")
+  await handleUsageRefresh()
+
+  expect(successMessages.some((m) => m.includes("1 entr"))).toBe(true)
+
+  const entries = db.getLlmUsage({ limit: 100, minCost: 0 })
+  expect(entries).toHaveLength(2) // 1 pre-existing + 1 new
 })
 
 // ── handleBackup ──────────────────────────────────────────

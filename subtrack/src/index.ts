@@ -22,6 +22,8 @@ import {
   handleUsageAdd,
   handleUsageList,
   handleUsageDelete,
+  handleUsageImport,
+  handleUsageRefresh,
 } from "./usage.ts"
 import { handleImport } from "./import-csv.ts"
 import type { Cycle } from "./types.ts"
@@ -244,6 +246,23 @@ const usageDeleteCommand = define({
   },
 })
 
+const usageImportCommand = define({
+  name: "import",
+  description: "Import LLM API usage from JSONL/JSON response log files",
+  toKebab: true,
+  args: {
+    file: { type: "positional", description: "JSONL/JSON file to import (use - for stdin)" },
+    dryRun: { type: "boolean", description: "Validate without importing" },
+  },
+  run: (ctx) => handleUsageImport(ctx.values),
+})
+
+const usageRefreshCommand = define({
+  name: "refresh",
+  description: "Auto-scan known sources (OpenCode DB, etc.) and import usage data",
+  run: () => handleUsageRefresh(),
+})
+
 const usageCommand = define({
   name: "usage",
   description: "Track LLM API usage costs",
@@ -251,8 +270,10 @@ const usageCommand = define({
     add: usageAddCommand,
     list: usageListCommand,
     delete: usageDeleteCommand,
+    import: usageImportCommand,
+    refresh: usageRefreshCommand,
   },
-  run: () => consola.info("Usage: subtrack usage add|list|delete"),
+  run: () => consola.info("Usage: subtrack usage add|list|delete|import|refresh"),
 })
 
 const mainCommand = define({
