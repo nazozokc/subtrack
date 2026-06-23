@@ -94,16 +94,19 @@ async function resolveAddOptions(flags: AddFlags) {
     cycleRes.prompted
 
   if (tagsStr === undefined) {
-    prompted = true
-    const existingTags = getAllTags()
-    tagsStr = await input({
-      message:
-        "tags" +
-        (existingTags.length > 0
-          ? ` (existing: ${existingTags.join(", ")})`
-          : ""),
-      validate: validateTags,
-    })
+    if (prompted) {
+      const existingTags = getAllTags()
+      tagsStr = await input({
+        message:
+          "tags" +
+          (existingTags.length > 0
+            ? ` (existing: ${existingTags.join(", ")})`
+            : ""),
+        validate: validateTags,
+      })
+    } else {
+      tagsStr = ""
+    }
   }
 
   const tags = tagsStr.split(",").map((t) => t.trim()).filter(Boolean)

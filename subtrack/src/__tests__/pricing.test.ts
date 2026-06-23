@@ -28,22 +28,21 @@ const SAMPLE_CACHE: PricingCache = {
   },
 }
 
-// ── matchModel ────────────────────────────────────────────
+// ── lookupModelKey ─────────────────────────────────────────
 
-test("matchModel finds exact match", async () => {
-  const { matchModel } = await import("../pricing.ts")
-  const result = matchModel(SAMPLE_CACHE, "openai", "gpt-4o")
-  expect(result).not.toBeNull()
-  expect(result?.litellm_provider).toBe("openai")
+test("lookupModelKey finds exact match", async () => {
+  const { lookupModelKey } = await import("../pricing.ts")
+  const result = lookupModelKey(SAMPLE_CACHE, "gpt-4o", "openai")
+  expect(result).toBe("gpt-4o")
 })
 
-test("matchModel returns null for non-existent model", async () => {
-  const { matchModel } = await import("../pricing.ts")
-  const result = matchModel(SAMPLE_CACHE, "openai", "nonexistent-model")
+test("lookupModelKey returns null for non-existent model", async () => {
+  const { lookupModelKey } = await import("../pricing.ts")
+  const result = lookupModelKey(SAMPLE_CACHE, "nonexistent-model", "openai")
   expect(result).toBeNull()
 })
 
-test("matchModel finds model by provider prefix", async () => {
+test("lookupModelKey finds model by provider prefix", async () => {
   const cache: PricingCache = {
     "openai/gpt-4o": {
       input_cost_per_token: 2.5e-6,
@@ -51,29 +50,78 @@ test("matchModel finds model by provider prefix", async () => {
       litellm_provider: "openai",
     },
   }
-  const { matchModel } = await import("../pricing.ts")
-  const result = matchModel(cache, "openai", "gpt-4o")
-  expect(result).not.toBeNull()
+  const { lookupModelKey } = await import("../pricing.ts")
+  const result = lookupModelKey(cache, "gpt-4o", "openai")
+  expect(result).toBe("openai/gpt-4o")
 })
 
-test("matchModel finds model by substring", async () => {
-  const { matchModel } = await import("../pricing.ts")
-  const result = matchModel(SAMPLE_CACHE, "openai", "gpt-4o-mini")
-  expect(result).not.toBeNull()
-  expect(result?.input_cost_per_token).toBe(1.5e-7)
+test("lookupModelKey is case-insensitive", async () => {
+  const { lookupModelKey } = await import("../pricing.ts")
+  const result = lookupModelKey(SAMPLE_CACHE, "GPT-4O", "openai")
+  expect(result).toBe("gpt-4o")
 })
 
-test("matchModel strips version suffixes", async () => {
-  const { matchModel } = await import("../pricing.ts")
-  const result = matchModel(SAMPLE_CACHE, "openai", "gpt-4o-v1")
-  expect(result).not.toBeNull()
+test("lookupModelKey returns null without provider on non-matching", async () => {
+  const { lookupModelKey } = await import("../pricing.ts")
+  const result = lookupModelKey(SAMPLE_CACHE, "nonexistent")
+  expect(result).toBeNull()
 })
 
-test("matchModel is case-insensitive", async () => {
-  const { matchModel } = await import("../pricing.ts")
-  const result = matchModel(SAMPLE_CACHE, "openai", "GPT-4O")
+// ── searchPricingModels ────────────────────────────────────
+
+test("searchPricingModels finds exact match", async () => {
+  const { searchPricingModels } = await import("../pricing.ts")
+  const results = searchPricingModels(SAMPLE_CACHE, "gpt-4o")
+  expect(results.length).toBeGreaterThan(0)
+  expect(results[0].value).toBe("gpt-4o")
+})
+
+test("searchPricingModels filters by provider", async () => {
+  const { searchPricingModels } = await import("../pricing.ts")
+  const results = searchPricingModels(SAMPLE_CACHE, "", "anthropic")
+  expect(results).toHaveLength(2)
+  expect(results.every((r) => r.value.startsWith("claude"))).toBe(true)
+})
+
+test("searchPricingModels returns empty for empty query with no match", async () => {
+  const { searchPricingModels } = await import("../pricing.ts")
+  const results = searchPricingModels(SAMPLE_CACHE, "zzzzzzz")
+  expect(results).toHaveLength(0)
+})
+
+test("searchPricingModels is case-insensitive", async () => {
+  const { searchPricingModels } = await import("../pricing.ts")
+  const results = searchPricingModels(SAMPLE_CACHE, "GPT-4O")
+  expect(results.some((r) => r.value === "gpt-4o")).toBe(true)
+})
+
+test("searchPricingModels includes cost description in results", async () => {
+  const { searchPricingModels } = await import("../pricing.ts")
+  const results = searchPricingModels(SAMPLE_CACHE, "gpt-4o")
+  expect(results[0].description).toBeTruthy()
+})
+
+test("searchPricingModels matches substring", async () => {
+  const { searchPricingModels } = await import("../pricing.ts")
+  // "gpt-4o" should match both "gpt-4o" and "gpt-4o-mini"
+  const results = searchPricingModels(SAMPLE_CACHE, "gpt-4o")
+  expect(results.length).toBeGreaterThanOrEqual(2)
+})
+
+// ── getModelPricing ────────────────────────────────────────
+
+test("getModelPricing returns pricing for existing model", async () => {
+  const { getModelPricing } = await import("../pricing.ts")
+  const result = getModelPricing(SAMPLE_CACHE, "gpt-4o")
   expect(result).not.toBeNull()
   expect(result?.litellm_provider).toBe("openai")
+  expect(result?.input_cost_per_token).toBe(2.5e-6)
+})
+
+test("getModelPricing returns null for non-existent model", async () => {
+  const { getModelPricing } = await import("../pricing.ts")
+  const result = getModelPricing(SAMPLE_CACHE, "nonexistent")
+  expect(result).toBeNull()
 })
 
 // ── calculateCostCents ────────────────────────────────────

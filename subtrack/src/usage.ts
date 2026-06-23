@@ -1,24 +1,12 @@
-import { input, select, confirm, checkbox } from "@inquirer/prompts"
+import { checkbox, confirm } from "@inquirer/prompts"
 import { consola } from "consola"
-import type { UsageAddFlags, LlmUsageEntry } from "./types.ts"
-import { addLlmUsage, getLlmUsage, deleteLlmUsage } from "./db.ts"
-import {
-  LLM_PROVIDER_CHOICES,
-  validateTokens,
-  validateDate,
-  validateModelName,
-} from "./prompts.ts"
-import {
-  ensurePricingCache,
-  matchModel,
-  calculateCostCents,
-  getModelPricingDirect,
-  refreshPricingCache,
-} from "./pricing.ts"
-import type { ModelPricingEntry } from "./pricing.ts"
+import type { LlmUsageEntry } from "./types.ts"
+import { getLlmUsage, deleteLlmUsage } from "./db.ts"
 import { renderUsageTable } from "./display.ts"
 
-// ── Workflow ──────────────────────────────────────────────
+export { handleUsageAdd } from "./usage-add.ts"
+export { handleUsageImport } from "./usage-import.ts"
+export { handleUsageRefresh } from "./usage-refresh.ts"
 
 async function resolveUsageAddOptions(flags: UsageAddFlags) {
   let manualCostCents: number | null = null
@@ -199,6 +187,8 @@ export async function handleUsageList(options: { provider?: string; from?: strin
   renderUsageTable(entries)
 }
 
+// ── Delete ──────────────────────────────────────────────
+
 export async function handleUsageDelete(ids?: number[]) {
   if (ids && ids.length > 0) {
     for (const id of ids) {
@@ -221,7 +211,7 @@ export async function handleUsageDelete(ids?: number[]) {
 
   const selected = await checkbox({
     message: "Select usage entries to delete",
-    choices: all.map((e) => ({
+    choices: all.map((e: LlmUsageEntry) => ({
       name: `${e.date}  ${e.provider}/${e.model}  ${e.input_tokens.toLocaleString()} in / ${e.output_tokens.toLocaleString()} out  $${(e.cost / 100).toFixed(4)}${e.description ? `  — ${e.description}` : ""}`,
       value: e,
     })),
@@ -247,15 +237,5 @@ export async function handleUsageDelete(ids?: number[]) {
   for (const entry of selected) {
     deleteLlmUsage(entry.id)
     consola.success(`Deleted: ${entry.provider}/${entry.model} (${entry.date})`)
-  }
-}
-
-export async function handleUsageRefresh() {
-  consola.info("Refreshing LiteLLM pricing cache...")
-  const result = await refreshPricingCache()
-  if (result) {
-    consola.success(`Pricing cache updated (${Object.keys(result).length} models)`)
-  } else {
-    consola.fail("Failed to fetch pricing data")
   }
 }
