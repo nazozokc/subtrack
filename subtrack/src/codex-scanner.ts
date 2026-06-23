@@ -31,7 +31,7 @@ export function scanCodexCli(from?: string, to?: string): ScanResult {
     return { source: "codex", entries: [] }
   }
 
-  let db: ReturnType<typeof _SQL.Database> | null = null
+  let db: InstanceType<typeof _SQL.Database> | null = null
   const entries: AddLlmUsageFromLogArgs[] = []
 
   try {

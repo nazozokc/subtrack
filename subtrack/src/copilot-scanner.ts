@@ -118,12 +118,20 @@ export function scanCopilot(from?: string, to?: string): ScanResult {
       if (!trimmed) continue
 
       const parsed = parseEventLine(trimmed, basename)
-      if (parsed) entries.push(parsed)
+      if (parsed && isEntryInDateRange(parsed, from, to)) {
+        entries.push(parsed)
+      }
     }
   }
 
   consola.info(`Found ${entries.length} usage entr${entries.length === 1 ? "y" : "ies"} in Copilot CLI sessions`)
   return { source: "copilot", entries }
+}
+
+function isEntryInDateRange(entry: { date: string }, from?: string, to?: string): boolean {
+  if (from && entry.date < from) return false
+  if (to && entry.date > to) return false
+  return true
 }
 
 /**

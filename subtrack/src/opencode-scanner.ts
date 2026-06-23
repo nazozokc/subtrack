@@ -3,6 +3,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { consola } from "consola"
 import initSqlJs from "sql.js"
+import type { Database } from "sql.js"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import type { Scanner, ScanResult } from "./scanner-types.ts"
 import { dateToStartOfDayMs, dateToEndOfDayMs } from "./date-utils.ts"
@@ -99,7 +100,7 @@ export function scanOpenCodeDb(from?: string, to?: string): ScanResult {
     return { source: "opencode", entries: [] }
   }
 
-  let db: ReturnType<typeof _SQL.Database> | null = null
+  let db: InstanceType<typeof _SQL.Database> | null = null
   const entries: AddLlmUsageFromLogArgs[] = []
 
   try {

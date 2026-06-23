@@ -1,9 +1,9 @@
-import { describe, test, expect } from "vitest"
+import { describe, test, expect, afterEach } from "vitest"
 import type { Scanner } from "../scanner-types.ts"
 
 // Import the functions we want to test
 // We import from a clean mock to avoid actually loading scanner implementations
-import { registerScanner, getRegisteredScanners, runAllScanners } from "../scanner.ts"
+import { registerScanner, getRegisteredScanners, runAllScanners, clearScanners } from "../scanner.ts"
 
 describe("scanner registry", () => {
   test("getRegisteredScanners returns registered scanners", () => {
@@ -27,6 +27,10 @@ describe("scanner registry", () => {
 })
 
 describe("runAllScanners", () => {
+  afterEach(() => {
+    clearScanners()
+  })
+
   test("returns combined entries from multiple scanners", () => {
     const result = runAllScanners()
     // Should always return a result object

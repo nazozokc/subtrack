@@ -1009,11 +1009,11 @@ test("handleUsageImport with OpenRouter JSONL adds entries", async () => {
   expect(entries).toHaveLength(3)
 
   // Ordered by id DESC, so gen-ccc first, then gen-bbb, then gen-aaa
-  const byGenId = Object.fromEntries(entries.map((e) => [e.model, e]))
-  expect(byGenId["gpt-4o"].provider).toBe("openai")
-  expect(byGenId["gpt-4o"].input_tokens).toBe(100)
-  expect(byGenId["gpt-4o"].output_tokens).toBe(50)
-  expect(byGenId["gpt-4o"].cost).toBe(0.0375)
+  const byModel = Object.fromEntries(entries.map((e) => [e.model, e]))
+  expect(byModel["gpt-4o"].provider).toBe("openai")
+  expect(byModel["gpt-4o"].input_tokens).toBe(100)
+  expect(byModel["gpt-4o"].output_tokens).toBe(50)
+  expect(byModel["gpt-4o"].cost).toBe(0.0375)
 
   if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
 })

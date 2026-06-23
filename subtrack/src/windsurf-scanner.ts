@@ -3,6 +3,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { consola } from "consola"
 import initSqlJs from "sql.js"
+import type { Database } from "sql.js"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import type { Scanner, ScanResult } from "./scanner-types.ts"
 
@@ -86,7 +87,7 @@ export function scanWindsurf(from?: string, to?: string): ScanResult {
     return { source: "windsurf", entries: [] }
   }
 
-  let db: ReturnType<typeof _SQL.Database> | null = null
+  let db: Database | null = null
   const entries: AddLlmUsageFromLogArgs[] = []
 
   try {
@@ -122,7 +123,9 @@ export function scanWindsurf(from?: string, to?: string): ScanResult {
       const rawValue = String(row[valueIdx] ?? "")
 
       const parsed = parseWindsurfKvValue(key, rawValue)
-      if (parsed) entries.push(parsed)
+      if (parsed && isEntryInDateRange(parsed, from, to)) {
+        entries.push(parsed)
+      }
     }
   } catch (err) {
     consola.warn(`Error scanning Windsurf DB: ${String(err)}`)
@@ -133,6 +136,12 @@ export function scanWindsurf(from?: string, to?: string): ScanResult {
 
   consola.info(`Found ${entries.length} usage entr${entries.length === 1 ? "y" : "ies"} in Windsurf DB`)
   return { source: "windsurf", entries }
+}
+
+function isEntryInDateRange(entry: { date: string }, from?: string, to?: string): boolean {
+  if (from && entry.date < from) return false
+  if (to && entry.date > to) return false
+  return true
 }
 
 /**

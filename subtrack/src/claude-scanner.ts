@@ -65,11 +65,11 @@ function parseSessionLine(
   // Skip entries with no meaningful usage
   if (inputTokens === 0 && outputTokens === 0) return null
 
-  // Use uuid as generation_id (or sessionId + offset as fallback)
-  const generationId = uuid || `claude-${sessionId}-${Date.now()}`
+  // Use uuid as generation_id (or deterministic fallback based on content)
+  const generationId = uuid || computeFallbackGenId(sessionId, inputTokens, outputTokens, model)
 
   // Extract date from ISO timestamp
-  const date = timestamp
+  const date = timestamp && !Number.isNaN(new Date(timestamp).getTime())
     ? new Date(timestamp).toISOString().split("T")[0]
     : new Date().toISOString().split("T")[0]
 
@@ -93,11 +93,28 @@ function getLineTimestampMs(line: string): number | null {
   try {
     const data = JSON.parse(line)
     const ts = data.timestamp as string | undefined
-    if (ts) return new Date(ts).getTime()
+    if (ts) {
+      const ms = new Date(ts).getTime()
+      return Number.isNaN(ms) ? null : ms
+    }
     return null
   } catch {
     return null
   }
+}
+
+/**
+ * Generate a deterministic fallback generation_id from available fields.
+ */
+function computeFallbackGenId(
+  sessionId: string,
+  inputTokens: number,
+  outputTokens: number,
+  model: string,
+): string {
+  // Use a simple hash-like approach: combine session + model + token counts
+  // This ensures the same content always produces the same id within a session
+  return `claude-${sessionId}-${model}-${inputTokens}-${outputTokens}`
 }
 
 /**

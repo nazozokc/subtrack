@@ -26,6 +26,14 @@ export function getRegisteredScanners(): Scanner[] {
 }
 
 /**
+ * Clear all registered scanners.
+ * Useful in tests to reset state before registering mock scanners.
+ */
+export function clearScanners(): void {
+  scanners.length = 0
+}
+
+/**
  * Register all built-in scanners.
  * Called automatically at import time.
  */

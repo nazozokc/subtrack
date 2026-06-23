@@ -4,7 +4,7 @@ import { consola } from "consola"
 import type { UsageAddFlags, UsageImportFlags, UsageRefreshFlags, LlmUsageEntry } from "./types.ts"
 import { addLlmUsage, addLlmUsageFromLog, batchAddLlmUsageFromLog, getLlmUsage, deleteLlmUsage } from "./db.ts"
 import { runAllScanners } from "./scanner.ts"
-import { currentMonthStart, today } from "./date-utils.ts"
+import { currentMonthStart } from "./date-utils.ts"
 import {
   LLM_PROVIDER_CHOICES,
   validateTokens,
@@ -299,12 +299,13 @@ type ParsedLogEntry = {
   date: string
 }
 
-function today(): string {
-  return new Date().toISOString().split("T")[0]
+function todayLocal(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
 }
 
 function unixTsToDate(ts: number | undefined): string {
-  if (!ts) return today()
+  if (!ts) return todayLocal()
   return new Date(ts * 1000).toISOString().split("T")[0]
 }
 
@@ -350,7 +351,7 @@ function parseResponseJson(obj: Record<string, unknown>): ParsedLogEntry | null 
       inputTokens,
       outputTokens,
       costCents,
-      date: today(),
+      date: todayLocal(),
     }
   }
 
@@ -382,7 +383,7 @@ function parseResponseJson(obj: Record<string, unknown>): ParsedLogEntry | null 
       inputTokens,
       outputTokens,
       costCents: null,
-      date: today(),
+      date: todayLocal(),
     }
   }
 
@@ -546,7 +547,7 @@ export async function handleUsageImport(flags: UsageImportFlags) {
 
 export async function handleUsageRefresh(flags: UsageRefreshFlags = {}) {
   const from = flags.all ? undefined : (flags.from ?? currentMonthStart())
-  const to = flags.all ? undefined : (flags.to ?? today())
+  const to = flags.all ? undefined : (flags.to ?? todayLocal())
 
   const result = runAllScanners(from, to)
 
