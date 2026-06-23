@@ -63,36 +63,20 @@ async function resolveUsageAddOptions(flags: UsageAddFlags) {
     })
   }
 
-  // Input tokens
-  let inputTokens: number
+  // Input tokens (from flags only — no interactive prompt)
+  let inputTokens = 0
   if (flags.inputTokens !== undefined) {
     const result = validateTokens(flags.inputTokens)
     if (result !== true) { consola.error(result); return null }
     inputTokens = Number(flags.inputTokens)
-  } else {
-    prompted = true
-    const str = await input({
-      message: "Input tokens used",
-      default: "0",
-      validate: validateTokens,
-    })
-    inputTokens = Number(str)
   }
 
-  // Output tokens
-  let outputTokens: number
+  // Output tokens (from flags only — no interactive prompt)
+  let outputTokens = 0
   if (flags.outputTokens !== undefined) {
     const result = validateTokens(flags.outputTokens)
     if (result !== true) { consola.error(result); return null }
     outputTokens = Number(flags.outputTokens)
-  } else {
-    prompted = true
-    const str = await input({
-      message: "Output tokens used",
-      default: "0",
-      validate: validateTokens,
-    })
-    outputTokens = Number(str)
   }
 
   // Date
@@ -116,35 +100,32 @@ async function resolveUsageAddOptions(flags: UsageAddFlags) {
     description = str.trim() || null
   }
 
-  // Pricing lookup
-  let pricing: ModelPricingEntry | null = null
+  // Cost resolution
   let costCents: number | null = null
   let manualCost = false
 
-  const cache = await ensurePricingCache()
-  if (cache) {
-    pricing = matchModel(cache, provider, model)
-  }
-  if (!pricing) {
-    pricing = await getModelPricingDirect(model)
-  }
-  if (pricing) {
-    costCents = calculateCostCents(pricing, inputTokens, outputTokens)
-  }
+  if (manualCostCents !== null) {
+    // --cost flag wins
+    costCents = manualCostCents
+    manualCost = true
+  } else {
+    // Try pricing lookup
+    const cache = await ensurePricingCache()
+    let pricing: ModelPricingEntry | null = null
+    if (cache) {
+      pricing = matchModel(cache, provider, model)
+    }
+    if (!pricing) {
+      pricing = await getModelPricingDirect(model)
+    }
 
-  if (costCents === null) {
-    // Fallback: use --cost flag if provided
-    if (manualCostCents !== null) {
-      costCents = manualCostCents
-      manualCost = true
-    } else if (!prompted) {
-      consola.error(
-        `Could not find pricing for "${model}". Provide --cost to set cost manually (e.g. --cost 0.50 for 50 cents).`,
-      )
-      return null
-    } else {
-      consola.warn(
-        `Could not find pricing for "${model}" in LiteLLM data. Enter cost manually.`,
+    if (pricing && flags.inputTokens !== undefined && flags.outputTokens !== undefined) {
+      // Both tokens provided via flags + pricing available → auto-calculate
+      costCents = calculateCostCents(pricing, inputTokens, outputTokens)
+    } else if (prompted) {
+      // Interactive: prompt for cost directly
+      consola.info(
+        `Cost will be entered manually${pricing ? "" : " (no pricing data for this model)"}`,
       )
       const costStr = await input({
         message: "Total cost in USD (e.g. 0.50 for 50 cents)",
@@ -153,6 +134,12 @@ async function resolveUsageAddOptions(flags: UsageAddFlags) {
       })
       costCents = Math.round(Number(costStr) * 100)
       manualCost = true
+    } else {
+      // Non-interactive: can't determine cost
+      consola.error(
+        "Cost cannot be determined. Provide --cost (e.g. --cost 0.50 for 50 cents), or --input-tokens and --output-tokens together for auto-calculation.",
+      )
+      return null
     }
   }
 
@@ -162,7 +149,7 @@ async function resolveUsageAddOptions(flags: UsageAddFlags) {
       ? `$${((costCents ?? 0) / 100).toFixed(2)} (manual)`
       : `$${((costCents ?? 0) / 100).toFixed(4)}`
     consola.info(
-      `Cost: ${costDisplay} (${(inputTokens ?? 0).toLocaleString()} in / ${(outputTokens ?? 0).toLocaleString()} out)`,
+      `Cost: ${costDisplay}${inputTokens > 0 || outputTokens > 0 ? ` (${inputTokens.toLocaleString()} in / ${outputTokens.toLocaleString()} out)` : ""}`,
     )
     const ok = await confirm({
       message: `Save this usage entry (${provider}, ${model})?`,
