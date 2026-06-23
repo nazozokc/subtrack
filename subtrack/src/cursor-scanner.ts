@@ -5,7 +5,8 @@ import { consola } from "consola"
 import initSqlJs from "sql.js"
 import type { Database } from "sql.js"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
-import type { Scanner, ScanResult } from "./scanner-types.ts"
+import { defineScanner, type ScanResult } from "./scanner-types.ts"
+import { isDateInRange, estimateTokenSplit } from "./date-utils.ts"
 
 const _SQL = await initSqlJs()
 
@@ -53,8 +54,7 @@ function parseCursorKvValue(key: string, value: string): AddLlmUsageFromLogArgs 
   const provider = (data.provider as string) ?? "cursor"
 
   // Cursor only stores total tokens typically — estimate 2:1 split
-  const inputTokens = Math.round(tokensUsed * 2 / 3)
-  const outputTokens = tokensUsed - inputTokens
+  const { inputTokens, outputTokens } = estimateTokenSplit(tokensUsed)
 
   // Extract timestamp
   const ts = (data.timestamp as number) ?? (data.createdAt as number) ?? (data.time as number) ?? 0
@@ -130,7 +130,7 @@ export function scanCursor(from?: string, to?: string): ScanResult {
       const rawValue = String(row[valueIdx] ?? "")
 
       const parsed = parseCursorKvValue(key, rawValue)
-      if (parsed && isEntryInDateRange(parsed, from, to)) {
+      if (parsed && isDateInRange(parsed.date, from, to)) {
         entries.push(parsed)
       }
     }
@@ -145,20 +145,7 @@ export function scanCursor(from?: string, to?: string): ScanResult {
   return { source: "cursor", entries }
 }
 
-function isEntryInDateRange(entry: { date: string }, from?: string, to?: string): boolean {
-  if (from && entry.date < from) return false
-  if (to && entry.date > to) return false
-  return true
-}
-
 /**
- * Create a Scanner instance for Cursor.
+ * Scanner instance for Cursor.
  */
-export function createCursorScanner(): Scanner {
-  return {
-    name: "cursor",
-    scan(from?: string, to?: string): ScanResult {
-      return scanCursor(from, to)
-    },
-  }
-}
+export const createCursorScanner = defineScanner("cursor", scanCursor)

@@ -5,7 +5,8 @@ import { consola } from "consola"
 import initSqlJs from "sql.js"
 import type { Database } from "sql.js"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
-import type { Scanner, ScanResult } from "./scanner-types.ts"
+import { defineScanner, type ScanResult } from "./scanner-types.ts"
+import { isDateInRange, estimateTokenSplit } from "./date-utils.ts"
 
 const _SQL = await initSqlJs()
 
@@ -47,8 +48,7 @@ function parseWindsurfKvValue(key: string, value: string): AddLlmUsageFromLogArg
   const model = (data.model as string) ?? "unknown"
   const provider = "windsurf"
 
-  const inputTokens = Math.round(tokensUsed * 2 / 3)
-  const outputTokens = tokensUsed - inputTokens
+  const { inputTokens, outputTokens } = estimateTokenSplit(tokensUsed)
 
   const ts = (data.timestamp as number) ?? (data.createdAt as number) ?? 0
   const date = ts > 0
@@ -123,7 +123,7 @@ export function scanWindsurf(from?: string, to?: string): ScanResult {
       const rawValue = String(row[valueIdx] ?? "")
 
       const parsed = parseWindsurfKvValue(key, rawValue)
-      if (parsed && isEntryInDateRange(parsed, from, to)) {
+      if (parsed && isDateInRange(parsed.date, from, to)) {
         entries.push(parsed)
       }
     }
@@ -138,20 +138,7 @@ export function scanWindsurf(from?: string, to?: string): ScanResult {
   return { source: "windsurf", entries }
 }
 
-function isEntryInDateRange(entry: { date: string }, from?: string, to?: string): boolean {
-  if (from && entry.date < from) return false
-  if (to && entry.date > to) return false
-  return true
-}
-
 /**
- * Create a Scanner instance for Windsurf.
+ * Scanner instance for Windsurf.
  */
-export function createWindsurfScanner(): Scanner {
-  return {
-    name: "windsurf",
-    scan(from?: string, to?: string): ScanResult {
-      return scanWindsurf(from, to)
-    },
-  }
-}
+export const createWindsurfScanner = defineScanner("windsurf", scanWindsurf)

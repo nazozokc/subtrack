@@ -5,7 +5,7 @@ import { consola } from "consola"
 import initSqlJs from "sql.js"
 import type { Database } from "sql.js"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
-import type { Scanner, ScanResult } from "./scanner-types.ts"
+import { defineScanner, type ScanResult } from "./scanner-types.ts"
 import { dateToStartOfDayMs, dateToEndOfDayMs } from "./date-utils.ts"
 
 const _SQL = await initSqlJs()
@@ -145,13 +145,6 @@ export function scanOpenCodeDb(from?: string, to?: string): ScanResult {
 }
 
 /**
- * Create a Scanner instance for OpenCode.
+ * Scanner instance for OpenCode.
  */
-export function createOpenCodeScanner(): Scanner {
-  return {
-    name: "opencode",
-    scan(from?: string, to?: string): ScanResult {
-      return scanOpenCodeDb(from, to)
-    },
-  }
-}
+export const createOpenCodeScanner = defineScanner("opencode", scanOpenCodeDb)

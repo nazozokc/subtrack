@@ -3,7 +3,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { consola } from "consola"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
-import type { Scanner, ScanResult } from "./scanner-types.ts"
+import { defineScanner, type ScanResult } from "./scanner-types.ts"
 import { isInDateRange } from "./date-utils.ts"
 
 /**
@@ -165,13 +165,6 @@ export function scanClaudeCode(from?: string, to?: string): ScanResult {
 }
 
 /**
- * Create a Scanner instance for Claude Code.
+ * Scanner instance for Claude Code.
  */
-export function createClaudeScanner(): Scanner {
-  return {
-    name: "claude",
-    scan(from?: string, to?: string): ScanResult {
-      return scanClaudeCode(from, to)
-    },
-  }
-}
+export const createClaudeScanner = defineScanner("claude", scanClaudeCode)

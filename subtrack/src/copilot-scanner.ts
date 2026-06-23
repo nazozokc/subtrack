@@ -3,8 +3,8 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { consola } from "consola"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
-import type { Scanner, ScanResult } from "./scanner-types.ts"
-import { isInDateRange } from "./date-utils.ts"
+import { defineScanner, type ScanResult } from "./scanner-types.ts"
+import { isDateInRange, estimateTokenSplit } from "./date-utils.ts"
 
 /**
  * Find Copilot CLI session event files.
@@ -61,9 +61,8 @@ function parseEventLine(
   const model = (payload.model as string) ?? (data.model as string) ?? "copilot"
   const provider = "github"
 
-  // Copilot typically only stores total tokens
-  const inputTokens = Math.round(tokensUsed * 2 / 3)
-  const outputTokens = tokensUsed - inputTokens
+  // Copilot typically only stores total tokens — estimate 2:1 split
+  const { inputTokens, outputTokens } = estimateTokenSplit(tokensUsed)
 
   // Extract timestamp
   const ts = (data.timestamp as number) ?? (data.createdAt as number) ?? Date.now()
@@ -118,7 +117,7 @@ export function scanCopilot(from?: string, to?: string): ScanResult {
       if (!trimmed) continue
 
       const parsed = parseEventLine(trimmed, basename)
-      if (parsed && isEntryInDateRange(parsed, from, to)) {
+      if (parsed && isDateInRange(parsed.date, from, to)) {
         entries.push(parsed)
       }
     }
@@ -128,20 +127,7 @@ export function scanCopilot(from?: string, to?: string): ScanResult {
   return { source: "copilot", entries }
 }
 
-function isEntryInDateRange(entry: { date: string }, from?: string, to?: string): boolean {
-  if (from && entry.date < from) return false
-  if (to && entry.date > to) return false
-  return true
-}
-
 /**
- * Create a Scanner instance for GitHub Copilot.
+ * Scanner instance for GitHub Copilot.
  */
-export function createCopilotScanner(): Scanner {
-  return {
-    name: "copilot",
-    scan(from?: string, to?: string): ScanResult {
-      return scanCopilot(from, to)
-    },
-  }
-}
+export const createCopilotScanner = defineScanner("copilot", scanCopilot)

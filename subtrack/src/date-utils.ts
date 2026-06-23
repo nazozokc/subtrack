@@ -47,3 +47,22 @@ export function isInDateRange(
   if (to && ts > dateToEndOfDayMs(to)) return false
   return true
 }
+
+/**
+ * Check if a YYYY-MM-DD date string falls within a date range.
+ * Simple string comparison (lexicographic order matches chronological for ISO dates).
+ */
+export function isDateInRange(dateStr: string, from?: string, to?: string): boolean {
+  if (from && dateStr < from) return false
+  if (to && dateStr > to) return false
+  return true
+}
+
+/**
+ * Estimate input/output token split from total tokens.
+ * Uses a 2:1 input-to-output heuristic common in chat completions.
+ */
+export function estimateTokenSplit(totalTokens: number): { inputTokens: number; outputTokens: number } {
+  const inputTokens = Math.round(totalTokens * 2 / 3)
+  return { inputTokens, outputTokens: totalTokens - inputTokens }
+}

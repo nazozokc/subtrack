@@ -38,12 +38,12 @@ export function clearScanners(): void {
  * Called automatically at import time.
  */
 function registerBuiltInScanners(): void {
-  registerScanner(createOpenCodeScanner())
-  registerScanner(createClaudeScanner())
-  registerScanner(createCodexScanner())
-  registerScanner(createCursorScanner())
-  registerScanner(createCopilotScanner())
-  registerScanner(createWindsurfScanner())
+  registerScanner(createOpenCodeScanner)
+  registerScanner(createClaudeScanner)
+  registerScanner(createCodexScanner)
+  registerScanner(createCursorScanner)
+  registerScanner(createCopilotScanner)
+  registerScanner(createWindsurfScanner)
 }
 
 registerBuiltInScanners()

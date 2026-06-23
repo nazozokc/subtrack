@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { consola } from "consola"
 import initSqlJs from "sql.js"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
-import type { Scanner, ScanResult } from "./scanner-types.ts"
+import { defineScanner, type ScanResult } from "./scanner-types.ts"
 import { isInDateRange, dateToStartOfDayMs, dateToEndOfDayMs } from "./date-utils.ts"
 
 const _SQL = await initSqlJs()
@@ -95,13 +95,6 @@ export function scanCodexCli(from?: string, to?: string): ScanResult {
 }
 
 /**
- * Create a Scanner instance for Codex CLI.
+ * Scanner instance for Codex CLI.
  */
-export function createCodexScanner(): Scanner {
-  return {
-    name: "codex",
-    scan(from?: string, to?: string): ScanResult {
-      return scanCodexCli(from, to)
-    },
-  }
-}
+export const createCodexScanner = defineScanner("codex", scanCodexCli)
