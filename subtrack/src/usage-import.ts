@@ -256,14 +256,14 @@ export async function handleUsageImport(flags: UsageImportFlags) {
       `Dry run: ${result.added} entries would be added` +
       (result.skipped > 0 ? `, ${result.skipped} duplicates` : "") +
       (result.noCost > 0 ? `, ${result.noCost} skipped (no cost data)` : "") +
-      (result.errors > 0 ? `, ${result.errors} unparseable entries` : ""),
+      (result.errors > 0 ? `, ${result.errors} unparsable entries` : ""),
     )
   } else {
     consola.success(
       `Imported: ${result.added} entries added` +
       (result.skipped > 0 ? `, ${result.skipped} duplicates skipped` : "") +
       (result.noCost > 0 ? `, ${result.noCost} skipped (no cost data)` : "") +
-      (result.errors > 0 ? `, ${result.errors} unparseable entries` : ""),
+      (result.errors > 0 ? `, ${result.errors} unparsable entries` : ""),
     )
   }
 }

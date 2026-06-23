@@ -1124,7 +1124,7 @@ test("handleUsageImport skips entries with no usage data", async () => {
   const { handleUsageImport } = await import("../usage.ts")
   await handleUsageImport({ file: filePath })
 
-  expect(successMessages.some((m) => m.includes("1 entries added") && m.includes("1 unparseable") && m.includes("1 skipped (no cost"))).toBe(true)
+  expect(successMessages.some((m) => m.includes("1 entries added") && m.includes("1 unparsable") && m.includes("1 skipped (no cost"))).toBe(true)
 
   if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
 })
