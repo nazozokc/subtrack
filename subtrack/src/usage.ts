@@ -8,8 +8,6 @@ export { handleUsageAdd } from "./usage-add.ts"
 export { handleUsageImport } from "./usage-import.ts"
 export { handleUsageRefresh } from "./usage-refresh.ts"
 
-// ── List ────────────────────────────────────────────────
-
 export async function handleUsageList(options: { provider?: string; from?: string; to?: string }) {
   const entries = getLlmUsage({
     provider: options.provider,
