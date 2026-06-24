@@ -82,11 +82,9 @@ async function resolveUsageAddOptions(flags: UsageAddFlags) {
       source: (input) => {
         const q = (input ?? "").trim()
         // Return models filtered by provider from cache
-        const results = searchPricingModels(cache!, q, provider === "__other__" ? undefined : provider)
-        // Limit to reasonable display
-        return results.slice(0, 50)
+        return searchPricingModels(cache!, q, provider === "__other__" ? undefined : provider)
       },
-      pageSize: 15,
+      pageSize: 20,
     })
     model = selected
     pricing = getModelPricing(cache, model)
