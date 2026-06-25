@@ -2,6 +2,8 @@ import { consola } from "consola"
 import { existsSync, statSync, readFileSync } from "node:fs"
 import { writeSubscription } from "./db.ts"
 import { validateName, validatePrice, validateTags, isValidCurrency, isValidCycle } from "./prompts.ts"
+import os from "node:os"
+import { resolveSafePath } from "./path-utils.ts"
 
 const MAX_CSV_SIZE = 10 * 1024 * 1024 // 10 MB
 
@@ -53,16 +55,23 @@ export async function handleImport(
     return
   }
 
+  // Validate path is within allowed base directories
+  const safeFile = resolveSafePath([os.homedir(), os.tmpdir()], file)
+  if (!safeFile) {
+    consola.error(`Invalid file path — must be within home directory`)
+    return
+  }
+
   let content: string
   try {
-    const st = statSync(file)
+    const st = statSync(safeFile)
     if (st.size > MAX_CSV_SIZE) {
       consola.error(
         `File too large (${(st.size / 1024 / 1024).toFixed(1)} MB). Maximum: ${MAX_CSV_SIZE / 1024 / 1024} MB`,
       )
       return
     }
-    content = readFileSync(file, "utf-8")
+    content = readFileSync(safeFile, "utf-8")
   } catch (err) {
     consola.error(`Failed to read file: ${String(err)}`)
     return

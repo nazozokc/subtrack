@@ -1387,7 +1387,7 @@ test("handleRestore restores from valid backup file", async () => {
 test("handleRestore with non-existent file shows error", async () => {
   const { handleRestore } = await import("../commands.ts")
   await handleRestore("/nonexistent/file.db.gz")
-  expect(errorMessages.some((m) => m.includes("not found"))).toBe(true)
+  expect(errorMessages.some((m) => m.includes("Invalid backup file"))).toBe(true)
 })
 
 test("handleRestore interactive: shows info when no backups found", async () => {
