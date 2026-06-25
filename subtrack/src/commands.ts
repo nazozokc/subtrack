@@ -7,7 +7,7 @@ import {
 import { gzipSync } from "node:zlib"
 import { encryptBuffer, decryptBuffer, isEncrypted } from "./crypto.ts"
 import path from "node:path"
-import type { Currency, Cycle, SharedArgs, AddSharedArgs, AddFlags, BackupFileInfo } from "./types.ts"
+import type { Currency, Cycle, Status, SharedArgs, AddSharedArgs, AddFlags, BackupFileInfo } from "./types.ts"
 import {
   getSubscriptions,
   getSubscription,
@@ -43,14 +43,20 @@ import { fetchFxRates, convertPrice } from "./fx.ts"
 import {
   CURRENCY_CHOICES,
   CYCLE_CHOICES,
+  STATUS_CHOICES,
   isValidCurrency,
   isValidCycle,
+  isValidStatus,
   validateName,
   validatePrice,
   validateTags,
+  validateBillingDay,
   promptString,
   promptSelect,
 } from "./prompts.ts"
+import { showUpcoming } from "./upcoming.ts"
+import { showAnalytics } from "./analytics.ts"
+import { loadConfig, setConfig, resetConfig, CONFIG_KEYS } from "./config.ts"
 
 // ── Add workflow ────────────────────────────────────────
 
@@ -109,15 +115,45 @@ async function resolveAddOptions(flags: AddFlags) {
     }
   }
 
+  // billingDay: optional, 1-31
+  let billingDay: number | null = null
+  const billingDayStr = flags.billingDay
+  if (billingDayStr !== undefined) {
+    const trimmed = billingDayStr.trim()
+    if (trimmed) {
+      const valid = validateBillingDay(trimmed)
+      if (valid !== true) { consola.error(valid); return null }
+      billingDay = Number(trimmed)
+    }
+  } else if (prompted) {
+    const dayStr = await input({
+      message: "billing day (1-31, optional)",
+      validate: validateBillingDay,
+    })
+    if (dayStr.trim()) billingDay = Number(dayStr)
+  }
+
+  // status
+  const statusRes = await promptSelect(
+    flags.status,
+    "status",
+    STATUS_CHOICES,
+    isValidStatus,
+  )
+  if (!statusRes) return null
+
   const tags = tagsStr.split(",").map((t) => t.trim()).filter(Boolean)
   const price = Number(priceRes.value)
   const name = nameRes.value.trim()
   const currency = currencyRes.value
   const cycle = cycleRes.value
+  const status = statusRes.value
+  prompted = prompted || statusRes.prompted
 
   if (prompted) {
+    const extra = status !== "active" ? `, status: ${status}` : ""
     const ok = await confirm({
-      message: `Save "${name}" (${formatPrice(price, currency)}, ${cycle})?`,
+      message: `Save "${name}" (${formatPrice(price, currency)}, ${cycle}${extra})?`,
       default: true,
     })
     if (!ok) {
@@ -126,7 +162,7 @@ async function resolveAddOptions(flags: AddFlags) {
     }
   }
 
-  return { name, price, currency, cycle, tags }
+  return { name, price, currency, cycle, tags, status, billingDay }
 }
 
 // ── Command handlers ────────────────────────────────────
@@ -443,7 +479,7 @@ async function safeAutoBackup() {
 
 export async function handleExport(
   format: string,
-  options: { currency?: string; tags?: string },
+  options: { currency?: string; tags?: string; output?: string },
 ) {
   if (format !== "csv" && format !== "json" && format !== "md") {
     consola.error(`Unsupported export format: "${format}". Supported: csv, json, md`)
@@ -477,8 +513,13 @@ export async function handleExport(
     }
   }
 
-  const output = format === "csv" ? exportCsv(list) : format === "json" ? exportJson(list) : exportMd(list)
-  consola.log(output)
+  const content = format === "csv" ? exportCsv(list) : format === "json" ? exportJson(list) : exportMd(list)
+  if (options.output) {
+    writeFileSync(options.output, content, { mode: 0o600 })
+    consola.success(`Exported to: ${options.output}`)
+  } else {
+    consola.log(content)
+  }
 }
 
 export async function handlePayment(
@@ -524,7 +565,8 @@ export async function handleEdit(
   const hasFlags =
     flags.name !== undefined || flags.price !== undefined ||
     flags.currency !== undefined || flags.cycle !== undefined ||
-    flags.tags !== undefined
+    flags.tags !== undefined || flags.status !== undefined ||
+    flags.billingDay !== undefined
 
   if (hasFlags) {
     // Non-interactive: update only flagged fields
@@ -533,6 +575,11 @@ export async function handleEdit(
     if (flags.price !== undefined) newData.price = Number(flags.price)
     if (flags.currency !== undefined) newData.currency = flags.currency
     if (flags.cycle !== undefined) newData.cycle = flags.cycle as Cycle
+    if (flags.status !== undefined) newData.status = flags.status as Status
+    if (flags.billingDay !== undefined) {
+      const trimmed = flags.billingDay.trim()
+      newData.billingDay = trimmed ? Number(trimmed) : null
+    }
     if (flags.tags !== undefined) {
       newData.tags = flags.tags.split(",").map((t) => t.trim()).filter(Boolean)
     }
@@ -557,6 +604,8 @@ export async function handleEdit(
       { name: `price (${formatPrice(sub.price, sub.currency)})`, value: "price" },
       { name: `currency (${sub.currency})`, value: "currency" },
       { name: `cycle (${sub.cycle})`, value: "cycle" },
+      { name: `status (${sub.status})`, value: "status" },
+      { name: `billing day (${sub.billingDay ?? "not set"})`, value: "billingDay" },
       { name: `tags (${sub.tags.join(", ") || "none"})`, value: "tags" },
     ],
   })
@@ -597,6 +646,21 @@ export async function handleEdit(
       choices: CYCLE_CHOICES,
     })
     newData.cycle = cycle
+  }
+  if (fields.includes("status")) {
+    const status = await select({
+      message: "New status:",
+      choices: STATUS_CHOICES,
+    })
+    newData.status = status
+  }
+  if (fields.includes("billingDay")) {
+    const day = await input({
+      message: "New billing day (1-31, empty to clear):",
+      default: sub.billingDay ? String(sub.billingDay) : "",
+      validate: validateBillingDay,
+    })
+    newData.billingDay = day.trim() ? Number(day) : null
   }
   if (fields.includes("tags")) {
     const existingTags = getAllTags()
@@ -684,4 +748,49 @@ export function handleTagPrune() {
 
 export async function handleSummary() {
   await showSummary()
+}
+
+// ── Upcoming ──────────────────────────────────────────────
+
+export function handleUpcoming(days?: number): void {
+  showUpcoming(days)
+}
+
+// ── Analytics ─────────────────────────────────────────────
+
+export function handleAnalytics(): void {
+  showAnalytics()
+}
+
+// ── Config ────────────────────────────────────────────────
+
+export function handleConfigList(): void {
+  const config = loadConfig()
+  for (const key of CONFIG_KEYS) {
+    consola.log(`${key}: ${config[key]}`)
+  }
+}
+
+export function handleConfigGet(key: string): void {
+  const config = loadConfig()
+  if (!(CONFIG_KEYS as readonly string[]).includes(key)) {
+    consola.error(`Unknown config key: "${key}". Valid: ${CONFIG_KEYS.join(", ")}`)
+    return
+  }
+  consola.log(`${key}: ${config[key as keyof typeof config]}`)
+}
+
+export function handleConfigSet(key: string, value: string): void {
+  setConfig(key, value)
+}
+
+export async function handleConfigReset(): Promise<void> {
+  const { unlinkSync, existsSync } = await import("node:fs")
+  const { getConfigPath } = await import("./config.ts")
+  const configPath = getConfigPath()
+  if (existsSync(configPath)) {
+    try { unlinkSync(configPath) } catch { /* best-effort */ }
+  }
+  resetConfig()
+  consola.success("Config reset to defaults")
 }

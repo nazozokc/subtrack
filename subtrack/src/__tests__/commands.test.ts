@@ -406,6 +406,23 @@ test("escapeCsv handles empty strings", async () => {
   expect(result).toContain(",,")
 })
 
+test("handleExport with --output flag writes to file", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({ name: "Netflix", price: 1500, currency: "JPY", cycle: "monthly", tags: ["video"] })
+  const tmpDir = createTempDir()
+  const outPath = join(tmpDir, "export.csv")
+
+  const { handleExport } = await import("../commands.ts")
+  await handleExport("csv", { output: outPath })
+
+  const { existsSync, readFileSync } = await import("node:fs")
+  expect(existsSync(outPath)).toBe(true)
+  const content = readFileSync(outPath, "utf-8")
+  expect(content).toContain("Netflix")
+  expect(content).toContain("1500")
+  expect(successMessages.some((m) => m.includes("Exported"))).toBe(true)
+})
+
 // ── handleList ───────────────────────────────────────────
 
 test("handleList delegates to spreadSubscription", async () => {
@@ -486,6 +503,43 @@ test("handleEdit updates tags with --tags flag", async () => {
 
   const updated = db.getSubscription(sub.id)
   expect(updated?.tags).toEqual(["new1", "new2"])
+})
+
+test("handleEdit updates status with --status flag", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({ name: "Test", price: 1000, currency: "USD", cycle: "monthly", tags: [] })
+  const [sub] = db.getSubscriptions()
+
+  const { handleEdit } = await import("../commands.ts")
+  await handleEdit(sub.id, { status: "paused" })
+
+  const updated = db.getSubscription(sub.id)
+  expect(updated?.status).toBe("paused")
+})
+
+test("handleEdit updates billingDay with --billingDay flag", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({ name: "Test", price: 1000, currency: "USD", cycle: "monthly", tags: [] })
+  const [sub] = db.getSubscriptions()
+
+  const { handleEdit } = await import("../commands.ts")
+  await handleEdit(sub.id, { billingDay: "15" })
+
+  const updated = db.getSubscription(sub.id)
+  expect(updated?.billingDay).toBe(15)
+})
+
+test("handleEdit clears billingDay with empty --billingDay flag", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({ name: "Test", price: 1000, currency: "USD", cycle: "monthly", tags: [], billingDay: 20 })
+  const [sub] = db.getSubscriptions()
+  expect(sub.billingDay).toBe(20)
+
+  const { handleEdit } = await import("../commands.ts")
+  await handleEdit(sub.id, { billingDay: "" })
+
+  const updated = db.getSubscription(sub.id)
+  expect(updated?.billingDay).toBeNull()
 })
 
 // ── handleEdit (interactive, with mocked prompts) ───────

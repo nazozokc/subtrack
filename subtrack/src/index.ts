@@ -17,6 +17,12 @@ import {
   handleBackup,
   handleRestore,
   handlePayment,
+  handleUpcoming,
+  handleAnalytics,
+  handleConfigList,
+  handleConfigGet,
+  handleConfigSet,
+  handleConfigReset,
 } from "./commands.ts"
 import {
   handleUsageAdd,
@@ -51,6 +57,8 @@ const addCommand = define({
     currency: { type: "string", description: "Currency" },
     cycle: { type: "string", description: "Billing cycle" },
     tags: { type: "string", description: "Comma-separated tags" },
+    billingDay: { type: "string", description: "Billing day of month (1-31)" },
+    status: { type: "string", description: "Status: active, paused, cancelled (default: active)" },
   },
   run: (ctx) => handleAdd(ctx.values),
 })
@@ -65,6 +73,8 @@ const editCommand = define({
     currency: { type: "string", description: "Currency" },
     cycle: { type: "string", description: "Billing cycle" },
     tags: { type: "string", description: "Comma-separated tags" },
+    status: { type: "string", description: "Status: active, paused, cancelled" },
+    billingDay: { type: "string", description: "Billing day of month (1-31)" },
   },
   run: (ctx) => handleEdit(ctx.values.id ? Number(ctx.values.id) : undefined, ctx.values),
 })
@@ -147,8 +157,9 @@ const exportCommand = define({
     format: { type: "positional", description: "Export format: csv, json, md" },
     currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
     tags: { type: "string", description: "Filter by comma-separated tags" },
+    output: { type: "string", short: "o", description: "Output file path (default: stdout)" },
   },
-  run: (ctx) => handleExport(ctx.values.format, { currency: ctx.values.currency, tags: ctx.values.tags }),
+  run: (ctx) => handleExport(ctx.values.format, { currency: ctx.values.currency, tags: ctx.values.tags, output: ctx.values.output }),
 })
 
 const importCommand = define({
@@ -203,6 +214,73 @@ const paymentCommand = define({
     const period = (ctx.values.period || "monthly") as Cycle
     handlePayment(period, { currency: ctx.values.currency, api: ctx.values.api })
   },
+})
+
+// ── Upcoming ──────────────────────────────────────────────
+
+const upcomingCommand = define({
+  name: "upcoming",
+  description: "Show upcoming bills within a number of days",
+  args: {
+    days: { type: "positional", description: "Number of days (default: 7)", required: false },
+  },
+  run: (ctx) => {
+    const days = ctx.values.days ? Number(ctx.values.days) : undefined
+    handleUpcoming(days)
+  },
+})
+
+// ── Analytics ─────────────────────────────────────────────
+
+const analyticsCommand = define({
+  name: "analytics",
+  description: "Show detailed subscription analytics",
+  run: () => handleAnalytics(),
+})
+
+// ── Config ────────────────────────────────────────────────
+
+const configListCmd = define({
+  name: "list",
+  description: "List all config values",
+  run: () => handleConfigList(),
+})
+
+const configGetCmd = define({
+  name: "get",
+  description: "Get a config value",
+  args: {
+    key: { type: "positional", description: "Config key" },
+  },
+  run: (ctx) => handleConfigGet(ctx.values.key),
+})
+
+const configSetCmd = define({
+  name: "set",
+  description: "Set a config value",
+  args: {
+    key: { type: "positional", description: "Config key" },
+    value: { type: "positional", description: "Config value" },
+  },
+  run: (ctx) => handleConfigSet(ctx.values.key, ctx.values.value),
+})
+
+const configResetCmd = define({
+  name: "reset",
+  description: "Reset config to defaults",
+  run: () => handleConfigReset(),
+})
+
+const configCommand = define({
+  name: "config",
+  description: "Manage configuration",
+  subCommands: {
+    list: configListCmd,
+    get: configGetCmd,
+    set: configSetCmd,
+    reset: configResetCmd,
+  },
+  run: () => consola.info("Usage: subtrack config list|get|set|reset"),
 })
 
 // ── Usage commands ───────────────────────────────────────
@@ -305,7 +383,7 @@ process.umask(0o077)
 try {
   await cli(process.argv.slice(2), mainCommand, {
     name: "subtrack",
-    version: "4.0.9",
+    version: "6.0.0",
     subCommands: {
       list: listCommand,
       add: addCommand,
@@ -319,6 +397,9 @@ try {
       backup: backupCommand,
       restore: restoreCommand,
       payment: paymentCommand,
+      upcoming: upcomingCommand,
+      analytics: analyticsCommand,
+      config: configCommand,
       usage: usageCommand,
     },
   })

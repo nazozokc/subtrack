@@ -523,6 +523,8 @@ export const updateSubscription = (
     if (fields.price !== undefined) { sets.push("price = ?"); params.push(fields.price) }
     if (fields.currency !== undefined) { sets.push("currency = ?"); params.push(fields.currency) }
     if (fields.cycle !== undefined) { sets.push("cycle = ?"); params.push(fields.cycle) }
+    if (fields.status !== undefined) { sets.push("status = ?"); params.push(fields.status) }
+    if (fields.billingDay !== undefined) { sets.push("billing_day = ?"); params.push(fields.billingDay) }
 
     if (sets.length > 0) {
       params.push(id)
