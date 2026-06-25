@@ -102,20 +102,16 @@ export function scanCursor(from?: string, to?: string): ScanResult {
     db = new _SQL.Database(data)
 
     // Try both possible table names
-    let tableName = "cursorDiskKV"
     const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table'")
-    if (tables.length > 0) {
-      const tableNames = tables[0].values.map((r) => String(r[0]))
-      if (tableNames.includes("ItemTable")) {
-        tableName = "ItemTable"  // Older Cursor versions
-      } else if (!tableNames.includes(tableName)) {
-        consola.info("No known Cursor KV table found")
-        return { source: "cursor", entries: [] }
-      }
+    const tableNames = tables.length > 0 ? tables[0].values.map((r) => String(r[0])) : []
+    const knownTables = ["cursorDiskKV", "ItemTable"]
+    const tableName = knownTables.find((t) => tableNames.includes(t))
+    if (!tableName) {
+      consola.info("No known Cursor KV table found")
+      return { source: "cursor", entries: [] }
     }
 
-    const sql = `SELECT key, value FROM ${tableName} WHERE key LIKE 'bubbleId:%'`
-    const results = db.exec(sql)
+    const results = db.exec(`SELECT key, value FROM "${tableName}" WHERE key LIKE 'bubbleId:%'`)
 
     if (results.length === 0) {
       consola.info("No usage data found in Cursor DB")

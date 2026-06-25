@@ -38,10 +38,11 @@ export function scanCodexCli(from?: string, to?: string): ScanResult {
     db = new _SQL.Database(data)
 
     let sql = `SELECT id, tokens_used, model, model_provider, created_at_ms FROM threads WHERE tokens_used > 0`
-    if (from) sql += ` AND created_at_ms >= ${dateToStartOfDayMs(from)}`
-    if (to) sql += ` AND created_at_ms <= ${dateToEndOfDayMs(to)}`
+    const params: (number | string)[] = []
+    if (from) { sql += ` AND created_at_ms >= ?`; params.push(dateToStartOfDayMs(from)) }
+    if (to) { sql += ` AND created_at_ms <= ?`; params.push(dateToEndOfDayMs(to)) }
 
-    const results = db.exec(sql)
+    const results = db.exec(sql, params)
 
     if (results.length === 0) {
       consola.info("No usage data found in Codex CLI DB")
