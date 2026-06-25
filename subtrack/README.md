@@ -31,6 +31,10 @@ A CLI tool to manage your subscription services from the terminal.
 - **Cycle-aware calculation** — automatically converts weekly, quarterly, yearly etc. to any period
 - **37 currencies** supported: AED, ARS, AUD, BRL, CAD, CHF, CLP, CNY, COP, CZK, DKK, EGP, EUR, GBP, HKD, HUF, IDR, ILS, INR, JPY, KRW, MXN, MYR, NGN, NOK, NZD, PHP, PLN, SAR, SEK, SGD, THB, TRY, TWD, USD, VND, ZAR
 - **6 billing cycles**: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly
+- **Status tracking** — active, paused, cancelled with color-coded display
+- **Upcoming bills** — see what's due soon with `subtrack upcoming`
+- **Analytics** — detailed spending breakdown with `subtrack analytics`
+- **Configuration** — customize default currency, monthly budget via `subtrack config`
 - **SQLite** storage — portable, zero-config, lives in `~/.config/subtrack/subtrack.db`
 - **Input validation** — name length, price bounds, tag limits
 
@@ -102,6 +106,16 @@ subtrack backup
 
 # Restore from backup
 subtrack restore
+
+# Show upcoming bills (next 7 days)
+subtrack upcoming
+
+# Show subscription analytics
+subtrack analytics
+
+# View or change configuration
+subtrack config list
+subtrack config set defaultCurrency JPY
 
 # Track LLM API usage
 subtrack usage add --provider openai --model gpt-4o --inputTokens 1000 --outputTokens 500
@@ -185,6 +199,8 @@ Adds a new subscription. Without flags, prompts for all fields interactively.
 | `--currency <currency>` | Currency code (e.g. JPY, USD)      |
 | `--cycle <cycle>`      | Billing cycle (e.g. monthly, yearly) |
 | `--tags <tags>`       | Comma-separated tags                 |
+| `--billingDay <day>`  | Billing day of month (1-31)          |
+| `--status <status>`   | Status: active, paused, cancelled    |
 
 All flags are optional. Providing all flags skips prompts entirely (useful for
 scripts). Partial flags still prompt for missing fields.
@@ -201,13 +217,15 @@ to delete. Confirmation is required before deletion.
 Edits an existing subscription. If no ID is given, an interactive selector
 shows all subscriptions to pick from.
 
-| Option                | Description                          |
-| --------------------- | ------------------------------------ |
-| `--name <name>`       | New subscription name                |
-| `--price <price>`     | New payment amount (integer)         |
-| `--currency <currency>` | New currency code (e.g. JPY, USD) |
-| `--cycle <cycle>`      | New billing cycle                   |
-| `--tags <tags>`       | New comma-separated tags             |
+| Option                  | Description                          |
+| ----------------------- | ------------------------------------ |
+| `--name <name>`         | New subscription name                |
+| `--price <price>`       | New payment amount (integer)         |
+| `--currency <currency>` | New currency code (e.g. JPY, USD)    |
+| `--cycle <cycle>`       | New billing cycle                    |
+| `--status <status>`     | New status: active, paused, cancelled |
+| `--billingDay <day>`    | New billing day of month (1-31)      |
+| `--tags <tags>`         | New comma-separated tags             |
 
 Without flags, prompts for which fields to change. With flags, only the
 specified fields are updated (non-interactive).
@@ -285,10 +303,11 @@ subtrack tag prune
 
 Exports subscriptions in the specified format.
 
-| Option              | Description                                       |
-| ------------------- | ------------------------------------------------- |
+| Option               | Description                                       |
+| -------------------- | ------------------------------------------------- |
 | `-c, --currency <C>` | Convert all prices to target currency             |
-| `--tags <tags>`     | Filter by comma-separated tags                    |
+| `--tags <tags>`      | Filter by comma-separated tags                    |
+| `-o, --output <file>` | Write to file instead of stdout                  |
 
 Supported formats: `csv`, `json`, `md`.
 
@@ -301,6 +320,9 @@ subtrack export json --currency JPY
 
 # Export as Markdown filtered by tag
 subtrack export md --tags video
+
+# Export to file
+subtrack export csv --output subscriptions.csv
 ```
 
 #### `import <file>`
@@ -374,17 +396,70 @@ subtrack restore
 subtrack restore backup.db.gz --force
 ```
 
-#### `usage add|list|delete|refresh`
+#### `upcoming [days]`
+
+Shows subscriptions with upcoming bills within the specified number of days.
+Filters out cancelled subscriptions.
+
+```bash
+# Show bills due in the next 7 days (default)
+subtrack upcoming
+
+# Show bills due in the next 30 days
+subtrack upcoming 30
+```
+
+#### `analytics`
+
+Shows detailed subscription analytics: status breakdown, monthly spending by
+currency, budget comparison (if configured), and monthly spending by tag.
+
+```bash
+subtrack analytics
+```
+
+#### `config list|get|set|reset`
+
+Manages subtrack configuration stored in `~/.config/subtrack/config.json`.
+
+| Subcommand | Description                                      |
+| ---------- | ------------------------------------------------ |
+| `list`     | List all configuration values                    |
+| `get`      | Get a specific configuration value               |
+| `set`      | Set a configuration value                        |
+| `reset`    | Reset configuration to defaults                  |
+
+Available config keys: `defaultCurrency`, `monthlyBudget`, `theme`.
+
+```bash
+# List all config
+subtrack config list
+
+# Get a specific value
+subtrack config get defaultCurrency
+
+# Set default currency to JPY
+subtrack config set defaultCurrency JPY
+
+# Set monthly budget (in USD cents)
+subtrack config set monthlyBudget 50000
+
+# Reset to defaults
+subtrack config reset
+```
+
+#### `usage add|list|delete|import|refresh`
 
 Tracks LLM API usage costs. Automatically calculates costs using LiteLLM
 pricing data.
 
-| Subcommand | Description                                         |
-| ---------- | --------------------------------------------------- |
-| `add`      | Add an LLM API usage entry                          |
-| `list`     | List usage entries (filterable by provider/date)    |
-| `delete`   | Delete usage entries (interactive or by ID)         |
-| `refresh`  | Force-refresh the LiteLLM pricing cache             |
+| Subcommand | Description                                                              |
+| ---------- | ------------------------------------------------------------------------ |
+| `add`      | Add an LLM API usage entry                                               |
+| `list`     | List usage entries (filterable by provider/date)                         |
+| `delete`   | Delete usage entries (interactive or by ID)                              |
+| `import`   | Import LLM API usage from JSONL/JSON response log files                  |
+| `refresh`  | Auto-scan known sources (OpenCode DB, Claude Code, etc.) and import data |
 
 ```bash
 # Add a usage entry (auto-calculated cost)
@@ -405,8 +480,14 @@ subtrack usage delete 42
 # Interactive delete
 subtrack usage delete
 
-# Refresh pricing cache
+# Refresh — auto-scan known sources and import usage data for current month
 subtrack usage refresh
+
+# Refresh scanning a specific date range
+subtrack usage refresh --from 2026-01-01 --to 2026-06-22
+
+# Import usage from JSONL log file
+subtrack usage import usage_log.jsonl
 ```
 
 ### Non-interactive mode

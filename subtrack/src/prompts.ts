@@ -1,6 +1,6 @@
 import { input, select } from "@inquirer/prompts"
 import { consola } from "consola"
-import type { Currency, Cycle } from "./types.ts"
+import type { Currency, Cycle, Status } from "./types.ts"
 
 export const CURRENCY_CHOICES: { name: string; value: Currency }[] = [
   { name: "AED (UAE Dirham)", value: "AED" },
@@ -42,6 +42,12 @@ export const CURRENCY_CHOICES: { name: string; value: Currency }[] = [
   { name: "ZAR (South African Rand)", value: "ZAR" },
 ]
 
+export const STATUS_CHOICES: { name: string; value: Status }[] = [
+  { name: "active", value: "active" },
+  { name: "paused", value: "paused" },
+  { name: "cancelled", value: "cancelled" },
+]
+
 export const CYCLE_CHOICES: { name: string; value: Cycle }[] = [
   { name: "weekly", value: "weekly" },
   { name: "bi-weekly", value: "bi-weekly" },
@@ -61,6 +67,17 @@ export function isValidCurrency(v: string): v is Currency {
 
 export function isValidCycle(v: string): v is Cycle {
   return CYCLE_CHOICES.some((c) => c.value === v)
+}
+
+export function isValidStatus(v: string): v is Status {
+  return v === "active" || v === "paused" || v === "cancelled"
+}
+
+export function validateBillingDay(v: string): string | true {
+  if (!v.trim()) return true // empty = not set
+  const n = Number(v)
+  if (!Number.isInteger(n) || n < 1 || n > 31) return "Enter a number between 1 and 31"
+  return true
 }
 
 export function validateName(v: string): string | true {

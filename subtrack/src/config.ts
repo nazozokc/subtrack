@@ -23,7 +23,7 @@ function getConfigDir(): string {
   return process.env.SUBSC_CLI_DB_DIR ?? path.join(homedir(), ".config", "subtrack")
 }
 
-function getConfigPath(): string {
+export function getConfigPath(): string {
   return path.join(getConfigDir(), "config.json")
 }
 
