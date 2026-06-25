@@ -114,7 +114,12 @@ export function handleConfigSet(key: string, value: string): void {
 export async function handleConfigReset(): Promise<void> {
   const configPath = getConfigPath()
   if (existsSync(configPath)) {
-    try { unlinkSync(configPath) } catch { /* best-effort */ }
+    try {
+      unlinkSync(configPath)
+    } catch (err) {
+      consola.error(`Failed to remove config file: ${err instanceof Error ? err.message : String(err)}`)
+      return
+    }
   }
   resetConfig()
   consola.success("Config reset to defaults")

@@ -225,8 +225,16 @@ const upcomingCommand = define({
     days: { type: "positional", description: "Number of days (default: 7)", required: false },
   },
   run: (ctx) => {
-    const days = ctx.values.days ? Number(ctx.values.days) : undefined
-    handleUpcoming(days)
+    if (ctx.values.days !== undefined) {
+      const parsed = Number(ctx.values.days)
+      if (isNaN(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+        consola.error("days must be a non-negative integer")
+        return
+      }
+      handleUpcoming(parsed)
+    } else {
+      handleUpcoming(undefined)
+    }
   },
 })
 
