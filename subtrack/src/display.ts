@@ -124,7 +124,8 @@ function renderTable(rows: string[][]): string {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
-    const isTotal = row[2].endsWith("TOTAL")
+    // Total rows have empty name and cycle columns
+    const isTotal = row[0] === "" && row[1] === ""
     if (isTotal) {
       table.push(row.map((cell, j) => {
         if (j === 2 || j === 3) return pc.bold(pc.yellow(cell))

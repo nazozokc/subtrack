@@ -95,20 +95,16 @@ export function scanWindsurf(from?: string, to?: string): ScanResult {
     db = new _SQL.Database(data)
 
     const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table'")
-    let tableName = "windsurfDiskKV"
-    if (tables.length > 0) {
-      const tableNames = tables[0].values.map((r) => String(r[0]))
-      if (tableNames.includes("ItemTable")) {
-        tableName = "ItemTable"
-      } else if (!tableNames.includes(tableName)) {
-        consola.info("No known Windsurf KV table found")
-        return { source: "windsurf", entries: [] }
-      }
+    const tableNames = tables.length > 0 ? tables[0].values.map((r) => String(r[0])) : []
+    const knownTables = ["windsurfDiskKV", "ItemTable"]
+    const tableName = knownTables.find((t) => tableNames.includes(t))
+    if (!tableName) {
+      consola.info("No known Windsurf KV table found")
+      return { source: "windsurf", entries: [] }
     }
 
     // Fetch all key-value pairs that might contain usage data
-    const sql = `SELECT key, value FROM ${tableName}`
-    const results = db.exec(sql)
+    const results = db.exec(`SELECT key, value FROM "${tableName}"`)
 
     if (results.length === 0) {
       consola.info("No data found in Windsurf DB")

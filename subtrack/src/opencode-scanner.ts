@@ -108,15 +108,18 @@ export function scanOpenCodeDb(from?: string, to?: string): ScanResult {
     db = new _SQL.Database(data)
 
     let sql = `SELECT id, data FROM message WHERE json_extract(data, '$.tokens.input') IS NOT NULL`
+    const params: (number | string)[] = []
 
     if (from) {
-      sql += ` AND json_extract(data, '$.time.created') >= ${dateToStartOfDayMs(from)}`
+      sql += ` AND json_extract(data, '$.time.created') >= ?`
+      params.push(dateToStartOfDayMs(from))
     }
     if (to) {
-      sql += ` AND json_extract(data, '$.time.created') <= ${dateToEndOfDayMs(to)}`
+      sql += ` AND json_extract(data, '$.time.created') <= ?`
+      params.push(dateToEndOfDayMs(to))
     }
 
-    const results = db.exec(sql)
+    const results = db.exec(sql, params)
 
     if (results.length === 0) {
       consola.info("No token usage data found in OpenCode DB")
