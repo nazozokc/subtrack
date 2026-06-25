@@ -1,5 +1,11 @@
-import { resolve, normalize, isAbsolute, dirname } from "node:path"
+import { resolve, normalize, isAbsolute, dirname, sep } from "node:path"
 import { realpathSync, existsSync } from "node:fs"
+
+/** Check if `child` path starts with `parent` directory, using platform separator. */
+function isWithin(child: string, parent: string): boolean {
+  const prefix = parent.endsWith(sep) ? parent : `${parent}${sep}`
+  return child.startsWith(prefix)
+}
 
 /**
  * Resolve a base directory through symlinks (if it exists), falling back
@@ -37,7 +43,7 @@ export function resolveSafePath(basePaths: string[], userPath: string): string |
     const base = resolveBase(basePath)
 
     // Must be within the base directory
-    if (!resolved.startsWith(base.endsWith("/") ? base : `${base}/`)) {
+    if (!isWithin(resolved, base)) {
       continue
     }
 
@@ -74,7 +80,7 @@ export function resolveSafeOutputPath(basePaths: string[], targetPath: string): 
 
     if (!existsSync(checkPath)) {
       // Nothing in the path exists — check the normalized path syntactically
-      if (absolute.startsWith(base.endsWith("/") ? base : `${base}/`) || absolute === base) {
+      if (isWithin(absolute, base) || absolute === base) {
         return absolute
       }
       continue
@@ -83,7 +89,7 @@ export function resolveSafeOutputPath(basePaths: string[], targetPath: string): 
     // Resolve symlinks from the existing portion
     try {
       const resolved = realpathSync(checkPath)
-      if (!resolved.startsWith(base.endsWith("/") ? base : `${base}/`)) {
+      if (!isWithin(resolved, base)) {
         continue
       }
       // Reconstruct the full path from the resolved base + remaining components
