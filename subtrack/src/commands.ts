@@ -7,7 +7,7 @@ import {
 import { gzipSync } from "node:zlib"
 import { encryptBuffer, decryptBuffer, isEncrypted } from "./crypto.ts"
 import path from "node:path"
-import type { Currency, Cycle, Status, SharedArgs, AddSharedArgs, AddFlags, BackupFileInfo } from "./types.ts"
+import type { Currency, Cycle, Status, SharedArgs, AddSharedArgs, AddFlags, BackupFileInfo, SubtrackConfig } from "./types.ts"
 import {
   getSubscriptions,
   getSubscription,
@@ -777,11 +777,15 @@ export function handleConfigGet(key: string): void {
     consola.error(`Unknown config key: "${key}". Valid: ${CONFIG_KEYS.join(", ")}`)
     return
   }
-  consola.log(`${key}: ${config[key as keyof typeof config]}`)
+  consola.log(`${key}: ${config[key as keyof SubtrackConfig]}`)
 }
 
 export function handleConfigSet(key: string, value: string): void {
-  setConfig(key, value)
+  if (!(CONFIG_KEYS as readonly string[]).includes(key)) {
+    consola.error(`Unknown config key: "${key}". Valid: ${CONFIG_KEYS.join(", ")}`)
+    return
+  }
+  setConfig(key as (typeof CONFIG_KEYS)[number], value)
 }
 
 export async function handleConfigReset(): Promise<void> {
