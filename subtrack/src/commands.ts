@@ -18,6 +18,8 @@ import { exportCsv, exportMd, exportJson } from "./export.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import { loadConfig, setConfig, resetConfig, CONFIG_KEYS, getConfigPath } from "./config.ts"
 import { unlinkSync, existsSync } from "node:fs"
+import os from "node:os"
+import { resolveSafeOutputPath } from "./path-utils.ts"
 
 export async function handleExport(
   format: string,
@@ -57,8 +59,13 @@ export async function handleExport(
 
   const content = format === "csv" ? exportCsv(list) : format === "json" ? exportJson(list) : exportMd(list)
   if (options.output) {
-    writeFileSync(options.output, content, { mode: 0o600 })
-    consola.success(`Exported to: ${options.output}`)
+    const safePath = resolveSafeOutputPath([os.homedir(), os.tmpdir()], options.output)
+    if (!safePath) {
+      consola.error(`Invalid output path — must be within home directory`)
+      return
+    }
+    writeFileSync(safePath, content, { mode: 0o600 })
+    consola.success(`Exported to: ${safePath}`)
   } else {
     consola.log(content)
   }
@@ -114,7 +121,12 @@ export function handleConfigSet(key: string, value: string): void {
 export async function handleConfigReset(): Promise<void> {
   const configPath = getConfigPath()
   if (existsSync(configPath)) {
-    try { unlinkSync(configPath) } catch { /* best-effort */ }
+    try {
+      unlinkSync(configPath)
+    } catch (err) {
+      consola.error(`Failed to remove config file: ${err instanceof Error ? err.message : String(err)}`)
+      return
+    }
   }
   resetConfig()
   consola.success("Config reset to defaults")

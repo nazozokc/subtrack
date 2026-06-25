@@ -1,11 +1,21 @@
 import { test, expect, beforeEach, afterEach, vi } from "vitest"
 import { consola } from "consola"
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 const logMessages: string[] = []
 const errorMessages: string[] = []
 const successMessages: string[] = []
 
+let originalEnv: string | undefined
+
 beforeEach(() => {
+  // Isolate config to temporary directory
+  originalEnv = process.env.SUBSC_CLI_DB_DIR
+  const testConfigDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  process.env.SUBSC_CLI_DB_DIR = testConfigDir
+
   logMessages.length = 0
   errorMessages.length = 0
   successMessages.length = 0
@@ -25,6 +35,12 @@ beforeEach(() => {
 
 afterEach(() => {
   consola.mockTypes()
+  // Restore original environment
+  if (originalEnv === undefined) {
+    delete process.env.SUBSC_CLI_DB_DIR
+  } else {
+    process.env.SUBSC_CLI_DB_DIR = originalEnv
+  }
 })
 
 test("handleConfigList shows all config keys", async () => {
@@ -50,7 +66,14 @@ test("handleConfigGet shows error for unknown key", async () => {
 
 test("handleConfigSet sets a config value", async () => {
   const { handleConfigSet } = await import("../commands.ts")
+  const { loadConfig, resetConfig } = await import("../config.ts")
+
   handleConfigSet("defaultCurrency", "JPY")
+
+  // Verify the change
+  const config = loadConfig()
+  expect(config.defaultCurrency).toBe("JPY")
+  expect(successMessages.some((m) => m.includes("Set defaultCurrency = JPY"))).toBe(true)
 
   // Reset for next test
   handleConfigSet("defaultCurrency", "USD")

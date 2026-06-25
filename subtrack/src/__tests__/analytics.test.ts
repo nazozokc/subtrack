@@ -2,13 +2,21 @@ import { test, expect, beforeEach, afterEach, beforeAll, afterAll } from "vitest
 import { consola } from "consola"
 import initSqlJs from "sql.js"
 import type { Database } from "sql.js"
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 const logMessages: string[] = []
 const infoMessages: string[] = []
 
 let testDb: Database
+let testConfigDir: string
 
 beforeAll(async () => {
+  // Isolate config to temporary directory
+  testConfigDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  process.env.SUBSC_CLI_DB_DIR = testConfigDir
+
   const SQL = await initSqlJs()
   testDb = new SQL.Database()
   testDb.run("PRAGMA foreign_keys = ON")
@@ -64,6 +72,7 @@ afterEach(() => {
 
 afterAll(() => {
   testDb.close()
+  delete process.env.SUBSC_CLI_DB_DIR
 })
 
 test("showAnalytics shows info when no subscriptions", async () => {

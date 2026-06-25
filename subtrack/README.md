@@ -441,7 +441,7 @@ subtrack config get defaultCurrency
 # Set default currency to JPY
 subtrack config set defaultCurrency JPY
 
-# Set monthly budget (in USD cents)
+# Set monthly budget (in smallest currency unit: cents for USD, yen for JPY, etc.)
 subtrack config set monthlyBudget 50000
 
 # Reset to defaults

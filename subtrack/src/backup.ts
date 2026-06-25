@@ -5,7 +5,9 @@ import {
 import { gzipSync } from "node:zlib"
 import { encryptBuffer, decryptBuffer, isEncrypted } from "./crypto.ts"
 import path from "node:path"
+import os from "node:os"
 import type { BackupFileInfo } from "./types.ts"
+import { resolveSafePath, resolveSafeOutputPath } from "./path-utils.ts"
 import {
   getSubscriptions,
   getDbPath,
@@ -99,8 +101,17 @@ async function safeAutoBackup() {
 export async function handleBackup(destination?: string, options: { encrypt?: boolean } = {}) {
   saveDb()
 
-  const dest = destination ?? getDefaultBackupDir()
+  let dest = destination ?? getDefaultBackupDir()
   try {
+    // Validate the backup destination path (directory may not exist yet)
+    if (destination) {
+      const safeDest = resolveSafeOutputPath([os.homedir(), os.tmpdir()], destination)
+      if (!safeDest) {
+        consola.error(`Invalid backup destination — must be within home directory`)
+        return
+      }
+      dest = safeDest
+    }
     if (!existsSync(dest)) {
       mkdirSync(dest, { recursive: true, mode: 0o700 })
     }
@@ -132,11 +143,13 @@ export async function handleRestore(
 ) {
   if (file) {
     // ── Non-interactive ──────────────────────────────────
-    const resolvedPath = path.resolve(file)
-    if (!existsSync(resolvedPath)) {
-      consola.error(`Backup file not found: ${resolvedPath}`)
+    const safePath = resolveSafePath([os.homedir(), os.tmpdir()], path.resolve(file))
+    if (!safePath) {
+      consola.error(`Invalid backup file — must be within home directory`)
       return
     }
+
+    const resolvedPath = safePath
 
     const currentCount = getSubscriptions().length
     if (!options.force) {
@@ -177,9 +190,17 @@ export async function handleRestore(
   }
 
   // ── Interactive ────────────────────────────────────────
-  const searchDir = options.dir
-    ? path.resolve(options.dir)
-    : getDefaultBackupDir()
+  let searchDir: string
+  if (options.dir) {
+    const safeDir = resolveSafePath([os.homedir(), os.tmpdir()], path.resolve(options.dir))
+    if (!safeDir) {
+      consola.error(`Invalid search directory — must be within home directory`)
+      return
+    }
+    searchDir = safeDir
+  } else {
+    searchDir = getDefaultBackupDir()
+  }
 
   let backups: BackupFileInfo[]
   try {
