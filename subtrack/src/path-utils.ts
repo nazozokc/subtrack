@@ -2,6 +2,19 @@ import { resolve, normalize, isAbsolute, dirname } from "node:path"
 import { realpathSync, existsSync } from "node:fs"
 
 /**
+ * Resolve a base directory through symlinks (if it exists), falling back
+ * to normalized form. This ensures macOS /tmp → /private/tmp mapping is
+ * handled correctly.
+ */
+function resolveBase(basePath: string): string {
+  try {
+    return realpathSync(basePath)
+  } catch {
+    return normalize(basePath)
+  }
+}
+
+/**
  * Check that a user-provided path resolves safely within one of the allowed base directories.
  * Prevents path traversal attacks using `..` or symlinks.
  *
@@ -16,14 +29,12 @@ export function resolveSafePath(basePaths: string[], userPath: string): string |
 
     let resolved: string
     try {
-      // realpathSync resolves all symlinks so a symlink pointing outside basePath
-      // cannot pass the prefix check
       resolved = realpathSync(userPath)
     } catch {
       continue
     }
 
-    const base = normalize(basePath)
+    const base = resolveBase(basePath)
 
     // Must be within the base directory
     if (!resolved.startsWith(base.endsWith("/") ? base : `${base}/`)) {
@@ -51,7 +62,7 @@ export function resolveSafeOutputPath(basePaths: string[], targetPath: string): 
   for (const basePath of basePaths) {
     if (!isAbsolute(basePath)) continue
 
-    const base = normalize(basePath)
+    const base = resolveBase(basePath)
 
     // Walk up from the target to find an existing parent for realpath check
     let checkPath = absolute
