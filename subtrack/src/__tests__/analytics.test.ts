@@ -127,7 +127,7 @@ test("showAnalytics includes budget info when configured", async () => {
 
   const output = logMessages.join("\n")
   expect(output).toContain("Budget:")
-  expect(output).toContain("$500.00")
+  expect(output).toContain("$50,000")
 
   // Reset budget
   setConfig("monthlyBudget", "0")
