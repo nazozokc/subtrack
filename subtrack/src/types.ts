@@ -1,5 +1,7 @@
 export type Currency = string
 
+export type Status = "active" | "paused" | "cancelled"
+
 export type Cycle =
   | "weekly" | "bi-weekly" | "monthly"
   | "quarterly" | "semi-annual" | "yearly"
@@ -29,9 +31,21 @@ export type SharedArgs = {
   currency: Currency
   cycle: Cycle
   tags: string[]
+  status: Status
+  billingDay: number | null
+  createdAt: string // YYYY-MM-DD
 }
 
-export type AddSharedArgs = Omit<SharedArgs, "id">
+export type AddSharedArgs = {
+  name: string
+  price: number
+  currency: Currency
+  cycle: Cycle
+  tags: string[]
+  status?: Status
+  billingDay?: number | null
+  createdAt?: string // YYYY-MM-DD
+}
 
 export type LlmUsageEntry = {
   id: number
@@ -80,6 +94,8 @@ export type AddFlags = {
   currency?: string
   cycle?: string
   tags?: string
+  billingDay?: string
+  status?: string
 }
 
 export type UsageRefreshFlags = {
@@ -93,4 +109,10 @@ export type BackupFileInfo = {
   path: string
   mtime: Date
   size: number
+}
+
+export type SubtrackConfig = {
+  defaultCurrency: string
+  monthlyBudget: number
+  theme: string
 }

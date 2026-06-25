@@ -1,7 +1,7 @@
 import { consola } from "consola"
 import pc from "picocolors"
 import CliTable3 from "cli-table3"
-import type { SharedArgs, Currency, LlmUsageEntry } from "./types.ts"
+import type { SharedArgs, Currency, LlmUsageEntry, Status } from "./types.ts"
 import { getSubscriptions } from "./db.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
@@ -15,19 +15,29 @@ export function formatPrice(price: number, currency: string): string {
   }).format(price)
 }
 
-function buildRow(sub: SharedArgs, price: string): [string, string, string, string] {
+function statusColor(status: Status): string {
+  switch (status) {
+    case "active": return pc.green("active")
+    case "paused": return pc.yellow("paused")
+    case "cancelled": return pc.red("cancelled")
+    default: return status
+  }
+}
+
+function buildRow(sub: SharedArgs, price: string): [string, string, string, string, string] {
   return [
     String(sub.name),
+    statusColor(sub.status),
     String(sub.cycle),
     sub.tags.length > 0 ? sub.tags.join(", ") : "-",
     price,
   ]
 }
 
-const HEADERS = ["name", "cycle", "tags", "price"] as const
-const MIN_WIDTHS = [10, 6, 8, 8] as const
-const MAX_WIDTHS = [40, 20, 60, 20] as const
-const BORDER_AND_PADDING = 13
+const HEADERS = ["name", "status", "cycle", "tags", "price"] as const
+const MIN_WIDTHS = [10, 8, 6, 8, 8] as const
+const MAX_WIDTHS = [40, 12, 20, 60, 20] as const
+const BORDER_AND_PADDING = 16
 
 function calcColumnWidths(rows: string[][]): number[] {
   const termWidth = process.stdout.columns ?? 80
@@ -119,15 +129,16 @@ function renderTable(rows: string[][]): string {
     head: [...HEADERS],
     wordWrap: true,
     wrapOnWordBoundary: true,
-    colAligns: ["left", "left", "left", "right"],
+    colAligns: ["left", "left", "left", "left", "right"],
   })
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
-    const isTotal = row[2].endsWith("TOTAL")
+    // Total rows have empty strings in first three columns (name, status, cycle)
+    const isTotal = row[0] === "" && row[1] === "" && row[2] === ""
     if (isTotal) {
       table.push(row.map((cell, j) => {
-        if (j === 2 || j === 3) return pc.bold(pc.yellow(cell))
+        if (j === 3 || j === 4) return pc.bold(pc.yellow(cell))
         return cell
       }))
     } else {
@@ -188,7 +199,7 @@ export const spreadSubscription = async (
         }
       }
 
-      rows.push(["", "", `${currency} TOTAL`, formatPrice(Math.round(total), currency)])
+      rows.push(["", "", "", `${currency} TOTAL`, formatPrice(Math.round(total), currency)])
 
       if (hasMissingRate) {
         consola.warn(
@@ -219,6 +230,7 @@ export const spreadSubscription = async (
       total += sub.price
     }
     groupRows.push([
+      "",
       "",
       "",
       `${currencyCode} TOTAL`,

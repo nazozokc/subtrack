@@ -168,7 +168,10 @@ export function getDb(): Database {
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
     currency TEXT NOT NULL,
-    cycle TEXT NOT NULL
+    cycle TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    billing_day INTEGER,
+    created_at TEXT NOT NULL DEFAULT (date('now'))
   )`)
   _db.run(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -398,7 +401,7 @@ export const getSubscriptions = (sort?: string, desc?: boolean): SharedArgs[] =>
   const order = desc ? "DESC" : "ASC"
   const subs = execObjs<SharedArgs>(
     db,
-    `SELECT id, name, price, currency, cycle FROM subscriptions ORDER BY ${field} ${order}`,
+    `SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt FROM subscriptions ORDER BY ${field} ${order}`,
   )
   return mapTags(subs)
 }
@@ -410,8 +413,8 @@ export const writeSubscription = (data: AddSharedArgs): void => {
   db.run("BEGIN TRANSACTION")
   try {
     db.run(
-      "INSERT INTO subscriptions (name, price, currency, cycle) VALUES (?, ?, ?, ?)",
-      [data.name, data.price, data.currency, data.cycle],
+      "INSERT INTO subscriptions (name, price, currency, cycle, status, billing_day, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [data.name, data.price, data.currency, data.cycle, data.status ?? "active", data.billingDay ?? null, data.createdAt ?? new Date().toISOString().split("T")[0]],
     )
 
     const idRow = execObj<Record<string, SqlValue>>(
@@ -489,7 +492,7 @@ export const tagsSubscription = (tag: string[] | string): SharedArgs[] => {
   const idPlaceholders = ids.map(() => "?").join(",")
   const subs = execObjs<SharedArgs>(
     db,
-    `SELECT id, name, price, currency, cycle FROM subscriptions
+    `SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt FROM subscriptions
      WHERE id IN (${idPlaceholders})`,
     ids,
   )
@@ -501,7 +504,7 @@ export const getSubscription = (id: number): SharedArgs | undefined => {
   const db = getDb()
   const sub = execObj<SharedArgs>(
     db,
-    "SELECT id, name, price, currency, cycle FROM subscriptions WHERE id = ?",
+    "SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt FROM subscriptions WHERE id = ?",
     [id],
   )
   if (!sub) return undefined

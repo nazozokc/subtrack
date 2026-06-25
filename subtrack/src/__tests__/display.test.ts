@@ -54,6 +54,9 @@ function makeSub(overrides: Partial<SharedArgs> = {}): SharedArgs {
     currency: "JPY",
     cycle: "monthly",
     tags: [],
+    status: "active",
+    billingDay: null,
+    createdAt: "2026-01-01",
     ...overrides,
   }
 }

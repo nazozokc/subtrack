@@ -7,3 +7,8 @@ packages:
 # postinstall/preinstall scripts as a supply chain security measure.
 allowBuilds:
   esbuild: true
+
+# Force cookie >= 0.7.0 to fix CVE-2024-47764
+# @sveltejs/kit specifies ^0.6.0 which resolves to the vulnerable 0.6.0
+overrides:
+  cookie: ">=0.7.0"

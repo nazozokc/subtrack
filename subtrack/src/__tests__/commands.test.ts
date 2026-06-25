@@ -93,7 +93,10 @@ beforeAll(async () => {
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
     currency TEXT NOT NULL,
-    cycle TEXT NOT NULL
+    cycle TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    billing_day INTEGER,
+    created_at TEXT NOT NULL DEFAULT (date('now'))
   )`)
   testDb.run(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1350,7 +1353,7 @@ test("handleRestore restores from valid backup file", async () => {
   // Create a backup database with target data
   const SQL2 = await initSqlJs2.default()
   const backupDb = new SQL2.Database()
-  backupDb.run("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL)")
+  backupDb.run("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')))")
   backupDb.run("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
   backupDb.run("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
   backupDb.run("CREATE TABLE llm_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, model TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, cost REAL NOT NULL, date TEXT NOT NULL, description TEXT)")
