@@ -5,6 +5,28 @@ description: Full reference for all subtrack CLI commands.
 
 subtrack provides the following commands. Most support both interactive and non-interactive modes.
 
+<details>
+<summary><strong>Quick navigation</strong></summary>
+
+- [`list`](#list)
+- [`add`](#add)
+- [`edit`](#edit)
+- [`delete`](#delete)
+- [`upcoming`](#upcoming)
+- [`payment`](#payment)
+- [`summary`](#summary)
+- [`analytics`](#analytics)
+- [`tags`](#tags)
+- [`tag`](#tag)
+- [`export`](#export)
+- [`import`](#import)
+- [`backup`](#backup)
+- [`restore`](#restore)
+- [`config`](#config)
+- [`usage`](#usage)
+
+</details>
+
 ## `list`
 
 Lists all subscriptions in a formatted table. Subscriptions are grouped by currency by default, with a subtotal row per group.
@@ -53,6 +75,8 @@ Adds a new subscription. Without flags, prompts for all fields interactively. Pr
 | `--currency <C>` | Currency code (ISO 4217). Accepts any 3-letter code; interactive mode provides a curated list |
 | `--cycle <cycle>` | Billing cycle. One of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly |
 | `--tags <tags>` | Comma-separated tags (max 10 tags, each max 50 characters) |
+| `--status <status>` | Subscription status: `active`, `paused`, `cancelled` (default: `active`) |
+| `--billingDay <n>` | Billing day of month (1–31). If not set, defaults to the creation date |
 
 ### Examples
 
@@ -73,6 +97,22 @@ subtrack add --name Netflix
 
 # Tags with existing tag autocomplete
 subtrack add --name "AWS" --price 50 --currency USD --cycle monthly
+
+# Add a paused subscription
+subtrack add \
+  --name "Adobe CC" \
+  --price 6980 \
+  --currency JPY \
+  --cycle monthly \
+  --status paused
+
+# Set a custom billing day
+subtrack add \
+  --name Netflix \
+  --price 1980 \
+  --currency JPY \
+  --cycle monthly \
+  --billingDay 15
 ```
 
 ## `edit`
@@ -87,6 +127,8 @@ Edits an existing subscription. Without flags, interactively selects a subscript
 | `--currency <C>` | New currency code |
 | `--cycle <cycle>` | New billing cycle |
 | `--tags <tags>` | New comma-separated tags |
+| `--status <status>` | New status: `active`, `paused`, `cancelled` |
+| `--billingDay <n>` | New billing day (1–31, or empty to clear) |
 
 ### Examples
 
@@ -102,6 +144,15 @@ subtrack edit 3 --price 1500
 
 # Update multiple fields
 subtrack edit 3 --name "Netflix Premium" --price 2500 --currency JPY
+
+# Pause a subscription
+subtrack edit 3 --status paused
+
+# Change billing day
+subtrack edit 3 --billingDay 1
+
+# Clear billing day (use cycle creation date instead)
+subtrack edit 3 --billingDay ""
 ```
 
 Without flags, `edit` shows a multi-select of fields to change. Each selected field is prompted with the current value as default.
@@ -123,67 +174,28 @@ subtrack delete 3
 subtrack delete 2 5 7
 ```
 
-## `import <file>`
+## `upcoming [days]`
 
-Imports subscriptions from a CSV file. The CSV must have a header row with exactly `name,cycle,tags,price,currency`.
+Shows subscriptions that are due for billing within the specified number of days (default: 7). Only active and paused subscriptions are included. Bills are calculated based on each subscription's billing cycle and `billingDay` (or creation date if not set).
 
 | Argument | Description |
 |----------|-------------|
-| `<file>` | Path to the CSV file |
-| `--dry-run` | Validate rows without importing |
-
-### CSV format
-
-```
-name,cycle,tags,price,currency
-Netflix,monthly,video;entertainment,1980,JPY
-GitHub Copilot,monthly,development,10,USD
-AWS,monthly,cloud;hosting,50,USD
-```
-
-- Tags are separated by `;` (semicolon) in the CSV
-- Price is an integer (smallest currency unit)
-- Currency is an ISO 4217 code
-- Cycle must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly
+| `[days]` | Number of days to look ahead (default: 7). Must be a non-negative integer. |
 
 ### Examples
 
 ```bash
-# Import from file
-subtrack import subscriptions.csv
+# Bills due in the next 7 days (default)
+subtrack upcoming
 
-# Dry-run: validate without importing
-subtrack import subscriptions.csv --dry-run
+# Bills due in the next 30 days
+subtrack upcoming 30
+
+# Bills due today
+subtrack upcoming 0
 ```
 
-## `export <format>`
-
-Exports subscriptions to the specified format.
-
-| Argument | Description |
-|----------|-------------|
-| `<format>` | Export format: `csv`, `json`, or `md` |
-
-| Option | Description |
-|--------|-------------|
-| `-c, --currency <C>` | Convert all prices to the given currency before exporting |
-| `--tags <tags>` | Filter by comma-separated tags before exporting |
-
-### Examples
-
-```bash
-# Export as CSV
-subtrack export csv
-
-# Export as JSON
-subtrack export json
-
-# Export as Markdown
-subtrack export md
-
-# Export only tagged subscriptions, converted to JPY
-subtrack export csv --tags music,video --currency JPY
-```
+Output is sorted by due date and shows each subscription's name, amount, cycle, and tags. A total row is displayed when multiple subscriptions are shown.
 
 ## `payment [period]`
 
@@ -261,6 +273,42 @@ Monthly by tag:
   ...
 ```
 
+## `analytics`
+
+Shows detailed subscription analytics, including a status breakdown (active/paused/cancelled), monthly spending by currency and tag, and budget tracking if a monthly budget has been configured.
+
+### Example
+
+```bash
+subtrack analytics
+```
+
+Output:
+
+```
+📊 Subscription Analytics
+
+Overview:
+  Total subscriptions:  5
+  Status breakdown:
+    active: 4
+    paused: 1
+
+Monthly spending:
+  JPY    ¥4,940
+  USD    $85.00
+  ──────────────────────────────
+  Budget:     $500.00
+  Remaining:  $415.00
+
+Monthly by tag:
+  hosting           $50.00/month (1 sub)
+  video             $47.00/month (3 subs)
+  ...
+```
+
+The budget display requires a monthly budget set via `subtrack config set monthlyBudget <amount>`.
+
 ## `tags <taglist...>`
 
 Filters and displays subscriptions that have **all** specified tags (AND logic).
@@ -312,6 +360,72 @@ Removes orphaned tags (tags not associated with any subscription).
 
 ```bash
 subtrack tag prune
+```
+
+## `import <file>`
+
+Imports subscriptions from a CSV file. The CSV must have a header row with exactly `name,cycle,tags,price,currency`.
+
+| Argument | Description |
+|----------|-------------|
+| `<file>` | Path to the CSV file |
+| `--dry-run` | Validate rows without importing |
+
+### CSV format
+
+```
+name,cycle,tags,price,currency
+Netflix,monthly,video;entertainment,1980,JPY
+GitHub Copilot,monthly,development,10,USD
+AWS,monthly,cloud;hosting,50,USD
+```
+
+- Tags are separated by `;` (semicolon) in the CSV
+- Price is an integer (smallest currency unit)
+- Currency is an ISO 4217 code
+- Cycle must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly
+
+### Examples
+
+```bash
+# Import from file
+subtrack import subscriptions.csv
+
+# Dry-run: validate without importing
+subtrack import subscriptions.csv --dry-run
+```
+
+## `export <format>`
+
+Exports subscriptions to the specified format.
+
+| Argument | Description |
+|----------|-------------|
+| `<format>` | Export format: `csv`, `json`, or `md` |
+
+| Option | Description |
+|--------|-------------|
+| `-c, --currency <C>` | Convert all prices to the given currency before exporting |
+| `--tags <tags>` | Filter by comma-separated tags before exporting |
+| `-o, --output <path>` | Write to file instead of stdout |
+
+### Examples
+
+```bash
+# Export as CSV
+subtrack export csv
+
+# Export as JSON
+subtrack export json
+
+# Export as Markdown
+subtrack export md
+
+# Export only tagged subscriptions, converted to JPY
+subtrack export csv --tags music,video --currency JPY
+
+# Write to a file instead of stdout
+subtrack export csv --output subscriptions.csv
 ```
 
 ## `backup [destination]`
@@ -370,6 +484,46 @@ subtrack restore ~/backups/subtrack_20260617_143000.db.gz --force
 # List backups from a custom directory
 subtrack restore --dir ~/custom-backups
 ```
+
+## `config`
+
+Manages subtrack configuration. Configuration is stored in `~/.config/subtrack/config.json`.
+
+| Subcommand | Description |
+|------------|-------------|
+| `list` | List all config values |
+| `get <key>` | Get a specific config value |
+| `set <key> <value>` | Set a config value |
+| `reset` | Reset config to defaults |
+
+### Config keys
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `defaultCurrency` | Default currency for display and analytics | `USD` |
+| `monthlyBudget` | Monthly spending budget in USD (0 = disabled) | `0` |
+| `theme` | Display theme | `default` |
+
+### Examples
+
+```bash
+# List all config values
+subtrack config list
+
+# Get a specific config value
+subtrack config get defaultCurrency
+
+# Set a monthly budget of $500
+subtrack config set monthlyBudget 500
+
+# Set default display currency
+subtrack config set defaultCurrency JPY
+
+# Reset all config to defaults
+subtrack config reset
+```
+
+The `config set` command validates input (e.g., currency codes must be ISO 4217, budget must be non-negative).
 
 ## `usage`
 
@@ -441,12 +595,61 @@ Interactively selects and deletes LLM API usage entries.
 subtrack usage delete
 ```
 
-Multi-select via checkbox → confirm → batch delete.
+Multi-select via checkbox → confirm → batch delete. You can also pass entry IDs directly:
+
+```bash
+subtrack usage delete 3 5 7
+```
+
+### `usage import`
+
+Imports LLM API usage from JSONL or JSON response log files. Supports importing from provider API response formats (e.g. OpenAI, Anthropic) by parsing token usage from the response body.
+
+| Option | Description |
+|--------|-------------|
+| `<file>` | JSONL/JSON file to import (use `-` for stdin) |
+| `--dry-run` | Validate without importing |
+
+```bash
+# Import from a JSONL file
+subtrack usage import ./openai-responses.jsonl
+
+# Import from stdin
+cat responses.jsonl | subtrack usage import -
+
+# Dry-run to validate
+subtrack usage import ./responses.jsonl --dry-run
+```
 
 ### `usage refresh`
 
-Force-refreshes the LiteLLM pricing cache from GitHub.
+Auto-scans known AI tool sources to find and import LLM usage data. Scans the following sources by default:
+
+- **OpenCode DB** — reads from OpenCode's own database
+- **Claude Code** — parses Claude Code CLI usage logs
+- **Codex CLI** — parses Codex CLI logs
+- **Cursor** — parses Cursor editor usage history
+- **GitHub Copilot** — parses Copilot CLI usage
+- **Windsurf** — parses Windsurf editor usage
+
+By default, scans the current month. Also refreshes the LiteLLM pricing cache from GitHub.
+
+| Option | Description |
+|--------|-------------|
+| `--from <YYYY-MM-DD>` | Start date (inclusive) |
+| `--to <YYYY-MM-DD>` | End date (inclusive) |
+| `--all` | Scan all historical data (ignore date range) |
 
 ```bash
+# Scan current month (default)
 subtrack usage refresh
+
+# Scan a specific date range
+subtrack usage refresh --from 2026-01-01 --to 2026-06-30
+
+# Scan all available history
+subtrack usage refresh --all
+
+# Force-refresh pricing cache only (no scanner data import)
+# (This is the default behavior of the old refresh — pricing is auto-refreshed daily)
 ```

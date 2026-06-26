@@ -64,23 +64,45 @@ Make sure both pass and CI is green.
 
 ```
 subtrack/
-├── subtrack/         # CLI tool (TypeScript/ESM)
+├── subtrack/              # CLI tool (TypeScript/ESM)
 │   ├── src/
-│   │   ├── index.ts      # Entry point, CLI definitions (gunshi)
-│   │   ├── commands.ts   # Command handlers
-│   │   ├── db.ts         # SQLite database layer
-│   │   ├── display.ts    # Table rendering, price formatting
-│   │   ├── prompts.ts    # Input validation, prompt helpers
-│   │   ├── types.ts      # TypeScript type definitions
-│   │   ├── payment.ts    # Payment totals & summary statistics
-│   │   ├── usage.ts      # LLM API usage tracking (add/list/delete/refresh)
-│   │   ├── pricing.ts    # LiteLLM pricing cache & cost calculation
-│   │   ├── export.ts     # CSV / JSON / Markdown export formatters
-│   │   ├── import-csv.ts # CSV parser & import handler
-│   │   ├── fx.ts         # FX rate API & price conversion
-│   │   └── *.test.ts     # Co-located tests (vitest)
-│   └── dist/             # Built output (dist/index.mjs)
-├── docs/             # Documentation site (SvelteKit)
-├── flake.nix         # Nix devShell
+│   │   ├── index.ts           # Entry point, CLI definitions (gunshi)
+│   │   ├── commands.ts        # Re-exports & thin CLI wrappers
+│   │   ├── subscription.ts    # Add/edit/delete/list/tags handlers
+│   │   ├── backup.ts          # Backup & restore handlers
+│   │   ├── tag.ts             # Tag management handlers
+│   │   ├── upcoming.ts        # Upcoming bills calculator
+│   │   ├── analytics.ts       # Subscription analytics & budget tracking
+│   │   ├── config.ts          # Configuration management (JSON file)
+│   │   ├── db.ts              # SQLite database layer (CRUD, schema, crypto)
+│   │   ├── display.ts         # Table rendering, price formatting
+│   │   ├── prompts.ts         # Input validation, prompt helpers
+│   │   ├── types.ts           # TypeScript type definitions
+│   │   ├── payment.ts         # Payment totals & summary statistics
+│   │   ├── usage.ts           # LLM API usage list & delete
+│   │   ├── usage-add.ts       # LLM usage add (interactive & flags)
+│   │   ├── usage-import.ts    # LLM usage import from JSONL/JSON logs
+│   │   ├── usage-refresh.ts   # Auto-scanner for AI tool usage data
+│   │   ├── pricing.ts         # LiteLLM pricing cache & cost calculation
+│   │   ├── export.ts          # CSV / JSON / Markdown export formatters
+│   │   ├── import-csv.ts      # CSV parser & import handler
+│   │   ├── fx.ts              # FX rate API & price conversion
+│   │   ├── crypto.ts          # AES-256-GCM encryption helpers
+│   │   ├── path-utils.ts      # Safe path resolution helpers
+│   │   ├── date-utils.ts      # Date formatting utilities
+│   │   ├── safe-json.ts       # Safe JSON parsing helper
+│   │   ├── scanner.ts         # Scanner framework for AI tool log parsing
+│   │   ├── scanner-types.ts   # Scanner type definitions
+│   │   ├── claude-scanner.ts  # Claude Code log scanner
+│   │   ├── codex-scanner.ts   # Codex CLI log scanner
+│   │   ├── copilot-scanner.ts # GitHub Copilot scanner
+│   │   ├── cursor-scanner.ts  # Cursor editor scanner
+│   │   ├── opencode-scanner.ts # OpenCode DB scanner
+│   │   ├── windsurf-scanner.ts # Windsurf editor scanner
+│   │   └── __tests__/         # Test files (vitest)
+│   └── dist/                  # Built output (dist/index.mjs)
+├── docs/                  # Documentation site (SvelteKit)
+├── images/                # Logo & branding assets
+├── flake.nix              # Nix devShell
 └── pnpm-workspace.yaml
 ```

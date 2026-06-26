@@ -46,6 +46,57 @@ subtrack edit 3 --price 2500 --tags "video,entertainment,4k"
 
 To see subscription IDs, run `subtrack list`.
 
+### Managing status and billing day
+
+Each subscription has a **status** (`active`, `paused`, `cancelled`) and an optional **billing day** (day of month).
+
+```bash
+# Pause a subscription (excluded from totals and upcoming bills)
+subtrack edit 3 --status paused
+
+# Set a specific billing day for accurate upcoming bill predictions
+subtrack edit 3 --billingDay 15
+
+# Reactivate a paused subscription
+subtrack edit 3 --status active
+```
+
+Paused subscriptions are preserved in the database but excluded from payment calculations. Cancelled subscriptions are kept for record-keeping but excluded from all totals.
+
+## Tracking upcoming bills
+
+See which subscriptions are due for payment soon:
+
+```bash
+# Bills due in the next 7 days (default)
+subtrack upcoming
+
+# Bills due in the next 30 days
+subtrack upcoming 30
+
+# Bills due today
+subtrack upcoming 0
+```
+
+The `upcoming` command uses each subscription's `billingDay` (or creation date) to calculate the next billing date. Only active and paused subscriptions are included.
+
+## Analytics and budget tracking
+
+Get detailed analytics including status breakdown and budget tracking:
+
+```bash
+subtrack analytics
+```
+
+Set a monthly budget to track spending:
+
+```bash
+subtrack config set monthlyBudget 500
+subtrack analytics
+```
+
+The analytics command shows whether you're within budget or over.
+
 ## Importing from CSV
 
 Bulk-import subscriptions from a CSV file:
@@ -235,6 +286,35 @@ subtrack payment monthly --api
 ```
 
 API costs for the current period are fetched and added to the subscription totals. They are stored in USD cents and automatically converted if you use `--currency`.
+
+### Auto-scanning from AI tools
+
+subtrack can automatically discover and import LLM usage data from various AI coding tools:
+
+```bash
+# Auto-scan known sources for the current month
+subtrack usage refresh
+
+# Scan a specific date range
+subtrack usage refresh --from 2026-01-01 --to 2026-06-30
+
+# Scan all available historical data
+subtrack usage refresh --all
+```
+
+Supported sources: OpenCode DB, Claude Code, Codex CLI, Cursor, GitHub Copilot, and Windsurf.
+
+### Importing from log files
+
+Import usage data from provider response logs:
+
+```bash
+# Import from a JSONL file
+subtrack usage import ./openai-responses.jsonl
+
+# Pipe from stdin
+cat responses.jsonl | subtrack usage import -
+```
 
 ### Refreshing pricing data
 

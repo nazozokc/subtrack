@@ -83,6 +83,44 @@ API costs are stored in USD cents (as a real number, allowing fractional cents f
 
 Model pricing is fetched from the [LiteLLM GitHub repository](https://github.com/BerriAI/litellm) (`model_prices_and_context_window.json`). The data is cached locally for 24 hours to avoid excessive network requests. You can force a refresh with `subtrack usage refresh`.
 
+## Can I pause a subscription instead of deleting it?
+
+Yes! Each subscription has a `status` field: `active`, `paused`, or `cancelled`. Paused subscriptions are preserved in the database but excluded from payment totals, analytics, and upcoming bills. This is useful for subscriptions you want to keep for reference but aren't currently paying for.
+
+Use `subtrack edit <id> --status paused` or edit interactively and select the `status` field.
+
+## What is the billing day for?
+
+The billing day (1–31) controls the day of month when a subscription is considered due. This is used by the `subtrack upcoming` command to predict when your next bill is coming. If not set, the subscription's creation date is used as the billing anchor.
+
+Set it with: `subtrack edit <id> --billingDay 15`
+
+## What is the analytics command?
+
+`subtrack analytics` provides a detailed overview of your subscriptions including:
+- Status breakdown (active vs paused vs cancelled)
+- Monthly spending by currency
+- Monthly spending by tag
+- Budget tracking (if configured)
+
+Set a budget with `subtrack config set monthlyBudget <amount>` and the analytics command will show whether you're within budget.
+
+## How does the config command work?
+
+The `subtrack config` command manages runtime settings stored in `~/.config/subtrack/config.json`:
+
+- `defaultCurrency` — default currency for display (default: `USD`)
+- `monthlyBudget` — monthly spending budget in USD (0 = disabled)
+- `theme` — display theme (default: `default`)
+
+Set values with `subtrack config set <key> <value>` and list them with `subtrack config list`.
+
+## How does usage auto-scan work?
+
+The `subtrack usage refresh` command automatically scans known AI coding tools for LLM API usage data, including OpenCode DB, Claude Code, Codex CLI, Cursor, GitHub Copilot, and Windsurf. It parses local logs and databases to find usage entries and imports them without manual data entry.
+
+By default, it scans the current month. Use `--all` to scan all historical data.
+
 ## How do I update subtrack?
 
 ```bash
