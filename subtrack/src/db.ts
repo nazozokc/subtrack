@@ -49,8 +49,20 @@ function validateDbDir(dir: string): void {
 
 // ── File locking ──────────────────────────────────────────
 
+const LOCK_STALE_MS = 30_000 // 30 seconds
+
 function getLockPath(): string {
   return path.join(getDbDir(), ".subtrack.lock")
+}
+
+function readLockFile(lockPath: string): { pid: string; timestamp: number } | null {
+  try {
+    const content = readFileSync(lockPath, "utf-8").trim()
+    const lines = content.split("\n")
+    return { pid: lines[0] ?? "unknown", timestamp: Number(lines[1]) || 0 }
+  } catch {
+    return null
+  }
 }
 
 function acquireLock(): void {
@@ -61,23 +73,36 @@ function acquireLock(): void {
       constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
       0o600,
     )
-    // Write PID for diagnostic purposes
-    writeSync(_lockFd, `${process.pid}\n`)
+    // Write PID and timestamp for stale detection
+    writeSync(_lockFd, `${process.pid}\n${Date.now()}\n`)
   } catch (err) {
     const nodeErr = err as NodeJS.ErrnoException
     if (nodeErr.code === "EEXIST") {
-      // Lock exists — read PID from it
-      let existingPid = "unknown"
-      try {
-        existingPid = readFileSync(lockPath, "utf-8").trim()
-      } catch {
-        // ignore read errors
+      const info = readLockFile(lockPath)
+      const pid = info?.pid ?? "unknown"
+      const elapsed = info?.timestamp ? Date.now() - info.timestamp : 0
+
+      // Check if lock is stale
+      if (info?.timestamp && elapsed > LOCK_STALE_MS) {
+        consola.warn(
+          `Removing stale lock from PID ${pid} (${Math.floor(elapsed / 1000)}s old)`,
+        )
+        try { unlinkSync(lockPath) } catch { /* ignore */ }
+        // Retry once
+        _lockFd = openSync(
+          lockPath,
+          constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+          0o600,
+        )
+        writeSync(_lockFd, `${process.pid}\n${Date.now()}\n`)
+        return
       }
+
       consola.error(
-        `Another subtrack instance (PID ${existingPid}) may be running.\n` +
+        `Another subtrack instance (PID ${pid}) may be running.\n` +
         `  If this is incorrect, delete: ${lockPath}`,
       )
-      throw new Error(`Cannot acquire lock: another instance may be running (PID ${existingPid})`)
+      throw new Error(`Cannot acquire lock: another instance may be running (PID ${pid})`)
     } else {
       throw err
     }
@@ -354,7 +379,12 @@ export function writeBackupHash(backupPath: string): void {
 
 export function verifyBackupHash(backupPath: string): boolean {
   const hashPath = getBackupHashPath(backupPath)
-  if (!existsSync(hashPath)) return true // skip if no sidecar (backward compat)
+  if (!existsSync(hashPath)) {
+    consola.warn(
+      `No integrity hash found for "${path.basename(backupPath)}" — integrity cannot be verified.`,
+    )
+    return true // backward compat: skip if no sidecar
+  }
   const expected = readFileSync(hashPath, "utf-8").trim()
   const content = readFileSync(backupPath)
   const actual = createHash("sha256").update(content).digest("hex")

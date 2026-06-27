@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs"
+import os from "node:os"
 import { consola } from "consola"
 import type { UsageImportFlags } from "./types.ts"
 import { addLlmUsageFromLog } from "./db.ts"
 import { safeJsonParse } from "./safe-json.ts"
+import { resolveSafePath } from "./path-utils.ts"
 import {
   ensurePricingCache,
   lookupModelKey,
@@ -139,10 +141,17 @@ export async function handleUsageImport(flags: UsageImportFlags) {
     }
     content = Buffer.concat(chunks).toString("utf-8")
   } else {
+    const safeFile = resolveSafePath([os.homedir(), os.tmpdir()], filePath)
+    if (!safeFile) {
+      consola.error(
+        `File not found or path not allowed — must be within home directory`,
+      )
+      return
+    }
     try {
-      content = readFileSync(filePath, "utf-8")
+      content = readFileSync(safeFile, "utf-8")
     } catch (err) {
-      consola.error(`Cannot read file: ${filePath} — ${String(err)}`)
+      consola.error(`Cannot read file: ${safeFile} — ${String(err)}`)
       return
     }
   }

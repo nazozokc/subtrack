@@ -1,5 +1,5 @@
 import { randomBytes, createCipheriv, createDecipheriv, scryptSync } from "node:crypto"
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs"
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync, chmodSync } from "node:fs"
 import path from "node:path"
 import { homedir } from "node:os"
 import { consola } from "consola"
@@ -25,6 +25,31 @@ function getSaltPath(): string {
 
 // ---- Internal helpers ----
 
+/** Verify that a sensitive file has restrictive permissions (owner-only). */
+function verifySecureFilePermission(filePath: string, name: string): void {
+  try {
+    const st = statSync(filePath)
+    // Check for group/others permissions (mode 077 = others rwx)
+    if (st.mode & 0o077) {
+      consola.warn(
+        `${name} has overly permissive permissions (${(st.mode & 0o777).toString(8)}). Fixing to 600.`,
+      )
+      chmodSync(filePath, 0o600)
+    }
+    // Check ownership on non-Windows
+    if (process.platform !== "win32" && typeof process.getuid === "function") {
+      const uid = process.getuid()
+      if (uid !== undefined && uid !== null && st.uid !== uid) {
+        consola.warn(
+          `${name} is not owned by current user (uid ${st.uid}). This may indicate tampering.`,
+        )
+      }
+    }
+  } catch {
+    // skip if file not accessible
+  }
+}
+
 function generateKey(): Buffer {
   return randomBytes(KEY_LENGTH)
 }
@@ -33,6 +58,7 @@ function deriveKeyFromPassphrase(passphrase: string): Buffer {
   const saltPath = getSaltPath()
   let salt: Buffer
   if (existsSync(saltPath)) {
+    verifySecureFilePermission(saltPath, "Key salt file")
     salt = readFileSync(saltPath)
   } else {
     salt = randomBytes(SALT_LENGTH)
@@ -48,7 +74,10 @@ function getOrCreateKey(): Buffer {
   if (passphrase) return deriveKeyFromPassphrase(passphrase)
 
   const keyPath = getKeyPath()
-  if (existsSync(keyPath)) return readFileSync(keyPath)
+  if (existsSync(keyPath)) {
+    verifySecureFilePermission(keyPath, "Encryption key file")
+    return readFileSync(keyPath)
+  }
 
   const dir = getConfigDir()
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })

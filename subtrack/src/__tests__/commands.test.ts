@@ -1217,7 +1217,7 @@ test("handleUsageImport with non-existent file shows error", async () => {
   const { handleUsageImport } = await import("../usage.ts")
   await handleUsageImport({ file: "/nonexistent/path/log.jsonl" })
 
-  expect(errorMessages.some((m) => m.includes("Cannot read file"))).toBe(true)
+  expect(errorMessages.some((m) => m.includes("path not allowed"))).toBe(true)
 })
 
 // ── handleUsageRefresh ────────────────────────────────────

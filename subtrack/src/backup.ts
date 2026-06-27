@@ -3,7 +3,7 @@ import {
   mkdirSync, existsSync, statSync, openSync, writeSync, closeSync, constants,
 } from "node:fs"
 import { gzipSync } from "node:zlib"
-import { encryptBuffer, decryptBuffer, isEncrypted } from "./crypto.ts"
+import { encryptBuffer, decryptBuffer, isEncrypted, hasEncryptionKey } from "./crypto.ts"
 import path from "node:path"
 import os from "node:os"
 import type { BackupFileInfo } from "./types.ts"
@@ -83,10 +83,12 @@ async function safeAutoBackup() {
   const backupDir = getDefaultBackupDir()
   mkdirSync(backupDir, { recursive: true, mode: 0o700 })
   const ts = getTimestamp()
-  const destPath = path.join(backupDir, `subtrack_${ts}_before_restore.db.gz`)
+  const encrypt = hasEncryptionKey()
+  const ext = encrypt ? ".db.enc" : ".db.gz"
+  const destPath = path.join(backupDir, `subtrack_${ts}_before_restore${ext}`)
 
-  if (writeCompressedBackup(destPath, false)) {
-    consola.info(`Auto-backup created: ${destPath}`)
+  if (writeCompressedBackup(destPath, encrypt)) {
+    consola.info(`Auto-backup created: ${destPath}${encrypt ? " (encrypted)" : ""}`)
   } else {
     consola.warn("Could not create auto-backup, continuing with restore")
   }
@@ -123,6 +125,14 @@ export async function handleBackup(destination?: string, options: { encrypt?: bo
     const nodeErr = err as NodeJS.ErrnoException
     consola.error(`Backup destination is not accessible: ${nodeErr.message}`)
     return
+  }
+
+  // Warn when database is encrypted but backup won't be
+  if (!options.encrypt && hasEncryptionKey()) {
+    consola.warn(
+      "Database is encrypted but backup will NOT be encrypted.\n" +
+      "  Use --encrypt (-e) to encrypt the backup.",
+    )
   }
 
   const ts = getTimestamp()
