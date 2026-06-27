@@ -243,10 +243,13 @@ function KeyboardHandler() {
       return
     }
 
-    // Escape — back
+    // Escape — back / navigate to list
     if (key.escape) {
       if (focus === "sidebar") {
         dispatch({ type: "SET_FOCUS", focus: "content" })
+      } else if (state.screen !== "list") {
+        dispatch({ type: "SET_SCREEN", screen: "list" })
+        dispatch({ type: "SET_LIST_INDEX", index: 0 })
       }
       return
     }

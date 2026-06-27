@@ -1,6 +1,6 @@
 import { Box, Text, useInput } from "ink"
 import { TextInput } from "@inkjs/ui"
-import { useState, useCallback } from "react"
+import { useState, useMemo } from "react"
 import { useTui } from "../context/app-context.tsx"
 import { loadConfig, setConfig, CONFIG_KEYS, resetConfig } from "../../config.ts"
 import type { ConfigKey } from "../../config.ts"
@@ -11,9 +11,7 @@ export function ConfigScreen() {
   const [editValue, setEditValue] = useState("")
   const [result, setResult] = useState<string | null>(null)
   const [rev, setRev] = useState(0)
-  const config = loadConfig()
-
-  const refresh = useCallback(() => { resetConfig(); setRev((n) => n + 1) }, [])
+  const config = useMemo(() => loadConfig(), [rev])
 
   useInput((input, key) => {
     if (key.escape) {

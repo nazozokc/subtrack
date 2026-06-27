@@ -3,6 +3,7 @@ import { TextInput } from "@inkjs/ui"
 import { useState, useMemo } from "react"
 import { getSubscriptions } from "../../db.ts"
 import { useTui } from "../context/app-context.tsx"
+import { formatPrice } from "../../price.ts"
 
 export function SearchScreen() {
   const { dispatch } = useTui()
@@ -34,7 +35,7 @@ export function SearchScreen() {
         results.map((s) => (
           <Box key={s.id}>
             <Box width={24}><Text bold wrap="truncate-end">{s.name}</Text></Box>
-            <Box width={14}><Text dimColor>{s.currency} {s.price}</Text></Box>
+            <Box width={14}><Text dimColor>{formatPrice(s.price, s.currency)}</Text></Box>
             <Text dimColor>{s.tags.join(", ")}</Text>
           </Box>
         ))

@@ -26,14 +26,18 @@ export function BackupScreen() {
       mkdirSync(currentDest, { recursive: true })
       const ts = new Date().toISOString().replace(/[:.]/g, "-")
       const destPath = join(currentDest, `subtrack-${ts}.db`)
+      const dbPath = join(getDbDir(), "subtrack.db")
 
-      if (encrypt && hasEncryptionKey()) {
-        const dbPath = join(getDbDir(), "subtrack.db")
+      if (encrypt) {
+        if (!hasEncryptionKey()) {
+          setResult("Cannot encrypt: no encryption key configured. Run 'subtrack backup' in CLI to set up encryption.")
+          setStep("done")
+          return
+        }
         const data = readFileSync(dbPath)
         const encrypted = encryptBuffer(data)
         writeFileSync(destPath, encrypted)
       } else {
-        const dbPath = join(getDbDir(), "subtrack.db")
         copyFileSync(dbPath, destPath)
       }
       setResult(`Backup saved to ${destPath}`)

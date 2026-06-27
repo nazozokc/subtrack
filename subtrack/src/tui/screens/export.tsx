@@ -4,11 +4,14 @@ import { useState, useCallback, useMemo } from "react"
 import { useTui } from "../context/app-context.tsx"
 import { getSubscriptions } from "../../db.ts"
 import { exportCsv, exportJson, exportMd } from "../../export.ts"
+import { writeFileSync } from "node:fs"
+import { join } from "node:path"
+import { cwd } from "node:process"
 
-const EXPORTERS: Record<string, (subs: any[]) => string> = {
-  csv: exportCsv,
-  json: exportJson,
-  md: exportMd,
+const EXPORTERS: Record<string, { ext: string; fn: (subs: any[]) => string }> = {
+  csv: { ext: "csv", fn: exportCsv },
+  json: { ext: "json", fn: exportJson },
+  md: { ext: "md", fn: exportMd },
 }
 
 export function ExportScreen() {
@@ -23,10 +26,13 @@ export function ExportScreen() {
 
   const doExport = useCallback((fmt: string) => {
     try {
-      const fn = EXPORTERS[fmt]
-      if (!fn) { setResult(`Unknown format: ${fmt}`); return }
-      const output = fn(subs)
-      setResult(`Exported as ${fmt.toUpperCase()}:\n\n${output.slice(0, 1000)}${output.length > 1000 ? "..." : ""}`)
+      const entry = EXPORTERS[fmt]
+      if (!entry) { setResult(`Unknown format: ${fmt}`); return }
+      const output = entry.fn(subs)
+      const filename = `subtrack-export.${entry.ext}`
+      const filePath = join(cwd(), filename)
+      writeFileSync(filePath, output, "utf-8")
+      setResult(`Exported as ${fmt.toUpperCase()} to ${filePath}`)
     } catch (e: unknown) {
       setResult(`Error: ${e instanceof Error ? e.message : String(e)}`)
     }

@@ -2,11 +2,9 @@ import { Box, Text } from "ink"
 import { useMemo } from "react"
 import { getSubscriptions } from "../../db.ts"
 import { formatPrice } from "../../price.ts"
-import { useTui } from "../context/app-context.tsx"
 import type { Status } from "../../types.ts"
 
 export function SummaryScreen() {
-  const { dispatch } = useTui()
 
   const subs = useMemo(() => getSubscriptions(), [])
 

@@ -11,6 +11,7 @@ export function BulkScreen() {
   const [action, setAction] = useState<"delete" | "tag" | "edit" | null>(null)
   const [newTag, setNewTag] = useState("")
   const [result, setResult] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const subs = useMemo(() => getSubscriptions(), [])
 
@@ -28,10 +29,13 @@ export function BulkScreen() {
 
   const executeAction = useCallback(() => {
     if (!action || selected.size === 0) return
+    setError(null)
     switch (action) {
       case "delete": {
         let count = 0
-        for (const id of selected) { if (deleteSubscription(id)) count++ }
+        for (const id of selected) {
+          try { if (deleteSubscription(id)) count++ } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)) }
+        }
         setResult(`Deleted ${count} subscription${count !== 1 ? "s" : ""}`)
         break
       }
@@ -41,8 +45,10 @@ export function BulkScreen() {
         for (const id of selected) {
           const sub = subs.find((s) => s.id === id)
           if (sub && !sub.tags.includes(newTag.trim())) {
-            updateSubscription(id, { ...sub, tags: [...sub.tags, newTag.trim()] })
-            count++
+            try {
+              updateSubscription(id, { ...sub, tags: [...sub.tags, newTag.trim()] })
+              count++
+            } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)) }
           }
         }
         setResult(`Added tag "${newTag}" to ${count} subscription${count !== 1 ? "s" : ""}`)
@@ -59,32 +65,44 @@ export function BulkScreen() {
         <Text bold underline>Bulk Operations</Text>
       </Box>
 
-      {step === "action" && (
+      {error && <Box marginBottom={1}><Text color="red">{error}</Text></Box>}
+
+      {subs.length === 0 ? (
+        <Text dimColor>No subscriptions to manage</Text>
+      ) : (
         <>
-          <Text dimColor>Select action:</Text>
-          <Select options={[{label:"Delete selected",value:"delete"},{label:"Add tag to selected",value:"tag"}]} onChange={(v) => { setAction(v as "delete" | "tag"); if (v === "tag") setStep("tag"); else setStep("confirm") }} />
+          {step === "action" && (
+            <>
+              <Box marginBottom={1}>
+                <Text dimColor>Select subscriptions using the list screen first.</Text>
+                <Text dimColor>Currently selected: <Text bold>{selected.size}</Text></Text>
+              </Box>
+              <Text dimColor>Select action:</Text>
+              <Select options={[{label:"Delete selected",value:"delete"},{label:"Add tag to selected",value:"tag"}]} onChange={(v) => { setAction(v as "delete" | "tag"); if (v === "tag") setStep("tag"); else setStep("confirm") }} />
+            </>
+          )}
+
+          {step === "tag" && (
+            <Box flexDirection="column" gap={1}>
+              <TextInput placeholder="Tag name to add..." defaultValue={newTag} onChange={setNewTag} onSubmit={() => setStep("confirm")} />
+            </Box>
+          )}
+
+          {step === "confirm" && (
+            <Box flexDirection="column" gap={1}>
+              <Text>Apply <Text bold>{action}</Text> to {selected.size} subscription{selected.size !== 1 ? "s" : ""}?</Text>
+              <Select options={[{label:"Yes",value:"yes"},{label:"Cancel",value:"no"}]} onChange={(v) => { if (v === "yes") executeAction(); else dispatch({ type: "SET_SCREEN", screen: "list" }) }} />
+            </Box>
+          )}
+
+          {step === "done" && (
+            <Box flexDirection="column" gap={1}>
+              <Text color={error ? "red" : "green"}>{result}</Text>
+              <Text dimColor>Press any key to return</Text>
+              <Select options={[{label:"Back to list",value:"back"}]} onChange={() => dispatch({ type: "SET_SCREEN", screen: "list" })} />
+            </Box>
+          )}
         </>
-      )}
-
-      {step === "tag" && (
-        <Box flexDirection="column" gap={1}>
-          <TextInput placeholder="Tag name to add..." defaultValue={newTag} onChange={setNewTag} onSubmit={() => setStep("confirm")} />
-        </Box>
-      )}
-
-      {step === "confirm" && (
-        <Box flexDirection="column" gap={1}>
-          <Text>Apply <Text bold>{action}</Text> to {selected.size} subscription{selected.size !== 1 ? "s" : ""}?</Text>
-          <Select options={[{label:"Yes",value:"yes"},{label:"Cancel",value:"no"}]} onChange={(v) => { if (v === "yes") executeAction(); else dispatch({ type: "SET_SCREEN", screen: "list" }) }} />
-        </Box>
-      )}
-
-      {step === "done" && (
-        <Box flexDirection="column" gap={1}>
-          <Text color="green">{result}</Text>
-          <Text dimColor>Press any key to return</Text>
-          <Select options={[{label:"Back to list",value:"back"}]} onChange={() => dispatch({ type: "SET_SCREEN", screen: "list" })} />
-        </Box>
       )}
     </Box>
   )

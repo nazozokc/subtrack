@@ -61,7 +61,7 @@ export function ImportScreen() {
         <Text bold underline>Import from CSV</Text>
       </Box>
       {result ? (
-        <Text color="green">{result}</Text>
+        <Text color={result.startsWith("Error") ? "red" : "green"}>{result}</Text>
       ) : (
         <TextInput
           placeholder="Path to CSV file..."

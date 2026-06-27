@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from "react"
 import { getTagsWithCount, renameTag, deleteTag, pruneTags } from "../../db.ts"
 import { useTui } from "../context/app-context.tsx"
 
-type Mode = "list" | "rename" | "delete" | "prune"
+type Mode = "list" | "rename-old" | "rename-new" | "delete" | "prune"
 
 export function TagManageScreen() {
   const { dispatch } = useTui()
@@ -19,6 +19,19 @@ export function TagManageScreen() {
 
   const refreshTags = useCallback(() => setRefresh((n) => n + 1), [])
 
+  const doRename = useCallback(() => {
+    if (renameOld.trim() && renameNew.trim()) {
+      try {
+        renameTag(renameOld.trim(), renameNew.trim())
+        refreshTags()
+        setMessage(`Renamed "${renameOld}" → "${renameNew}"`)
+      } catch (e: unknown) {
+        setMessage(`Error: ${e instanceof Error ? e.message : String(e)}`)
+      }
+      setMode("list")
+    }
+  }, [renameOld, renameNew, refreshTags])
+
   useInput((input, key) => {
     if (key.escape) {
       if (mode !== "list") { setMode("list"); setMessage(null); return }
@@ -27,7 +40,7 @@ export function TagManageScreen() {
     }
 
     if (mode === "list") {
-      if (input === "r") setMode("rename")
+      if (input === "r") setMode("rename-old")
       else if (input === "d") setMode("delete")
       else if (input === "p") {
         const count = pruneTags()
@@ -44,7 +57,7 @@ export function TagManageScreen() {
         <Text dimColor>  [r] rename  [d] delete  [p] prune  [Esc] back</Text>
       </Box>
 
-      {message && <Text color={message.startsWith("Pruned") ? "yellow" : "green"}>{message}</Text>}
+      {message && <Text color={message.startsWith("Error") ? "red" : message.startsWith("Pruned") ? "yellow" : "green"}>{message}</Text>}
 
       {mode === "list" && (
         <>
@@ -61,16 +74,23 @@ export function TagManageScreen() {
         </>
       )}
 
-      {mode === "rename" && (
+      {mode === "rename-old" && (
         <Box flexDirection="column" gap={1}>
-          <TextInput placeholder="Current tag name" defaultValue={renameOld} onChange={setRenameOld} onSubmit={() => { if (renameOld.trim() && renameNew.trim()) { renameTag(renameOld.trim(), renameNew.trim()); refreshTags(); setMode("list"); setMessage(`Renamed "${renameOld}" → "${renameNew}"`) } }} />
-          <TextInput placeholder="New tag name" defaultValue={renameNew} onChange={setRenameNew} />
+          <Text dimColor>Current tag name:</Text>
+          <TextInput placeholder="e.g. streaming" defaultValue={renameOld} onChange={setRenameOld} onSubmit={() => { if (renameOld.trim()) setMode("rename-new") }} />
+        </Box>
+      )}
+
+      {mode === "rename-new" && (
+        <Box flexDirection="column" gap={1}>
+          <Text dimColor>New tag name:</Text>
+          <TextInput placeholder="e.g. video" defaultValue={renameNew} onChange={setRenameNew} onSubmit={doRename} />
         </Box>
       )}
 
       {mode === "delete" && (
         <Box flexDirection="column" gap={1}>
-          <TextInput placeholder="Tag name to delete" defaultValue={deleteName} onChange={setDeleteName} onSubmit={() => { if (deleteName.trim()) { deleteTag(deleteName.trim()); refreshTags(); setMode("list"); setMessage(`Deleted tag: ${deleteName}`) } }} />
+          <TextInput placeholder="Tag name to delete" defaultValue={deleteName} onChange={setDeleteName} onSubmit={() => { if (deleteName.trim()) { try { deleteTag(deleteName.trim()); refreshTags(); setMessage(`Deleted tag: ${deleteName}`) } catch (e: unknown) { setMessage(`Error: ${e instanceof Error ? e.message : String(e)}`) } setMode("list") } }} />
         </Box>
       )}
     </Box>
