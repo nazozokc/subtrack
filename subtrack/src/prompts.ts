@@ -99,6 +99,25 @@ export function validateNotes(v: string): string | true {
   return true
 }
 
+export function validatePaymentMethod(v: string): string | true {
+  if (v.length > 50) return "Payment method too long (max 50 chars)"
+  return true
+}
+
+export function validateTrialName(v: string): string | true {
+  if (!v.trim()) return "Name cannot be empty"
+  if (v.length > 100) return "Name too long (max 100 chars)"
+  return true
+}
+
+export function validateExpiresAt(v: string): string | true {
+  if (!v.trim()) return "Expiration date cannot be empty"
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return "Use YYYY-MM-DD format"
+  const d = new Date(v + "T00:00:00")
+  if (isNaN(d.getTime())) return "Invalid date"
+  return true
+}
+
 export function validateTags(v: string): string | true {
   if (!v.trim()) return true
   const tags = v.split(",").map((t) => t.trim()).filter(Boolean)
