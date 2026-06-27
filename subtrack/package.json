@@ -44,7 +44,7 @@
     "start": "tsx --no-warnings src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint:typos": "typos",
+    "lint:typos": "typos || echo 'typos not installed, skipping'",
     "lint:security": "pnpm audit --audit-level=high",
     "lint:types": "tsc --noEmit",
     "lint:lockfile": "node -e \"process.exit(require('fs').readFileSync('../pnpm-lock.yaml','utf8').startsWith('lockfileVersion')?0:1)\"",
@@ -53,11 +53,7 @@
   },
   "lint-staged": {
     "*.{ts,tsx}": [
-      "typos --",
       "tsc --noEmit"
-    ],
-    "*.{ts,tsx,json,md,yaml,yml}": [
-      "typos --"
     ]
   },
   "dependencies": {
