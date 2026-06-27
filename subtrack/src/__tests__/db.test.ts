@@ -17,7 +17,8 @@ beforeAll(async () => {
     status TEXT NOT NULL DEFAULT 'active',
     billing_day INTEGER,
     created_at TEXT NOT NULL DEFAULT (date('now')),
-    notes TEXT
+    notes TEXT,
+    payment_method TEXT
   )`)
   testDb.run(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,6 +43,16 @@ beforeAll(async () => {
     generation_id TEXT
   )`)
   testDb.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
+  testDb.run(`CREATE TABLE IF NOT EXISTS trials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    price INTEGER,
+    currency TEXT,
+    cycle TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (date('now'))
+  )`)
 
   const db = await import("../db.ts")
   db.__setDb(testDb)
