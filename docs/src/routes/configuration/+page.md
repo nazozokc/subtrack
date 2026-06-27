@@ -51,9 +51,29 @@ Alternatively, you can set `SUBSC_CLI_DB_PASSPHRASE` to derive the encryption ke
 
 Backups can also be encrypted with `subtrack backup --encrypt`.
 
+## Configuration management (`subtrack config`)
+
+subtrack provides a `config` command to manage runtime settings stored in `~/.config/subtrack/config.json`:
+
+```bash
+# List all config values
+subtrack config list
+
+# Get a specific value
+subtrack config get defaultCurrency
+
+# Set a value
+subtrack config set monthlyBudget 500
+
+# Reset all config to defaults
+subtrack config reset
+```
+
+See the [Commands reference](/commands#config) for full details.
+
 ## No config file
 
-subtrack does not use configuration files (`.subtrackrc`, `subtrack.json`, etc.). All settings are controlled via environment variables or CLI flags. This keeps the tool simple and predictable.
+subtrack does not use configuration files (`.subtrackrc`, `subtrack.json`, etc.). All settings are controlled via the `config` command, environment variables, or CLI flags. This keeps the tool simple and predictable.
 
 ## Currency & cycle choices
 

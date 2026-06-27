@@ -53,7 +53,29 @@ Running `subtrack add` without flags starts a step-by-step prompt session.
 - Validated as a non-negative integer
 - Max 99,999,999
 
-### 3. Currency
+### 3. Billing day (optional)
+
+```
+? billing day (1-31, optional)
+```
+
+- Optional text input
+- Leave empty to use the creation date as the billing anchor
+- Enter a number between 1 and 31
+
+### 4. Status
+
+```
+? status (Use arrow keys)
+❯  active
+   paused
+   cancelled
+```
+
+- Select from 3 statuses
+- Default is `active`
+
+### 5. Currency
 
 ```
 ? currency (Use arrow keys)
@@ -72,7 +94,7 @@ Running `subtrack add` without flags starts a step-by-step prompt session.
 - Select from 36 supported currencies
 - Navigate with arrow keys, confirm with Enter
 
-### 4. Cycle
+### 6. Cycle
 
 ```
 ? cycle (Use arrow keys)
@@ -86,7 +108,7 @@ Running `subtrack add` without flags starts a step-by-step prompt session.
 
 - Select from 6 billing cycles
 
-### 5. Tags
+### 7. Tags
 
 ```
 ? tags existing: music, video
@@ -97,10 +119,16 @@ Running `subtrack add` without flags starts a step-by-step prompt session.
 - Comma-separated, max 10 tags, each max 50 characters
 - Can be left blank (press Enter to skip)
 
-### 6. Confirmation
+### 8. Confirmation
 
 ```
 ? Save "Netflix" (¥1,980, monthly)? (Y/n)
+```
+
+If the status is not `active`, it's shown in the confirmation summary:
+
+```
+? Save "Adobe CC" (¥6,980, monthly, status: paused)? (Y/n)
 ```
 
 - Shows a summary of the subscription
@@ -115,7 +143,7 @@ After confirmation:
 
 ### Full-flag mode (no prompts)
 
-When all flags are provided (`--name`, `--price`, `--currency`, `--cycle`, `--tags`), **no prompts appear** and the subscription is saved immediately without confirmation:
+When all required flags are provided (`--name`, `--price`, `--currency`, `--cycle`, `--tags`), **no prompts appear** and the subscription is saved immediately without confirmation. Optional flags like `--status`, `--billingDay` can also be included:
 
 ```bash
 subtrack add \
@@ -123,7 +151,9 @@ subtrack add \
   --price 1980 \
   --currency JPY \
   --cycle monthly \
-  --tags "video,entertainment"
+  --tags "video,entertainment" \
+  --status active \
+  --billingDay 15
 ```
 
 Useful for scripts and automation.
@@ -163,6 +193,8 @@ Running `subtrack edit` without arguments interactively selects a subscription a
  ◯ price (¥1,980)
  ◯ currency (JPY)
  ◯ cycle (monthly)
+ ◯ status (active)
+ ◯ billing day (not set)
  ◯ tags (video, entertainment)
 ```
 

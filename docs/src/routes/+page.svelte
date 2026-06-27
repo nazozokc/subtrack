@@ -51,8 +51,14 @@ subtrack edit 3 --price 2500
 # Show monthly payment total
 subtrack payment
 
+# Show upcoming bills
+subtrack upcoming
+
 # Show summary statistics
 subtrack summary
+
+# Show detailed analytics
+subtrack analytics
 
 # Filter by tags
 subtrack tags music video</pre>
