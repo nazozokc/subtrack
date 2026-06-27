@@ -6,14 +6,8 @@ import { getSubscriptions } from "./db.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
 
-export function formatPrice(price: number, currency: string): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(price)
-}
+import { formatPrice } from "./price.ts"
+export { formatPrice }
 
 function statusColor(status: Status): string {
   switch (status) {

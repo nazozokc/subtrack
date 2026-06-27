@@ -12,6 +12,7 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 - **Logging**: `consola`
 - **Tables**: `cli-table3`
 - **Colors**: `picocolors`
+- **TUI**: `ink` + `react` + `@inkjs/ui`
 - **Build**: `tsdown`
 - **Test**: `vitest`
 
@@ -54,6 +55,11 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 | `src/crypto.ts` | Backup encryption |
 | `src/pricing.ts` | Pricing/litellm integration |
 | `src/types.ts` | Shared types |
+| `src/tui.tsx` | TUI entry: render Ink app |
+| `src/tui/app.tsx` | Root component: layout, keyboard handling |
+| `src/tui/context/app-context.tsx` | Global state (screen, mode, focus) |
+| `src/tui/screens/` | TUI screen components (list, add, edit, …) |
+| `src/tui/components/` | Reusable UI components (sidebar, table, form, …) |
 
 ## Key Conventions
 
@@ -63,6 +69,7 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 - **No semicolons** in imports/exports
 - **Prices**: integers (smallest unit — JPY no decimal, USD cents)
 - **DB**: `sql.js` with `PRAGMA foreign_keys = ON`, use transactions for multi-step writes
+- **TUI**: Ink + React components under `src/tui/`, vim-like keybindings, sidebar navigation
 
 ## Environment Variables
 
@@ -87,3 +94,4 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 | `subtrack restore [file]` | Restore database |
 | `subtrack payment [period]` | Show payment totals |
 | `subtrack usage add\|list\|delete\|refresh` | Track LLM API usage |
+| `subtrack tui` | Interactive terminal UI (sidebar, vim-like) |
