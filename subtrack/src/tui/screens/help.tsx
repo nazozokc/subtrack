@@ -43,7 +43,7 @@ export function HelpScreen() {
       <Box flexDirection="column" gap={1} marginBottom={1}>
         <Text bold>Available Screens</Text>
         {SIDEBAR_ITEMS.map((item, i) => (
-          <Box key={item.id}>
+          <Box key={item.screen}>
             <Box width={4}><Text dimColor>{i + 1}.</Text></Box>
             <Box width={22}><Text bold wrap="truncate-end">{item.icon} {item.label}</Text></Box>
           </Box>

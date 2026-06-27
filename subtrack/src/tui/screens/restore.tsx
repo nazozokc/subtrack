@@ -14,7 +14,7 @@ export function RestoreScreen() {
   const [result, setResult] = useState<string | null>(null)
 
   const backups = getBackupFiles(getDbDir())
-  const options = backups.map((b) => ({ label: `${b.name} (${b.date})`, value: b.path }))
+  const options = backups.map((b) => ({ label: `${b.name} (${b.mtime.toISOString().slice(0, 10)})`, value: b.path }))
 
   useInput((input, key) => {
     if (key.escape) dispatch({ type: "SET_SCREEN", screen: "list" })
