@@ -136,6 +136,7 @@ export const showPayment = async (
   currency?: Currency,
   subs?: SharedArgs[],
   includeApi?: boolean,
+  byMethod?: boolean,
 ): Promise<void> => {
   const list = subs ?? getSubscriptions()
 
@@ -145,10 +146,11 @@ export const showPayment = async (
   }
 
   // Calculate per-subscription converted price
-  type Entry = { convertedPrice: number; currency: Currency }
+  type Entry = { convertedPrice: number; currency: Currency; paymentMethod: string | null }
   const entries: Entry[] = list.map((sub) => ({
     convertedPrice: sub.price * periodFactor(sub.cycle, period),
     currency: sub.currency,
+    paymentMethod: sub.paymentMethod,
   }))
 
   const fmtPeriod = period === "monthly" ? "month" : period === "bi-weekly" ? "bi-week" : period === "semi-annual" ? "6 months" : period
@@ -230,6 +232,21 @@ export const showPayment = async (
     // Round to integer for display (prices are stored as integers)
     const rounded = Math.round(total)
     consola.log(`${ccy} ${formatPrice(rounded, ccy)}/${fmtPeriod}`)
+  }
+
+  // Group by payment method
+  if (byMethod) {
+    const methodGroups: Record<string, number> = {}
+    for (const entry of entries) {
+      const method = entry.paymentMethod || "unspecified"
+      methodGroups[method] = (methodGroups[method] ?? 0) + entry.convertedPrice
+    }
+    consola.log("")
+    consola.log(pc.bold("By payment method:"))
+    for (const [method, total] of Object.entries(methodGroups).sort()) {
+      const rounded = Math.round(total)
+      consola.log(`  ${method.padEnd(16)} ${formatPrice(rounded, "USD")}/${fmtPeriod}`)
+    }
   }
 
   if (includeApi) {

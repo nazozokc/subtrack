@@ -21,6 +21,8 @@ import type {
   AddLlmUsageArgs,
   AddLlmUsageFromLogArgs,
   BackupFileInfo,
+  TrialEntry,
+  AddTrialArgs,
 } from "./types.ts"
 
 let _db: Database | null = null
@@ -185,6 +187,93 @@ function execObj<T>(
   return makeObj(columns, values[0]) as T
 }
 
+/** Apply schema creation and migrations to a database instance. */
+function runMigrations(db: Database): void {
+  db.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    price INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    cycle TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    billing_day INTEGER,
+    created_at TEXT NOT NULL DEFAULT (date('now')),
+    notes TEXT
+  )`)
+  db.run(`CREATE TABLE IF NOT EXISTS tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+  )`)
+  db.run(`CREATE TABLE IF NOT EXISTS subscription_tags (
+    subscription_id INTEGER NOT NULL,
+    tag_id INTEGER NOT NULL,
+    PRIMARY KEY (subscription_id, tag_id),
+    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+  )`)
+  db.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cost REAL NOT NULL,
+    date TEXT NOT NULL,
+    description TEXT,
+    generation_id TEXT
+  )`)
+  db.run(`CREATE TABLE IF NOT EXISTS trials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    price INTEGER,
+    currency TEXT,
+    cycle TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (date('now'))
+  )`)
+
+  // Migration: add generation_id column if missing (pre-4.1.0 databases)
+  const llmCols = db.exec("PRAGMA table_info(llm_usage)")
+  const hasGenId = llmCols.length > 0 && llmCols[0].values.some(
+    (row) => String(row[1]) === "generation_id",
+  )
+  if (!hasGenId) {
+    db.run("ALTER TABLE llm_usage ADD COLUMN generation_id TEXT")
+    db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
+  }
+
+  // Migration: add notes column if missing (pre-6.x databases)
+  const subCols = db.exec("PRAGMA table_info(subscriptions)")
+  const hasNotes = subCols.length > 0 && subCols[0].values.some(
+    (row) => String(row[1]) === "notes",
+  )
+  if (!hasNotes) {
+    db.run("ALTER TABLE subscriptions ADD COLUMN notes TEXT")
+  }
+
+  // Migration: add payment_method column if missing
+  const hasPaymentMethod = subCols.length > 0 && subCols[0].values.some(
+    (row) => String(row[1]) === "payment_method",
+  )
+  if (!hasPaymentMethod) {
+    db.run("ALTER TABLE subscriptions ADD COLUMN payment_method TEXT")
+  }
+
+  // Verify database integrity on startup
+  const integrityResult = db.exec("PRAGMA integrity_check")
+  if (
+    integrityResult.length > 0 &&
+    integrityResult[0].values.length > 0 &&
+    String(integrityResult[0].values[0][0]) !== "ok"
+  ) {
+    consola.warn(
+      `Database integrity check failed: ${String(integrityResult[0].values[0][0])}\n` +
+      "  Run 'subtrack backup' immediately and restore from a known-good backup.",
+    )
+  }
+}
+
 export function getDb(): Database {
   if (_db) return _db
 
@@ -204,72 +293,7 @@ export function getDb(): Database {
 
   _db.run("PRAGMA foreign_keys = ON")
   _db.run("PRAGMA secure_delete = ON")
-  _db.run(`CREATE TABLE IF NOT EXISTS subscriptions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    price INTEGER NOT NULL,
-    currency TEXT NOT NULL,
-    cycle TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active',
-    billing_day INTEGER,
-    created_at TEXT NOT NULL DEFAULT (date('now')),
-    notes TEXT
-  )`)
-  _db.run(`CREATE TABLE IF NOT EXISTS tags (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE
-  )`)
-  _db.run(`CREATE TABLE IF NOT EXISTS subscription_tags (
-    subscription_id INTEGER NOT NULL,
-    tag_id INTEGER NOT NULL,
-    PRIMARY KEY (subscription_id, tag_id),
-    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
-    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
-  )`)
-  _db.run(`CREATE TABLE IF NOT EXISTS llm_usage (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    provider TEXT NOT NULL,
-    model TEXT NOT NULL,
-    input_tokens INTEGER NOT NULL DEFAULT 0,
-    output_tokens INTEGER NOT NULL DEFAULT 0,
-    cost REAL NOT NULL,
-    date TEXT NOT NULL,
-    description TEXT,
-    generation_id TEXT
-  )`)
-
-  // Migration: add generation_id column if missing (pre-4.1.0 databases)
-  const llmCols = _db.exec("PRAGMA table_info(llm_usage)")
-  const hasGenId = llmCols.length > 0 && llmCols[0].values.some(
-    (row) => String(row[1]) === "generation_id",
-  )
-  if (!hasGenId) {
-    _db.run("ALTER TABLE llm_usage ADD COLUMN generation_id TEXT")
-    // Unique index for dedup lookups
-    _db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
-  }
-
-  // Migration: add notes column if missing (pre-6.x databases)
-  const subCols = _db.exec("PRAGMA table_info(subscriptions)")
-  const hasNotes = subCols.length > 0 && subCols[0].values.some(
-    (row) => String(row[1]) === "notes",
-  )
-  if (!hasNotes) {
-    _db.run("ALTER TABLE subscriptions ADD COLUMN notes TEXT")
-  }
-
-  // Verify database integrity on startup
-  const integrityResult = _db.exec("PRAGMA integrity_check")
-  if (
-    integrityResult.length > 0 &&
-    integrityResult[0].values.length > 0 &&
-    String(integrityResult[0].values[0][0]) !== "ok"
-  ) {
-    consola.warn(
-      `Database integrity check failed: ${String(integrityResult[0].values[0][0])}\n` +
-      "  Run 'subtrack backup' immediately and restore from a known-good backup.",
-    )
-  }
+  runMigrations(_db)
 
   return _db
 }
@@ -383,6 +407,7 @@ export function restoreDb(backupPath: string): void {
   newDb.run("PRAGMA foreign_keys = ON")
   newDb.run("PRAGMA secure_delete = ON")
   _db = newDb
+  runMigrations(newDb)
 }
 
 /** Replace the DB instance for testing (e.g. with in-memory). */
@@ -417,7 +442,7 @@ export function verifyBackupHash(backupPath: string): boolean {
   return expected === actual
 }
 
-function mapTags(subs: SharedArgs[]): SharedArgs[] {
+export function mapTags(subs: SharedArgs[]): SharedArgs[] {
   if (subs.length === 0) return subs
 
   const db = getDb()
@@ -457,7 +482,7 @@ export const getSubscriptions = (sort?: string, desc?: boolean): SharedArgs[] =>
   const order = desc ? "DESC" : "ASC"
   const subs = execObjs<SharedArgs>(
     db,
-    `SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt, notes FROM subscriptions ORDER BY ${field} ${order}`,
+    `SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt, notes, payment_method AS paymentMethod FROM subscriptions ORDER BY ${field} ${order}`,
   )
   return mapTags(subs)
 }
@@ -469,8 +494,8 @@ export const writeSubscription = (data: AddSharedArgs): void => {
   db.run("BEGIN TRANSACTION")
   try {
     db.run(
-      "INSERT INTO subscriptions (name, price, currency, cycle, status, billing_day, created_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      [data.name, data.price, data.currency, data.cycle, data.status ?? "active", data.billingDay ?? null, data.createdAt ?? new Date().toISOString().split("T")[0], data.notes ?? null],
+      "INSERT INTO subscriptions (name, price, currency, cycle, status, billing_day, created_at, notes, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [data.name, data.price, data.currency, data.cycle, data.status ?? "active", data.billingDay ?? null, data.createdAt ?? new Date().toISOString().split("T")[0], data.notes ?? null, data.paymentMethod ?? null],
     )
 
     const idRow = execObj<Record<string, SqlValue>>(
@@ -548,7 +573,7 @@ export const tagsSubscription = (tag: string[] | string): SharedArgs[] => {
   const idPlaceholders = ids.map(() => "?").join(",")
   const subs = execObjs<SharedArgs>(
     db,
-    `SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt, notes FROM subscriptions
+    `SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt, notes, payment_method AS paymentMethod FROM subscriptions
      WHERE id IN (${idPlaceholders})`,
     ids,
   )
@@ -560,7 +585,7 @@ export const getSubscription = (id: number): SharedArgs | undefined => {
   const db = getDb()
   const sub = execObj<SharedArgs>(
     db,
-    "SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt, notes FROM subscriptions WHERE id = ?",
+    "SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt, notes, payment_method AS paymentMethod FROM subscriptions WHERE id = ?",
     [id],
   )
   if (!sub) return undefined
@@ -585,6 +610,7 @@ export const updateSubscription = (
     if (fields.status !== undefined) { sets.push("status = ?"); params.push(fields.status) }
     if (fields.billingDay !== undefined) { sets.push("billing_day = ?"); params.push(fields.billingDay) }
     if (fields.notes !== undefined) { sets.push("notes = ?"); params.push(fields.notes || null) }
+    if (fields.paymentMethod !== undefined) { sets.push("payment_method = ?"); params.push(fields.paymentMethod || null) }
 
     if (sets.length > 0) {
       params.push(id)
@@ -873,5 +899,53 @@ export const getLlmUsageTotalByProvider = (
      GROUP BY provider
      ORDER BY total DESC`,
     [from, to],
+  )
+}
+
+// ── Trial CRUD ──────────────────────────────────────────────
+
+export const writeTrial = (data: AddTrialArgs): void => {
+  const db = getDb()
+  db.run(
+    "INSERT INTO trials (name, expires_at, price, currency, cycle, notes) VALUES (?, ?, ?, ?, ?, ?)",
+    [data.name, data.expiresAt, data.price ?? null, data.currency ?? null, data.cycle ?? null, data.notes ?? null],
+  )
+  saveDb()
+}
+
+export const getTrials = (): TrialEntry[] => {
+  const db = getDb()
+  return execObjs<TrialEntry>(
+    db,
+    "SELECT id, name, expires_at AS expiresAt, price, currency, cycle, notes, created_at AS createdAt FROM trials ORDER BY expires_at ASC",
+  )
+}
+
+export const getTrial = (id: number): TrialEntry | undefined => {
+  const db = getDb()
+  return execObj<TrialEntry>(
+    db,
+    "SELECT id, name, expires_at AS expiresAt, price, currency, cycle, notes, created_at AS createdAt FROM trials WHERE id = ?",
+    [id],
+  )
+}
+
+export const deleteTrial = (id: number): boolean => {
+  const db = getDb()
+  db.run("DELETE FROM trials WHERE id = ?", [id])
+  const modified = db.getRowsModified() > 0
+  if (modified) saveDb()
+  return modified
+}
+
+/** Return trial entries expiring within the next `days` days. */
+export const getTrialsExpiringSoon = (days: number): TrialEntry[] => {
+  const db = getDb()
+  return execObjs<TrialEntry>(
+    db,
+    `SELECT id, name, expires_at AS expiresAt, price, currency, cycle, notes, created_at AS createdAt FROM trials
+     WHERE expires_at >= date('now') AND expires_at <= date('now', '+' || ? || ' days')
+     ORDER BY expires_at ASC`,
+    [days],
   )
 }

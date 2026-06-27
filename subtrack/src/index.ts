@@ -24,6 +24,17 @@ import {
   handleConfigGet,
   handleConfigSet,
   handleConfigReset,
+  handleSearch,
+  handleTrialAdd,
+  handleTrialList,
+  handleTrialExpiring,
+  handleTrialDelete,
+  handleBulkStatus,
+  handleBulkDelete,
+  handleBulkTagAdd,
+  handleBulkTagRemove,
+  handleForecast,
+  handleTui,
 } from "./commands.ts"
 import {
   handleUsageAdd,
@@ -46,6 +57,7 @@ const listCommand = define({
     desc: { type: "boolean", short: "d", description: "Sort descending" },
     api: { type: "boolean", short: "a", description: "Include LLM API usage for current month" },
     notes: { type: "boolean", short: "n", description: "Show notes column" },
+    method: { type: "boolean", short: "m", description: "Show payment method column" },
   },
   run: (ctx) => handleList(ctx.values),
 })
@@ -61,6 +73,7 @@ const addCommand = define({
     tags: { type: "string", description: "Comma-separated tags" },
     billingDay: { type: "string", description: "Billing day of month (1-31)" },
     status: { type: "string", description: "Status: active, paused, cancelled (default: active)" },
+    paymentMethod: { type: "string", description: "Payment method (e.g. credit_card, paypal)" },
   },
   run: (ctx) => handleAdd(ctx.values),
 })
@@ -77,6 +90,7 @@ const editCommand = define({
     tags: { type: "string", description: "Comma-separated tags" },
     status: { type: "string", description: "Status: active, paused, cancelled" },
     billingDay: { type: "string", description: "Billing day of month (1-31)" },
+    paymentMethod: { type: "string", description: "Payment method" },
   },
   run: (ctx) => handleEdit(ctx.values.id ? Number(ctx.values.id) : undefined, ctx.values),
 })
@@ -152,6 +166,188 @@ const tagCommand = define({
   run: () => consola.info("Usage: subtrack tag list|rename|delete|prune"),
 })
 
+// ── Search ──────────────────────────────────────────────
+
+const searchCommand = define({
+  name: "search",
+  description: "Search subscriptions by name, notes, or tags",
+  args: {
+    query: { type: "positional", description: "Search query", required: false },
+    names: { type: "boolean", description: "Search in names only" },
+    notes: { type: "boolean", description: "Search in notes only" },
+    tags: { type: "boolean", description: "Search in tags only" },
+  },
+  run: (ctx) => {
+    const positionals = ctx.positionals as string[]
+    const query = ctx.values.query ?? positionals[1]
+    handleSearch(query, { names: ctx.values.names, notes: ctx.values.notes, tags: ctx.values.tags })
+  },
+})
+
+// ── Trial ──────────────────────────────────────────────
+
+const trialAddCmd = define({
+  name: "add",
+  description: "Add a free trial",
+  toKebab: true,
+  args: {
+    name: { type: "string", description: "Trial name" },
+    expiresAt: { type: "string", description: "Expiration date (YYYY-MM-DD)" },
+    price: { type: "string", description: "Price after trial ends" },
+    currency: { type: "string", description: "Currency" },
+    cycle: { type: "string", description: "Billing cycle" },
+    notes: { type: "string", description: "Notes" },
+  },
+  run: (ctx) => handleTrialAdd(ctx.values),
+})
+
+const trialListCmd = define({
+  name: "list",
+  description: "List all free trials",
+  run: () => handleTrialList(),
+})
+
+const trialExpiringCmd = define({
+  name: "expiring",
+  description: "Show trials expiring within a number of days",
+  args: {
+    days: { type: "positional", description: "Number of days (default: 7)", required: false },
+  },
+  run: (ctx) => {
+    const days = ctx.values.days !== undefined ? Number(ctx.values.days) : 7
+    handleTrialExpiring(days)
+  },
+})
+
+const trialDeleteCmd = define({
+  name: "delete",
+  description: "Delete free trials",
+  args: {
+    id: { type: "positional", array: true, description: "Trial ID(s) to delete (omit for interactive selection)", required: false },
+  },
+  run: (ctx) => {
+    const ids = ctx.positionals.slice(1).map(Number).filter((n: number) => !isNaN(n))
+    handleTrialDelete(ids.length > 0 ? ids : undefined)
+  },
+})
+
+const trialCommand = define({
+  name: "trial",
+  description: "Manage free trials",
+  subCommands: {
+    add: trialAddCmd,
+    list: trialListCmd,
+    expiring: trialExpiringCmd,
+    delete: trialDeleteCmd,
+  },
+  run: () => consola.info("Usage: subtrack trial add|list|expiring|delete"),
+})
+
+// ── Bulk ───────────────────────────────────────────────
+
+const bulkStatusCmd = define({
+  name: "status",
+  description: "Bulk change subscription status",
+  args: {
+    set: { type: "string", description: "Target status: active, paused, cancelled", required: true },
+    tag: { type: "string", description: "Filter by tag" },
+    status: { type: "string", description: "Filter by current status" },
+    name: { type: "string", description: "Filter by name pattern" },
+    force: { type: "boolean", short: "f", description: "Skip confirmation" },
+  },
+  run: (ctx) => handleBulkStatus(ctx.values.set, { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }, { force: ctx.values.force }),
+})
+
+const bulkDeleteCmd = define({
+  name: "delete",
+  description: "Bulk delete subscriptions",
+  args: {
+    tag: { type: "string", description: "Filter by tag" },
+    status: { type: "string", description: "Filter by current status" },
+    name: { type: "string", description: "Filter by name pattern" },
+    force: { type: "boolean", short: "f", description: "Skip confirmation" },
+  },
+  run: (ctx) => handleBulkDelete({ tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }, { force: ctx.values.force }),
+})
+
+const bulkTagAddCmd = define({
+  name: "add",
+  description: "Bulk add tag to matching subscriptions",
+  args: {
+    add: { type: "string", description: "Tag to add", required: true },
+    tag: { type: "string", description: "Filter by tag" },
+    status: { type: "string", description: "Filter by current status" },
+    name: { type: "string", description: "Filter by name pattern" },
+  },
+  run: (ctx) => handleBulkTagAdd(ctx.values.add, { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }),
+})
+
+const bulkTagRemoveCmd = define({
+  name: "remove",
+  description: "Bulk remove tag from matching subscriptions",
+  args: {
+    remove: { type: "string", description: "Tag to remove", required: true },
+    tag: { type: "string", description: "Filter by tag" },
+    status: { type: "string", description: "Filter by current status" },
+    name: { type: "string", description: "Filter by name pattern" },
+  },
+  run: (ctx) => handleBulkTagRemove(ctx.values.remove, { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }),
+})
+
+const bulkTagCmd = define({
+  name: "tag",
+  description: "Bulk add/remove tags",
+  subCommands: {
+    add: bulkTagAddCmd,
+    remove: bulkTagRemoveCmd,
+  },
+  run: () => consola.info("Usage: subtrack bulk tag add|remove"),
+})
+
+const bulkCommand = define({
+  name: "bulk",
+  description: "Bulk operations on subscriptions",
+  subCommands: {
+    status: bulkStatusCmd,
+    delete: bulkDeleteCmd,
+    tag: bulkTagCmd,
+  },
+  run: () => consola.info("Usage: subtrack bulk status|delete|tag"),
+})
+
+// ── TUI ────────────────────────────────────────────────
+
+const tuiCommand = define({
+  name: "tui",
+  description: "Interactive terminal UI",
+  run: () => handleTui(),
+})
+
+// ── Forecast ──────────────────────────────────────────
+
+const forecastCommand = define({
+  name: "forecast",
+  description: "Show spending forecast and what-if scenarios",
+  args: {
+    months: { type: "string", description: "Number of months to forecast (default: 12)" },
+    cancel: { type: "string", description: "Comma-separated subscription names to exclude" },
+    addName: { type: "string", description: "Hypothetical subscription name to add" },
+    addPrice: { type: "string", description: "Hypothetical subscription price" },
+    addCurrency: { type: "string", description: "Hypothetical subscription currency" },
+    addCycle: { type: "string", description: "Hypothetical subscription cycle" },
+    currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
+  },
+  run: (ctx) => handleForecast({
+    months: ctx.values.months ? Number(ctx.values.months) : undefined,
+    cancel: ctx.values.cancel?.split(",").map((s: string) => s.trim()).filter(Boolean),
+    addName: ctx.values.addName,
+    addPrice: ctx.values.addPrice,
+    addCurrency: ctx.values.addCurrency,
+    addCycle: ctx.values.addCycle,
+    currency: ctx.values.currency,
+  }),
+})
+
 const exportCommand = define({
   name: "export",
   description: "Export subscriptions",
@@ -211,10 +407,11 @@ const paymentCommand = define({
     period: { type: "positional", description: "Billing period (default: monthly)", required: false },
     currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
     api: { type: "boolean", short: "a", description: "Include LLM API usage costs" },
+    method: { type: "boolean", short: "m", description: "Group by payment method" },
   },
   run: (ctx) => {
     const period = (ctx.values.period || "monthly") as Cycle
-    handlePayment(period, { currency: ctx.values.currency, api: ctx.values.api })
+    handlePayment(period, { currency: ctx.values.currency, api: ctx.values.api, method: ctx.values.method })
   },
 })
 
@@ -417,6 +614,11 @@ try {
       delete: deleteCommand,
       tags: tagsCommand,
       tag: tagCommand,
+      search: searchCommand,
+      trial: trialCommand,
+      bulk: bulkCommand,
+      tui: tuiCommand,
+      forecast: forecastCommand,
       export: exportCommand,
       import: importCommand,
       summary: summaryCommand,
