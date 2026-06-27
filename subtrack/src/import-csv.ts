@@ -1,5 +1,5 @@
 import { consola } from "consola"
-import { existsSync, statSync, readFileSync } from "node:fs"
+import { statSync, readFileSync } from "node:fs"
 import { writeSubscription } from "./db.ts"
 import { validateName, validatePrice, validateTags, isValidCurrency, isValidCycle } from "./prompts.ts"
 import os from "node:os"
@@ -50,15 +50,10 @@ export async function handleImport(
     return
   }
 
-  if (!existsSync(file)) {
-    consola.error(`File not found: ${file}`)
-    return
-  }
-
-  // Validate path is within allowed base directories
+  // Validate path is within allowed base directories (also verifies existence)
   const safeFile = resolveSafePath([os.homedir(), os.tmpdir()], file)
   if (!safeFile) {
-    consola.error(`Invalid file path — must be within home directory`)
+    consola.error(`File not found or path not allowed — must be within home or temp directory`)
     return
   }
 
