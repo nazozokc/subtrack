@@ -28,6 +28,7 @@ import {
   validatePrice,
   validateTags,
   validateBillingDay,
+  validateNotes,
   promptString,
   promptSelect,
 } from "./prompts.ts"
@@ -89,6 +90,25 @@ async function resolveAddOptions(flags: AddFlags) {
     }
   }
 
+  // notes: optional free text
+  let notes: string | null = null
+  const notesStr = flags.notes
+  if (notesStr !== undefined) {
+    const trimmed = notesStr.trim()
+    if (trimmed) {
+      const valid = validateNotes(trimmed)
+      if (valid !== true) { consola.error(valid); return null }
+      notes = trimmed
+    }
+    // empty flag = no notes (keep null)
+  } else if (prompted) {
+    const noteStr = await input({
+      message: "notes (optional, max 500 chars)",
+      validate: validateNotes,
+    })
+    if (noteStr.trim()) notes = noteStr.trim()
+  }
+
   // billingDay: optional, 1-31
   let billingDay: number | null = null
   const billingDayStr = flags.billingDay
@@ -136,14 +156,14 @@ async function resolveAddOptions(flags: AddFlags) {
     }
   }
 
-  return { name, price, currency, cycle, tags, status, billingDay }
+  return { name, price, currency, cycle, tags, status, billingDay, notes }
 }
 
 // ── Command handlers ────────────────────────────────────
 
-export async function handleList(options: { currency?: string; sort?: string; desc?: boolean; api?: boolean }) {
+export async function handleList(options: { currency?: string; sort?: string; desc?: boolean; api?: boolean; notes?: boolean }) {
   const list = getSubscriptions(options.sort, options.desc)
-  await spreadSubscription(list, options.currency as Currency | undefined)
+  await spreadSubscription(list, options.currency as Currency | undefined, options.notes)
 
   if (options.api) {
     const now = new Date()
@@ -278,6 +298,10 @@ export async function handleEdit(
     }
     if (flags.tags !== undefined) {
       newData.tags = flags.tags.split(",").map((t) => t.trim()).filter(Boolean)
+    }
+    if (flags.notes !== undefined) {
+      const trimmed = flags.notes.trim()
+      newData.notes = trimmed || null
     }
     updateSubscription(sub.id, newData)
     const updated = getSubscription(sub.id)!

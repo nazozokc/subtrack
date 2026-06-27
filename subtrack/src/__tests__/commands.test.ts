@@ -96,7 +96,8 @@ beforeAll(async () => {
     cycle TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
     billing_day INTEGER,
-    created_at TEXT NOT NULL DEFAULT (date('now'))
+    created_at TEXT NOT NULL DEFAULT (date('now')),
+    notes TEXT
   )`)
   testDb.run(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -718,6 +719,56 @@ test("handlePayment with --currency converts to target", async () => {
   const combined = logMessages.join("\n")
   expect(combined).toContain("¥1,000")
   expect(combined).toContain("/month")
+})
+
+// ── handleCompare ──────────────────────────────────────────
+
+test("handleCompare shows info when no active subscriptions", async () => {
+  const { handleCompare } = await import("../commands.ts")
+  await handleCompare("monthly", {})
+  expect(infoMessages.some((m) => m.includes("No active subscriptions"))).toBe(true)
+})
+
+test("handleCompare shows comparison for active subscriptions", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({ name: "Netflix", price: 1500, currency: "JPY", cycle: "monthly", tags: [] })
+
+  const { handleCompare } = await import("../commands.ts")
+  await handleCompare("monthly", {})
+  const combined = logMessages.join("\n")
+  expect(combined).toContain("JPY")
+  expect(combined).toContain("¥")
+  expect(combined).toContain("Grand Total")
+})
+
+test("handleCompare with --api includes API usage", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({ name: "Spotify", price: 980, currency: "JPY", cycle: "monthly", tags: [] })
+  db.addLlmUsage({
+    provider: "openai",
+    model: "gpt-4o",
+    input_tokens: 100,
+    output_tokens: 50,
+    cost: 0.5,
+    date: "2026-06-19",
+    description: null,
+  })
+
+  const { handleCompare } = await import("../commands.ts")
+  await handleCompare("monthly", { api: true })
+  const combined = logMessages.join("\n")
+  expect(combined).toContain("API Usage")
+  expect(combined).toContain("Grand Total")
+})
+
+test("handleCompare with --currency converts prices", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({ name: "Netflix", price: 1600, currency: "JPY", cycle: "monthly", tags: [] })
+
+  const { handleCompare } = await import("../commands.ts")
+  await handleCompare("monthly", { currency: "USD" })
+  const combined = logMessages.join("\n")
+  expect(combined).toContain("USD")
 })
 
 // ── handleAdd ─────────────────────────────────────────────
@@ -1353,7 +1404,7 @@ test("handleRestore restores from valid backup file", async () => {
   // Create a backup database with target data
   const SQL2 = await initSqlJs2.default()
   const backupDb = new SQL2.Database()
-  backupDb.run("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')))")
+  backupDb.run("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
   backupDb.run("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
   backupDb.run("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
   backupDb.run("CREATE TABLE llm_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, model TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, cost REAL NOT NULL, date TEXT NOT NULL, description TEXT)")

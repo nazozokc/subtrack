@@ -24,9 +24,14 @@ jobs:
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
+      attestations: write
       contents: write
       id-token: write
     steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
@@ -62,6 +67,22 @@ jobs:
           echo "✅ Version: $TAG_VERSION"
         id: version
 
+      - name: Verify signed tag
+        if: github.event_name == 'release'
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          SIGNATURE=$(git tag -v "$TAG" 2>&1 || true)
+          if echo "$SIGNATURE" | grep -q "error:"; then
+            echo "⚠  Tag $TAG is not signed or cannot be verified."
+            echo "   Consider signing tags with: git tag -s <tag>"
+            echo "   See https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-tags"
+          elif echo "$SIGNATURE" | grep -q "Good signature"; then
+            echo "✅ Tag $TAG has a valid signature"
+          else
+            echo "ℹ  Tag verification status:"
+            echo "$SIGNATURE" | head -5
+          fi
+
       - name: Set package.json version from tag
         if: github.event_name == 'release'
         working-directory: ./subtrack
@@ -75,17 +96,36 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Generate npm-shrinkwrap.json for reproducible installs
+      - name: Generate shrinkwrap
+        working-directory: ./subtrack
+        run: pnpm shrinkwrap
+
       - run: pnpm build
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v3
+        with:
+          path: ./
+          artifact-name: subtrack-sbom-${{ steps.version.outputs.version || 'dev' }}
+          format: spdx-json
 
       - name: Verify build
         working-directory: ./subtrack
         run: |
           test -f dist/index.mjs
+          test -f npm-shrinkwrap.json
           node -e "
             const bytes = require('fs').readFileSync('dist/index.mjs').length;
             const tag = '${{ steps.version.outputs.version }}';
             console.log('📦 subtrack v' + tag + ' | dist/index.mjs (' + (bytes / 1024).toFixed(1) + ' KB)');
           "
+
+      - name: Attest build provenance
+        if: github.event_name == 'release'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: subtrack/dist/index.mjs,subtrack/npm-shrinkwrap.json
 
       - name: Dry run publish
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry-run == true)
@@ -104,5 +144,8 @@ jobs:
         working-directory: ./subtrack
         run: |
           TAG="${{ github.event.release.tag_name }}"
-          gh release upload "$TAG" dist/index.mjs#subtrack.mjs
-          echo "✅ Uploaded subtrack.mjs to $TAG"
+          # Attach SBOM and build provenance
+          gh release upload "$TAG" \
+            dist/index.mjs#subtrack.mjs \
+            npm-shrinkwrap.json#npm-shrinkwrap.json
+          echo "✅ Uploaded assets to $TAG"

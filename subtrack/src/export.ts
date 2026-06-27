@@ -18,11 +18,12 @@ function escapeCsv(value: string): string {
 }
 
 export function exportCsv(subs: SharedArgs[]): string {
-  const header = "name,cycle,tags,price,currency"
+  const header = "name,cycle,tags,price,currency,notes"
   const rows = subs.map((s) => {
     const tags = s.tags.map((t) => escapeCsv(t)).join(";")
     const name = escapeCsv(s.name)
-    return `${name},${s.cycle},${tags},${s.price},${s.currency}`
+    const notes = escapeCsv(s.notes ?? "")
+    return `${name},${s.cycle},${tags},${s.price},${s.currency},${notes}`
   })
   // BOM for Excel compatibility
   return "\uFEFF" + [header, ...rows].join("\n")
@@ -42,12 +43,13 @@ function escapeMdCell(value: string): string {
 }
 
 export function exportMd(subs: SharedArgs[]): string {
-  const header = "| name | cycle | tags | price | currency |"
-  const separator = "| --- | --- | --- | --- | --- |"
+  const header = "| name | cycle | tags | price | currency | notes |"
+  const separator = "| --- | --- | --- | --- | --- | --- |"
   const rows = subs.map((s) => {
     const tags = s.tags.map(escapeMdCell).join(", ") || "-"
     const price = formatPrice(s.price, s.currency)
-    return `| ${escapeMdCell(s.name)} | ${s.cycle} | ${tags} | ${price} | ${s.currency} |`
+    const notes = escapeMdCell(s.notes ?? "") || "-"
+    return `| ${escapeMdCell(s.name)} | ${s.cycle} | ${tags} | ${price} | ${s.currency} | ${notes} |`
   })
   return [header, separator, ...rows].join("\n")
 }

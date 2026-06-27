@@ -20,7 +20,8 @@ beforeAll(async () => {
     cycle TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
     billing_day INTEGER,
-    created_at TEXT NOT NULL DEFAULT (date('now'))
+    created_at TEXT NOT NULL DEFAULT (date('now')),
+    notes TEXT
   )`)
   testDb.run(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

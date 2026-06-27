@@ -82,9 +82,13 @@ export async function handleImport(
 
   // Validate header
   const header = parseCsvLine(lines[0]).map((h) => h.toLowerCase().trim())
-  if (header.join(",") !== "name,cycle,tags,price,currency") {
+  const hasNotes = header.length >= 6 && header[5] === "notes"
+  const expectedBase = "name,cycle,tags,price,currency"
+  const expectedNotes = "name,cycle,tags,price,currency,notes"
+  const actual = header.join(",")
+  if (actual !== expectedBase && actual !== expectedNotes) {
     consola.error(
-      `Invalid CSV header. Expected: name,cycle,tags,price,currency`,
+      `Invalid CSV header. Expected: ${expectedBase} or ${expectedNotes}`,
     )
     return
   }
@@ -100,7 +104,12 @@ export async function handleImport(
       continue
     }
 
-    const [name, cycle, tagsStr, priceStr, currency] = fields
+    const name = fields[0]
+    const cycle = fields[1]
+    const tagsStr = fields[2]
+    const priceStr = fields[3]
+    const currency = fields[4]
+    const notes = hasNotes ? (fields[5]?.trim() || null) : null
 
     // Validate
     const nameErr = validateName(name)
@@ -135,6 +144,7 @@ export async function handleImport(
           currency,
           cycle,
           tags,
+          notes: notes ?? undefined,
         })
         success++
       } catch (e) {

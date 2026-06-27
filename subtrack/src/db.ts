@@ -212,7 +212,8 @@ export function getDb(): Database {
     cycle TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
     billing_day INTEGER,
-    created_at TEXT NOT NULL DEFAULT (date('now'))
+    created_at TEXT NOT NULL DEFAULT (date('now')),
+    notes TEXT
   )`)
   _db.run(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -238,14 +239,23 @@ export function getDb(): Database {
   )`)
 
   // Migration: add generation_id column if missing (pre-4.1.0 databases)
-  const cols = _db.exec("PRAGMA table_info(llm_usage)")
-  const hasGenId = cols.length > 0 && cols[0].values.some(
+  const llmCols = _db.exec("PRAGMA table_info(llm_usage)")
+  const hasGenId = llmCols.length > 0 && llmCols[0].values.some(
     (row) => String(row[1]) === "generation_id",
   )
   if (!hasGenId) {
     _db.run("ALTER TABLE llm_usage ADD COLUMN generation_id TEXT")
     // Unique index for dedup lookups
     _db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
+  }
+
+  // Migration: add notes column if missing (pre-6.x databases)
+  const subCols = _db.exec("PRAGMA table_info(subscriptions)")
+  const hasNotes = subCols.length > 0 && subCols[0].values.some(
+    (row) => String(row[1]) === "notes",
+  )
+  if (!hasNotes) {
+    _db.run("ALTER TABLE subscriptions ADD COLUMN notes TEXT")
   }
 
   // Verify database integrity on startup
@@ -447,7 +457,7 @@ export const getSubscriptions = (sort?: string, desc?: boolean): SharedArgs[] =>
   const order = desc ? "DESC" : "ASC"
   const subs = execObjs<SharedArgs>(
     db,
-    `SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt FROM subscriptions ORDER BY ${field} ${order}`,
+    `SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt, notes FROM subscriptions ORDER BY ${field} ${order}`,
   )
   return mapTags(subs)
 }
@@ -459,8 +469,8 @@ export const writeSubscription = (data: AddSharedArgs): void => {
   db.run("BEGIN TRANSACTION")
   try {
     db.run(
-      "INSERT INTO subscriptions (name, price, currency, cycle, status, billing_day, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [data.name, data.price, data.currency, data.cycle, data.status ?? "active", data.billingDay ?? null, data.createdAt ?? new Date().toISOString().split("T")[0]],
+      "INSERT INTO subscriptions (name, price, currency, cycle, status, billing_day, created_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [data.name, data.price, data.currency, data.cycle, data.status ?? "active", data.billingDay ?? null, data.createdAt ?? new Date().toISOString().split("T")[0], data.notes ?? null],
     )
 
     const idRow = execObj<Record<string, SqlValue>>(
@@ -538,7 +548,7 @@ export const tagsSubscription = (tag: string[] | string): SharedArgs[] => {
   const idPlaceholders = ids.map(() => "?").join(",")
   const subs = execObjs<SharedArgs>(
     db,
-    `SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt FROM subscriptions
+    `SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt, notes FROM subscriptions
      WHERE id IN (${idPlaceholders})`,
     ids,
   )
@@ -550,7 +560,7 @@ export const getSubscription = (id: number): SharedArgs | undefined => {
   const db = getDb()
   const sub = execObj<SharedArgs>(
     db,
-    "SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt FROM subscriptions WHERE id = ?",
+    "SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt, notes FROM subscriptions WHERE id = ?",
     [id],
   )
   if (!sub) return undefined
@@ -574,6 +584,7 @@ export const updateSubscription = (
     if (fields.cycle !== undefined) { sets.push("cycle = ?"); params.push(fields.cycle) }
     if (fields.status !== undefined) { sets.push("status = ?"); params.push(fields.status) }
     if (fields.billingDay !== undefined) { sets.push("billing_day = ?"); params.push(fields.billingDay) }
+    if (fields.notes !== undefined) { sets.push("notes = ?"); params.push(fields.notes || null) }
 
     if (sets.length > 0) {
       params.push(id)

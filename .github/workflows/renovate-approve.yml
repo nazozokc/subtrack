@@ -13,13 +13,31 @@ jobs:
     runs-on: ubuntu-latest
     if: github.actor == 'renovate[bot]'
     steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
       - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
-            github.rest.pulls.createReview({
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            })
+
+            // Only approve PRs where Renovate has enabled auto-merge.
+            // Major updates and dashboard-approval PRs are excluded
+            // because Renovate does not enable auto-merge on them.
+            if (!pr.data.auto_merge) {
+              console.log('Auto-merge not enabled — skipping auto-approval')
+              return
+            }
+
+            await github.rest.pulls.createReview({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
               event: 'APPROVE',
-              body: 'Auto-approved: Renovate PR will merge when CI passes.'
+              body: 'Auto-approved: Renovate PR with auto-merge enabled.'
             })
