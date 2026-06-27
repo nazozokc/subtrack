@@ -27,9 +27,9 @@ import { ImportScreen } from "./screens/import.tsx"
 import { BackupScreen } from "./screens/backup.tsx"
 import { RestoreScreen } from "./screens/restore.tsx"
 import { HelpScreen } from "./screens/help.tsx"
-import { getSubscriptions } from "../db.ts"
 import { SIDEBAR_ITEMS, SCREEN_TITLES } from "./types.ts"
-import { useRef } from "react"
+import { useRef, useEffect } from "react"
+import { useMouse } from "./hooks/use-mouse.ts"
 import type { Screen } from "./types.ts"
 
 // ── Placeholder for unimplemented screens ──────────────
@@ -400,6 +400,85 @@ function executeCommand(
   dispatch({ type: "SET_MODE", mode: "NORMAL" })
 }
 
+// ── Sidebar row mapping (for mouse click position) ────
+//
+// The sidebar renders as:
+//   Row 0: top border
+//   Row 1: margin before "📋 Data"
+//   Row 2: "📋 Data" header text
+//   Rows 3‑7: Data items (List, Find, Add, Edit, Delete)
+//   Row 8: margin before "🏷️ Tags"
+//   Row 9: "🏷️ Tags" header text
+//   Rows 10‑12: Tag items (Tags, Trials, Bulk)
+//   Row 13: margin before "📊 Reports"
+//   Row 14: "📊 Reports" header text
+//   Rows 15‑20: Report items (Summary‥Forecast)
+//   Row 21: margin before "⚙️ System"
+//   Row 22: "⚙️ System" header text
+//   Rows 23‑29: System items (Config‥Help)
+//   Row 30: bottom border
+//
+// Map sidebar‑internal row → SIDEBAR_ITEMS[] index.
+
+const SIDEBAR_ROW_TO_INDEX: Record<number, number> = {
+  3: 0, 4: 1, 5: 2, 6: 3, 7: 4,     // Data
+  10: 5, 11: 6, 12: 7,                // Tags
+  15: 8, 16: 9, 17: 10, 18: 11, 19: 12, 20: 13, // Reports
+  23: 14, 24: 15, 25: 16, 26: 17, 27: 18, 28: 19, 29: 20, // System
+}
+
+// ── Mouse handler component ─────────────────────────
+
+/** Approximate row within the content area where data rows begin.
+ *  Row 0 = status bar
+ *  Row 1 = flex row (content box border top)
+ *  Row 2 = content top padding
+ *  Row 3 = ListScreen title "Subscriptions (N total)"
+ *  Row 4 = column header row
+ *  Row 5 = separator row ("─────")
+ *  Row 6 = first data row
+ */
+const DATA_ROW_OFFSET = 6
+
+function MouseHandler() {
+  const { state, dispatch } = useTui()
+  const mouse = useMouse()
+
+  // Form screens use @inkjs/ui components — skip global mouse handling
+  const isFormScreen = state.screen === "add" || state.screen === "edit" || state.screen === "delete"
+
+  useEffect(() => {
+    if (!mouse) return
+    if (!mouse.pressed || mouse.button !== 0) return
+    if (isFormScreen) return
+
+    const { x, y } = mouse
+
+    // Sidebar click if column ≤ 24 (sidebar width 22 + 2 border)
+    if (x <= 24) {
+      const sidebarRow = y - 1  // convert to 0‑based inside the flex row
+      const itemIndex = SIDEBAR_ROW_TO_INDEX[sidebarRow]
+      if (itemIndex !== undefined) {
+        dispatch({ type: "SET_SIDEBAR_INDEX", index: itemIndex })
+        dispatch({ type: "SET_SCREEN", screen: SIDEBAR_ITEMS[itemIndex].screen })
+        dispatch({ type: "SET_LIST_INDEX", index: 0 })
+      }
+      return
+    }
+
+    // Content area: route based on current screen
+    if (state.screen === "list") {
+      const idx = y - DATA_ROW_OFFSET
+      if (idx >= 0) {
+        dispatch({ type: "SET_LIST_INDEX", index: idx })
+        dispatch({ type: "SET_FOCUS", focus: "content" })
+      }
+    }
+  }, [mouse, isFormScreen])
+
+  return null
+}
+
 // ── Root App ─────────────────────────────────────────
 
 export function App() {
@@ -411,11 +490,12 @@ export function App() {
 }
 
 function AppInner() {
-  const { state } = useTui()
+  const { state, dispatch } = useTui()
 
   return (
     <Box flexDirection="column" height="100%">
       <KeyboardHandler />
+      <MouseHandler />
 
       {/* Status bar */}
       <StatusBar />
