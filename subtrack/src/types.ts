@@ -35,6 +35,7 @@ export type SharedArgs = {
   billingDay: number | null
   createdAt: string // YYYY-MM-DD
   notes: string | null
+  paymentMethod: string | null
 }
 
 export type AddSharedArgs = {
@@ -47,6 +48,7 @@ export type AddSharedArgs = {
   billingDay?: number | null
   createdAt?: string // YYYY-MM-DD
   notes?: string | null
+  paymentMethod?: string | null
 }
 
 export type LlmUsageEntry = {
@@ -99,12 +101,42 @@ export type AddFlags = {
   billingDay?: string
   status?: string
   notes?: string
+  paymentMethod?: string
 }
 
 export type UsageRefreshFlags = {
   from?: string
   to?: string
   all?: boolean
+}
+
+export type TrialEntry = {
+  id: number
+  name: string
+  expiresAt: string // YYYY-MM-DD
+  price: number | null
+  currency: string | null
+  cycle: string | null
+  notes: string | null
+  createdAt: string // YYYY-MM-DD
+}
+
+export type AddTrialArgs = {
+  name: string
+  expiresAt: string
+  price?: number | null
+  currency?: string | null
+  cycle?: string | null
+  notes?: string | null
+}
+
+export type TrialAddFlags = {
+  name?: string
+  expiresAt?: string
+  price?: string
+  currency?: string
+  cycle?: string
+  notes?: string
 }
 
 export type BackupFileInfo = {
