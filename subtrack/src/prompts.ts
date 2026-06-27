@@ -94,6 +94,11 @@ export function validatePrice(v: string): string | true {
   return true
 }
 
+export function validateNotes(v: string): string | true {
+  if (v.length > 500) return "Notes too long (max 500 chars)"
+  return true
+}
+
 export function validateTags(v: string): string | true {
   if (!v.trim()) return true
   const tags = v.split(",").map((t) => t.trim()).filter(Boolean)

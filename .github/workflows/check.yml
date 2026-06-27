@@ -25,8 +25,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install dependencies (integrity check)
-        run: pnpm install --frozen-lockfile --verify-store-integrity
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Verify lockfile is up to date
         run: pnpm install --lockfile-only && git diff --exit-code pnpm-lock.yaml

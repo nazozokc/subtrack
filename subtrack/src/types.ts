@@ -34,6 +34,7 @@ export type SharedArgs = {
   status: Status
   billingDay: number | null
   createdAt: string // YYYY-MM-DD
+  notes: string | null
 }
 
 export type AddSharedArgs = {
@@ -45,6 +46,7 @@ export type AddSharedArgs = {
   status?: Status
   billingDay?: number | null
   createdAt?: string // YYYY-MM-DD
+  notes?: string | null
 }
 
 export type LlmUsageEntry = {
@@ -96,6 +98,7 @@ export type AddFlags = {
   tags?: string
   billingDay?: string
   status?: string
+  notes?: string
 }
 
 export type UsageRefreshFlags = {

@@ -24,39 +24,59 @@ function statusColor(status: Status): string {
   }
 }
 
-function buildRow(sub: SharedArgs, price: string): [string, string, string, string, string] {
-  return [
+function buildRow(sub: SharedArgs, price: string, showNotes: boolean): string[] {
+  const row = [
     String(sub.name),
     statusColor(sub.status),
     String(sub.cycle),
     sub.tags.length > 0 ? sub.tags.join(", ") : "-",
     price,
   ]
+  if (showNotes) {
+    const notes = sub.notes ?? ""
+    row.splice(4, 0, notes.length > 40 ? notes.slice(0, 37) + "..." : notes)
+  }
+  return row
 }
 
-const HEADERS = ["name", "status", "cycle", "tags", "price"] as const
-const MIN_WIDTHS = [10, 8, 6, 8, 8] as const
-const MAX_WIDTHS = [40, 12, 20, 60, 20] as const
+type ColumnConfig = {
+  headers: readonly string[]
+  minWidths: readonly number[]
+  maxWidths: readonly number[]
+}
+
+const BASE_COLS: ColumnConfig = {
+  headers: ["name", "status", "cycle", "tags", "price"] as const,
+  minWidths: [10, 8, 6, 8, 8] as const,
+  maxWidths: [40, 12, 20, 60, 20] as const,
+}
+
+const NOTES_COLS: ColumnConfig = {
+  headers: ["name", "status", "cycle", "tags", "notes", "price"] as const,
+  minWidths: [10, 8, 6, 8, 15, 8] as const,
+  maxWidths: [40, 12, 20, 60, 50, 20] as const,
+}
+
 const BORDER_AND_PADDING = 16
 
-function calcColumnWidths(rows: string[][]): number[] {
+function calcColumnWidths(rows: string[][], config: ColumnConfig): number[] {
   const termWidth = process.stdout.columns ?? 80
   const avail = Math.max(40, termWidth - BORDER_AND_PADDING)
 
-  const weights = HEADERS.map((hdr, i) => {
+  const weights = config.headers.map((hdr, i) => {
     let max = hdr.length
     for (const row of rows) {
       const len = row[i].length
       if (len > max) max = len
     }
-    return Math.min(max, MAX_WIDTHS[i])
+    return Math.min(max, config.maxWidths[i])
   })
 
   const totalWeight = weights.reduce((a, b) => a + b, 0)
   const widths = weights.map((w, i) =>
     Math.max(
-      MIN_WIDTHS[i],
-      Math.min(MAX_WIDTHS[i], Math.round((avail * w) / totalWeight)),
+      config.minWidths[i],
+      Math.min(config.maxWidths[i], Math.round((avail * w) / totalWeight)),
     ),
   )
 
@@ -68,7 +88,7 @@ function calcColumnWidths(rows: string[][]): number[] {
   while (diff > 0 && iterations < 100) {
     let idx = -1
     for (let i = 0; i < widths.length; i++) {
-      if (widths[i] > MIN_WIDTHS[i] && (idx === -1 || widths[i] > widths[idx]))
+      if (widths[i] > config.minWidths[i] && (idx === -1 || widths[i] > widths[idx]))
         idx = i
     }
     if (idx === -1) break
@@ -81,7 +101,7 @@ function calcColumnWidths(rows: string[][]): number[] {
   while (diff < 0 && iterations < 100) {
     let idx = -1
     for (let i = 0; i < widths.length; i++) {
-      if (widths[i] < MAX_WIDTHS[i] && (idx === -1 || weights[i] > weights[idx]))
+      if (widths[i] < config.maxWidths[i] && (idx === -1 || weights[i] > weights[idx]))
         idx = i
     }
     if (idx === -1) break
@@ -119,18 +139,25 @@ const TABLE_STYLE = {
   compact: false,
 } satisfies Record<string, unknown>
 
-function renderTable(rows: string[][]): string {
-  const widths = calcColumnWidths(rows)
+function renderTable(rows: string[][], config: ColumnConfig): string {
+  const widths = calcColumnWidths(rows, config)
+  const colAligns = config.headers.map((h, i) =>
+    i === config.headers.length - 1 ? "right" : "left",
+  ) as ("left" | "right")[]
 
   const table = new CliTable3({
     chars: { ...TABLE_CHARS },
     style: { ...TABLE_STYLE },
     colWidths: widths,
-    head: [...HEADERS],
+    head: [...config.headers],
     wordWrap: true,
     wrapOnWordBoundary: true,
-    colAligns: ["left", "left", "left", "left", "right"],
+    colAligns,
   })
+
+  const colCount = config.headers.length
+  const priceCol = colCount - 1
+  const labelCol = priceCol - 1
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
@@ -138,7 +165,7 @@ function renderTable(rows: string[][]): string {
     const isTotal = row[0] === "" && row[1] === "" && row[2] === ""
     if (isTotal) {
       table.push(row.map((cell, j) => {
-        if (j === 3 || j === 4) return pc.bold(pc.yellow(cell))
+        if (j === labelCol || j === priceCol) return pc.bold(pc.yellow(cell))
         return cell
       }))
     } else {
@@ -156,6 +183,7 @@ function renderTable(rows: string[][]): string {
 export const spreadSubscription = async (
   get?: SharedArgs[],
   currency?: Currency,
+  showNotes?: boolean,
 ): Promise<void> => {
   const list = get ?? getSubscriptions()
 
@@ -164,6 +192,7 @@ export const spreadSubscription = async (
     return
   }
 
+  const config = showNotes ? NOTES_COLS : BASE_COLS
   const rows: string[][] = []
 
   if (currency) {
@@ -190,16 +219,20 @@ export const spreadSubscription = async (
             rates.rates,
           )
           total += converted
-          rows.push(buildRow(sub, formatPrice(Math.round(converted), currency)))
+          rows.push(buildRow(sub, formatPrice(Math.round(converted), currency), showNotes ?? false))
         } catch {
           hasMissingRate = true
           rows.push(
-            buildRow(sub, `? (${formatPrice(sub.price, sub.currency)})`),
+            buildRow(sub, `? (${formatPrice(sub.price, sub.currency)})`, showNotes ?? false),
           )
         }
       }
 
-      rows.push(["", "", "", `${currency} TOTAL`, formatPrice(Math.round(total), currency)])
+      if (showNotes) {
+        rows.push(["", "", "", "", `${currency} TOTAL`, formatPrice(Math.round(total), currency)])
+      } else {
+        rows.push(["", "", "", `${currency} TOTAL`, formatPrice(Math.round(total), currency)])
+      }
 
       if (hasMissingRate) {
         consola.warn(
@@ -207,7 +240,7 @@ export const spreadSubscription = async (
         )
       }
 
-      consola.log(renderTable(rows))
+      consola.log(renderTable(rows, config))
       return
     }
     // fallback: continue to the no-currency path below
@@ -226,18 +259,16 @@ export const spreadSubscription = async (
 
     let total = 0
     for (const sub of subs) {
-      groupRows.push(buildRow(sub, formatPrice(sub.price, sub.currency)))
+      groupRows.push(buildRow(sub, formatPrice(sub.price, sub.currency), showNotes ?? false))
       total += sub.price
     }
-    groupRows.push([
-      "",
-      "",
-      "",
-      `${currencyCode} TOTAL`,
-      formatPrice(total, currencyCode),
-    ])
+    if (showNotes) {
+      groupRows.push(["", "", "", "", `${currencyCode} TOTAL`, formatPrice(total, currencyCode)])
+    } else {
+      groupRows.push(["", "", "", `${currencyCode} TOTAL`, formatPrice(total, currencyCode)])
+    }
 
-    consola.log(renderTable(groupRows))
+    consola.log(renderTable(groupRows, config))
     if (i < groupEntries.length - 1) consola.log("")
   }
 }

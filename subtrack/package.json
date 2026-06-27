@@ -41,7 +41,7 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "start": "tsx src/index.ts",
+    "start": "tsx --no-warnings src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint:typos": "typos",
@@ -69,15 +69,15 @@
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
-    "secretlint": "^10.2.0",
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.2",
     "@types/node": "^26.0.0",
     "@types/sql.js": "^1.4.11",
     "husky": "^9.1.7",
     "lint-staged": "^15.5.1",
+    "secretlint": "^10.2.0",
     "tsdown": "^0.22.2",
     "tsx": "^4.19.0",
     "typescript": "^6",
-    "vitest": "^4"
+    "vitest": "^4.1.9"
   }
 }

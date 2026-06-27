@@ -14,6 +14,7 @@ import { formatPrice } from "./display.ts"
 import { showPayment, showSummary } from "./payment.ts"
 import { showUpcoming } from "./upcoming.ts"
 import { showAnalytics } from "./analytics.ts"
+import { showCompare } from "./compare.ts"
 import { exportCsv, exportMd, exportJson } from "./export.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import { loadConfig, setConfig, resetConfig, CONFIG_KEYS, getConfigPath } from "./config.ts"
@@ -90,6 +91,13 @@ export function handleUpcoming(days?: number): void {
 
 export function handleAnalytics(): void {
   showAnalytics()
+}
+
+export async function handleCompare(
+  period: Cycle,
+  options: { currency?: string; api?: boolean },
+): Promise<void> {
+  await showCompare(period, options)
 }
 
 // ── Config handlers ─────────────────────────────────────
