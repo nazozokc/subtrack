@@ -34,6 +34,7 @@ import {
   handleBulkTagAdd,
   handleBulkTagRemove,
   handleForecast,
+  handleTui,
 } from "./commands.ts"
 import {
   handleUsageAdd,
@@ -312,6 +313,14 @@ const bulkCommand = define({
     tag: bulkTagCmd,
   },
   run: () => consola.info("Usage: subtrack bulk status|delete|tag"),
+})
+
+// ── TUI ────────────────────────────────────────────────
+
+const tuiCommand = define({
+  name: "tui",
+  description: "Interactive terminal UI",
+  run: () => handleTui(),
 })
 
 // ── Forecast ──────────────────────────────────────────
@@ -608,6 +617,7 @@ try {
       search: searchCommand,
       trial: trialCommand,
       bulk: bulkCommand,
+      tui: tuiCommand,
       forecast: forecastCommand,
       export: exportCommand,
       import: importCommand,
