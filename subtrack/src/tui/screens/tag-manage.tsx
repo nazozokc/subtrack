@@ -1,6 +1,6 @@
 import { Box, Text, useInput } from "ink"
 import { TextInput } from "@inkjs/ui"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { getTagsWithCount, renameTag, deleteTag, pruneTags } from "../../db.ts"
 import { useTui } from "../context/app-context.tsx"
 
@@ -13,8 +13,11 @@ export function TagManageScreen() {
   const [renameNew, setRenameNew] = useState("")
   const [deleteName, setDeleteName] = useState("")
   const [message, setMessage] = useState<string | null>(null)
+  const [refresh, setRefresh] = useState(0)
 
-  const tags = useMemo(() => getTagsWithCount(), [])
+  const tags = useMemo(() => getTagsWithCount(), [refresh])
+
+  const refreshTags = useCallback(() => setRefresh((n) => n + 1), [])
 
   useInput((input, key) => {
     if (key.escape) {
@@ -29,6 +32,7 @@ export function TagManageScreen() {
       else if (input === "p") {
         const count = pruneTags()
         setMessage(`Pruned ${count} orphaned tag${count !== 1 ? "s" : ""}`)
+        refreshTags()
       }
     }
   })
@@ -59,14 +63,14 @@ export function TagManageScreen() {
 
       {mode === "rename" && (
         <Box flexDirection="column" gap={1}>
-          <TextInput placeholder="Current tag name" defaultValue={renameOld} onChange={setRenameOld} onSubmit={() => { if (renameOld.trim() && renameNew.trim()) { renameTag(renameOld.trim(), renameNew.trim()); setMode("list"); setMessage(`Renamed "${renameOld}" → "${renameNew}"`) } }} />
+          <TextInput placeholder="Current tag name" defaultValue={renameOld} onChange={setRenameOld} onSubmit={() => { if (renameOld.trim() && renameNew.trim()) { renameTag(renameOld.trim(), renameNew.trim()); refreshTags(); setMode("list"); setMessage(`Renamed "${renameOld}" → "${renameNew}"`) } }} />
           <TextInput placeholder="New tag name" defaultValue={renameNew} onChange={setRenameNew} />
         </Box>
       )}
 
       {mode === "delete" && (
         <Box flexDirection="column" gap={1}>
-          <TextInput placeholder="Tag name to delete" defaultValue={deleteName} onChange={setDeleteName} onSubmit={() => { if (deleteName.trim()) { deleteTag(deleteName.trim()); setMode("list"); setMessage(`Deleted tag: ${deleteName}`) } }} />
+          <TextInput placeholder="Tag name to delete" defaultValue={deleteName} onChange={setDeleteName} onSubmit={() => { if (deleteName.trim()) { deleteTag(deleteName.trim()); refreshTags(); setMode("list"); setMessage(`Deleted tag: ${deleteName}`) } }} />
         </Box>
       )}
     </Box>

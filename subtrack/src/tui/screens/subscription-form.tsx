@@ -103,7 +103,7 @@ function validateStep(step: FormStep, data: FormData): string | null {
       break
     case "price":
       if (!data.price.trim()) return "Price is required"
-      if (isNaN(Number(data.price)) || Number(data.price) < 0) return "Price must be a non-negative number"
+      if (isNaN(Number(data.price)) || Number(data.price) < 0 || !Number.isInteger(Number(data.price))) return "Price must be a non-negative integer"
       break
     case "billingDay":
       if (data.billingDay.trim()) {
@@ -161,8 +161,8 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
 
   const handleConfirm = useCallback(() => {
     const price = Number(data.price)
-    if (isNaN(price) || price < 0) {
-      setError("Invalid price")
+    if (isNaN(price) || price < 0 || !Number.isInteger(price)) {
+      setError("Price must be a non-negative integer")
       return
     }
 

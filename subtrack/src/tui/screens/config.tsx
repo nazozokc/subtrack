@@ -1,16 +1,19 @@
 import { Box, Text, useInput } from "ink"
 import { TextInput } from "@inkjs/ui"
-import { useState, useMemo } from "react"
+import { useState, useCallback } from "react"
 import { useTui } from "../context/app-context.tsx"
-import { loadConfig, setConfig, CONFIG_KEYS } from "../../config.ts"
+import { loadConfig, setConfig, CONFIG_KEYS, resetConfig } from "../../config.ts"
 import type { ConfigKey } from "../../config.ts"
 
 export function ConfigScreen() {
   const { dispatch } = useTui()
-  const config = useMemo(() => loadConfig(), [])
   const [editKey, setEditKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
   const [result, setResult] = useState<string | null>(null)
+  const [rev, setRev] = useState(0)
+  const config = loadConfig()
+
+  const refresh = useCallback(() => { resetConfig(); setRev((n) => n + 1) }, [])
 
   useInput((input, key) => {
     if (key.escape) {
@@ -28,7 +31,7 @@ export function ConfigScreen() {
 
   const save = (k: string, v: string) => {
     const ok = setConfig(k as ConfigKey, v)
-    if (ok) { setResult(`Saved ${k} = ${v}`); setEditKey(null) }
+    if (ok) { resetConfig(); setRev((n) => n + 1); setResult(`Saved ${k} = ${v}`); setEditKey(null) }
     else setResult("Failed to save config")
   }
 

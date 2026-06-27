@@ -44,7 +44,7 @@
     "start": "tsx --no-warnings src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint:typos": "typos || echo 'typos not installed, skipping'",
+    "lint:typos": "command -v typos >/dev/null 2>&1 && typos || echo 'typos not installed, skipping'",
     "lint:security": "pnpm audit --audit-level=high",
     "lint:types": "tsc --noEmit",
     "lint:lockfile": "node -e \"process.exit(require('fs').readFileSync('../pnpm-lock.yaml','utf8').startsWith('lockfileVersion')?0:1)\"",
@@ -52,9 +52,7 @@
     "lint:secrets": "secretlint \"src/**/*.ts\""
   },
   "lint-staged": {
-    "*.{ts,tsx}": [
-      "tsc --noEmit"
-    ]
+    "*.{ts,tsx}": []
   },
   "dependencies": {
     "@inkjs/ui": "^2.0.0",

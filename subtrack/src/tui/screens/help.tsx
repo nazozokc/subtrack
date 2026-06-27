@@ -17,7 +17,7 @@ export function HelpScreen() {
 
       <Box flexDirection="column" gap={1} marginBottom={1}>
         <Text bold>Sidebar Navigation</Text>
-        <Text>  {Array.from({ length: SIDEBAR_ITEMS.length }, (_, i) => i + 1).join(" ")} {SIDEBAR_ITEMS.length}</Text>
+        <Text>  {Array.from({ length: SIDEBAR_ITEMS.length }, (_, i) => i + 1).join(" ")}</Text>
         <Text>  j/k          Move down/up in sidebar or list</Text>
         <Text>  Tab           Focus toggle: sidebar ↔ content</Text>
       </Box>

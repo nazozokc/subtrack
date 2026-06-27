@@ -117,7 +117,12 @@ function KeyboardHandler() {
   const pendingSeq = useRef<{ key: string; timer: ReturnType<typeof setTimeout> } | null>(null)
 
   // Form screens use @inkjs/ui components or handle their own input
-  const isFormScreen = state.screen === "add" || state.screen === "edit" || state.screen === "delete"
+  const isFormScreen =
+    state.screen === "add" ||
+    state.screen === "edit" ||
+    state.screen === "delete" ||
+    state.screen === "restore" ||
+    state.screen === "tag-manage"
 
   useInput((input: string, key: any) => {
     const { mode, focus, filterText, confirmQuit, sidebarIndex, selectedSubId } = state
@@ -445,7 +450,12 @@ function MouseHandler() {
   const mouse = useMouse()
 
   // Form screens use @inkjs/ui components — skip global mouse handling
-  const isFormScreen = state.screen === "add" || state.screen === "edit" || state.screen === "delete"
+  const isFormScreen =
+    state.screen === "add" ||
+    state.screen === "edit" ||
+    state.screen === "delete" ||
+    state.screen === "restore" ||
+    state.screen === "tag-manage"
 
   useEffect(() => {
     if (!mouse) return

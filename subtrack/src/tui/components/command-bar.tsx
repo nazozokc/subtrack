@@ -1,13 +1,13 @@
 import { Box, Text } from "ink"
 import { useTui } from "../context/app-context.tsx"
-import { type Screen } from "../types.ts"
+import type { Screen } from "../types.ts"
 
 const HINT_TEXT: Record<Screen, string> = {
   list: "j↓ k↑ /filter :cmd ?help q:quit",
   search: "j↓ k↑ Enter:open :cmd ?help q:quit",
   add: "Tab:next Enter:save Esc:cancel",
   edit: "Tab:next Enter:save Esc:cancel",
-  delete: "j↓ k↑ Space:toggle Enter:confirm Esc:cancel",
+  delete: "y:delete n:cancel",
   tags: "j↓ k↑ Enter:filter",
   "tag-manage": "j↓ k↑ Enter:manage",
   trials: "j↓ k↑ Enter:detail a:add",

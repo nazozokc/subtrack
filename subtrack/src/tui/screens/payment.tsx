@@ -1,6 +1,7 @@
 import { Box, Text } from "ink"
 import { useMemo } from "react"
 import { getSubscriptions } from "../../db.ts"
+import { formatPrice } from "../../price.ts"
 
 const OCCURRENCES_PER_YEAR: Record<string, number> = {
   weekly: 52, "bi-weekly": 26, monthly: 12,
@@ -9,7 +10,7 @@ const OCCURRENCES_PER_YEAR: Record<string, number> = {
 
 export function PaymentScreen() {
   const subs = useMemo(() => getSubscriptions(), [])
-  const active = subs.filter((s) => s.status !== "cancelled")
+  const active = subs.filter((s) => s.status === "active")
 
   const monthlyByCurrency = useMemo(() => {
     const map = new Map<string, number>()
@@ -63,12 +64,4 @@ export function PaymentScreen() {
   )
 }
 
-function formatPrice(price: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0,
-    }).format(price)
-  } catch {
-    return `${currency} ${price}`
-  }
-}
+

@@ -1,6 +1,6 @@
 import { Box, Text, useInput } from "ink"
 import { TextInput, Select } from "@inkjs/ui"
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef } from "react"
 import { useTui } from "../context/app-context.tsx"
 import { getDefaultBackupDir, saveDb, getDbDir } from "../../db.ts"
 import { encryptBuffer, hasEncryptionKey } from "../../crypto.ts"
@@ -11,19 +11,21 @@ export function BackupScreen() {
   const { dispatch } = useTui()
   const [step, setStep] = useState<"path" | "encrypt" | "done">("path")
   const [dest, setDest] = useState(getDefaultBackupDir())
-  const [encrypt, setEncrypt] = useState(false)
   const [result, setResult] = useState<string | null>(null)
+  const destRef = useRef(dest)
+  destRef.current = dest
 
   useInput((input, key) => {
     if (key.escape) dispatch({ type: "SET_SCREEN", screen: "list" })
   })
 
-  const doBackup = useCallback(() => {
+  const doBackup = useCallback((encrypt: boolean) => {
+    const currentDest = destRef.current
     try {
       saveDb()
-      mkdirSync(dest, { recursive: true })
+      mkdirSync(currentDest, { recursive: true })
       const ts = new Date().toISOString().replace(/[:.]/g, "-")
-      const destPath = join(dest, `subtrack-${ts}.db`)
+      const destPath = join(currentDest, `subtrack-${ts}.db`)
 
       if (encrypt && hasEncryptionKey()) {
         const dbPath = join(getDbDir(), "subtrack.db")
@@ -39,7 +41,7 @@ export function BackupScreen() {
       setResult(`Backup failed: ${e instanceof Error ? e.message : String(e)}`)
     }
     setStep("done")
-  }, [dest, encrypt])
+  }, [])
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1}>
@@ -52,7 +54,7 @@ export function BackupScreen() {
       {step === "encrypt" && (
         <Box flexDirection="column" gap={1}>
           <Text>Encrypt backup?</Text>
-          <Select options={[{label:"Yes, encrypt",value:"yes"},{label:"No, plain copy",value:"no"}]} onChange={(v) => { setEncrypt(v === "yes"); doBackup() }} />
+          <Select options={[{label:"Yes, encrypt",value:"yes"},{label:"No, plain copy",value:"no"}]} onChange={(v) => { doBackup(v === "yes") }} />
         </Box>
       )}
       {step === "done" && (

@@ -1,6 +1,7 @@
 import { Box, Text } from "ink"
 import { useMemo } from "react"
 import { getTrials } from "../../db.ts"
+import { formatPrice } from "../../price.ts"
 
 export function TrialsScreen() {
   const trials = useMemo(() => getTrials(), [])
@@ -16,19 +17,22 @@ export function TrialsScreen() {
       ) : (
         trials.map((t) => {
           const expires = new Date(t.expiresAt)
-          const daysLeft = Math.ceil((expires.getTime() - now.getTime()) / 86400000)
-          const color = daysLeft < 0 ? "red" : daysLeft <= 3 ? "yellow" : "green"
+          const nowMs = now.getTime()
+          const expiresMs = expires.getTime()
+          const daysLeft = Math.ceil((expiresMs - nowMs) / 86400000)
+          const expired = expiresMs < nowMs
+          const color = expired ? "red" : daysLeft <= 3 ? "yellow" : "green"
           return (
             <Box key={t.id}>
               <Box width={24}><Text bold wrap="truncate-end">{t.name}</Text></Box>
               <Box width={14}>
                 <Text color={color}>
-                  {t.expiresAt} {daysLeft < 0 ? "(expired)" : `(${daysLeft}d)`}
+                  {t.expiresAt} {expired ? "(expired)" : `(${daysLeft}d)`}
                 </Text>
               </Box>
               {t.price !== null && (
                 <Text dimColor>
-                  → {t.price} {t.currency ?? ""} /{t.cycle ?? "mo"}
+                  → {formatPrice(t.price, t.currency ?? "USD")} /{t.cycle ?? "mo"}
                 </Text>
               )}
             </Box>

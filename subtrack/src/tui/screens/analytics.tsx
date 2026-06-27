@@ -1,21 +1,12 @@
 import { Box, Text } from "ink"
 import { useMemo } from "react"
 import { getSubscriptions } from "../../db.ts"
-
-function formatPrice(price: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0,
-    }).format(price)
-  } catch {
-    return `${currency} ${price}`
-  }
-}
+import { formatPrice } from "../../price.ts"
 
 export function AnalyticsScreen() {
   const subs = useMemo(() => getSubscriptions(), [])
 
-  const activeSubs = subs.filter((s) => s.status !== "cancelled")
+  const activeSubs = subs.filter((s) => s.status === "active")
 
   // Tag frequency
   const tagFreq = useMemo(() => {
@@ -30,11 +21,14 @@ export function AnalyticsScreen() {
 
   // Cost by cycle
   const cycleCost = useMemo(() => {
-    const map = new Map<string, number>()
+    const map = new Map<string, { cycle: string; currency: string; total: number }>()
     for (const sub of activeSubs) {
-      map.set(sub.cycle, (map.get(sub.cycle) ?? 0) + sub.price)
+      const key = `${sub.cycle}::${sub.currency}`
+      const existing = map.get(key) ?? { cycle: sub.cycle, currency: sub.currency, total: 0 }
+      existing.total += sub.price
+      map.set(key, existing)
     }
-    return Array.from(map.entries()).sort((a, b) => b[1] - a[1])
+    return Array.from(map.values()).sort((a, b) => b.total - a.total)
   }, [activeSubs])
 
   // Most expensive
@@ -67,13 +61,10 @@ export function AnalyticsScreen() {
 
           <Box marginBottom={1} flexDirection="column">
             <Text bold color="cyan">Cost by Cycle</Text>
-            {cycleCost.map(([cycle, total]) => (
-              <Box key={cycle}>
+            {cycleCost.map(({ cycle, currency, total }) => (
+              <Box key={`${cycle}::${currency}`}>
                 <Box width={16}><Text>{cycle}</Text></Box>
-                <Text dimColor>{
-                  // Show first currency group
-                  formatPrice(total, subs.find((s) => s.cycle === cycle)?.currency ?? "USD")
-                } total</Text>
+                <Text dimColor>{formatPrice(total, currency)} total</Text>
               </Box>
             ))}
           </Box>

@@ -1,6 +1,7 @@
 import { Box, Text } from "ink"
 import { useMemo } from "react"
 import { getSubscriptions } from "../../db.ts"
+import { formatPrice } from "../../price.ts"
 
 export function UpcomingScreen() {
   const subs = useMemo(() => getSubscriptions(), [])
@@ -46,18 +47,15 @@ export function UpcomingScreen() {
 function computeNextBill(day: number, from: Date, until: Date): Date | null {
   const year = from.getFullYear()
   const month = from.getMonth()
-  let d = new Date(year, month, day)
-  if (d < from) d = new Date(year, month + 1, day)
+  const lastDay = new Date(year, month + 1, 0).getDate()
+  const clampedDay = Math.min(day, lastDay)
+  let d = new Date(year, month, clampedDay)
+  if (d < from) {
+    const nextLastDay = new Date(year, month + 2, 0).getDate()
+    d = new Date(year, month + 1, Math.min(day, nextLastDay))
+  }
   if (d <= until) return d
   return null
 }
 
-function formatPrice(price: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0,
-    }).format(price)
-  } catch {
-    return `${currency} ${price}`
-  }
-}
+

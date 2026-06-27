@@ -3,6 +3,7 @@ import { getSubscriptions } from "../../db.ts"
 import { useTui } from "../context/app-context.tsx"
 import type { SharedArgs, Status } from "../../types.ts"
 import { useMemo, useEffect } from "react"
+import { formatPrice } from "../../price.ts"
 
 // ── Status color helpers ──────────────────────────────
 
@@ -12,19 +13,6 @@ function statusColor(status: Status): string {
     case "paused": return "yellow"
     case "cancelled": return "red"
     default: return "white"
-  }
-}
-
-function formatPrice(price: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(price)
-  } catch {
-    return `${currency} ${price}`
   }
 }
 
@@ -113,7 +101,11 @@ export function ListScreen() {
 
   // Sync selected subscription ID with global state
   useEffect(() => {
-    if (subs.length > 0 && state.listIndex < subs.length) {
+    if (subs.length === 0) {
+      dispatch({ type: "SET_SELECTED_SUB_ID", id: null })
+    } else if (state.listIndex >= subs.length) {
+      dispatch({ type: "SET_SELECTED_SUB_ID", id: subs[subs.length - 1].id })
+    } else {
       dispatch({ type: "SET_SELECTED_SUB_ID", id: subs[state.listIndex].id })
     }
   }, [state.listIndex, subs, dispatch])

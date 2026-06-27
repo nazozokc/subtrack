@@ -1,18 +1,9 @@
 import { Box, Text } from "ink"
 import { useMemo } from "react"
 import { getSubscriptions } from "../../db.ts"
+import { formatPrice } from "../../price.ts"
 import { useTui } from "../context/app-context.tsx"
 import type { Status } from "../../types.ts"
-
-function formatPrice(price: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0,
-    }).format(price)
-  } catch {
-    return `${currency} ${price}`
-  }
-}
 
 export function SummaryScreen() {
   const { dispatch } = useTui()

@@ -48,16 +48,9 @@ function buildRows(): Row[] {
   return rows
 }
 
-/** Placeholders: non-list screens show a stub until implemented. */
+/** Screens that only exist as sub‑routes and are not directly reachable from the sidebar. */
 const PLACEHOLDER_SCREENS = new Set([
-  "search", "add", "edit", "delete",
-  "tags", "tag-manage",
-  "trials", "trial-add", "trial-expiring",
-  "bulk",
-  "summary", "payment", "upcoming", "analytics", "compare", "forecast",
-  "config", "usage",
-  "export", "import", "backup", "restore",
-  "help",
+  "tag-manage", "trial-add", "trial-expiring",
 ])
 
 export function Sidebar() {

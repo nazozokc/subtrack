@@ -22,7 +22,9 @@ export function TrialAddScreen() {
   useInput((input) => {
     if (step === "confirm") {
       if (input === "y") {
-        writeTrial({ name: data.name, expiresAt: data.expiresAt, price: data.price ? Number(data.price) : null, currency: data.currency || null, cycle: data.cycle || null, notes: data.notes || null })
+        const priceVal = data.price.trim() ? Number(data.price) : null
+        if (priceVal !== null && (isNaN(priceVal) || priceVal < 0)) return
+        writeTrial({ name: data.name, expiresAt: data.expiresAt, price: priceVal, currency: data.currency || null, cycle: data.cycle || null, notes: data.notes || null })
         dispatch({ type: "SET_SCREEN", screen: "trials" })
       } else if (input === "n") cancel()
     }

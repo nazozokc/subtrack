@@ -50,10 +50,11 @@ export function RestoreScreen() {
       {step === "choose" && (
         <Box flexDirection="column" gap={1}>
           <Text dimColor>Select a backup file:</Text>
-          <Select
-            options={options.length > 0 ? options : [{ label: "No backups found", value: "" }]}
-            onChange={(v) => { setSource(v); setStep("confirm") }}
-          />
+          {options.length > 0 ? (
+            <Select options={options} onChange={(v) => { setSource(v); setStep("confirm") }} />
+          ) : (
+            <Text dimColor>No backups found</Text>
+          )}
           <TextInput placeholder="Or enter path manually..." defaultValue={source} onChange={setSource} onSubmit={() => setStep("confirm")} />
         </Box>
       )}
