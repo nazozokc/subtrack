@@ -6,14 +6,8 @@ import { getSubscriptions } from "./db.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
 
-export function formatPrice(price: number, currency: string): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(price)
-}
+import { formatPrice } from "./price.ts"
+export { formatPrice }
 
 function statusColor(status: Status): string {
   switch (status) {
@@ -24,7 +18,7 @@ function statusColor(status: Status): string {
   }
 }
 
-function buildRow(sub: SharedArgs, price: string, showNotes: boolean): string[] {
+function buildRow(sub: SharedArgs, price: string, showNotes: boolean, showMethod: boolean): string[] {
   const row = [
     String(sub.name),
     statusColor(sub.status),
@@ -32,9 +26,16 @@ function buildRow(sub: SharedArgs, price: string, showNotes: boolean): string[] 
     sub.tags.length > 0 ? sub.tags.join(", ") : "-",
     price,
   ]
+  // Insert method column before price (at index 4) when shown
+  if (showMethod) {
+    const method = sub.paymentMethod ?? ""
+    row.splice(4, 0, method.length > 20 ? method.slice(0, 17) + "..." : method)
+  }
+  // Insert notes column before the last column (price or method+price)
   if (showNotes) {
+    const insertAt = row.length - 1
     const notes = sub.notes ?? ""
-    row.splice(4, 0, notes.length > 40 ? notes.slice(0, 37) + "..." : notes)
+    row.splice(insertAt, 0, notes.length > 40 ? notes.slice(0, 37) + "..." : notes)
   }
   return row
 }
@@ -55,6 +56,18 @@ const NOTES_COLS: ColumnConfig = {
   headers: ["name", "status", "cycle", "tags", "notes", "price"] as const,
   minWidths: [10, 8, 6, 8, 15, 8] as const,
   maxWidths: [40, 12, 20, 60, 50, 20] as const,
+}
+
+const METHOD_COLS: ColumnConfig = {
+  headers: ["name", "status", "cycle", "tags", "method", "price"] as const,
+  minWidths: [10, 8, 6, 8, 10, 8] as const,
+  maxWidths: [40, 12, 20, 60, 30, 20] as const,
+}
+
+const ALL_COLS: ColumnConfig = {
+  headers: ["name", "status", "cycle", "tags", "method", "notes", "price"] as const,
+  minWidths: [10, 8, 6, 8, 10, 15, 8] as const,
+  maxWidths: [40, 12, 20, 60, 30, 50, 20] as const,
 }
 
 const BORDER_AND_PADDING = 16
@@ -184,6 +197,7 @@ export const spreadSubscription = async (
   get?: SharedArgs[],
   currency?: Currency,
   showNotes?: boolean,
+  showMethod?: boolean,
 ): Promise<void> => {
   const list = get ?? getSubscriptions()
 
@@ -192,7 +206,7 @@ export const spreadSubscription = async (
     return
   }
 
-  const config = showNotes ? NOTES_COLS : BASE_COLS
+  const config = showNotes && showMethod ? ALL_COLS : showNotes ? NOTES_COLS : showMethod ? METHOD_COLS : BASE_COLS
   const rows: string[][] = []
 
   if (currency) {
@@ -219,20 +233,19 @@ export const spreadSubscription = async (
             rates.rates,
           )
           total += converted
-          rows.push(buildRow(sub, formatPrice(Math.round(converted), currency), showNotes ?? false))
+          rows.push(buildRow(sub, formatPrice(Math.round(converted), currency), showNotes ?? false, showMethod ?? false))
         } catch {
           hasMissingRate = true
           rows.push(
-            buildRow(sub, `? (${formatPrice(sub.price, sub.currency)})`, showNotes ?? false),
+            buildRow(sub, `? (${formatPrice(sub.price, sub.currency)})`, showNotes ?? false, showMethod ?? false),
           )
         }
       }
 
-      if (showNotes) {
-        rows.push(["", "", "", "", `${currency} TOTAL`, formatPrice(Math.round(total), currency)])
-      } else {
-        rows.push(["", "", "", `${currency} TOTAL`, formatPrice(Math.round(total), currency)])
-      }
+      const totalRow = new Array<string>(config.headers.length).fill("")
+      totalRow[config.headers.length - 2] = `${currency} TOTAL`
+      totalRow[config.headers.length - 1] = formatPrice(Math.round(total), currency)
+      rows.push(totalRow)
 
       if (hasMissingRate) {
         consola.warn(
@@ -259,14 +272,13 @@ export const spreadSubscription = async (
 
     let total = 0
     for (const sub of subs) {
-      groupRows.push(buildRow(sub, formatPrice(sub.price, sub.currency), showNotes ?? false))
+      groupRows.push(buildRow(sub, formatPrice(sub.price, sub.currency), showNotes ?? false, showMethod ?? false))
       total += sub.price
     }
-    if (showNotes) {
-      groupRows.push(["", "", "", "", `${currencyCode} TOTAL`, formatPrice(total, currencyCode)])
-    } else {
-      groupRows.push(["", "", "", `${currencyCode} TOTAL`, formatPrice(total, currencyCode)])
-    }
+    const totalRow = new Array<string>(config.headers.length).fill("")
+    totalRow[config.headers.length - 2] = `${currencyCode} TOTAL`
+    totalRow[config.headers.length - 1] = formatPrice(total, currencyCode)
+    groupRows.push(totalRow)
 
     consola.log(renderTable(groupRows, config))
     if (i < groupEntries.length - 1) consola.log("")
