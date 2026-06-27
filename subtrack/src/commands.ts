@@ -1,8 +1,18 @@
 // ── Re-exports from domain modules ──────────────────────
 
 export { handleList, handleAdd, handleDelete, handleEdit, handleTags } from "./subscription.ts"
+export { handleSearch } from "./search.ts"
+export { handleTrialAdd, handleTrialList, handleTrialExpiring, handleTrialDelete } from "./trial.ts"
+export { handleBulkStatus, handleBulkDelete, handleBulkTagAdd, handleBulkTagRemove } from "./bulk.ts"
+export { handleForecast } from "./forecast.ts"
 export { handleBackup, handleRestore } from "./backup.ts"
 export { handleTagList, handleTagRename, handleTagDelete, handleTagPrune } from "./tag.ts"
+
+// Lazy import for TUI to avoid loading Ink/React/yoga-layout WASM in tests
+export async function handleTui(): Promise<void> {
+  const { handleTui: tui } = await import("./tui.tsx")
+  return tui()
+}
 
 // ── Export handler ──────────────────────────────────────
 
@@ -76,9 +86,9 @@ export async function handleExport(
 
 export async function handlePayment(
   period: Cycle,
-  options: { currency?: string; api?: boolean },
+  options: { currency?: string; api?: boolean; method?: boolean },
 ) {
-  await showPayment(period, options.currency as Currency | undefined, undefined, options.api)
+  await showPayment(period, options.currency as Currency | undefined, undefined, options.api, options.method)
 }
 
 export async function handleSummary() {

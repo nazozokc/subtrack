@@ -58,6 +58,7 @@ function makeSub(overrides: Partial<SharedArgs> = {}): SharedArgs {
     billingDay: null,
     createdAt: "2026-01-01",
     notes: null,
+    paymentMethod: null,
     ...overrides,
   }
 }

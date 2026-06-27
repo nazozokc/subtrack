@@ -29,6 +29,7 @@ import {
   validateTags,
   validateBillingDay,
   validateNotes,
+  validatePaymentMethod,
   promptString,
   promptSelect,
 } from "./prompts.ts"
@@ -109,6 +110,24 @@ async function resolveAddOptions(flags: AddFlags) {
     if (noteStr.trim()) notes = noteStr.trim()
   }
 
+  // paymentMethod: optional free text
+  let paymentMethod: string | null = null
+  const paymentMethodStr = flags.paymentMethod
+  if (paymentMethodStr !== undefined) {
+    const trimmed = paymentMethodStr.trim()
+    if (trimmed) {
+      const valid = validatePaymentMethod(trimmed)
+      if (valid !== true) { consola.error(valid); return null }
+      paymentMethod = trimmed
+    }
+  } else if (prompted) {
+    const pmStr = await input({
+      message: "payment method (optional, e.g. credit_card, paypal)",
+      validate: validatePaymentMethod,
+    })
+    if (pmStr.trim()) paymentMethod = pmStr.trim()
+  }
+
   // billingDay: optional, 1-31
   let billingDay: number | null = null
   const billingDayStr = flags.billingDay
@@ -156,14 +175,14 @@ async function resolveAddOptions(flags: AddFlags) {
     }
   }
 
-  return { name, price, currency, cycle, tags, status, billingDay, notes }
+  return { name, price, currency, cycle, tags, status, billingDay, notes, paymentMethod }
 }
 
 // ── Command handlers ────────────────────────────────────
 
-export async function handleList(options: { currency?: string; sort?: string; desc?: boolean; api?: boolean; notes?: boolean }) {
+export async function handleList(options: { currency?: string; sort?: string; desc?: boolean; api?: boolean; notes?: boolean; method?: boolean }) {
   const list = getSubscriptions(options.sort, options.desc)
-  await spreadSubscription(list, options.currency as Currency | undefined, options.notes)
+  await spreadSubscription(list, options.currency as Currency | undefined, options.notes, options.method)
 
   if (options.api) {
     const now = new Date()
@@ -282,7 +301,8 @@ export async function handleEdit(
     flags.name !== undefined || flags.price !== undefined ||
     flags.currency !== undefined || flags.cycle !== undefined ||
     flags.tags !== undefined || flags.status !== undefined ||
-    flags.billingDay !== undefined
+    flags.billingDay !== undefined ||
+    flags.paymentMethod !== undefined
 
   if (hasFlags) {
     // Non-interactive: update only flagged fields
@@ -302,6 +322,10 @@ export async function handleEdit(
     if (flags.notes !== undefined) {
       const trimmed = flags.notes.trim()
       newData.notes = trimmed || null
+    }
+    if (flags.paymentMethod !== undefined) {
+      const trimmed = flags.paymentMethod.trim()
+      newData.paymentMethod = trimmed || null
     }
     updateSubscription(sub.id, newData)
     const updated = getSubscription(sub.id)!
@@ -327,6 +351,7 @@ export async function handleEdit(
       { name: `status (${sub.status})`, value: "status" },
       { name: `billing day (${sub.billingDay ?? "not set"})`, value: "billingDay" },
       { name: `tags (${sub.tags.join(", ") || "none"})`, value: "tags" },
+      { name: `payment method (${sub.paymentMethod ?? "not set"})`, value: "paymentMethod" },
     ],
   })
 
@@ -392,6 +417,14 @@ export async function handleEdit(
       validate: validateTags,
     })
     newData.tags = tags.split(",").map((t) => t.trim()).filter(Boolean)
+  }
+  if (fields.includes("paymentMethod")) {
+    const pm = await input({
+      message: "New payment method (empty to clear):",
+      default: sub.paymentMethod ?? "",
+      validate: validatePaymentMethod,
+    })
+    newData.paymentMethod = pm.trim() || null
   }
 
   const ok = await confirm({ message: "Save changes?", default: true })
