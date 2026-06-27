@@ -8,6 +8,12 @@ export { handleForecast } from "./forecast.ts"
 export { handleBackup, handleRestore } from "./backup.ts"
 export { handleTagList, handleTagRename, handleTagDelete, handleTagPrune } from "./tag.ts"
 
+// Lazy import for TUI to avoid loading Ink/React/yoga-layout WASM in tests
+export async function handleTui(): Promise<void> {
+  const { handleTui: tui } = await import("./tui.tsx")
+  return tui()
+}
+
 // ── Export handler ──────────────────────────────────────
 
 import { consola } from "consola"
