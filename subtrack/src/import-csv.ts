@@ -53,7 +53,7 @@ export async function handleImport(
   // Validate path is within allowed base directories (also verifies existence)
   const safeFile = resolveSafePath([os.homedir(), os.tmpdir()], file)
   if (!safeFile) {
-    consola.error(`File not found or path not allowed — must be within home directory`)
+    consola.error(`File not found or path not allowed — must be within home or temp directory`)
     return
   }
 

@@ -1,5 +1,5 @@
 import { randomBytes, createCipheriv, createDecipheriv, scryptSync } from "node:crypto"
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync, chmodSync } from "node:fs"
+import { readFileSync, writeFileSync, existsSync, mkdirSync, lstatSync, chmodSync } from "node:fs"
 import path from "node:path"
 import { homedir } from "node:os"
 import { consola } from "consola"
@@ -25,28 +25,43 @@ function getSaltPath(): string {
 
 // ---- Internal helpers ----
 
-/** Verify that a sensitive file has restrictive permissions (owner-only). */
+/** Verify that a sensitive file is safe to read (regular file, owner-only permissions). Fail-closed. */
 function verifySecureFilePermission(filePath: string, name: string): void {
+  let st
   try {
-    const st = statSync(filePath)
-    // Check for group/others permissions (mode 077 = others rwx)
-    if (st.mode & 0o077) {
-      consola.warn(
-        `${name} has overly permissive permissions (${(st.mode & 0o777).toString(8)}). Fixing to 600.`,
-      )
-      chmodSync(filePath, 0o600)
-    }
-    // Check ownership on non-Windows
-    if (process.platform !== "win32" && typeof process.getuid === "function") {
-      const uid = process.getuid()
-      if (uid !== undefined && uid !== null && st.uid !== uid) {
-        consola.warn(
-          `${name} is not owned by current user (uid ${st.uid}). This may indicate tampering.`,
-        )
-      }
-    }
+    st = lstatSync(filePath)
   } catch {
-    // skip if file not accessible
+    throw new Error(`${name} at ${filePath} is not accessible`)
+  }
+
+  if (st.isSymbolicLink()) {
+    throw new Error(`${name} at ${filePath} is a symbolic link — refusing to read`)
+  }
+
+  if (!st.isFile()) {
+    throw new Error(`${name} at ${filePath} is not a regular file — refusing to read`)
+  }
+
+  // Check for group/others permissions (mode 077 = others rwx)
+  if (st.mode & 0o077) {
+    consola.warn(
+      `${name} has overly permissive permissions (${(st.mode & 0o777).toString(8)}). Fixing to 600.`,
+    )
+    try {
+      chmodSync(filePath, 0o600)
+    } catch {
+      throw new Error(`Failed to fix permissions on ${name} at ${filePath}`)
+    }
+  }
+
+  // Check ownership on non-Windows
+  if (process.platform !== "win32" && typeof process.getuid === "function") {
+    const uid = process.getuid()
+    if (uid !== undefined && uid !== null && st.uid !== uid) {
+      consola.warn(
+        `${name} is not owned by current user (uid ${st.uid}). This may indicate tampering.`,
+      )
+    }
   }
 }
 

@@ -144,7 +144,7 @@ export async function handleUsageImport(flags: UsageImportFlags) {
     const safeFile = resolveSafePath([os.homedir(), os.tmpdir()], filePath)
     if (!safeFile) {
       consola.error(
-        `File not found or path not allowed — must be within home directory`,
+        `File not found or path not allowed — must be within home or temp directory`,
       )
       return
     }

@@ -51,6 +51,22 @@ function validateDbDir(dir: string): void {
 
 const LOCK_STALE_MS = 30_000 // 30 seconds
 
+/** Check whether the process that owns a lock is still alive. */
+function isLockOwnerAlive(pid: string): boolean {
+  const pidNumber = Number(pid)
+  if (!Number.isInteger(pidNumber) || pidNumber <= 0) return false
+
+  try {
+    // Signal 0 tests whether the process exists without sending a signal
+    process.kill(pidNumber, 0)
+    return true
+  } catch (err) {
+    const nodeErr = err as NodeJS.ErrnoException
+    // ESRCH: no such process, EPERM: process exists but can't be signaled
+    return nodeErr.code === "EPERM"
+  }
+}
+
 function getLockPath(): string {
   return path.join(getDbDir(), ".subtrack.lock")
 }
@@ -82,8 +98,8 @@ function acquireLock(): void {
       const pid = info?.pid ?? "unknown"
       const elapsed = info?.timestamp ? Date.now() - info.timestamp : 0
 
-      // Check if lock is stale
-      if (info?.timestamp && elapsed > LOCK_STALE_MS) {
+      // Check if lock is stale (only remove if owner process is gone)
+      if (info?.timestamp && elapsed > LOCK_STALE_MS && !isLockOwnerAlive(pid)) {
         consola.warn(
           `Removing stale lock from PID ${pid} (${Math.floor(elapsed / 1000)}s old)`,
         )
