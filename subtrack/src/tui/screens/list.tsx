@@ -1,4 +1,4 @@
-import { Box, Text, useStdout, useWindowSize } from "ink"
+import { Box, Text, useWindowSize } from "ink"
 import { getSubscriptions } from "../../db.ts"
 import { useTui } from "../context/app-context.tsx"
 import type { SharedArgs, Status } from "../../types.ts"
@@ -36,38 +36,21 @@ const COLUMNS: Column[] = [
 
 function calcWidths(availableWidth: number): number[] {
   const totalFlex = COLUMNS.reduce((s, c) => s + c.flex, 0)
-  let remaining = availableWidth
-  const widths: number[] = []
+  const widths = COLUMNS.map((c) => c.minWidth)
+  const remaining = availableWidth - widths.reduce((s, w) => s + w, 0)
 
-  // First pass: assign min widths
-  for (const col of COLUMNS) {
-    widths.push(col.minWidth)
-    remaining -= col.minWidth
-  }
-
-  // Second pass: distribute remaining space by flex ratio
   if (remaining > 0) {
-    for (let i = 0; i < COLUMNS.length; i++) {
+    let allocated = 0
+    for (let i = 0; i < COLUMNS.length - 1; i++) {
       const extra = Math.floor((remaining * COLUMNS[i].flex) / totalFlex)
       widths[i] += extra
+      allocated += extra
     }
+    // Give all remaining pixels to the last column
+    widths[COLUMNS.length - 1] += remaining - allocated
   }
 
   return widths
-}
-
-// ── Helpers ──────────────────────────────────────────
-
-function cycleIcon(cycle: string): string {
-  switch (cycle) {
-    case "weekly": return "🔄"
-    case "bi-weekly": return "🔄"
-    case "monthly": return "📅"
-    case "quarterly": return "📅"
-    case "semi-annual": return "📅"
-    case "yearly": return "📅"
-    default: return "📅"
-  }
 }
 
 // ── Component ────────────────────────────────────────
