@@ -1,6 +1,6 @@
-import { Box, Text, useWindowSize } from "ink"
+import { Box, Text, useWindowSize, useInput, useApp } from "ink"
 import Gradient from "ink-gradient"
-import { getSubscriptions } from "../../db.ts"
+import { getSubscriptions, getSubscription, updateSubscription } from "../../db.ts"
 import { useTui, type SortField } from "../context/app-context.tsx"
 import type { Status } from "../../types.ts"
 import { useMemo, useEffect } from "react"
@@ -148,6 +148,124 @@ export function ListScreen() {
   }, [subs])
 
   const activeCount = useMemo(() => subs.filter((s) => s.status === "active").length, [subs])
+  const { exit } = useApp()
+
+  // ── Keyboard handler ──
+  useInput(
+    (input: string, key) => {
+      if (state.focus !== "content") return
+
+      // Navigation
+      if (key.upArrow || input === "k") {
+        dispatch({ type: "SET_LIST_INDEX", index: Math.max(0, state.listIndex - 1) })
+        return
+      }
+      if (key.downArrow || input === "j") {
+        dispatch({ type: "SET_LIST_INDEX", index: state.listIndex + 1 })
+        return
+      }
+      if (key.pageUp || (key.ctrl && input === "u")) {
+        const jump = Math.max(1, Math.floor((process.stdout.rows ?? 24) / 2))
+        dispatch({ type: "SET_LIST_INDEX", index: Math.max(0, state.listIndex - jump) })
+        return
+      }
+      if (key.pageDown || (key.ctrl && input === "d")) {
+        const jump = Math.max(1, Math.floor((process.stdout.rows ?? 24) / 2))
+        dispatch({ type: "SET_LIST_INDEX", index: state.listIndex + jump })
+        return
+      }
+      if (key.home || input === "g") {
+        dispatch({ type: "SET_LIST_INDEX", index: 0 })
+        return
+      }
+      if (key.end || input === "G") {
+        dispatch({ type: "SET_LIST_INDEX", index: Number.MAX_SAFE_INTEGER })
+        return
+      }
+
+      // Actions
+      if (input === "a") {
+        dispatch({ type: "SET_SCREEN", screen: "add" })
+        return
+      }
+      if (key.return && state.selectedId !== null) {
+        dispatch({ type: "SET_SCREEN", screen: "detail" })
+        return
+      }
+      if (input === "e" && state.selectedId !== null) {
+        dispatch({ type: "SET_SCREEN", screen: "edit" })
+        return
+      }
+      if (input === "d" && state.selectedId !== null) {
+        dispatch({ type: "SET_SCREEN", screen: "delete" })
+        return
+      }
+      if (input === "/") {
+        dispatch({ type: "SET_MODE", mode: "COMMAND" })
+        dispatch({ type: "SET_FILTER_TEXT", value: "/" })
+        return
+      }
+      if (input === "v") {
+        if (state.selectedId !== null) {
+          dispatch({ type: "MULTI_SELECT_TOGGLE", id: state.selectedId })
+        }
+        return
+      }
+      if (input === "r") {
+        dispatch({ type: "SET_SCREEN", screen: "reports" })
+        return
+      }
+      if (input === "c") {
+        dispatch({ type: "SET_SCREEN", screen: "config" })
+        return
+      }
+      if (input === "R") {
+        dispatch({ type: "INCREMENT_REFRESH_KEY" })
+        return
+      }
+      if (input === "s") {
+        dispatch({ type: "SET_SORT" })
+        return
+      }
+      if (input === "S" && state.selectedId !== null) {
+        const sub = getSubscription(state.selectedId)
+        if (sub) {
+          const cycle: Record<Status, Status> = {
+            active: "paused",
+            paused: "cancelled",
+            cancelled: "active",
+          }
+          const label: Record<Status, string> = {
+            active: "Active",
+            paused: "Paused",
+            cancelled: "Cancelled",
+          }
+          const newStatus = cycle[sub.status]
+          try {
+            updateSubscription(sub.id, { status: newStatus })
+            dispatch({ type: "INCREMENT_REFRESH_KEY" })
+            dispatch({
+              type: "SET_TOAST",
+              toast: {
+                message: `${sub.name} → ${label[newStatus]}`,
+                type: "info",
+              },
+            })
+          } catch (e: unknown) {
+            dispatch({
+              type: "SET_TOAST",
+              toast: {
+                message: `Failed to update ${sub.name}: ${e instanceof Error ? e.message : String(e)}`,
+                type: "error",
+              },
+            })
+          }
+        }
+        return
+      }
+    },
+    { isActive: state.focus === "content" && !state.formActive && !state.paletteOpen },
+  )
 
   // ── Render ──
 
