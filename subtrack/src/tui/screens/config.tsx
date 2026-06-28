@@ -1,8 +1,8 @@
 import { Box, Text, useInput } from "ink"
 import { TextInput } from "@inkjs/ui"
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { useTui, useSetFormActive } from "../context/app-context.tsx"
-import { loadConfig, setConfig, CONFIG_KEYS, resetConfig } from "../../config.ts"
+import { loadConfig, setConfig, CONFIG_KEYS } from "../../config.ts"
 import type { ConfigKey } from "../../config.ts"
 
 export function ConfigScreen() {
@@ -24,6 +24,8 @@ export function ConfigScreen() {
       if (editKey) {
         setEditKey(null)
         setResult(null)
+      } else {
+        dispatch({ type: "GO_BACK" })
       }
     }
     if (!editKey && /^\d$/.test(input)) {
@@ -35,44 +37,65 @@ export function ConfigScreen() {
     }
   })
 
-  const save = (k: string, v: string) => {
+  const save = useCallback((k: string, v: string) => {
     const ok = setConfig(k as ConfigKey, v)
     if (ok) {
-      resetConfig()
       setRev((n) => n + 1)
       setResult(`Saved ${k} = ${v}`)
       setEditKey(null)
     } else {
       setResult("Failed to save config")
     }
-  }
+  }, [])
 
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1}>
+    <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
       <Box marginBottom={1}>
-        <Text bold underline>Configuration</Text>
+        <Text bold inverse color="cyan">
+          {" Configuration "}
+        </Text>
       </Box>
-      {CONFIG_KEYS.map((k, i) => (
-        <Box key={k}>
-          <Box width={4}><Text dimColor>{i + 1}.</Text></Box>
-          <Box width={20}><Text>{k}</Text></Box>
-          <Text>{editKey === k ? "→" : ":"}</Text>
-          <Box marginLeft={1}>
-            {editKey === k ? (
-              <TextInput
-                defaultValue={editValue}
-                onChange={setEditValue}
-                onSubmit={(v) => save(k, v)}
-              />
-            ) : (
-              <Text dimColor>{String(config[k])}</Text>
-            )}
+
+      <Box
+        borderStyle="round"
+        borderColor="gray"
+        paddingX={1}
+        paddingY={1}
+        flexDirection="column"
+      >
+        {CONFIG_KEYS.map((k, i) => (
+          <Box key={k} marginBottom={editKey === k ? 0 : 0}>
+            <Box width={4}>
+              <Text dimColor>{i + 1}.</Text>
+            </Box>
+            <Box width={20}>
+              <Text bold>{k}:</Text>
+            </Box>
+            <Box flexGrow={1}>
+              {editKey === k ? (
+                <TextInput
+                  defaultValue={editValue}
+                  onChange={setEditValue}
+                  onSubmit={(v) => save(k, v)}
+                />
+              ) : (
+                <Text dimColor>{String(config[k])}</Text>
+              )}
+            </Box>
           </Box>
+        ))}
+      </Box>
+
+      {result && (
+        <Box marginTop={1} borderStyle="round" borderColor="green" paddingX={1}>
+          <Text color="green">{result}</Text>
         </Box>
-      ))}
-      {result && <Text color="green">{result}</Text>}
+      )}
+
       <Box marginTop={1}>
-        <Text dimColor>Press number to edit, Esc to go back</Text>
+        <Text dimColor>
+          Press a number to edit, Enter to save, Esc to go back
+        </Text>
       </Box>
     </Box>
   )

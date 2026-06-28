@@ -4,13 +4,12 @@ import { SCREEN_TITLES } from "../types.ts"
 
 export function StatusBar() {
   const { state } = useTui()
-  const modeColor =
-    state.mode === "NORMAL" ? "green" : "yellow"
+  const modeColor = state.mode === "NORMAL" ? "green" : "yellow"
 
   return (
-    <Box width="100%" borderStyle="single" borderColor="gray">
+    <Box width="100%" borderStyle="single" borderColor="gray" minHeight={1}>
       <Box paddingLeft={1} flexGrow={1}>
-        <Text bold>subtrack</Text>
+        <Text bold color="cyan">subtrack</Text>
         <Text dimColor> TUI</Text>
       </Box>
 
@@ -21,7 +20,9 @@ export function StatusBar() {
       {state.filterText && (
         <Box>
           <Text color="blue">
-            {" "}🔍 "{state.filterText}"{" "}
+            {" "}&gt; {state.filterText.length > 20
+              ? state.filterText.slice(0, 20) + "…"
+              : state.filterText}{" "}
           </Text>
         </Box>
       )}
@@ -29,14 +30,14 @@ export function StatusBar() {
       {state.multiSelect.size > 0 && (
         <Box>
           <Text color="yellow" bold>
-            {" "}✕ {state.multiSelect.size}{" "}
+            {" "}[{state.multiSelect.size}]{" "}
           </Text>
         </Box>
       )}
 
       <Box paddingRight={1}>
-        <Text color={modeColor} bold>
-          {" "}{state.mode}{" "}
+        <Text color={modeColor} bold inverse>
+          {" "}{state.mode === "NORMAL" ? " NORMAL " : " CMD "}{" "}
         </Text>
       </Box>
     </Box>

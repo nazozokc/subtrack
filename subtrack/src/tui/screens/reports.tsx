@@ -5,24 +5,59 @@ import { formatPrice } from "../../price.ts"
 import { useTui } from "../context/app-context.tsx"
 import { REPORT_TAB_LABELS, REPORT_TABS } from "../types.ts"
 import type { ReportsTab } from "../types.ts"
+import { OCCURRENCES_PER_YEAR, type Cycle } from "../../types.ts"
 
 // ── Helpers ───────────────────────────────────────────
 
-const OCCURRENCES_PER_YEAR: Record<string, number> = {
-  weekly: 52,
-  "bi-weekly": 26,
-  monthly: 12,
-  quarterly: 4,
-  "semi-annual": 2,
-  yearly: 1,
-}
-
 function monthlyFactor(cycle: string): number {
-  return (OCCURRENCES_PER_YEAR[cycle] ?? 12) / 12
+  return (OCCURRENCES_PER_YEAR[cycle as Cycle] ?? 12) / 12
 }
 
 function yearlyFactor(cycle: string): number {
-  return OCCURRENCES_PER_YEAR[cycle] ?? 12
+  return OCCURRENCES_PER_YEAR[cycle as Cycle] ?? 12
+}
+
+// ── Bar Chart Component ──────────────────────────────
+
+type BarItem = {
+  label: string
+  value: number
+  color?: string
+}
+
+function BarChart({ items, maxWidth = 16, currency = "USD" }: { items: BarItem[]; maxWidth?: number; currency?: string }) {
+  if (items.length === 0) return null
+
+  const maxValue = Math.max(...items.map((i) => i.value), 1)
+
+  return (
+    <Box flexDirection="column" gap={0}>
+      {items.map((item) => {
+        const ratio = item.value / maxValue
+        const filled = Math.round(ratio * maxWidth)
+        const empty = maxWidth - filled
+        const bar = "█".repeat(filled) + "░".repeat(Math.max(0, empty))
+
+        return (
+          <Box key={item.label} minHeight={1}>
+            <Box width={18}>
+              <Text bold wrap="truncate-end">
+                {item.label.padEnd(18).slice(0, 18)}
+              </Text>
+            </Box>
+            <Box width={maxWidth + 2}>
+              <Text color={item.color ?? "cyan"}>{bar}</Text>
+            </Box>
+            <Box width={14} justifyContent="flex-end">
+              <Text bold color="yellow">
+                {formatPrice(item.value, currency)}
+              </Text>
+            </Box>
+          </Box>
+        )
+      })}
+    </Box>
+  )
 }
 
 // ── Tab bar ───────────────────────────────────────────
@@ -92,14 +127,21 @@ function SummaryTab() {
       </Box>
 
       {monthlyByCurrency.size > 0 && (
-        <Box flexDirection="column">
+        <Box flexDirection="column" marginTop={1}>
           <Box marginBottom={1}>
             <Text bold underline>Monthly Cost</Text>
           </Box>
           {Array.from(monthlyByCurrency.entries()).map(([currency, total]) => (
-            <Box key={currency}>
-              <Box width={12}><Text dimColor>{currency}:</Text></Box>
-              <Text bold color="yellow">{formatPrice(total, currency)}/mo</Text>
+            <Box key={currency} flexDirection="column">
+              <Box marginBottom={1}>
+                <Text bold color="cyan">{currency}</Text>
+                <Text dimColor>  {formatPrice(total, currency)}/mo</Text>
+              </Box>
+              <BarChart
+                items={[{ label: "Total", value: total }]}
+                maxWidth={12}
+                currency={currency}
+              />
             </Box>
           ))}
         </Box>
@@ -142,18 +184,32 @@ function PaymentTab() {
           <Box flexDirection="column" marginBottom={1}>
             <Text bold color="cyan">Monthly</Text>
             {monthlyByCurrency.map(([currency, total]) => (
-              <Box key={currency}>
-                <Box width={12}><Text dimColor>{currency}</Text></Box>
-                <Text bold color="yellow">{formatPrice(total, currency)}</Text>
+              <Box key={currency} flexDirection="column" marginBottom={1}>
+                <Box>
+                  <Text dimColor>{currency}</Text>
+                  <Text bold color="yellow">  {formatPrice(total, currency)}</Text>
+                </Box>
+                <BarChart
+                  items={[{ label: "Monthly", value: total }]}
+                  maxWidth={12}
+                  currency={currency}
+                />
               </Box>
             ))}
           </Box>
           <Box flexDirection="column">
             <Text bold color="cyan">Yearly</Text>
             {yearlyByCurrency.map(([currency, total]) => (
-              <Box key={currency}>
-                <Box width={12}><Text dimColor>{currency}</Text></Box>
-                <Text bold color="yellow">{formatPrice(total, currency)}</Text>
+              <Box key={currency} flexDirection="column" marginBottom={1}>
+                <Box>
+                  <Text dimColor>{currency}</Text>
+                  <Text bold color="yellow">  {formatPrice(total, currency)}</Text>
+                </Box>
+                <BarChart
+                  items={[{ label: "Yearly", value: total }]}
+                  maxWidth={12}
+                  currency={currency}
+                />
               </Box>
             ))}
           </Box>
@@ -259,24 +315,45 @@ function AnalyticsTab() {
         <>
           <Box flexDirection="column" marginBottom={1}>
             <Text bold color="cyan">Most Expensive (top 5)</Text>
-            {sortedByPrice.map((sub, i) => (
-              <Box key={sub.id}>
-                <Box width={4}><Text dimColor>{(i + 1) + "."}</Text></Box>
-                <Box width={24}><Text bold wrap="truncate-end">{sub.name}</Text></Box>
-                <Box width={14}><Text>{formatPrice(sub.price, sub.currency)}</Text></Box>
-                <Text dimColor>/{sub.cycle}</Text>
-              </Box>
-            ))}
+            <Box marginTop={1}>
+              <BarChart
+                items={sortedByPrice.map((sub) => ({
+                  label: sub.name,
+                  value: sub.price,
+                  color: "yellow",
+                }))}
+                maxWidth={16}
+                currency={sortedByPrice[0]?.currency ?? "USD"}
+              />
+            </Box>
+            <Box marginTop={1}>
+              {sortedByPrice.map((sub, i) => (
+                <Box key={sub.id}>
+                  <Box width={4}><Text dimColor>{(i + 1) + "."}</Text></Box>
+                  <Box width={24}><Text bold wrap="truncate-end">{sub.name}</Text></Box>
+                  <Text dimColor>/{sub.cycle}</Text>
+                </Box>
+              ))}
+            </Box>
           </Box>
 
           <Box flexDirection="column" marginBottom={1}>
             <Text bold color="cyan">Cost by Cycle</Text>
-            {cycleCost.map(({ cycle, currency, total }) => (
-              <Box key={`${cycle}::${currency}`}>
-                <Box width={16}><Text>{cycle}</Text></Box>
-                <Text dimColor>{formatPrice(total, currency)}</Text>
-              </Box>
-            ))}
+            <Box marginTop={1}>
+              {/* Group by currency for display */}
+              {Array.from(new Set(cycleCost.map((c) => c.currency))).map((currency) => (
+                <Box key={currency} flexDirection="column" marginBottom={1}>
+                  <Text dimColor>{currency}:</Text>
+                  <BarChart
+                    items={cycleCost
+                      .filter((c) => c.currency === currency)
+                      .map((c) => ({ label: c.cycle, value: c.total }))}
+                    maxWidth={16}
+                    currency={currency}
+                  />
+                </Box>
+              ))}
+            </Box>
           </Box>
 
           <Box flexDirection="column">
@@ -323,9 +400,16 @@ function CompareTab() {
         <Text dimColor>No active subscriptions</Text>
       ) : (
         Array.from(monthlyTotal.entries()).map(([currency, total]) => (
-          <Box key={currency}>
-            <Box width={20}><Text dimColor>{currency}/month:</Text></Box>
-            <Text bold color="yellow">{formatPrice(total, currency)}</Text>
+          <Box key={currency} flexDirection="column" marginBottom={1}>
+            <Box marginBottom={1}>
+              <Text bold color="cyan">{currency}/month</Text>
+              <Text bold color="yellow">  {formatPrice(total, currency)}</Text>
+            </Box>
+            <BarChart
+              items={[{ label: currency, value: total }]}
+              maxWidth={16}
+              currency={currency}
+            />
           </Box>
         ))
       )}
@@ -366,21 +450,31 @@ function ForecastTab() {
         <>
           <Box marginBottom={1} flexDirection="column">
             <Text bold color="cyan">Monthly Costs</Text>
-            {Array.from(monthly.entries()).map(([c, t]) => (
-              <Box key={c}>
-                <Box width={16}><Text dimColor>{c}:</Text></Box>
-                <Text bold>{formatPrice(t, c)}</Text>
-              </Box>
-            ))}
+            <Box marginTop={1}>
+              {Array.from(monthly.entries()).map(([c, t]) => (
+                <Box key={c} flexDirection="column" marginBottom={1}>
+                  <Box>
+                    <Text dimColor>{c}:</Text>
+                    <Text bold color="yellow">  {formatPrice(t, c)}</Text>
+                  </Box>
+                  <BarChart items={[{ label: "Monthly", value: t }]} maxWidth={12} currency={c} />
+                </Box>
+              ))}
+            </Box>
           </Box>
           <Box flexDirection="column">
             <Text bold color="cyan">Yearly Total</Text>
-            {Array.from(yearly.entries()).map(([c, t]) => (
-              <Box key={c}>
-                <Box width={16}><Text dimColor>{c}:</Text></Box>
-                <Text bold color="yellow">{formatPrice(t, c)}</Text>
-              </Box>
-            ))}
+            <Box marginTop={1}>
+              {Array.from(yearly.entries()).map(([c, t]) => (
+                <Box key={c} flexDirection="column" marginBottom={1}>
+                  <Box>
+                    <Text dimColor>{c}:</Text>
+                    <Text bold color="yellow">  {formatPrice(t, c)}</Text>
+                  </Box>
+                  <BarChart items={[{ label: "Yearly", value: t }]} maxWidth={12} currency={c} />
+                </Box>
+              ))}
+            </Box>
           </Box>
         </>
       )}
@@ -395,11 +489,12 @@ export function ReportsScreen() {
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
-      <Box marginBottom={1}>
-        <Text bold>📊 Reports</Text>
-        <Text dimColor>
-          {"  "}← → switch tab, Esc to go back
-        </Text>
+      <Box marginBottom={1} flexDirection="column">
+        <Box>
+          <Text bold inverse color="cyan">
+            {" Reports "}
+          </Text>
+        </Box>
       </Box>
 
       <TabBar activeTab={state.reportsTab} />

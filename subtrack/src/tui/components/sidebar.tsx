@@ -3,6 +3,7 @@ import {
   SIDEBAR_ITEMS,
   type SidebarItem,
   type SidebarSection,
+  type Screen,
 } from "../types.ts"
 import { useTui } from "../context/app-context.tsx"
 
@@ -47,7 +48,12 @@ export function Sidebar() {
   const { state } = useTui()
   const isFocused = state.focus === "sidebar"
   const rows = buildRows()
-  const currentIdx = SIDEBAR_ITEMS.findIndex((i) => i.screen === state.screen)
+  // Map non-sidebar screens to their parent sidebar item
+  const sidebarScreen: Screen =
+    state.screen === "edit" || state.screen === "delete" || state.screen === "detail"
+      ? "list"
+      : state.screen
+  const currentIdx = SIDEBAR_ITEMS.findIndex((i) => i.screen === sidebarScreen)
 
   return (
     <Box

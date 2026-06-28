@@ -1,9 +1,11 @@
 import { Box, Text, useWindowSize } from "ink"
 import { getSubscriptions } from "../../db.ts"
-import { useTui } from "../context/app-context.tsx"
+import { useTui, type SortField } from "../context/app-context.tsx"
 import type { Status } from "../../types.ts"
 import { useMemo, useEffect } from "react"
 import { formatPrice } from "../../price.ts"
+
+// ── Sort types ─────────────────────────────────────────
 
 // ── Status color helpers ──────────────────────────────
 
@@ -33,14 +35,16 @@ type Column = {
   minWidth: number
   flex: number
   align: "left" | "right"
+  sortField?: SortField
 }
 
 const COLUMNS: Column[] = [
-  { key: "name", label: "Name", minWidth: 8, flex: 4, align: "left" },
-  { key: "status", label: "Status", minWidth: 8, flex: 2, align: "left" },
-  { key: "cycle", label: "Cycle", minWidth: 6, flex: 2, align: "left" },
+  { key: "name", label: "Name", minWidth: 8, flex: 4, align: "left", sortField: "name" },
+  { key: "status", label: "Status", minWidth: 8, flex: 2, align: "left", sortField: "status" },
+  { key: "cycle", label: "Cycle", minWidth: 6, flex: 2, align: "left", sortField: "cycle" },
+  { key: "billingDay", label: "Bill", minWidth: 4, flex: 1, align: "right" },
   { key: "tags", label: "Tags", minWidth: 4, flex: 3, align: "left" },
-  { key: "price", label: "Price", minWidth: 10, flex: 3, align: "right" },
+  { key: "price", label: "Price", minWidth: 10, flex: 3, align: "right", sortField: "price" },
 ]
 
 function calcWidths(availableWidth: number): number[] {
@@ -61,36 +65,46 @@ function calcWidths(availableWidth: number): number[] {
   return widths
 }
 
+// ── Sort indicator ────────────────────────────────────
+
+function sortArrow(field: SortField | undefined, sortField: SortField, desc: boolean): string {
+  if (field !== sortField) return ""
+  return desc ? " ▼" : " ▲"
+}
+
 // ── Component ────────────────────────────────────────
 
 export function ListScreen() {
   const { state, dispatch } = useTui()
   const { columns: termCols, rows: termRows } = useWindowSize()
 
-  const sidebarWidth = 24
-  const availableWidth = Math.max(40, termCols - sidebarWidth)
-  const headerHeight = 3
+  const { sortField, sortDesc } = state
+
+  const sidebarWidth = 22
+  const availableWidth = Math.max(40, termCols - sidebarWidth - 2) // -2 for borders
+  const headerHeight = 4
   const footerHeight = 3
   const filterBarHeight = state.filterText ? 2 : 0
   const availableHeight = Math.max(5, termRows - headerHeight - footerHeight - filterBarHeight)
 
   const widths = calcWidths(availableWidth)
 
-  // Fetch and filter subscriptions
+  // Fetch, sort, and filter subscriptions
   const subs = useMemo(() => {
-    let all = getSubscriptions()
+    const all = getSubscriptions(sortField, sortDesc)
     if (state.filterText) {
       const q = state.filterText.toLowerCase()
-      all = all.filter(
+      return all.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
-          s.tags.some((t) => t.toLowerCase().includes(q)),
+          s.tags.some((t) => t.toLowerCase().includes(q)) ||
+          (s.notes ?? "").toLowerCase().includes(q),
       )
     }
     return all
-  }, [state.filterText])
+  }, [state.filterText, sortField, sortDesc, state.refreshKey])
 
-  // Sync selectedId — clamp listIndex to valid range
+  // Clamp listIndex to valid range
   const clampedListIndex = useMemo(() => {
     if (subs.length === 0) return 0
     return Math.min(state.listIndex, subs.length - 1)
@@ -104,8 +118,11 @@ export function ListScreen() {
     }
   }, [clampedListIndex, subs, dispatch])
 
-  // Scroll offset (centered)
+  // Scroll position
   const maxVisible = Math.max(1, availableHeight - 2)
+  const scrollPosition = subs.length > 0
+    ? `${clampedListIndex + 1}/${subs.length}`
+    : ""
   const scrollOffset = Math.max(
     0,
     Math.min(clampedListIndex - Math.floor(maxVisible / 2), Math.max(0, subs.length - maxVisible)),
@@ -127,34 +144,45 @@ export function ListScreen() {
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1}>
-      {/* Title */}
-      <Box>
-        <Text bold color="white">
-          Subscriptions{" "}
-        </Text>
-        <Text dimColor>
-          ({subs.length} total, {activeCount} active)
-        </Text>
-        {state.filterText && (
-          <Text color="blue">
-            {" "}🔍 "{state.filterText}"
+      {/* Title bar */}
+      <Box marginTop={1}>
+        <Box flexGrow={1}>
+          <Text bold color="white">
+            Subscriptions{" "}
           </Text>
-        )}
-        {state.multiSelect.size > 0 && (
-          <Text color="yellow" bold>
-            {" "}[{state.multiSelect.size} selected]
+          <Text dimColor>
+            {subs.length} total · {activeCount} active
           </Text>
-        )}
+          {state.filterText && (
+            <Text color="blue">
+              {" "}▶ "{state.filterText.length > 16
+                ? state.filterText.slice(0, 16) + "…"
+                : state.filterText}"
+            </Text>
+          )}
+          {state.multiSelect.size > 0 && (
+            <Text color="yellow" bold>
+              {" "}[{state.multiSelect.size}]
+            </Text>
+          )}
+        </Box>
+        <Box>
+          {scrollPosition && (
+            <Text dimColor>
+              {scrollPosition}{" "}
+            </Text>
+          )}
+        </Box>
       </Box>
 
-      {/* Column headers */}
+      {/* Column headers with sort indicators */}
       <Box marginTop={1}>
         {COLUMNS.map((col, i) => (
           <Box key={col.key} width={widths[i]}>
-            <Text bold underline color="cyan">
+            <Text bold underline color={col.sortField === sortField ? "cyan" : "gray"}>
               {col.align === "right"
-                ? col.label.padStart(widths[i])
-                : col.label.padEnd(widths[i])}
+                ? (col.label + sortArrow(col.sortField, sortField, sortDesc)).padStart(widths[i])
+                : (col.label + sortArrow(col.sortField, sortField, sortDesc)).padEnd(widths[i])}
             </Text>
           </Box>
         ))}
@@ -173,9 +201,14 @@ export function ListScreen() {
               : "No subscriptions yet"}
           </Text>
           {!state.filterText && (
-            <Text color="cyan" dimColor={false}>
-              {" "}Press  a  to add your first subscription
-            </Text>
+            <>
+              <Text color="cyan">
+                {" "}a  Add your first subscription
+              </Text>
+              <Text dimColor>
+                {" "}Enter  View details
+              </Text>
+            </>
           )}
         </Box>
       ) : (
@@ -186,19 +219,29 @@ export function ListScreen() {
           const isMultiSelected = state.multiSelect.has(sub.id)
           const isEven = globalIdx % 2 === 0
 
+          // Selection glow: selected rows get bold + inverse (swap fg/bg)
+          // Multi-selected items get a yellow arrow marker
+          const selStyle = isSelected && isActiveFocus
+
           return (
             <Box key={sub.id}>
-              {/* Multi-select marker */}
+              {/* Multi-select marker column */}
               <Box width={2}>
-                <Text color="yellow">{isMultiSelected ? "▶" : " "}</Text>
+                {isMultiSelected ? (
+                  <Text bold color="yellow">▶</Text>
+                ) : selStyle ? (
+                  <Text color="cyan">▸</Text>
+                ) : (
+                  <Text dimColor> </Text>
+                )}
               </Box>
               {/* Name */}
               <Box width={widths[0]}>
                 <Text
-                  bold={isSelected && isActiveFocus}
-                  inverse={isSelected && isActiveFocus}
+                  bold={selStyle}
+                  inverse={selStyle}
                   wrap="truncate-end"
-                  dimColor={!isSelected && !isEven}
+                  color={selStyle ? "white" : isEven ? "gray" : "white"}
                 >
                   {sub.name.padEnd(widths[0]).slice(0, widths[0])}
                 </Text>
@@ -207,8 +250,8 @@ export function ListScreen() {
               <Box width={widths[1]}>
                 <Text
                   color={statusColor(sub.status)}
-                  inverse={isSelected && isActiveFocus}
-                  dimColor={!isSelected && !isEven}
+                  inverse={selStyle}
+                  dimColor={!selStyle && isEven}
                 >
                   {statusLabel(sub.status).padEnd(widths[1]).slice(0, widths[1])}
                 </Text>
@@ -216,33 +259,43 @@ export function ListScreen() {
               {/* Cycle */}
               <Box width={widths[2]}>
                 <Text
-                  inverse={isSelected && isActiveFocus}
-                  dimColor={!isSelected}
+                  inverse={selStyle}
+                  dimColor={!selStyle}
                 >
                   {sub.cycle.padEnd(widths[2]).slice(0, widths[2])}
                 </Text>
               </Box>
-              {/* Tags */}
-              <Box width={widths[3]}>
+              {/* Billing Day */}
+              <Box width={widths[3]} justifyContent="flex-end">
                 <Text
-                  inverse={isSelected && isActiveFocus}
+                  inverse={selStyle}
+                  dimColor={!selStyle && isEven}
+                >
+                  {sub.billingDay ? String(sub.billingDay).padStart(widths[3]).slice(0, widths[3]) : "—".padStart(widths[3])}
+                </Text>
+              </Box>
+              {/* Tags */}
+              <Box width={widths[4]}>
+                <Text
+                  inverse={selStyle}
                   wrap="truncate-end"
-                  dimColor={!isSelected && !isEven}
+                  dimColor={!selStyle && isEven}
                 >
                   {(sub.tags.length > 0
                     ? sub.tags.join(", ")
                     : "—"
-                  ).padEnd(widths[3]).slice(0, widths[3])}
+                  ).padEnd(widths[4]).slice(0, widths[4])}
                 </Text>
               </Box>
               {/* Price */}
-              <Box width={widths[4]} justifyContent="flex-end">
+              <Box width={widths[5]} justifyContent="flex-end">
                 <Text
                   bold
-                  inverse={isSelected && isActiveFocus}
-                  dimColor={!isSelected && !isEven}
+                  inverse={selStyle}
+                  dimColor={!selStyle && isEven}
+                  color={selStyle ? "white" : "yellow"}
                 >
-                  {formatPrice(sub.price, sub.currency).padStart(widths[4]).slice(0, widths[4])}
+                  {formatPrice(sub.price, sub.currency).padStart(widths[5]).slice(0, widths[5])}
                 </Text>
               </Box>
             </Box>

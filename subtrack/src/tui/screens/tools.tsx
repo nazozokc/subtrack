@@ -7,17 +7,18 @@ import type { ToolsTab } from "../types.ts"
 import {
   getSubscriptions,
   getLlmUsage,
-  writeSubscription,
   getDb,
   getDbDir,
+  saveDb,
   getDefaultBackupDir,
   getBackupFiles,
   restoreDb,
 } from "../../db.ts"
+import type { SharedArgs } from "../../types.ts"
 import { exportCsv, exportJson, exportMd } from "../../export.ts"
 import { parseCsvLine } from "../../import-csv.ts"
 import { isValidCurrency, isValidCycle } from "../../prompts.ts"
-import { encryptBuffer, hasEncryptionKey, decryptBuffer, isEncrypted } from "../../crypto.ts"
+import { encryptBuffer, hasEncryptionKey } from "../../crypto.ts"
 import { writeFileSync, readFileSync, copyFileSync, mkdirSync, existsSync } from "node:fs"
 import { join } from "node:path"
 import { cwd } from "node:process"
@@ -59,7 +60,7 @@ function TabBar({ activeTab }: { activeTab: ToolsTab }) {
 
 // ── Export tab ────────────────────────────────────────
 
-const EXPORTERS: Record<string, { ext: string; fn: (subs: any[]) => string }> = {
+const EXPORTERS: Record<string, { ext: string; fn: (subs: SharedArgs[]) => string }> = {
   csv: { ext: "csv", fn: exportCsv },
   json: { ext: "json", fn: exportJson },
   md: { ext: "md", fn: exportMd },
@@ -129,7 +130,8 @@ function ImportTab() {
       let success = 0
       let failed = 0
       const errors: string[] = []
-      getDb().exec("BEGIN TRANSACTION")
+      const db = getDb()
+      db.run("BEGIN TRANSACTION")
       try {
         for (let i = 1; i < lines.length; i++) {
           const fields = parseCsvLine(lines[i])
@@ -137,18 +139,29 @@ function ImportTab() {
           if (!isValidCurrency(fields[4]) || !isValidCycle(fields[1])) { failed++; continue }
           const price = Number(fields[3])
           if (isNaN(price) || price < 0 || !Number.isInteger(price)) { failed++; errors.push(`Line ${i + 1}: invalid price "${fields[3]}"`); continue }
-          writeSubscription({
-            name: fields[0].trim(),
-            cycle: fields[1],
-            tags: fields[2].split(";").map((t) => t.trim()).filter(Boolean),
-            price,
-            currency: fields[4],
-          })
+          // Direct insert to avoid nested transaction from writeSubscription
+          db.run(
+            "INSERT INTO subscriptions (name, price, currency, cycle, status, created_at) VALUES (?, ?, ?, ?, 'active', date('now'))",
+            [fields[0].trim(), price, fields[4], fields[1]],
+          )
+          const idRow = db.exec("SELECT last_insert_rowid() AS id")
+          if (idRow.length > 0 && idRow[0].values.length > 0) {
+            const subId = Number(idRow[0].values[0][0])
+            const tags = fields[2].split(";").map((t) => t.trim()).filter(Boolean)
+            for (const t of tags) {
+              db.run("INSERT OR IGNORE INTO tags (name) VALUES (?)", [t])
+              const tagRow = db.exec("SELECT id FROM tags WHERE name = ?", [t])
+              if (tagRow.length > 0 && tagRow[0].values.length > 0) {
+                db.run("INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)", [subId, Number(tagRow[0].values[0][0])])
+              }
+            }
+          }
           success++
         }
-        getDb().exec("COMMIT")
+        db.run("COMMIT")
+        saveDb()
       } catch (e) {
-        getDb().exec("ROLLBACK")
+        db.run("ROLLBACK")
         throw e
       }
       const msg = `Imported ${success} subscription${success !== 1 ? "s" : ""} from ${filePath}${failed > 0 ? ` (${failed} failed)` : ""}`
@@ -269,21 +282,8 @@ function RestoreTab() {
       return
     }
     try {
-      if (isEncrypted(readFileSync(source))) {
-        if (!hasEncryptionKey()) {
-          setResult("Cannot decrypt: no encryption key configured")
-          setStep("done")
-          return
-        }
-        const data = readFileSync(source)
-        const decrypted = decryptBuffer(data)
-        const dest = join(getDbDir(), "subtrack.db")
-        writeFileSync(dest, decrypted)
-        setResult(`Restored from ${source} (decrypted)`)
-      } else {
-        restoreDb(source)
-        setResult(`Restored from ${source}`)
-      }
+      restoreDb(source)
+      setResult(`Restored from ${source}`)
     } catch (e: unknown) {
       setResult(`Restore failed: ${e instanceof Error ? e.message : String(e)}`)
     }
@@ -342,7 +342,8 @@ function RestoreTab() {
 // ── Usage tab ─────────────────────────────────────────
 
 function UsageTab() {
-  const entries = useMemo(() => getLlmUsage({ limit: 50 }), [])
+  const { state } = useTui()
+  const entries = useMemo(() => getLlmUsage({ limit: 50 }), [state.refreshKey])
   const total = entries.reduce((s, e) => s + e.cost, 0)
 
   return (
@@ -392,11 +393,12 @@ export function ToolsScreen() {
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
-      <Box marginBottom={1}>
-        <Text bold>🔧 Tools</Text>
-        <Text dimColor>
-          {"  "}← → switch tab, Esc to go back
-        </Text>
+      <Box marginBottom={1} flexDirection="column">
+        <Box>
+          <Text bold inverse color="cyan">
+            {" Tools "}
+          </Text>
+        </Box>
       </Box>
 
       <TabBar activeTab={state.toolsTab} />

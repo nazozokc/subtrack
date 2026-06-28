@@ -7,6 +7,8 @@ import {
 } from "react"
 import type { Screen, Mode, Focus, ReportsTab, ToolsTab } from "../types.ts"
 
+export type SortField = "name" | "price" | "cycle" | "status" | "id"
+
 export type AppState = {
   screen: Screen
   mode: Mode
@@ -26,6 +28,12 @@ export type AppState = {
   toolsTab: ToolsTab
   /** Multi-select mode: set of selected subscription IDs */
   multiSelect: Set<number>
+  /** Incremented to force data refresh */
+  refreshKey: number
+  /** Sort field for list */
+  sortField: SortField
+  /** Sort direction */
+  sortDesc: boolean
 }
 
 export type AppAction =
@@ -43,6 +51,8 @@ export type AppAction =
   | { type: "TOGGLE_FOCUS" }
   | { type: "MULTI_SELECT_TOGGLE"; id: number }
   | { type: "MULTI_SELECT_CLEAR" }
+  | { type: "INCREMENT_REFRESH_KEY" }
+  | { type: "SET_SORT" }
 
 const initialState: AppState = {
   screen: "list",
@@ -57,6 +67,9 @@ const initialState: AppState = {
   reportsTab: "summary",
   toolsTab: "export",
   multiSelect: new Set(),
+  refreshKey: 0,
+  sortField: "name",
+  sortDesc: false,
 }
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -122,6 +135,17 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
     case "MULTI_SELECT_CLEAR":
       return { ...state, multiSelect: new Set() }
+    case "INCREMENT_REFRESH_KEY":
+      return { ...state, refreshKey: state.refreshKey + 1 }
+    case "SET_SORT": {
+      const SORT_CYCLE: SortField[] = ["name", "price", "cycle", "status", "id"]
+      const idx = SORT_CYCLE.indexOf(state.sortField)
+      const next = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length]
+      if (next === state.sortField) {
+        return { ...state, sortDesc: !state.sortDesc }
+      }
+      return { ...state, sortField: next, sortDesc: false }
+    }
     default:
       return state
   }

@@ -1,4 +1,5 @@
 import { Box, Text, useInput, useApp } from "ink"
+import type { AppState, AppAction } from "./context/app-context.tsx"
 import { AppProvider, useTui } from "./context/app-context.tsx"
 import { Sidebar } from "./components/sidebar.tsx"
 import { StatusBar } from "./components/status-bar.tsx"
@@ -7,11 +8,14 @@ import { ListScreen } from "./screens/list.tsx"
 import { AddScreen } from "./screens/add.tsx"
 import { EditScreen } from "./screens/edit.tsx"
 import { DeleteScreen } from "./screens/delete.tsx"
+import { DetailScreen } from "./screens/detail.tsx"
 import { ReportsScreen } from "./screens/reports.tsx"
 import { ConfigScreen } from "./screens/config.tsx"
 import { ToolsScreen } from "./screens/tools.tsx"
 import { HelpScreen } from "./screens/help.tsx"
 import { SIDEBAR_ITEMS, REPORT_TABS, TOOLS_TABS } from "./types.ts"
+import { getSubscription, updateSubscription } from "../db.ts"
+import type { Status } from "../types.ts"
 
 // ── Screen router ─────────────────────────────────────
 
@@ -27,6 +31,8 @@ function CurrentScreen() {
       return <EditScreen />
     case "delete":
       return <DeleteScreen />
+    case "detail":
+      return <DetailScreen />
     case "reports":
       return <ReportsScreen />
     case "config":
@@ -51,7 +57,7 @@ function KeyboardHandler() {
   const { exit } = useApp()
 
   useInput(
-    (input: string, key: any) => {
+    (input: string, key) => {
       // ── COMMAND mode ──
       if (state.mode === "COMMAND") {
         if (key.escape) {
@@ -124,6 +130,14 @@ function KeyboardHandler() {
         return
       }
 
+      // Ctrl+l — clear filter (vim-like)
+      if (key.ctrl && input === "l") {
+        if (state.filterText) {
+          dispatch({ type: "SET_FILTER_TEXT", value: "" })
+        }
+        return
+      }
+
       // Arrow / vim navigation for list/config screens
       if (state.screen === "list" || state.screen === "config") {
         if (key.upArrow || input === "k") {
@@ -149,7 +163,7 @@ function KeyboardHandler() {
           return
         }
         if (key.end || input === "G") {
-          dispatch({ type: "SET_LIST_INDEX", index: 999999 })
+          dispatch({ type: "SET_LIST_INDEX", index: Number.MAX_SAFE_INTEGER })
           return
         }
       }
@@ -169,6 +183,23 @@ function KeyboardHandler() {
           })
           return
         }
+      }
+
+      // 1-6 — sidebar shortcuts (not on config, which uses numbers for editing)
+      if (/^[1-6]$/.test(input) && state.screen !== "config") {
+        const idx = Number(input) - 1
+        const item = SIDEBAR_ITEMS[idx]
+        if (item) {
+          dispatch({ type: "SET_SCREEN", screen: item.screen })
+          dispatch({ type: "SET_LIST_INDEX", index: 0 })
+        }
+        return
+      }
+
+      // ? — help screen (global, any screen)
+      if (input === "?") {
+        dispatch({ type: "SET_SCREEN", screen: "help" })
+        return
       }
 
       // h/l — focus navigation (not on tabbed screens)
@@ -199,6 +230,10 @@ function KeyboardHandler() {
               dispatch({ type: "SET_SCREEN", screen: "add" })
               return
             }
+            if (key.return && state.selectedId !== null) {
+              dispatch({ type: "SET_SCREEN", screen: "detail" })
+              return
+            }
             if (input === "e" && state.selectedId !== null) {
               dispatch({ type: "SET_SCREEN", screen: "edit" })
               return
@@ -220,6 +255,32 @@ function KeyboardHandler() {
             }
             if (input === "r") {
               dispatch({ type: "SET_SCREEN", screen: "reports" })
+              return
+            }
+            if (input === "c") {
+              dispatch({ type: "SET_SCREEN", screen: "config" })
+              return
+            }
+            if (input === "R") {
+              dispatch({ type: "INCREMENT_REFRESH_KEY" })
+              return
+            }
+            if (input === "s") {
+              dispatch({ type: "SET_SORT" })
+              return
+            }
+            if (input === "S" && state.selectedId !== null) {
+              const sub = getSubscription(state.selectedId)
+              if (sub) {
+                const cycle: Record<Status, Status> = {
+                  active: "paused",
+                  paused: "cancelled",
+                  cancelled: "active",
+                }
+                const newStatus = cycle[sub.status]
+                updateSubscription(sub.id, { status: newStatus })
+                dispatch({ type: "INCREMENT_REFRESH_KEY" })
+              }
               return
             }
             break
@@ -267,8 +328,8 @@ function KeyboardHandler() {
 
 function executeCommand(
   cmd: string,
-  state: any,
-  dispatch: any,
+  state: AppState,
+  dispatch: React.Dispatch<AppAction>,
   exit: (error?: Error | unknown) => void,
 ) {
   const trimmed = cmd.trim()

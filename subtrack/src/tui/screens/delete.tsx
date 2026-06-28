@@ -20,12 +20,7 @@ export function DeleteScreen() {
     [state.selectedId],
   )
 
-  useInput((input, key) => {
-    if (key.escape && !(input === "y" || input === "Y" || input === "n" || input === "N")) {
-      dispatch({ type: "GO_BACK" })
-      dispatch({ type: "SET_SELECTED_ID", id: null })
-      return
-    }
+  useInput((input) => {
     if (input === "y" || input === "Y") {
       if (sub) {
         try {
@@ -53,21 +48,38 @@ export function DeleteScreen() {
 
   return (
     <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
-      {error && <Text color="red">{error}</Text>}
-      <Box marginBottom={1}>
-        <Text bold color="red">
-          Delete Subscription
-        </Text>
+      {error && (
+        <Box marginBottom={1} borderStyle="round" borderColor="red" paddingX={1}>
+          <Text color="red">⚠ {error}</Text>
+        </Box>
+      )}
+
+      {/* Warning header */}
+      <Box marginBottom={1} borderStyle="round" borderColor="red" paddingX={2} paddingY={1}>
+        <Box flexDirection="column" alignItems="center">
+          <Text bold color="red" inverse>
+            {" Delete Subscription "}
+          </Text>
+          <Text dimColor>This action cannot be undone</Text>
+        </Box>
       </Box>
 
-      <Box flexDirection="column" gap={1} marginBottom={1}>
+      {/* Subscription details */}
+      <Box
+        borderStyle="round"
+        borderColor="gray"
+        paddingX={2}
+        paddingY={1}
+        flexDirection="column"
+        width={50}
+      >
         <Box>
           <Box width={14}><Text dimColor>Name:</Text></Box>
           <Text bold>{sub.name}</Text>
         </Box>
         <Box>
           <Box width={14}><Text dimColor>Price:</Text></Box>
-          <Text bold>{formatPrice(sub.price, sub.currency)}</Text>
+          <Text bold color="yellow">{formatPrice(sub.price, sub.currency)}</Text>
         </Box>
         <Box>
           <Box width={14}><Text dimColor>Cycle:</Text></Box>
@@ -77,15 +89,22 @@ export function DeleteScreen() {
           <Box width={14}><Text dimColor>Status:</Text></Box>
           <Text bold>{sub.status}</Text>
         </Box>
+        {sub.tags.length > 0 && (
+          <Box>
+            <Box width={14}><Text dimColor>Tags:</Text></Box>
+            <Text bold>{sub.tags.join(", ")}</Text>
+          </Box>
+        )}
       </Box>
 
-      <Box marginTop={1}>
+      {/* Confirmation prompt */}
+      <Box marginTop={1} paddingX={2} paddingY={1} borderStyle="round" borderColor="yellow">
         <Text>
-          Are you sure?{" "}
+          Are you sure?{"  "}
           <Text bold color="green" inverse> y </Text>
-          {" "}to delete /{" "}
+          {"  to delete  "}
           <Text bold color="red" inverse> n </Text>
-          {" "}to cancel
+          {"  to cancel"}
         </Text>
       </Box>
     </Box>

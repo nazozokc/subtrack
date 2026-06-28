@@ -25,11 +25,24 @@ export function HelpScreen() {
         <Text>  a             Add new subscription</Text>
         <Text>  e             Edit selected subscription</Text>
         <Text>  d             Delete selected subscription</Text>
+        <Text>  Enter         View full details</Text>
         <Text>  /             Filter subscriptions</Text>
         <Text>  v             Toggle multi-select</Text>
         <Text>  r             Open Reports</Text>
+        <Text>  c             Open Config</Text>
         <Text>  g/G           Go to top/bottom</Text>
+        <Text>  s             Cycle sort (name/price/cycle/status/id)</Text>
         <Text>  Ctrl+d/u      Page down/up</Text>
+        <Text>  S             Toggle status (active→paused→cancelled)</Text>
+        <Text>  R             Refresh data</Text>
+      </Box>
+
+      <Box flexDirection="column" gap={1} marginBottom={1}>
+        <Text bold>Detail Screen</Text>
+        <Text>  e             Edit subscription</Text>
+        <Text>  d             Delete subscription</Text>
+        <Text>  r             Toggle raw values</Text>
+        <Text>  q / Esc       Go back</Text>
       </Box>
 
       <Box flexDirection="column" gap={1} marginBottom={1}>
