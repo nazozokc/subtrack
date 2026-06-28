@@ -97,7 +97,8 @@ const initialState: AppState = {
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "SET_SCREEN": {
-      // Push current screen to history before navigating
+      // Skip history push when navigating to the same screen
+      if (action.screen === state.screen) return state
       const history = [...state.history, state.screen]
       return {
         ...state,
@@ -162,10 +163,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case "SET_SORT": {
       const SORT_CYCLE: SortField[] = ["name", "price", "cycle", "status", "id"]
       const idx = SORT_CYCLE.indexOf(state.sortField)
+      // Advance to next field in cycle; reset desc on field change
       const next = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length]
-      if (next === state.sortField) {
-        return { ...state, sortDesc: !state.sortDesc }
-      }
       return { ...state, sortField: next, sortDesc: false }
     }
     case "SET_TOAST":

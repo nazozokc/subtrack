@@ -7,18 +7,21 @@ export async function handleTui(): Promise<void> {
   const prevLevel = consola.level
   consola.level = -999
 
-  const instance = render(<App />, {
-    exitOnCtrlC: true,
-    patchConsole: true,
-  })
-
+  let instance: ReturnType<typeof render> | undefined
   try {
+    instance = render(<App />, {
+      exitOnCtrlC: true,
+      patchConsole: true,
+    })
     await instance.waitUntilExit()
   } catch {
-    // App exited with an error — silently ignore for clean exit
+    // App exited with an error — ignore for clean exit
   } finally {
     // Clear Ink's output and restore terminal
-    instance.clear()
-    consola.level = prevLevel
+    try {
+      instance?.clear()
+    } finally {
+      consola.level = prevLevel
+    }
   }
 }

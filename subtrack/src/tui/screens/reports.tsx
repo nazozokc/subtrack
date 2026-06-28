@@ -98,8 +98,8 @@ function TabBar({ activeTab }: { activeTab: ReportsTab }) {
 
 // ── Summary tab ───────────────────────────────────────
 
-function SummaryTab() {
-  const subs = useMemo(() => getSubscriptions(), [])
+function SummaryTab({ refreshKey }: { refreshKey: number }) {
+  const subs = useMemo(() => getSubscriptions(), [refreshKey])
 
   const totalActive = subs.filter((s) => s.status === "active").length
   const totalPaused = subs.filter((s) => s.status === "paused").length
@@ -153,8 +153,8 @@ function SummaryTab() {
 
 // ── Payment tab ───────────────────────────────────────
 
-function PaymentTab() {
-  const subs = useMemo(() => getSubscriptions(), [])
+function PaymentTab({ refreshKey }: { refreshKey: number }) {
+  const subs = useMemo(() => getSubscriptions(), [refreshKey])
   const active = subs.filter((s) => s.status === "active")
 
   const monthlyByCurrency = useMemo(() => {
@@ -236,8 +236,8 @@ function computeNextBill(day: number, from: Date, until: Date): Date | null {
   return null
 }
 
-function UpcomingTab() {
-  const subs = useMemo(() => getSubscriptions(), [])
+function UpcomingTab({ refreshKey }: { refreshKey: number }) {
+  const subs = useMemo(() => getSubscriptions(), [refreshKey])
   const today = new Date()
   const in7Days = new Date(today.getTime() + 7 * 86400000)
 
@@ -277,8 +277,8 @@ function UpcomingTab() {
 
 // ── Analytics tab ─────────────────────────────────────
 
-function AnalyticsTab() {
-  const subs = useMemo(() => getSubscriptions(), [])
+function AnalyticsTab({ refreshKey }: { refreshKey: number }) {
+  const subs = useMemo(() => getSubscriptions(), [refreshKey])
   const activeSubs = subs.filter((s) => s.status === "active")
 
   const tagFreq = useMemo(() => {
@@ -378,8 +378,8 @@ function AnalyticsTab() {
 
 // ── Compare tab ───────────────────────────────────────
 
-function CompareTab() {
-  const subs = useMemo(() => getSubscriptions(), [])
+function CompareTab({ refreshKey }: { refreshKey: number }) {
+  const subs = useMemo(() => getSubscriptions(), [refreshKey])
   const active = subs.filter((s) => s.status === "active")
 
   const monthlyTotal = useMemo(() => {
@@ -420,8 +420,8 @@ function CompareTab() {
 
 // ── Forecast tab ──────────────────────────────────────
 
-function ForecastTab() {
-  const subs = useMemo(() => getSubscriptions(), [])
+function ForecastTab({ refreshKey }: { refreshKey: number }) {
+  const subs = useMemo(() => getSubscriptions(), [refreshKey])
   const active = subs.filter((s) => s.status === "active")
 
   const monthly = useMemo(() => {
@@ -487,6 +487,7 @@ function ForecastTab() {
 
 export function ReportsScreen() {
   const { state } = useTui()
+  const refreshKey = state.refreshKey
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
@@ -502,12 +503,12 @@ export function ReportsScreen() {
 
       <TabBar activeTab={state.reportsTab} />
 
-      {state.reportsTab === "summary" && <SummaryTab />}
-      {state.reportsTab === "payment" && <PaymentTab />}
-      {state.reportsTab === "upcoming" && <UpcomingTab />}
-      {state.reportsTab === "analytics" && <AnalyticsTab />}
-      {state.reportsTab === "compare" && <CompareTab />}
-      {state.reportsTab === "forecast" && <ForecastTab />}
+      {state.reportsTab === "summary" && <SummaryTab refreshKey={refreshKey} />}
+      {state.reportsTab === "payment" && <PaymentTab refreshKey={refreshKey} />}
+      {state.reportsTab === "upcoming" && <UpcomingTab refreshKey={refreshKey} />}
+      {state.reportsTab === "analytics" && <AnalyticsTab refreshKey={refreshKey} />}
+      {state.reportsTab === "compare" && <CompareTab refreshKey={refreshKey} />}
+      {state.reportsTab === "forecast" && <ForecastTab refreshKey={refreshKey} />}
     </Box>
   )
 }

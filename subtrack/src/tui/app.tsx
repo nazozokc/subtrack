@@ -146,8 +146,8 @@ function KeyboardHandler() {
         return
       }
 
-      // Arrow / vim navigation for list/config screens
-      if (state.screen === "list" || state.screen === "config") {
+      // Arrow / vim navigation for list/config screens (content focus only)
+      if (state.focus === "content" && (state.screen === "list" || state.screen === "config")) {
         if (key.upArrow || input === "k") {
           dispatch({ type: "SET_LIST_INDEX", index: Math.max(0, state.listIndex - 1) })
           return
@@ -291,15 +291,25 @@ function KeyboardHandler() {
                   cancelled: "Cancelled",
                 }
                 const newStatus = cycle[sub.status]
-                updateSubscription(sub.id, { status: newStatus })
-                dispatch({ type: "INCREMENT_REFRESH_KEY" })
-                dispatch({
-                  type: "SET_TOAST",
-                  toast: {
-                    message: `${sub.name} → ${label[newStatus]}`,
-                    type: "info",
-                  },
-                })
+                try {
+                  updateSubscription(sub.id, { status: newStatus })
+                  dispatch({ type: "INCREMENT_REFRESH_KEY" })
+                  dispatch({
+                    type: "SET_TOAST",
+                    toast: {
+                      message: `${sub.name} → ${label[newStatus]}`,
+                      type: "info",
+                    },
+                  })
+                } catch (e: unknown) {
+                  dispatch({
+                    type: "SET_TOAST",
+                    toast: {
+                      message: `Failed to update ${sub.name}: ${e instanceof Error ? e.message : String(e)}`,
+                      type: "error",
+                    },
+                  })
+                }
               }
               return
             }
@@ -374,7 +384,8 @@ function executeCommand(
     dispatch({ type: "SET_MODE", mode: "NORMAL" })
     return
   }
-  // Unknown command
+  // Unknown command — clear filter text and return to NORMAL
+  dispatch({ type: "SET_FILTER_TEXT", value: "" })
   dispatch({ type: "SET_MODE", mode: "NORMAL" })
 }
 
