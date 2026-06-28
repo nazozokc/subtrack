@@ -104,7 +104,7 @@ jobs:
       - run: pnpm build
 
       - name: Generate SBOM
-        uses: anchore/sbom-action@v3
+        uses: anchore/sbom-action@v0
         with:
           path: ./
           artifact-name: subtrack-sbom-${{ steps.version.outputs.version || 'dev' }}
