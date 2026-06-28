@@ -1,7 +1,7 @@
 import { Box, Text, useWindowSize } from "ink"
 import { getSubscriptions } from "../../db.ts"
 import { useTui } from "../context/app-context.tsx"
-import type { SharedArgs, Status } from "../../types.ts"
+import type { Status } from "../../types.ts"
 import { useMemo, useEffect } from "react"
 import { formatPrice } from "../../price.ts"
 
@@ -13,6 +13,15 @@ function statusColor(status: Status): string {
     case "paused": return "yellow"
     case "cancelled": return "red"
     default: return "white"
+  }
+}
+
+function statusLabel(status: Status): string {
+  switch (status) {
+    case "active": return "● active"
+    case "paused": return "◐ paused"
+    case "cancelled": return "○ cancelled"
+    default: return status
   }
 }
 
@@ -28,10 +37,10 @@ type Column = {
 
 const COLUMNS: Column[] = [
   { key: "name", label: "Name", minWidth: 8, flex: 4, align: "left" },
-  { key: "status", label: "Status", minWidth: 6, flex: 2, align: "left" },
+  { key: "status", label: "Status", minWidth: 8, flex: 2, align: "left" },
   { key: "cycle", label: "Cycle", minWidth: 6, flex: 2, align: "left" },
   { key: "tags", label: "Tags", minWidth: 4, flex: 3, align: "left" },
-  { key: "price", label: "Price", minWidth: 8, flex: 3, align: "right" },
+  { key: "price", label: "Price", minWidth: 10, flex: 3, align: "right" },
 ]
 
 function calcWidths(availableWidth: number): number[] {
@@ -46,7 +55,6 @@ function calcWidths(availableWidth: number): number[] {
       widths[i] += extra
       allocated += extra
     }
-    // Give all remaining pixels to the last column
     widths[COLUMNS.length - 1] += remaining - allocated
   }
 
@@ -59,12 +67,12 @@ export function ListScreen() {
   const { state, dispatch } = useTui()
   const { columns: termCols, rows: termRows } = useWindowSize()
 
-  // Available content area
-  const sidebarWidth = 24 // 22 + border padding
+  const sidebarWidth = 24
   const availableWidth = Math.max(40, termCols - sidebarWidth)
-  const headerHeight = 3 // status border + title row + separator
-  const footerHeight = 3 // command bar border
-  const availableHeight = Math.max(5, termRows - headerHeight - footerHeight)
+  const headerHeight = 3
+  const footerHeight = 3
+  const filterBarHeight = state.filterText ? 2 : 0
+  const availableHeight = Math.max(5, termRows - headerHeight - footerHeight - filterBarHeight)
 
   const widths = calcWidths(availableWidth)
 
@@ -82,24 +90,26 @@ export function ListScreen() {
     return all
   }, [state.filterText])
 
-  // Sync selected subscription ID with global state
+  // Sync selectedId — clamp listIndex to valid range
+  const clampedListIndex = useMemo(() => {
+    if (subs.length === 0) return 0
+    return Math.min(state.listIndex, subs.length - 1)
+  }, [state.listIndex, subs.length])
+
   useEffect(() => {
     if (subs.length === 0) {
-      dispatch({ type: "SET_SELECTED_SUB_ID", id: null })
-    } else if (state.listIndex >= subs.length) {
-      dispatch({ type: "SET_SELECTED_SUB_ID", id: subs[subs.length - 1].id })
+      dispatch({ type: "SET_SELECTED_ID", id: null })
     } else {
-      dispatch({ type: "SET_SELECTED_SUB_ID", id: subs[state.listIndex].id })
+      dispatch({ type: "SET_SELECTED_ID", id: subs[clampedListIndex].id })
     }
-  }, [state.listIndex, subs, dispatch])
+  }, [clampedListIndex, subs, dispatch])
 
-  // Scroll offset
-  const maxVisible = Math.max(1, availableHeight - 2) // -2 for header/separator
+  // Scroll offset (centered)
+  const maxVisible = Math.max(1, availableHeight - 2)
   const scrollOffset = Math.max(
     0,
-    Math.min(state.listIndex - Math.floor(maxVisible / 2), Math.max(0, subs.length - maxVisible)),
+    Math.min(clampedListIndex - Math.floor(maxVisible / 2), Math.max(0, subs.length - maxVisible)),
   )
-
   const visibleSubs = subs.slice(scrollOffset, scrollOffset + maxVisible)
 
   // Totals by currency
@@ -111,27 +121,34 @@ export function ListScreen() {
     return map
   }, [subs])
 
+  const activeCount = useMemo(() => subs.filter((s) => s.status === "active").length, [subs])
+
   // ── Render ──
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1}>
-      {/* Title + count */}
+      {/* Title */}
       <Box>
-        <Text bold>
+        <Text bold color="white">
           Subscriptions{" "}
         </Text>
         <Text dimColor>
-          ({subs.length} total)
+          ({subs.length} total, {activeCount} active)
         </Text>
         {state.filterText && (
-          <Text dimColor>
-            {" "}filtered by "{state.filterText}"
+          <Text color="blue">
+            {" "}🔍 "{state.filterText}"
+          </Text>
+        )}
+        {state.multiSelect.size > 0 && (
+          <Text color="yellow" bold>
+            {" "}[{state.multiSelect.size} selected]
           </Text>
         )}
       </Box>
 
-      {/* Header row */}
-      <Box>
+      {/* Column headers */}
+      <Box marginTop={1}>
         {COLUMNS.map((col, i) => (
           <Box key={col.key} width={widths[i]}>
             <Text bold underline color="cyan">
@@ -149,25 +166,39 @@ export function ListScreen() {
 
       {/* Data rows */}
       {visibleSubs.length === 0 ? (
-        <Box flexGrow={1} alignItems="center" justifyContent="center">
+        <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
           <Text dimColor>
-            {state.filterText ? "No subscriptions match filter" : "No subscriptions yet"}
+            {state.filterText
+              ? "No subscriptions match filter"
+              : "No subscriptions yet"}
           </Text>
+          {!state.filterText && (
+            <Text color="cyan" dimColor={false}>
+              {" "}Press  a  to add your first subscription
+            </Text>
+          )}
         </Box>
       ) : (
         visibleSubs.map((sub, idx) => {
           const globalIdx = scrollOffset + idx
-          const isSelected = globalIdx === state.listIndex
+          const isSelected = globalIdx === clampedListIndex
           const isActiveFocus = state.focus === "content"
+          const isMultiSelected = state.multiSelect.has(sub.id)
+          const isEven = globalIdx % 2 === 0
 
           return (
             <Box key={sub.id}>
+              {/* Multi-select marker */}
+              <Box width={2}>
+                <Text color="yellow">{isMultiSelected ? "▶" : " "}</Text>
+              </Box>
               {/* Name */}
               <Box width={widths[0]}>
                 <Text
                   bold={isSelected && isActiveFocus}
                   inverse={isSelected && isActiveFocus}
                   wrap="truncate-end"
+                  dimColor={!isSelected && !isEven}
                 >
                   {sub.name.padEnd(widths[0]).slice(0, widths[0])}
                 </Text>
@@ -177,8 +208,9 @@ export function ListScreen() {
                 <Text
                   color={statusColor(sub.status)}
                   inverse={isSelected && isActiveFocus}
+                  dimColor={!isSelected && !isEven}
                 >
-                  {sub.status.padEnd(widths[1]).slice(0, widths[1])}
+                  {statusLabel(sub.status).padEnd(widths[1]).slice(0, widths[1])}
                 </Text>
               </Box>
               {/* Cycle */}
@@ -195,6 +227,7 @@ export function ListScreen() {
                 <Text
                   inverse={isSelected && isActiveFocus}
                   wrap="truncate-end"
+                  dimColor={!isSelected && !isEven}
                 >
                   {(sub.tags.length > 0
                     ? sub.tags.join(", ")
@@ -207,6 +240,7 @@ export function ListScreen() {
                 <Text
                   bold
                   inverse={isSelected && isActiveFocus}
+                  dimColor={!isSelected && !isEven}
                 >
                   {formatPrice(sub.price, sub.currency).padStart(widths[4]).slice(0, widths[4])}
                 </Text>

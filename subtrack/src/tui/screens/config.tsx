@@ -1,7 +1,7 @@
 import { Box, Text, useInput } from "ink"
 import { TextInput } from "@inkjs/ui"
-import { useState, useMemo } from "react"
-import { useTui } from "../context/app-context.tsx"
+import { useState, useMemo, useEffect } from "react"
+import { useTui, useSetFormActive } from "../context/app-context.tsx"
 import { loadConfig, setConfig, CONFIG_KEYS, resetConfig } from "../../config.ts"
 import type { ConfigKey } from "../../config.ts"
 
@@ -12,11 +12,19 @@ export function ConfigScreen() {
   const [result, setResult] = useState<string | null>(null)
   const [rev, setRev] = useState(0)
   const config = useMemo(() => loadConfig(), [rev])
+  const setFormActive = useSetFormActive()
+
+  useEffect(() => {
+    setFormActive(editKey !== null)
+    return () => setFormActive(false)
+  }, [editKey, setFormActive])
 
   useInput((input, key) => {
     if (key.escape) {
-      if (editKey) { setEditKey(null); setResult(null) }
-      else dispatch({ type: "SET_SCREEN", screen: "list" })
+      if (editKey) {
+        setEditKey(null)
+        setResult(null)
+      }
     }
     if (!editKey && /^\d$/.test(input)) {
       const idx = Number(input) - 1
@@ -29,8 +37,14 @@ export function ConfigScreen() {
 
   const save = (k: string, v: string) => {
     const ok = setConfig(k as ConfigKey, v)
-    if (ok) { resetConfig(); setRev((n) => n + 1); setResult(`Saved ${k} = ${v}`); setEditKey(null) }
-    else setResult("Failed to save config")
+    if (ok) {
+      resetConfig()
+      setRev((n) => n + 1)
+      setResult(`Saved ${k} = ${v}`)
+      setEditKey(null)
+    } else {
+      setResult("Failed to save config")
+    }
   }
 
   return (
@@ -45,7 +59,11 @@ export function ConfigScreen() {
           <Text>{editKey === k ? "→" : ":"}</Text>
           <Box marginLeft={1}>
             {editKey === k ? (
-              <TextInput defaultValue={editValue} onChange={setEditValue} onSubmit={(v) => save(k, v)} />
+              <TextInput
+                defaultValue={editValue}
+                onChange={setEditValue}
+                onSubmit={(v) => save(k, v)}
+              />
             ) : (
               <Text dimColor>{String(config[k])}</Text>
             )}

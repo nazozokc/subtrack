@@ -1,22 +1,29 @@
 import { Box, Text, useInput } from "ink"
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import { getSubscription, deleteSubscription } from "../../db.ts"
-import { useTui } from "../context/app-context.tsx"
+import { useTui, useSetFormActive } from "../context/app-context.tsx"
 import { formatPrice } from "../../price.ts"
 
 export function DeleteScreen() {
   const { state, dispatch } = useTui()
   const [error, setError] = useState<string | null>(null)
+  const setFormActive = useSetFormActive()
+
+  // Prevent global key handler from firing alongside our own
+  useEffect(() => {
+    setFormActive(true)
+    return () => setFormActive(false)
+  }, [setFormActive])
 
   const sub = useMemo(
-    () => (state.editId ? getSubscription(state.editId) : undefined),
-    [state.editId],
+    () => (state.selectedId ? getSubscription(state.selectedId) : undefined),
+    [state.selectedId],
   )
 
   useInput((input, key) => {
     if (key.escape && !(input === "y" || input === "Y" || input === "n" || input === "N")) {
-      dispatch({ type: "SET_EDIT_ID", id: null })
-      dispatch({ type: "SET_SCREEN", screen: "list" })
+      dispatch({ type: "GO_BACK" })
+      dispatch({ type: "SET_SELECTED_ID", id: null })
       return
     }
     if (input === "y" || input === "Y") {
@@ -28,11 +35,11 @@ export function DeleteScreen() {
           return
         }
       }
-      dispatch({ type: "SET_EDIT_ID", id: null })
-      dispatch({ type: "SET_SCREEN", screen: "list" })
+      dispatch({ type: "GO_BACK" })
+      dispatch({ type: "SET_SELECTED_ID", id: null })
     } else if (input === "n" || input === "N") {
-      dispatch({ type: "SET_EDIT_ID", id: null })
-      dispatch({ type: "SET_SCREEN", screen: "list" })
+      dispatch({ type: "GO_BACK" })
+      dispatch({ type: "SET_SELECTED_ID", id: null })
     }
   })
 

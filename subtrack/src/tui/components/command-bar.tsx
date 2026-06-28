@@ -3,67 +3,24 @@ import { useTui } from "../context/app-context.tsx"
 import type { Screen } from "../types.ts"
 
 const HINT_TEXT: Record<Screen, string> = {
-  list: "j↓ k↑ /filter :cmd ?help q:quit",
-  search: "j↓ k↑ Enter:open :cmd ?help q:quit",
-  add: "Tab:next Enter:save Esc:cancel",
-  edit: "Tab:next Enter:save Esc:cancel",
-  delete: "y:delete n:cancel",
-  tags: "j↓ k↑ Enter:filter",
-  "tag-manage": "j↓ k↑ Enter:manage",
-  trials: "j↓ k↑ Enter:detail a:add",
-  "trial-add": "Tab:next Enter:save Esc:cancel",
-  "trial-expiring": "j↓ k↑ Enter:detail",
-  bulk: "Tab:select Enter:execute",
-  summary: "q:quit",
-  payment: "q:quit",
-  upcoming: "j↓ k↑",
-  analytics: "q:quit",
-  compare: "q:quit",
-  forecast: "q:quit",
-  config: "j↓ k↑ e:edit",
-  usage: "j↓ k↑ d:delete",
-  export: "Enter:export",
-  import: "Enter:import",
-  backup: "Enter:backup",
-  restore: "j↓ k↑ Enter:restore",
-  help: "q:quit",
+  list: "j↓ k↑  /filter  a:add  e:edit  d:delete  v:select  r:reports  q:quit  ?help",
+  add: "Tab/Enter:next  Enter:save  Esc:cancel",
+  edit: "Tab/Enter:next  Enter:save  Esc:cancel",
+  delete: "y:delete  n:cancel",
+  reports: "← →:tab  h/l:tab  Esc:back",
+  config: "1-9:edit  Esc:back",
+  tools: "← →:tab  h/l:tab  Esc:back",
+  help: "Esc/q:back",
 }
 
 export function CommandBar() {
-  const { state, dispatch } = useTui()
-
-  if (state.confirmQuit) {
-    return (
-      <Box width="100%" borderStyle="single" borderColor="yellow">
-        <Text bold color="yellow">
-          {" "}Quit subtrack TUI?{" "}
-        </Text>
-        <Text bold color="green">
-          y
-        </Text>
-        <Text>
-          /N{" "}
-        </Text>
-      </Box>
-    )
-  }
+  const { state } = useTui()
 
   if (state.mode === "COMMAND") {
     return (
       <Box width="100%" borderStyle="single" borderColor="yellow">
         <Text bold color="yellow">
           :{state.filterText}
-        </Text>
-        <Text dimColor>█</Text>
-      </Box>
-    )
-  }
-
-  if (state.mode === "SEARCH") {
-    return (
-      <Box width="100%" borderStyle="single" borderColor="blue">
-        <Text bold color="blue">
-          /{state.filterText}
         </Text>
         <Text dimColor>█</Text>
       </Box>

@@ -1,6 +1,7 @@
 import { Box, Text, useInput } from "ink"
 import { TextInput, Select } from "@inkjs/ui"
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
+import { useSetFormActive } from "../context/app-context.tsx"
 import type { AddSharedArgs, Cycle, Status } from "../../types.ts"
 
 // ── Types ──────────────────────────────────────────────
@@ -122,6 +123,13 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
   const [stepIdx, setStepIdx] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const step = STEPS[stepIdx]
+  const setFormActive = useSetFormActive()
+
+  // Prevent global key handler conflicts while form is active
+  useEffect(() => {
+    setFormActive(true)
+    return () => setFormActive(false)
+  }, [setFormActive])
 
   const goNext = useCallback(() => {
     const err = validateStep(step, data)

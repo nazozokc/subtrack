@@ -8,7 +8,6 @@ import { useTui } from "../context/app-context.tsx"
 
 const SECTION_HEADS: Record<SidebarSection, string> = {
   data: "📋 Data",
-  "tags-trials-bulk": "🏷️ Tags",
   reports: "📊 Reports",
   system: "⚙️ System",
 }
@@ -27,13 +26,9 @@ function groupItems(): SectionGroup[] {
   return Array.from(map.entries()).map(([section, items]) => ({ section, items }))
 }
 
-/**
- * Row descriptor for sidebar rendering.
- * - "head": section header, not selectable
- * - "item": sidebar item, selectable
- * The `itemIndex` is the index into SIDEBAR_ITEMS[], -1 for headers.
- */
-type Row = { kind: "head"; section: SidebarSection; itemIndex: -1 } | { kind: "item"; section: SidebarSection; item: SidebarItem; itemIndex: number }
+type Row =
+  | { kind: "head"; section: SidebarSection; itemIndex: -1 }
+  | { kind: "item"; section: SidebarSection; item: SidebarItem; itemIndex: number }
 
 function buildRows(): Row[] {
   const rows: Row[] = []
@@ -48,17 +43,10 @@ function buildRows(): Row[] {
   return rows
 }
 
-/** Screens that only exist as sub‑routes and are not directly reachable from the sidebar. */
-const PLACEHOLDER_SCREENS = new Set([
-  "tag-manage", "trial-add", "trial-expiring",
-])
-
 export function Sidebar() {
-  const { state, dispatch } = useTui()
+  const { state } = useTui()
   const isFocused = state.focus === "sidebar"
   const rows = buildRows()
-
-  // Current selected screen index
   const currentIdx = SIDEBAR_ITEMS.findIndex((i) => i.screen === state.screen)
 
   return (
@@ -67,7 +55,7 @@ export function Sidebar() {
       flexDirection="column"
       borderStyle="round"
       borderColor={isFocused ? "cyan" : "gray"}
-      minHeight={20}
+      minHeight={12}
     >
       {rows.map((row) => {
         if (row.kind === "head") {
@@ -82,9 +70,6 @@ export function Sidebar() {
 
         const { item, itemIndex } = row
         const isCurrent = itemIndex === currentIdx
-        const isPlaceholder = PLACEHOLDER_SCREENS.has(item.screen)
-
-        // Focus highlight: when sidebar is focused and this item is the "selected" one
         const focusedHere = isFocused && itemIndex === state.sidebarIndex
 
         return (
@@ -95,10 +80,6 @@ export function Sidebar() {
               </Text>
             ) : isCurrent ? (
               <Text bold color="cyan">
-                {" "}{item.icon} {item.label.padEnd(14)}{" "}
-              </Text>
-            ) : isPlaceholder ? (
-              <Text dimColor>
                 {" "}{item.icon} {item.label.padEnd(14)}{" "}
               </Text>
             ) : (
