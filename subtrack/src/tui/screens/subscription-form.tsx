@@ -273,22 +273,22 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
       {/* Title + progress */}
-      <Box marginBottom={1} flexDirection="column">
+      <Box marginBottom={0} flexDirection="column">
         <Box>
           <Text bold inverse color="cyan">
             {" "}{title}{" "}
           </Text>
         </Box>
-        <Box marginTop={1}>
+        <Box marginTop={0}>
           <ProgressBar current={stepIdx + 1} total={STEPS.length} />
           <Text dimColor>
-            {"  →  "}{STEP_SHORT[step] ?? step}
+            {" "}{STEP_SHORT[step] ?? step}
           </Text>
         </Box>
       </Box>
 
       {/* Step label */}
-      <Box marginBottom={1}>
+      <Box>
         <Text bold underline color="cyan">
           {STEP_LABELS[step] ?? step}
         </Text>
@@ -296,8 +296,8 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
 
       {/* Error */}
       {error && (
-        <Box marginBottom={1} borderStyle="round" borderColor="red" paddingX={1} paddingY={0}>
-          <Text color="red">⚠ {error}</Text>
+        <Box borderStyle="round" borderColor="red" paddingX={1} paddingY={0}>
+          <Text color="red">{error}</Text>
         </Box>
       )}
 
@@ -323,7 +323,7 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
       </Box>
 
       {/* Key hints */}
-      <Box marginTop={1} borderStyle="single" borderColor="gray" paddingX={1}>
+      <Box borderStyle="single" borderColor="gray" paddingX={1}>
         <Text dimColor>
           {step === "confirm"
             ? "  y  confirm    n  cancel"

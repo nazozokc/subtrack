@@ -8,7 +8,7 @@ import {
   TOOLS_TABS,
   TOOLS_TAB_LABELS,
 } from "../types.ts"
-import { getSubscriptions } from "../../db.ts"
+
 
 type PaletteEntry = {
   id: string
@@ -29,7 +29,7 @@ export function CommandPalette() {
     for (const item of SIDEBAR_ITEMS) {
       list.push({
         id: `screen:${item.screen}`,
-        label: `${item.icon} ${item.label}`,
+        label: `${item.label}`,
         category: "Navigate",
         execute: () => {
           setScreen(item.screen)
@@ -41,7 +41,7 @@ export function CommandPalette() {
     for (const tab of REPORT_TABS) {
       list.push({
         id: `reports:${tab}`,
-        label: `📊 Reports › ${REPORT_TAB_LABELS[tab]}`,
+        label: `Reports > ${REPORT_TAB_LABELS[tab]}`,
         category: "Navigate",
         execute: () => {
           dispatch({ type: "SET_REPORTS_TAB", tab })
@@ -54,7 +54,7 @@ export function CommandPalette() {
     for (const tab of TOOLS_TABS) {
       list.push({
         id: `tools:${tab}`,
-        label: `🔧 Tools › ${TOOLS_TAB_LABELS[tab]}`,
+        label: `Tools > ${TOOLS_TAB_LABELS[tab]}`,
         category: "Navigate",
         execute: () => {
           dispatch({ type: "SET_TOOLS_TAB", tab })
@@ -64,12 +64,11 @@ export function CommandPalette() {
     }
 
     // Actions
-    const subs = getSubscriptions()
     const hasSelection = state.selectedId !== null
 
     list.push({
       id: "action:refresh",
-      label: "🔄 Refresh Data",
+      label: "Refresh Data",
       category: "Actions",
       execute: () => dispatch({ type: "INCREMENT_REFRESH_KEY" }),
     })
@@ -77,19 +76,19 @@ export function CommandPalette() {
     if (state.screen === "list" && hasSelection) {
       list.push({
         id: "action:edit",
-        label: "✏️ Edit Subscription",
+        label: "Edit Subscription",
         category: "Actions",
         execute: () => setScreen("edit"),
       })
       list.push({
         id: "action:delete",
-        label: "🗑️ Delete Subscription",
+        label: "Delete Subscription",
         category: "Actions",
         execute: () => setScreen("delete"),
       })
       list.push({
         id: "action:detail",
-        label: "📋 View Details",
+        label: "View Details",
         category: "Actions",
         execute: () => setScreen("detail"),
       })
@@ -98,7 +97,7 @@ export function CommandPalette() {
     if (state.screen === "list" && state.filterText) {
       list.push({
         id: "action:clear-filter",
-        label: "🧹 Clear Filter",
+        label: "Clear Filter",
         category: "Actions",
         execute: () => dispatch({ type: "SET_FILTER_TEXT", value: "" }),
       })
@@ -107,7 +106,7 @@ export function CommandPalette() {
     if (state.history.length > 0) {
       list.push({
         id: "action:back",
-        label: "◀ Go Back",
+        label: "Go Back",
         category: "Actions",
         execute: () => goBack(),
       })
@@ -115,7 +114,7 @@ export function CommandPalette() {
 
     list.push({
       id: "action:quit",
-      label: "🚪 Quit",
+      label: "Quit",
       category: "Actions",
       execute: () => process.exit(0),
     })
@@ -124,7 +123,7 @@ export function CommandPalette() {
     if (state.screen === "list") {
       list.push({
         id: "action:sort",
-        label: "🔀 Cycle Sort",
+        label: "Cycle Sort",
         category: "Actions",
         execute: () => dispatch({ type: "SET_SORT" }),
       })
@@ -133,7 +132,7 @@ export function CommandPalette() {
     // Filter
     list.push({
       id: "action:filter",
-      label: "🔍 Filter Subscriptions",
+      label: "Filter Subscriptions",
       category: "Actions",
       execute: () => {
         dispatch({ type: "SET_MODE", mode: "COMMAND" })

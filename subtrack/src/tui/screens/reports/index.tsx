@@ -1,5 +1,4 @@
 import { Box, Text, useInput } from "ink"
-import Gradient from "ink-gradient"
 import { useTui } from "../../context/app-context.tsx"
 import { TabBar } from "../../components/tab-bar.tsx"
 import { REPORT_TABS, REPORT_TAB_LABELS } from "../../types.ts"
@@ -34,14 +33,10 @@ export function ReportsScreen() {
 
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
-      <Box marginBottom={1} flexDirection="column">
-        <Box>
-          <Gradient name="pastel">
-            <Text bold inverse>
-              {" Reports "}
-            </Text>
-          </Gradient>
-        </Box>
+      <Box marginBottom={1}>
+        <Text bold inverse color="cyan">
+          {" Reports "}
+        </Text>
       </Box>
 
       <TabBar tabs={REPORT_TABS} activeTab={state.reportsTab} tabLabels={REPORT_TAB_LABELS} />

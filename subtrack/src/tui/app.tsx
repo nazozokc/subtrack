@@ -19,17 +19,16 @@ export function App() {
 }
 
 /**
- * Layout structure (top to bottom):
+ * Layout structure (top to bottom) — uses every terminal row:
  *
- * ┌─ StatusBar ─────────────────────────────────────┐  ← flexShrink=0
- * ├──────────────────────────────────────────────────┤
- * │ Sidebar │  Content (fills remaining space)       │  ← flexGrow=1, minHeight=0
- * ├──────────────────────────────────────────────────┤
- * └─ CommandBar ─────────────────────────────────────┘  ← flexShrink=0
+ * 1  StatusLine                   ← flexShrink=0, 1 row
+ * 2+ Sidebar | Content            ← flexGrow=1, fills all remaining rows
+ *    (fixed width) (fills rest)
+ * N  CommandBar                   ← flexShrink=0, 1 row
  *
- * Overlays (absolute positioned, rendered on top):
- *   - Toast:  bottom-center, overlays CommandBar
- *   - Palette: full-screen overlay, always on top
+ * Overlays (absolute positioned, on top):
+ *   - Toast:  bottom-center
+ *   - Palette: full-screen overlay
  */
 function AppInner() {
   const { state } = useTui()
@@ -38,29 +37,30 @@ function AppInner() {
     <Box flexDirection="column" height="100%" position="relative">
       <KeyboardHandler />
 
-      {/* ── Fixed header ── */}
+      {/* ── 1-row compact header ── */}
       <Box flexShrink={0}>
         <StatusBar />
       </Box>
 
-      {/* ── Main area — fills remaining space ── */}
+      {/* ── Main area — fills EVERYTHING between header & footer ── */}
       <Box
         flexGrow={1}
         flexDirection="row"
         minHeight={0}
+        height="100%"
       >
         <Sidebar />
-        <Box flexGrow={1} minWidth={0} minHeight={0}>
+        <Box flexGrow={1} minWidth={0}>
           <CurrentScreen />
         </Box>
       </Box>
 
-      {/* ── Fixed footer ── */}
+      {/* ── 1-row footer ── */}
       <Box flexShrink={0}>
         <CommandBar />
       </Box>
 
-      {/* ── Overlays (outside document flow) ── */}
+      {/* ── Overlays ── */}
       <Toast />
       {state.paletteOpen && <CommandPalette />}
     </Box>

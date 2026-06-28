@@ -9,9 +9,9 @@ import {
 import { useTui } from "../context/app-context.tsx"
 
 const SECTION_HEADS: Record<SidebarSection, string> = {
-  data: "📋 Data",
-  reports: "📊 Reports",
-  system: "⚙️ System",
+  data: "Data",
+  reports: "Reports",
+  system: "System",
 }
 
 type SectionGroup = {
@@ -55,6 +55,7 @@ export function Sidebar() {
       ? "list"
       : state.screen
   const currentIdx = SIDEBAR_ITEMS.findIndex((i) => i.screen === sidebarScreen)
+  const contentWidth = SIDEBAR_WIDTH - 2 // minus border
 
   return (
     <Box
@@ -62,14 +63,13 @@ export function Sidebar() {
       flexDirection="column"
       borderStyle="round"
       borderColor={isFocused ? "cyan" : "gray"}
-      flexGrow={1}
     >
       {rows.map((row) => {
         if (row.kind === "head") {
           return (
-            <Box key={`head-${row.section}`} marginTop={1}>
+            <Box key={`head-${row.section}`} marginTop={1} paddingLeft={1}>
               <Text dimColor bold>
-                {" "}{SECTION_HEADS[row.section]}
+                {SECTION_HEADS[row.section]}
               </Text>
             </Box>
           )
@@ -78,20 +78,21 @@ export function Sidebar() {
         const { item, itemIndex } = row
         const isCurrent = itemIndex === currentIdx
         const focusedHere = isFocused && itemIndex === state.sidebarIndex
+        const label = item.label.padEnd(contentWidth - 2)
 
         return (
           <Box key={item.screen} paddingLeft={1}>
             {focusedHere ? (
               <Text bold color="cyan" inverse>
-                {" "}{item.icon} {item.label.padEnd(14)}{" "}
+                {" "}{label}{" "}
               </Text>
             ) : isCurrent ? (
               <Text bold color="cyan">
-                {" "}{item.icon} {item.label.padEnd(14)}{" "}
+                {" "}{label}{" "}
               </Text>
             ) : (
               <Text>
-                {" "}{item.icon} {item.label.padEnd(14)}{" "}
+                {" "}{label}{" "}
               </Text>
             )}
           </Box>

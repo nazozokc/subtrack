@@ -1,5 +1,4 @@
 import { Box, Text, useInput } from "ink"
-import Gradient from "ink-gradient"
 import { TextInput } from "@inkjs/ui"
 import { useState, useMemo, useEffect, useCallback } from "react"
 import { useTui, useSetFormActive } from "../context/app-context.tsx"
@@ -52,11 +51,9 @@ export function ConfigScreen() {
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
       <Box marginBottom={1}>
-        <Gradient name="pastel">
-          <Text bold inverse>
-            {" Configuration "}
-          </Text>
-        </Gradient>
+        <Text bold inverse color="cyan">
+          {" Configuration "}
+        </Text>
       </Box>
 
       <Box
@@ -67,7 +64,7 @@ export function ConfigScreen() {
         flexDirection="column"
       >
         {CONFIG_KEYS.map((k, i) => (
-          <Box key={k} marginBottom={editKey === k ? 0 : 0}>
+          <Box key={k}>
             <Box width={4}>
               <Text dimColor>{i + 1}.</Text>
             </Box>
