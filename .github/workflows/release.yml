@@ -49,7 +49,8 @@ jobs:
         if: github.event_name == 'release'
         working-directory: ./subtrack
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          TAG_VERSION="${TAG_NAME#v}"
           PKG_VERSION=$(node -p "require('./package.json').version")
 
           # Must be valid semver
