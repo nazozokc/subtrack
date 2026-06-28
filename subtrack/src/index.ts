@@ -810,7 +810,7 @@ process.umask(0o077);
 try {
   await cli(process.argv.slice(2), mainCommand, {
     name: "subtrack",
-    version: "7.0.7",
+    version: "7.0.8",
     subCommands: {
       list: listCommand,
       add: addCommand,
