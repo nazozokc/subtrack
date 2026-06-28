@@ -401,7 +401,6 @@ export function App() {
 
 function AppInner() {
   const { state } = useTui()
-  const focusColor = state.focus === "sidebar" ? "cyan" : "gray"
 
   return (
     <Box flexDirection="column" height="100%">
@@ -409,16 +408,16 @@ function AppInner() {
 
       <StatusBar />
 
-      <Box flexGrow={1} flexDirection="row" height="100%">
+      <Box flexGrow={1} flexDirection="row">
         <Sidebar />
-        <Box flexGrow={1} borderStyle="round" borderColor={focusColor} height="100%">
+        <Box flexGrow={1}>
           <CurrentScreen />
         </Box>
       </Box>
 
-      <Toast />
-
       <CommandBar />
+
+      <Toast />
 
       {state.paletteOpen && <CommandPalette />}
     </Box>

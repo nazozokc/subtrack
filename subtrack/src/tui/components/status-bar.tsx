@@ -47,7 +47,7 @@ export function StatusBar() {
   const modeColor = state.mode === "NORMAL" ? "green" : "yellow"
 
   return (
-    <Box width="100%" borderStyle="single" borderColor="gray" minHeight={1}>
+    <Box width="100%" minHeight={1}>
       <Box paddingLeft={1} flexGrow={1}>
         <Gradient name="cristal"><Text bold>subtrack</Text></Gradient>
         <Text dimColor> TUI</Text>
