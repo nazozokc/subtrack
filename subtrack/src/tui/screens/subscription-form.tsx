@@ -223,11 +223,15 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
       if (step === "confirm") {
         if (input === "y" || input === "Y") {
           handleConfirm()
-        } else if (input === "n" || input === "N" || key.escape) {
+          return
+        }
+        if (input === "n" || input === "N" || key.escape) {
           onCancel()
+          return
         }
       } else if (key.escape) {
         onCancel()
+        return
       }
     },
     { isActive: true },
@@ -278,7 +282,7 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
         <Box marginTop={1}>
           <ProgressBar current={stepIdx + 1} total={STEPS.length} />
           <Text dimColor>
-            {"  →  "}{STEP_SHORT[step]}
+            {"  →  "}{STEP_SHORT[step] ?? step}
           </Text>
         </Box>
       </Box>
@@ -286,7 +290,7 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
       {/* Step label */}
       <Box marginBottom={1}>
         <Text bold underline color="cyan">
-          {STEP_LABELS[step]}
+          {STEP_LABELS[step] ?? step}
         </Text>
       </Box>
 
@@ -339,6 +343,7 @@ function renderStep(
   next: () => void,
 ) {
   switch (step) {
+    // Each case defined below — check STEPS + STEP_LABELS when adding a new step
     case "name":
       return (
         <Box flexDirection="column">

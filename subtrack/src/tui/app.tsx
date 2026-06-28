@@ -18,26 +18,50 @@ export function App() {
   )
 }
 
+/**
+ * Layout structure (top to bottom):
+ *
+ * ┌─ StatusBar ─────────────────────────────────────┐  ← flexShrink=0
+ * ├──────────────────────────────────────────────────┤
+ * │ Sidebar │  Content (fills remaining space)       │  ← flexGrow=1, minHeight=0
+ * ├──────────────────────────────────────────────────┤
+ * └─ CommandBar ─────────────────────────────────────┘  ← flexShrink=0
+ *
+ * Overlays (absolute positioned, rendered on top):
+ *   - Toast:  bottom-center, overlays CommandBar
+ *   - Palette: full-screen overlay, always on top
+ */
 function AppInner() {
   const { state } = useTui()
 
   return (
-    <Box flexDirection="column" height="100%">
+    <Box flexDirection="column" height="100%" position="relative">
       <KeyboardHandler />
 
-      <StatusBar />
+      {/* ── Fixed header ── */}
+      <Box flexShrink={0}>
+        <StatusBar />
+      </Box>
 
-      <Box flexGrow={1} flexDirection="row">
+      {/* ── Main area — fills remaining space ── */}
+      <Box
+        flexGrow={1}
+        flexDirection="row"
+        minHeight={0}
+      >
         <Sidebar />
-        <Box flexGrow={1}>
+        <Box flexGrow={1} minWidth={0} minHeight={0}>
           <CurrentScreen />
         </Box>
       </Box>
 
-      <CommandBar />
+      {/* ── Fixed footer ── */}
+      <Box flexShrink={0}>
+        <CommandBar />
+      </Box>
 
+      {/* ── Overlays (outside document flow) ── */}
       <Toast />
-
       {state.paletteOpen && <CommandPalette />}
     </Box>
   )

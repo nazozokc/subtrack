@@ -3,6 +3,7 @@ import Gradient from "ink-gradient"
 import { getSubscriptions, getSubscription, updateSubscription } from "../../db.ts"
 import { useTui, type SortField } from "../context/app-context.tsx"
 import type { Status } from "../../types.ts"
+import { SIDEBAR_WIDTH } from "../types.ts"
 import { useMemo, useEffect } from "react"
 import { formatPrice } from "../../price.ts"
 
@@ -81,11 +82,11 @@ export function ListScreen() {
 
   const { sortField, sortDesc } = state
 
-  const sidebarWidth = 22
-  const availableWidth = Math.max(40, termCols - sidebarWidth - 2) // -2 for sidebar border + screen padding
+  const availableWidth = Math.max(40, termCols - SIDEBAR_WIDTH - 2) // -2 for sidebar border + screen padding
+  const LAYOUT_OVERHEAD = 2  // StatusBar + CommandBar rows outside ListScreen
   const headerHeight = 4
   const footerHeight = 3
-  const availableHeight = Math.max(5, termRows - headerHeight - footerHeight)
+  const availableHeight = Math.max(5, termRows - LAYOUT_OVERHEAD - headerHeight - footerHeight)
 
   const widths = calcWidths(availableWidth)
 

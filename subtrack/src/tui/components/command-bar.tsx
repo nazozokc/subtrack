@@ -63,7 +63,7 @@ export function CommandBar() {
     )
   }
 
-  const groups = HINT_GROUPS[state.screen]
+  const groups = HINT_GROUPS[state.screen] ?? []
 
   return (
     <Box width="100%" minHeight={1}>

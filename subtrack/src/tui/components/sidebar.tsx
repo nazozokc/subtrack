@@ -1,6 +1,7 @@
 import { Box, Text } from "ink"
 import {
   SIDEBAR_ITEMS,
+  SIDEBAR_WIDTH,
   type SidebarItem,
   type SidebarSection,
   type Screen,
@@ -57,11 +58,11 @@ export function Sidebar() {
 
   return (
     <Box
-      width={22}
+      width={SIDEBAR_WIDTH}
       flexDirection="column"
       borderStyle="round"
       borderColor={isFocused ? "cyan" : "gray"}
-      minHeight={12}
+      flexGrow={1}
     >
       {rows.map((row) => {
         if (row.kind === "head") {

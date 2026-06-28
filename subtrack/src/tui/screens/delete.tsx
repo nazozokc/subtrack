@@ -1,4 +1,4 @@
-import { Box, Text, useInput } from "ink"
+import { Box, Text, useInput, useWindowSize } from "ink"
 import { useMemo, useState, useEffect } from "react"
 import { getSubscription, deleteSubscription } from "../../db.ts"
 import { useTui, useSetFormActive } from "../context/app-context.tsx"
@@ -6,6 +6,7 @@ import { formatPrice } from "../../price.ts"
 
 export function DeleteScreen() {
   const { state, dispatch } = useTui()
+  const { columns: termCols } = useWindowSize()
   const [error, setError] = useState<string | null>(null)
   const setFormActive = useSetFormActive()
 
@@ -75,7 +76,7 @@ export function DeleteScreen() {
         paddingX={2}
         paddingY={1}
         flexDirection="column"
-        width={50}
+        width={Math.min(50, Math.max(termCols - 12, 30))}
       >
         <Box>
           <Box width={14}><Text dimColor>Name:</Text></Box>
