@@ -12,16 +12,14 @@ export async function handleTui(): Promise<void> {
     instance = render(<App />, {
       exitOnCtrlC: true,
       patchConsole: true,
+      alternateScreen: true,
     })
     await instance.waitUntilExit()
   } catch {
     // App exited with an error — ignore for clean exit
   } finally {
-    // Clear Ink's output and restore terminal
-    try {
-      instance?.clear()
-    } finally {
-      consola.level = prevLevel
-    }
+    consola.level = prevLevel
+    // Clear screen after exiting alternate screen buffer
+    process.stdout.write("\x1b[2J\x1b[H")
   }
 }
