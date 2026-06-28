@@ -4,6 +4,8 @@ import { AppProvider, useTui } from "./context/app-context.tsx"
 import { Sidebar } from "./components/sidebar.tsx"
 import { StatusBar } from "./components/status-bar.tsx"
 import { CommandBar } from "./components/command-bar.tsx"
+import { Toast } from "./components/toast.tsx"
+import { CommandPalette } from "./components/command-palette.tsx"
 import { ListScreen } from "./screens/list.tsx"
 import { AddScreen } from "./screens/add.tsx"
 import { EditScreen } from "./screens/edit.tsx"
@@ -89,6 +91,12 @@ function KeyboardHandler() {
       }
 
       // ── NORMAL mode ──
+
+      // Ctrl+P — command palette
+      if (key.ctrl && input === "p") {
+        dispatch({ type: "SET_PALETTE_OPEN", open: true })
+        return
+      }
 
       // : — enter command mode
       if (input === ":") {
@@ -277,9 +285,21 @@ function KeyboardHandler() {
                   paused: "cancelled",
                   cancelled: "active",
                 }
+                const label: Record<Status, string> = {
+                  active: "Active",
+                  paused: "Paused",
+                  cancelled: "Cancelled",
+                }
                 const newStatus = cycle[sub.status]
                 updateSubscription(sub.id, { status: newStatus })
                 dispatch({ type: "INCREMENT_REFRESH_KEY" })
+                dispatch({
+                  type: "SET_TOAST",
+                  toast: {
+                    message: `${sub.name} → ${label[newStatus]}`,
+                    type: "info",
+                  },
+                })
               }
               return
             }
@@ -318,7 +338,7 @@ function KeyboardHandler() {
         }
       }
     },
-    { isActive: !state.formActive },
+    { isActive: !state.formActive && !state.paletteOpen },
   )
 
   return null
@@ -385,7 +405,11 @@ function AppInner() {
         </Box>
       </Box>
 
+      <Toast />
+
       <CommandBar />
+
+      {state.paletteOpen && <CommandPalette />}
     </Box>
   )
 }

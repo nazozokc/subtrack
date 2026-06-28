@@ -1,7 +1,46 @@
 import { Box, Text } from "ink"
 import Gradient from "ink-gradient"
 import { useTui } from "../context/app-context.tsx"
-import { SCREEN_TITLES } from "../types.ts"
+import type { Screen } from "../types.ts"
+
+const SCREEN_LABELS: Record<Screen, string> = {
+  list: "List",
+  add: "Add",
+  edit: "Edit",
+  delete: "Delete",
+  detail: "Detail",
+  reports: "Reports",
+  config: "Config",
+  tools: "Tools",
+  help: "Help",
+}
+
+function Breadcrumb({ history, current }: { history: Screen[]; current: Screen }) {
+  // Build breadcrumb trail: unique screens in order, last 3 max + current
+  const trail: string[] = []
+  const seen = new Set<string>()
+  for (const s of history) {
+    const label = SCREEN_LABELS[s]
+    if (!seen.has(label) && label !== SCREEN_LABELS[current]) {
+      trail.push(label)
+      seen.add(label)
+    }
+  }
+  // Keep only last 3
+  const displayTrail = trail.slice(-3)
+
+  return (
+    <Text dimColor>
+      {" "}
+      {displayTrail.map((l) => (
+        <Text key={l} dimColor>
+          {l} <Text bold color="gray">›</Text>{" "}
+        </Text>
+      ))}
+      <Text bold color="white">{SCREEN_LABELS[current]}</Text>{" "}
+    </Text>
+  )
+}
 
 export function StatusBar() {
   const { state } = useTui()
@@ -15,7 +54,7 @@ export function StatusBar() {
       </Box>
 
       <Box>
-        <Text dimColor> {SCREEN_TITLES[state.screen]} </Text>
+        <Breadcrumb history={state.history} current={state.screen} />
       </Box>
 
       {state.filterText && (

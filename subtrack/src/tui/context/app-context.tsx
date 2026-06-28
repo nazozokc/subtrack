@@ -9,6 +9,11 @@ import type { Screen, Mode, Focus, ReportsTab, ToolsTab } from "../types.ts"
 
 export type SortField = "name" | "price" | "cycle" | "status" | "id"
 
+export type ToastInfo = {
+  message: string
+  type: "success" | "error" | "info"
+}
+
 export type AppState = {
   screen: Screen
   mode: Mode
@@ -34,6 +39,14 @@ export type AppState = {
   sortField: SortField
   /** Sort direction */
   sortDesc: boolean
+  /** Toast notification (auto-clears after timeout) */
+  toast: ToastInfo | null
+  /** Command palette open */
+  paletteOpen: boolean
+  /** Command palette search query */
+  paletteQuery: string
+  /** Command palette selection index */
+  paletteIndex: number
 }
 
 export type AppAction =
@@ -53,6 +66,11 @@ export type AppAction =
   | { type: "MULTI_SELECT_CLEAR" }
   | { type: "INCREMENT_REFRESH_KEY" }
   | { type: "SET_SORT" }
+  | { type: "SET_TOAST"; toast: ToastInfo | null }
+  | { type: "CLEAR_TOAST" }
+  | { type: "SET_PALETTE_OPEN"; open: boolean }
+  | { type: "SET_PALETTE_QUERY"; query: string }
+  | { type: "SET_PALETTE_INDEX"; index: number }
 
 const initialState: AppState = {
   screen: "list",
@@ -70,6 +88,10 @@ const initialState: AppState = {
   refreshKey: 0,
   sortField: "name",
   sortDesc: false,
+  toast: null,
+  paletteOpen: false,
+  paletteQuery: "",
+  paletteIndex: 0,
 }
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -146,6 +168,21 @@ function appReducer(state: AppState, action: AppAction): AppState {
       }
       return { ...state, sortField: next, sortDesc: false }
     }
+    case "SET_TOAST":
+      return { ...state, toast: action.toast }
+    case "CLEAR_TOAST":
+      return { ...state, toast: null }
+    case "SET_PALETTE_OPEN":
+      return {
+        ...state,
+        paletteOpen: action.open,
+        paletteQuery: action.open ? state.paletteQuery : "",
+        paletteIndex: 0,
+      }
+    case "SET_PALETTE_QUERY":
+      return { ...state, paletteQuery: action.query, paletteIndex: 0 }
+    case "SET_PALETTE_INDEX":
+      return { ...state, paletteIndex: action.index }
     default:
       return state
   }

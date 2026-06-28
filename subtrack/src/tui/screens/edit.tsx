@@ -27,6 +27,10 @@ export function EditScreen() {
       updateSubscription(sub.id, data)
       dispatch({ type: "GO_BACK" })
       dispatch({ type: "SET_SELECTED_ID", id: null })
+      dispatch({
+        type: "SET_TOAST",
+        toast: { message: `Updated ${data.name}`, type: "success" },
+      })
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     }

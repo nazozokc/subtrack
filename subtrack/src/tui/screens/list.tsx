@@ -119,7 +119,7 @@ export function ListScreen() {
     }
   }, [clampedListIndex, subs, dispatch])
 
-  // Scroll position
+  // Scroll position + visual scrollbar
   const maxVisible = Math.max(1, availableHeight - 2)
   const scrollPosition = subs.length > 0
     ? `${clampedListIndex + 1}/${subs.length}`
@@ -129,6 +129,15 @@ export function ListScreen() {
     Math.min(clampedListIndex - Math.floor(maxVisible / 2), Math.max(0, subs.length - maxVisible)),
   )
   const visibleSubs = subs.slice(scrollOffset, scrollOffset + maxVisible)
+
+  // Visual scrollbar (horizontal, like a progress bar)
+  const scrollBarWidth = 8
+  const scrollBar = useMemo(() => {
+    if (subs.length <= maxVisible) return "        ".split("").map(() => "░").join("")
+    const pos = clampedListIndex / (subs.length - 1)
+    const filled = Math.round(pos * scrollBarWidth)
+    return "▓".repeat(filled) + "░".repeat(scrollBarWidth - filled)
+  }, [clampedListIndex, subs.length, maxVisible])
 
   // Totals by currency
   const totals = useMemo(() => {
@@ -171,9 +180,12 @@ export function ListScreen() {
         </Box>
         <Box>
           {scrollPosition && (
-            <Text dimColor>
-              {scrollPosition}{" "}
-            </Text>
+            <>
+              <Text color="gray">{scrollBar}</Text>
+              <Text dimColor>
+                {" "}{scrollPosition}{" "}
+              </Text>
+            </>
           )}
         </Box>
       </Box>
@@ -198,19 +210,37 @@ export function ListScreen() {
       {/* Data rows */}
       {visibleSubs.length === 0 ? (
         <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
-          <Text dimColor>
-            {state.filterText
-              ? "No subscriptions match filter"
-              : "No subscriptions yet"}
-          </Text>
-          {!state.filterText && (
+          {state.filterText ? (
             <>
-              <Text color="cyan">
-                {" "}a  Add your first subscription
-              </Text>
-              <Text dimColor>
-                {" "}Enter  View details
-              </Text>
+              <Text dimColor>🔍 No subscriptions match filter</Text>
+              <Box marginTop={1}>
+                <Text color="blue">  Esc or Ctrl+L</Text>
+                <Text dimColor>  Clear filter</Text>
+              </Box>
+            </>
+          ) : (
+            <>
+              <Box
+                borderStyle="round"
+                borderColor="cyan"
+                paddingX={2}
+                paddingY={1}
+                flexDirection="column"
+                alignItems="center"
+              >
+                <Text bold color="cyan">📋 No subscriptions yet</Text>
+                <Box marginTop={1}>
+                  <Text dimColor>
+                    Press  <Text bold color="green">a</Text>  to add your first subscription
+                  </Text>
+                </Box>
+                <Box marginTop={1}>
+                  <Text dimColor>
+                    Or use  <Text bold color="green">Ctrl+P</Text>  to open command palette
+                  </Text>
+                </Box>
+
+              </Box>
             </>
           )}
         </Box>

@@ -14,6 +14,10 @@ export function AddScreen() {
       writeSubscription(data)
       dispatch({ type: "GO_BACK" })
       dispatch({ type: "SET_LIST_INDEX", index: 0 })
+      dispatch({
+        type: "SET_TOAST",
+        toast: { message: `Added ${data.name}`, type: "success" },
+      })
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     }

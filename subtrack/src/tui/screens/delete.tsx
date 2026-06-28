@@ -25,6 +25,10 @@ export function DeleteScreen() {
       if (sub) {
         try {
           deleteSubscription(sub.id)
+          dispatch({
+            type: "SET_TOAST",
+            toast: { message: `Deleted ${sub.name}`, type: "success" },
+          })
         } catch (e: unknown) {
           setError(e instanceof Error ? e.message : String(e))
           return
