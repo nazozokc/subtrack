@@ -52,7 +52,7 @@ export function CommandBar() {
   if (state.mode === "COMMAND") {
     const cmdText = state.filterText || ""
     return (
-      <Box width="100%" borderStyle="single" borderColor="yellow" minHeight={1}>
+      <Box width="100%" minHeight={1}>
         <Text bold color="yellow">
           :{cmdText}
         </Text>
@@ -66,7 +66,7 @@ export function CommandBar() {
   const groups = HINT_GROUPS[state.screen]
 
   return (
-    <Box width="100%" borderStyle="single" borderColor="gray" minHeight={1}>
+    <Box width="100%" minHeight={1}>
       <Box paddingLeft={1} gap={1}>
         {groups.map((g) => (
           <Box key={g.label}>

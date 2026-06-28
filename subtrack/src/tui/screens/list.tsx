@@ -82,10 +82,9 @@ export function ListScreen() {
   const { sortField, sortDesc } = state
 
   const sidebarWidth = 22
-  const availableWidth = Math.max(40, termCols - sidebarWidth - 2) // -2 for borders
+  const availableWidth = Math.max(40, termCols - sidebarWidth - 2) // -2 for sidebar border + screen padding
   const headerHeight = 4
   const footerHeight = 3
-  // Filter is now rendered inline in the title bar, not as a separate row
   const availableHeight = Math.max(5, termRows - headerHeight - footerHeight)
 
   const widths = calcWidths(availableWidth)
