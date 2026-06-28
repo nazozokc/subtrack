@@ -2,79 +2,83 @@ import { Box, Text } from "ink"
 import { useTui } from "../context/app-context.tsx"
 import type { Screen } from "../types.ts"
 
-const HINT_TEXT: Record<Screen, string> = {
-  list: "j↓ k↑ /filter :cmd ?help q:quit",
-  search: "j↓ k↑ Enter:open :cmd ?help q:quit",
-  add: "Tab:next Enter:save Esc:cancel",
-  edit: "Tab:next Enter:save Esc:cancel",
-  delete: "y:delete n:cancel",
-  tags: "j↓ k↑ Enter:filter",
-  "tag-manage": "j↓ k↑ Enter:manage",
-  trials: "j↓ k↑ Enter:detail a:add",
-  "trial-add": "Tab:next Enter:save Esc:cancel",
-  "trial-expiring": "j↓ k↑ Enter:detail",
-  bulk: "Tab:select Enter:execute",
-  summary: "q:quit",
-  payment: "q:quit",
-  upcoming: "j↓ k↑",
-  analytics: "q:quit",
-  compare: "q:quit",
-  forecast: "q:quit",
-  config: "j↓ k↑ e:edit",
-  usage: "j↓ k↑ d:delete",
-  export: "Enter:export",
-  import: "Enter:import",
-  backup: "Enter:backup",
-  restore: "j↓ k↑ Enter:restore",
-  help: "q:quit",
+type HintGroup = {
+  label: string
+  color: string
+  hints: string
+}
+
+const HINT_GROUPS: Record<Screen, HintGroup[]> = {
+  list: [
+    { label: "Nav", color: "cyan", hints: "j/k · g/G · /" },
+    { label: "Action", color: "green", hints: "a:add · e:edit · d:del · Enter:detail" },
+    { label: "Data", color: "yellow", hints: "s:sort · S:status · v:sel" },
+    { label: "System", color: "blue", hints: "r:rpt · c:cfg · R:ref · ?:help · q:quit" },
+  ],
+  add: [
+    { label: "Form", color: "green", hints: "Enter:next · Esc:cancel" },
+  ],
+  edit: [
+    { label: "Form", color: "green", hints: "Enter:next · Esc:cancel" },
+  ],
+  delete: [
+    { label: "Confirm", color: "red", hints: "y:delete · n:cancel" },
+  ],
+  detail: [
+    { label: "Action", color: "green", hints: "e:edit · d:delete" },
+    { label: "View", color: "cyan", hints: "r:raw" },
+    { label: "Back", color: "gray", hints: "q/Esc:back" },
+  ],
+  reports: [
+    { label: "Tab", color: "cyan", hints: "← → · h/l" },
+    { label: "Back", color: "gray", hints: "Esc:back" },
+  ],
+  config: [
+    { label: "Edit", color: "green", hints: "1-9:edit · Enter:save" },
+    { label: "Back", color: "gray", hints: "Esc:back" },
+  ],
+  tools: [
+    { label: "Tab", color: "cyan", hints: "← → · h/l" },
+    { label: "Back", color: "gray", hints: "Esc:back" },
+  ],
+  help: [
+    { label: "Back", color: "gray", hints: "Esc/q:back" },
+  ],
 }
 
 export function CommandBar() {
-  const { state, dispatch } = useTui()
-
-  if (state.confirmQuit) {
-    return (
-      <Box width="100%" borderStyle="single" borderColor="yellow">
-        <Text bold color="yellow">
-          {" "}Quit subtrack TUI?{" "}
-        </Text>
-        <Text bold color="green">
-          y
-        </Text>
-        <Text>
-          /N{" "}
-        </Text>
-      </Box>
-    )
-  }
+  const { state } = useTui()
 
   if (state.mode === "COMMAND") {
+    const cmdText = state.filterText || ""
     return (
-      <Box width="100%" borderStyle="single" borderColor="yellow">
+      <Box width="100%" borderStyle="single" borderColor="yellow" minHeight={1}>
         <Text bold color="yellow">
-          :{state.filterText}
+          :{cmdText}
         </Text>
-        <Text dimColor>█</Text>
+        <Text bold color="yellow">
+          ▎
+        </Text>
       </Box>
     )
   }
 
-  if (state.mode === "SEARCH") {
-    return (
-      <Box width="100%" borderStyle="single" borderColor="blue">
-        <Text bold color="blue">
-          /{state.filterText}
-        </Text>
-        <Text dimColor>█</Text>
-      </Box>
-    )
-  }
+  const groups = HINT_GROUPS[state.screen]
 
   return (
-    <Box width="100%" borderStyle="single" borderColor="gray">
-      <Text dimColor>
-        {" "}{HINT_TEXT[state.screen]}{" "}
-      </Text>
+    <Box width="100%" borderStyle="single" borderColor="gray" minHeight={1}>
+      <Box paddingLeft={1} gap={1}>
+        {groups.map((g) => (
+          <Box key={g.label}>
+            <Text color={g.color} bold>
+              {g.label}
+            </Text>
+            <Text dimColor>
+              : {g.hints}
+            </Text>
+          </Box>
+        ))}
+      </Box>
     </Box>
   )
 }

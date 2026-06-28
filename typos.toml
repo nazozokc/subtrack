@@ -1,2 +1,6 @@
 [files]
 extend-exclude = ["pnpm-lock.yaml", "dist/"]
+
+[default.extend-words]
+# ink-gradient gradient name — false positive for "crystal"
+cristal = "cristal"

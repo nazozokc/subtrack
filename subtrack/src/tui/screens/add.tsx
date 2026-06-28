@@ -12,15 +12,19 @@ export function AddScreen() {
   const handleSave = (data: AddSharedArgs) => {
     try {
       writeSubscription(data)
-      dispatch({ type: "SET_SCREEN", screen: "list" })
+      dispatch({ type: "GO_BACK" })
       dispatch({ type: "SET_LIST_INDEX", index: 0 })
+      dispatch({
+        type: "SET_TOAST",
+        toast: { message: `Added ${data.name}`, type: "success" },
+      })
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     }
   }
 
   const handleCancel = () => {
-    dispatch({ type: "SET_SCREEN", screen: "list" })
+    dispatch({ type: "GO_BACK" })
   }
 
   return (

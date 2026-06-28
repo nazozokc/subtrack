@@ -503,6 +503,31 @@ test("getSubscriptions falls back to id order for invalid sort field", async () 
   expect(subs[1].name).toBe("A")
 })
 
+test("getSubscriptions sorts by status ascending", async () => {
+  const db = await import("../db.ts")
+  // status alpha order: active < cancelled < paused
+  db.writeSubscription({ name: "Mid", price: 100, currency: "USD", cycle: "monthly", status: "cancelled", tags: [] })
+  db.writeSubscription({ name: "First", price: 100, currency: "USD", cycle: "monthly", status: "active", tags: [] })
+  db.writeSubscription({ name: "Last", price: 100, currency: "USD", cycle: "monthly", status: "paused", tags: [] })
+
+  const subs = db.getSubscriptions("status", false)
+  expect(subs[0].status).toBe("active")
+  expect(subs[1].status).toBe("cancelled")
+  expect(subs[2].status).toBe("paused")
+})
+
+test("getSubscriptions sorts by status descending", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({ name: "Mid", price: 100, currency: "USD", cycle: "monthly", status: "cancelled", tags: [] })
+  db.writeSubscription({ name: "First", price: 100, currency: "USD", cycle: "monthly", status: "active", tags: [] })
+  db.writeSubscription({ name: "Last", price: 100, currency: "USD", cycle: "monthly", status: "paused", tags: [] })
+
+  const subs = db.getSubscriptions("status", true)
+  expect(subs[0].status).toBe("paused")
+  expect(subs[1].status).toBe("cancelled")
+  expect(subs[2].status).toBe("active")
+})
+
 // ── getSubscription ───────────────────────────────────────
 
 test("getSubscription returns a single subscription by id", async () => {

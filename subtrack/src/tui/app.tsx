@@ -1,54 +1,23 @@
 import { Box, Text, useInput, useApp } from "ink"
+import type { AppState, AppAction } from "./context/app-context.tsx"
 import { AppProvider, useTui } from "./context/app-context.tsx"
 import { Sidebar } from "./components/sidebar.tsx"
 import { StatusBar } from "./components/status-bar.tsx"
 import { CommandBar } from "./components/command-bar.tsx"
+import { Toast } from "./components/toast.tsx"
+import { CommandPalette } from "./components/command-palette.tsx"
 import { ListScreen } from "./screens/list.tsx"
 import { AddScreen } from "./screens/add.tsx"
 import { EditScreen } from "./screens/edit.tsx"
 import { DeleteScreen } from "./screens/delete.tsx"
-import { SearchScreen } from "./screens/search.tsx"
-import { TagsScreen } from "./screens/tags.tsx"
-import { TagManageScreen } from "./screens/tag-manage.tsx"
-import { TrialsScreen } from "./screens/trials.tsx"
-import { TrialAddScreen } from "./screens/trial-add.tsx"
-import { TrialExpiringScreen } from "./screens/trial-expiring.tsx"
-import { BulkScreen } from "./screens/bulk.tsx"
-import { SummaryScreen } from "./screens/summary.tsx"
-import { PaymentScreen } from "./screens/payment.tsx"
-import { UpcomingScreen } from "./screens/upcoming.tsx"
-import { AnalyticsScreen } from "./screens/analytics.tsx"
-import { CompareScreen } from "./screens/compare.tsx"
-import { ForecastScreen } from "./screens/forecast.tsx"
+import { DetailScreen } from "./screens/detail.tsx"
+import { ReportsScreen } from "./screens/reports.tsx"
 import { ConfigScreen } from "./screens/config.tsx"
-import { UsageScreen } from "./screens/usage.tsx"
-import { ExportScreen } from "./screens/export.tsx"
-import { ImportScreen } from "./screens/import.tsx"
-import { BackupScreen } from "./screens/backup.tsx"
-import { RestoreScreen } from "./screens/restore.tsx"
+import { ToolsScreen } from "./screens/tools.tsx"
 import { HelpScreen } from "./screens/help.tsx"
-import { SIDEBAR_ITEMS, SCREEN_TITLES } from "./types.ts"
-import { useRef, useEffect } from "react"
-import { useMouse } from "./hooks/use-mouse.ts"
-import type { Screen } from "./types.ts"
-
-// ── Placeholder for unimplemented screens ──────────────
-
-function PlaceholderScreen({ screen }: { screen: Screen }) {
-  return (
-    <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
-      <Text bold color="cyan">
-        {SCREEN_TITLES[screen]}
-      </Text>
-      <Text dimColor>
-        Not yet implemented — coming in a future update
-      </Text>
-      <Text dimColor>
-        Press Esc to go back
-      </Text>
-    </Box>
-  )
-}
+import { SIDEBAR_ITEMS, REPORT_TABS, TOOLS_TABS } from "./types.ts"
+import { getSubscription, updateSubscription } from "../db.ts"
+import type { Status } from "../types.ts"
 
 // ── Screen router ─────────────────────────────────────
 
@@ -58,438 +27,366 @@ function CurrentScreen() {
   switch (state.screen) {
     case "list":
       return <ListScreen />
-    case "search":
-      return <SearchScreen />
     case "add":
       return <AddScreen />
     case "edit":
       return <EditScreen />
     case "delete":
       return <DeleteScreen />
-    case "tags":
-      return <TagsScreen />
-    case "tag-manage":
-      return <TagManageScreen />
-    case "trials":
-      return <TrialsScreen />
-    case "trial-add":
-      return <TrialAddScreen />
-    case "trial-expiring":
-      return <TrialExpiringScreen />
-    case "bulk":
-      return <BulkScreen />
-    case "summary":
-      return <SummaryScreen />
-    case "payment":
-      return <PaymentScreen />
-    case "upcoming":
-      return <UpcomingScreen />
-    case "analytics":
-      return <AnalyticsScreen />
-    case "compare":
-      return <CompareScreen />
-    case "forecast":
-      return <ForecastScreen />
+    case "detail":
+      return <DetailScreen />
+    case "reports":
+      return <ReportsScreen />
     case "config":
       return <ConfigScreen />
-    case "usage":
-      return <UsageScreen />
-    case "export":
-      return <ExportScreen />
-    case "import":
-      return <ImportScreen />
-    case "backup":
-      return <BackupScreen />
-    case "restore":
-      return <RestoreScreen />
+    case "tools":
+      return <ToolsScreen />
     case "help":
       return <HelpScreen />
     default:
-      return <PlaceholderScreen screen={state.screen} />
+      return (
+        <Box flexGrow={1} alignItems="center" justifyContent="center">
+          <Text dimColor>Unknown screen</Text>
+        </Box>
+      )
   }
 }
 
-// ── Keyboard handler component ────────────────────────
+// ── Keyboard handler ──────────────────────────────────
 
 function KeyboardHandler() {
   const { state, dispatch } = useTui()
   const { exit } = useApp()
-  const pendingSeq = useRef<{ key: string; timer: ReturnType<typeof setTimeout> } | null>(null)
 
-  // Form screens use @inkjs/ui components or handle their own input
-  const isFormScreen =
-    state.screen === "add" ||
-    state.screen === "edit" ||
-    state.screen === "delete" ||
-    state.screen === "restore" ||
-    state.screen === "tag-manage"
-
-  useInput((input: string, key: any) => {
-    const { mode, focus, filterText, confirmQuit, sidebarIndex, selectedSubId } = state
-    if (isFormScreen) return
-
-    // ── Quit confirmation handling ──
-    if (confirmQuit) {
-      if (input === "y" || input === "Y") {
-        exit()
-      } else {
-        dispatch({ type: "SET_CONFIRM_QUIT", value: false })
-      }
-      return
-    }
-
-    // ── MODE: COMMAND ──
-    if (mode === "COMMAND") {
-      if (key.escape) {
-        dispatch({ type: "SET_MODE", mode: "NORMAL" })
-        return
-      }
-      if (key.return) {
-        executeCommand(filterText, state, dispatch, exit)
-        return
-      }
-      if (key.backspace) {
-        dispatch({ type: "SET_FILTER_TEXT", value: filterText.slice(0, -1) })
-        return
-      }
-      if (input.length === 1) {
-        dispatch({ type: "SET_FILTER_TEXT", value: filterText + input })
-      }
-      return
-    }
-
-    // ── MODE: SEARCH ──
-    if (mode === "SEARCH") {
-      if (key.escape) {
-        dispatch({ type: "SET_MODE", mode: "NORMAL" })
-        dispatch({ type: "SET_FILTER_TEXT", value: "" })
-        return
-      }
-      if (key.return) {
-        // Apply filter and return to normal mode
-        dispatch({ type: "SET_MODE", mode: "NORMAL" })
-        return
-      }
-      if (key.backspace) {
-        dispatch({ type: "SET_FILTER_TEXT", value: filterText.slice(0, -1) })
-        return
-      }
-      if (input.length === 1) {
-        dispatch({ type: "SET_FILTER_TEXT", value: filterText + input })
-      }
-      return
-    }
-
-    // ── MODE: NORMAL ──
-
-    // Handle two-key sequences (gg, dd)
-    if (!key.shift && !key.ctrl && !key.meta && (input === "g" || input === "d")) {
-      if (pendingSeq.current?.key === input) {
-        clearTimeout(pendingSeq.current.timer)
-        pendingSeq.current = null
-        if (input === "g") {
-          dispatch({ type: "SET_LIST_INDEX", index: 0 })
-        } else if (input === "d" && selectedSubId !== null) {
-          dispatch({ type: "SET_EDIT_ID", id: selectedSubId })
-          dispatch({ type: "SET_SCREEN", screen: "delete" })
+  useInput(
+    (input: string, key) => {
+      // ── COMMAND mode ──
+      if (state.mode === "COMMAND") {
+        if (key.escape) {
+          dispatch({
+            type: "SET_FILTER_TEXT",
+            value: state.filterText.startsWith("/") ? "" : state.filterText,
+          })
+          dispatch({ type: "SET_MODE", mode: "NORMAL" })
+          return
+        }
+        if (key.return) {
+          executeCommand(state.filterText, state, dispatch, exit)
+          return
+        }
+        if (key.backspace) {
+          dispatch({
+            type: "SET_FILTER_TEXT",
+            value: state.filterText.slice(0, -1),
+          })
+          return
+        }
+        if (input.length === 1) {
+          dispatch({
+            type: "SET_FILTER_TEXT",
+            value: state.filterText + input,
+          })
         }
         return
       }
-      clearTimeout(pendingSeq.current?.timer)
-      pendingSeq.current = {
-        key: input,
-        timer: setTimeout(() => {
-          pendingSeq.current = null
-        }, 400),
+
+      // ── NORMAL mode ──
+
+      // Ctrl+P — command palette
+      if (key.ctrl && input === "p") {
+        dispatch({ type: "SET_PALETTE_OPEN", open: true })
+        return
       }
-      return
-    }
 
-    // Clear pending sequence on other keys
-    if (pendingSeq.current) {
-      clearTimeout(pendingSeq.current.timer)
-      pendingSeq.current = null
-    }
+      // : — enter command mode
+      if (input === ":") {
+        dispatch({ type: "SET_MODE", mode: "COMMAND" })
+        dispatch({ type: "SET_FILTER_TEXT", value: "" })
+        return
+      }
 
-    // Arrow keys
-    if (key.upArrow) { moveUp(focus, state, dispatch); return }
-    if (key.downArrow) { moveDown(focus, state, dispatch); return }
-    if (key.pageUp) { pageUp(state, dispatch); return }
-    if (key.pageDown) { pageDown(state, dispatch); return }
-    if (key.home) { dispatch({ type: "SET_LIST_INDEX", index: 0 }); return }
-    if (key.end) { dispatch({ type: "SET_LIST_INDEX", index: getMaxIndex() }); return }
+      // q — quit on list, go back on other screens
+      if (input === "q") {
+        if (state.screen === "list") {
+          exit()
+          return
+        }
+        if (state.history.length > 0) {
+          dispatch({ type: "GO_BACK" })
+          return
+        }
+        exit()
+        return
+      }
 
-    // Vim navigation
-    if (input === "k" && !key.ctrl) { moveUp(focus, state, dispatch); return }
-    if (input === "j" && !key.ctrl) { moveDown(focus, state, dispatch); return }
-    if (input === "h") { dispatch({ type: "SET_FOCUS", focus: "sidebar" }); return }
-    if (input === "l") { dispatch({ type: "SET_FOCUS", focus: "content" }); return }
+      // Esc — go back
+      if (key.escape) {
+        if (state.focus === "sidebar") {
+          dispatch({ type: "SET_FOCUS", focus: "content" })
+        } else if (state.history.length > 0) {
+          dispatch({ type: "GO_BACK" })
+        } else if (state.screen !== "list") {
+          dispatch({ type: "SET_SCREEN", screen: "list" })
+          dispatch({ type: "SET_LIST_INDEX", index: 0 })
+        }
+        return
+      }
 
-    // G (Shift+g) — go to bottom
-    if (input === "G" || (input === "g" && key.shift)) {
-      dispatch({ type: "SET_LIST_INDEX", index: getMaxIndex() })
-      return
-    }
+      // Tab — toggle focus
+      if (key.tab) {
+        dispatch({ type: "TOGGLE_FOCUS" })
+        return
+      }
 
-    // Enter — select
-    if (key.return) {
-      if (focus === "sidebar") {
-        const item = SIDEBAR_ITEMS[sidebarIndex]
+      // Ctrl+l — clear filter (vim-like)
+      if (key.ctrl && input === "l") {
+        if (state.filterText) {
+          dispatch({ type: "SET_FILTER_TEXT", value: "" })
+        }
+        return
+      }
+
+      // Arrow / vim navigation for list/config screens (content focus only)
+      if (state.focus === "content" && (state.screen === "list" || state.screen === "config")) {
+        if (key.upArrow || input === "k") {
+          dispatch({ type: "SET_LIST_INDEX", index: Math.max(0, state.listIndex - 1) })
+          return
+        }
+        if (key.downArrow || input === "j") {
+          dispatch({ type: "SET_LIST_INDEX", index: state.listIndex + 1 })
+          return
+        }
+        if (key.pageUp || (key.ctrl && input === "u")) {
+          const jump = Math.max(1, Math.floor((process.stdout.rows ?? 24) / 2))
+          dispatch({ type: "SET_LIST_INDEX", index: Math.max(0, state.listIndex - jump) })
+          return
+        }
+        if (key.pageDown || (key.ctrl && input === "d")) {
+          const jump = Math.max(1, Math.floor((process.stdout.rows ?? 24) / 2))
+          dispatch({ type: "SET_LIST_INDEX", index: state.listIndex + jump })
+          return
+        }
+        if (key.home || input === "g") {
+          dispatch({ type: "SET_LIST_INDEX", index: 0 })
+          return
+        }
+        if (key.end || input === "G") {
+          dispatch({ type: "SET_LIST_INDEX", index: Number.MAX_SAFE_INTEGER })
+          return
+        }
+      }
+
+      // Sidebar navigation
+      if (key.upArrow || input === "k") {
+        if (state.focus === "sidebar") {
+          dispatch({ type: "SET_SIDEBAR_INDEX", index: Math.max(0, state.sidebarIndex - 1) })
+          return
+        }
+      }
+      if (key.downArrow || input === "j") {
+        if (state.focus === "sidebar") {
+          dispatch({
+            type: "SET_SIDEBAR_INDEX",
+            index: Math.min(SIDEBAR_ITEMS.length - 1, state.sidebarIndex + 1),
+          })
+          return
+        }
+      }
+
+      // 1-6 — sidebar shortcuts (not on config, which uses numbers for editing)
+      if (/^[1-6]$/.test(input) && state.screen !== "config") {
+        const idx = Number(input) - 1
+        const item = SIDEBAR_ITEMS[idx]
         if (item) {
           dispatch({ type: "SET_SCREEN", screen: item.screen })
           dispatch({ type: "SET_LIST_INDEX", index: 0 })
         }
+        return
       }
-      return
-    }
 
-    // Escape — back / navigate to list
-    if (key.escape) {
-      if (focus === "sidebar") {
-        dispatch({ type: "SET_FOCUS", focus: "content" })
-      } else if (state.screen !== "list") {
-        dispatch({ type: "SET_SCREEN", screen: "list" })
-        dispatch({ type: "SET_LIST_INDEX", index: 0 })
-      }
-      return
-    }
-
-    // Tab — toggle focus
-    if (key.tab) {
-      dispatch({ type: "TOGGLE_FOCUS" })
-      return
-    }
-
-    // q — quit (with confirmation)
-    if (input === "q" && !key.ctrl) {
-      dispatch({ type: "SET_CONFIRM_QUIT", value: true })
-      return
-    }
-
-    // a — add
-    if (input === "a") {
-      dispatch({ type: "SET_SCREEN", screen: "add" })
-      dispatch({ type: "SET_LIST_INDEX", index: 0 })
-      return
-    }
-
-    // e — edit selected subscription
-    if (input === "e" && selectedSubId !== null) {
-      dispatch({ type: "SET_EDIT_ID", id: selectedSubId })
-      dispatch({ type: "SET_SCREEN", screen: "edit" })
-      return
-    }
-
-    // r — refresh
-    if (input === "r") {
-      // Force re-render by toggling through a dummy state
-      dispatch({ type: "SET_LIST_INDEX", index: state.listIndex })
-      return
-    }
-
-    // n / N — next/prev search result (placeholder)
-    if (input === "n" && !key.shift) {
-      dispatch({ type: "SET_LIST_INDEX", index: Math.min(state.listIndex + 1, getMaxIndex()) })
-      return
-    }
-    if (input === "N" || (input === "n" && key.shift)) {
-      dispatch({ type: "SET_LIST_INDEX", index: Math.max(state.listIndex - 1, 0) })
-      return
-    }
-
-    // ? — help
-    if (input === "?") {
-      const helpItem = SIDEBAR_ITEMS.find((i) => i.screen === "help")
-      if (helpItem) {
+      // ? — help screen (global, any screen)
+      if (input === "?") {
         dispatch({ type: "SET_SCREEN", screen: "help" })
+        return
       }
-      return
-    }
 
-    // Ctrl+d / Ctrl+u
-    if (key.ctrl && input === "d") {
-      pageDown(state, dispatch)
-      return
-    }
-    if (key.ctrl && input === "u") {
-      pageUp(state, dispatch)
-      return
-    }
+      // h/l — focus navigation (not on tabbed screens)
+      if (input === "h" && state.screen !== "reports" && state.screen !== "tools") {
+        dispatch({ type: "SET_FOCUS", focus: "sidebar" })
+        return
+      }
+      if (input === "l" && state.screen !== "reports" && state.screen !== "tools") {
+        dispatch({ type: "SET_FOCUS", focus: "content" })
+        return
+      }
 
-    // : — enter command mode
-    if (input === ":") {
-      dispatch({ type: "SET_MODE", mode: "COMMAND" })
-      dispatch({ type: "SET_FILTER_TEXT", value: "" })
-      return
-    }
+      // Enter — select sidebar item
+      if (key.return && state.focus === "sidebar") {
+        const item = SIDEBAR_ITEMS[state.sidebarIndex]
+        if (item) {
+          dispatch({ type: "SET_SCREEN", screen: item.screen })
+          dispatch({ type: "SET_LIST_INDEX", index: 0 })
+        }
+        return
+      }
 
-    // / — enter search mode
-    if (input === "/") {
-      dispatch({ type: "SET_MODE", mode: "SEARCH" })
-      dispatch({ type: "SET_FILTER_TEXT", value: "" })
-      return
-    }
-  })
+      // ── Screen-specific shortcuts (only when focus is on content) ──
+      if (state.focus === "content") {
+        switch (state.screen) {
+          case "list": {
+            if (input === "a") {
+              dispatch({ type: "SET_SCREEN", screen: "add" })
+              return
+            }
+            if (key.return && state.selectedId !== null) {
+              dispatch({ type: "SET_SCREEN", screen: "detail" })
+              return
+            }
+            if (input === "e" && state.selectedId !== null) {
+              dispatch({ type: "SET_SCREEN", screen: "edit" })
+              return
+            }
+            if (input === "d" && state.selectedId !== null) {
+              dispatch({ type: "SET_SCREEN", screen: "delete" })
+              return
+            }
+            if (input === "/") {
+              dispatch({ type: "SET_MODE", mode: "COMMAND" })
+              dispatch({ type: "SET_FILTER_TEXT", value: "/" })
+              return
+            }
+            if (input === "v") {
+              if (state.selectedId !== null) {
+                dispatch({ type: "MULTI_SELECT_TOGGLE", id: state.selectedId })
+              }
+              return
+            }
+            if (input === "r") {
+              dispatch({ type: "SET_SCREEN", screen: "reports" })
+              return
+            }
+            if (input === "c") {
+              dispatch({ type: "SET_SCREEN", screen: "config" })
+              return
+            }
+            if (input === "R") {
+              dispatch({ type: "INCREMENT_REFRESH_KEY" })
+              return
+            }
+            if (input === "s") {
+              dispatch({ type: "SET_SORT" })
+              return
+            }
+            if (input === "S" && state.selectedId !== null) {
+              const sub = getSubscription(state.selectedId)
+              if (sub) {
+                const cycle: Record<Status, Status> = {
+                  active: "paused",
+                  paused: "cancelled",
+                  cancelled: "active",
+                }
+                const label: Record<Status, string> = {
+                  active: "Active",
+                  paused: "Paused",
+                  cancelled: "Cancelled",
+                }
+                const newStatus = cycle[sub.status]
+                try {
+                  updateSubscription(sub.id, { status: newStatus })
+                  dispatch({ type: "INCREMENT_REFRESH_KEY" })
+                  dispatch({
+                    type: "SET_TOAST",
+                    toast: {
+                      message: `${sub.name} → ${label[newStatus]}`,
+                      type: "info",
+                    },
+                  })
+                } catch (e: unknown) {
+                  dispatch({
+                    type: "SET_TOAST",
+                    toast: {
+                      message: `Failed to update ${sub.name}: ${e instanceof Error ? e.message : String(e)}`,
+                      type: "error",
+                    },
+                  })
+                }
+              }
+              return
+            }
+            break
+          }
+          case "reports": {
+            if (key.leftArrow || input === "h") {
+              const idx = REPORT_TABS.indexOf(state.reportsTab)
+              const prev = REPORT_TABS[(idx - 1 + REPORT_TABS.length) % REPORT_TABS.length]
+              dispatch({ type: "SET_REPORTS_TAB", tab: prev })
+              return
+            }
+            if (key.rightArrow || input === "l") {
+              const idx = REPORT_TABS.indexOf(state.reportsTab)
+              const next = REPORT_TABS[(idx + 1) % REPORT_TABS.length]
+              dispatch({ type: "SET_REPORTS_TAB", tab: next })
+              return
+            }
+            break
+          }
+          case "tools": {
+            if (key.leftArrow || input === "h") {
+              const idx = TOOLS_TABS.indexOf(state.toolsTab)
+              const prev = TOOLS_TABS[(idx - 1 + TOOLS_TABS.length) % TOOLS_TABS.length]
+              dispatch({ type: "SET_TOOLS_TAB", tab: prev })
+              return
+            }
+            if (key.rightArrow || input === "l") {
+              const idx = TOOLS_TABS.indexOf(state.toolsTab)
+              const next = TOOLS_TABS[(idx + 1) % TOOLS_TABS.length]
+              dispatch({ type: "SET_TOOLS_TAB", tab: next })
+              return
+            }
+            break
+          }
+        }
+      }
+    },
+    { isActive: !state.formActive && !state.paletteOpen },
+  )
 
   return null
 }
 
-// ── Helper functions ─────────────────────────────────
-
-function getMaxIndex(): number {
-  return 999999 // Will be clamped by screen
-}
-
-function moveUp(focus: string, state: any, dispatch: any) {
-  if (focus === "sidebar") {
-    const newIdx = Math.max(0, state.sidebarIndex - 1)
-    dispatch({ type: "SET_SIDEBAR_INDEX", index: newIdx })
-  } else {
-    dispatch({ type: "SET_LIST_INDEX", index: Math.max(0, state.listIndex - 1) })
-  }
-}
-
-function moveDown(focus: string, state: any, dispatch: any) {
-  if (focus === "sidebar") {
-    const newIdx = Math.min(SIDEBAR_ITEMS.length - 1, state.sidebarIndex + 1)
-    dispatch({ type: "SET_SIDEBAR_INDEX", index: newIdx })
-  } else {
-    dispatch({ type: "SET_LIST_INDEX", index: state.listIndex + 1 })
-  }
-}
-
-function pageUp(state: any, dispatch: any) {
-  const jump = Math.max(1, Math.floor((process.stdout.rows ?? 24) / 2))
-  dispatch({ type: "SET_LIST_INDEX", index: Math.max(0, state.listIndex - jump) })
-}
-
-function pageDown(state: any, dispatch: any) {
-  const jump = Math.max(1, Math.floor((process.stdout.rows ?? 24) / 2))
-  dispatch({ type: "SET_LIST_INDEX", index: state.listIndex + jump })
-}
+// ── Commands ─────────────────────────────────────────
 
 function executeCommand(
   cmd: string,
-  state: any,
-  dispatch: any,
+  state: AppState,
+  dispatch: React.Dispatch<AppAction>,
   exit: (error?: Error | unknown) => void,
 ) {
   const trimmed = cmd.trim()
 
-  if (trimmed === "q" || trimmed === "q!") {
-    exit()
-    return
-  }
-
-  if (trimmed === "help") {
-    const helpItem = SIDEBAR_ITEMS.find((i) => i.screen === "help")
-    if (helpItem) dispatch({ type: "SET_SCREEN", screen: "help" })
-    dispatch({ type: "SET_MODE", mode: "NORMAL" })
-    return
-  }
-
-  if (trimmed.startsWith("sort ")) {
-    const field = trimmed.slice(5).trim()
-    if (["name", "price", "currency", "cycle", "status"].includes(field)) {
-      // TODO: pass sort field to list screen
-      dispatch({ type: "SET_MODE", mode: "NORMAL" })
-      return
-    }
-  }
-
-  if (trimmed.startsWith("filter ")) {
-    const query = trimmed.slice(7).trim()
+  if (trimmed.startsWith("/")) {
+    const query = trimmed.slice(1)
     dispatch({ type: "SET_FILTER_TEXT", value: query })
     dispatch({ type: "SET_MODE", mode: "NORMAL" })
     return
   }
-
-  // Unknown command — just return to normal mode
+  if (trimmed === "q" || trimmed === "q!") {
+    exit()
+    return
+  }
+  if (trimmed === "help") {
+    dispatch({ type: "SET_SCREEN", screen: "help" })
+    dispatch({ type: "SET_MODE", mode: "NORMAL" })
+    return
+  }
+  if (trimmed === "clear") {
+    dispatch({ type: "SET_FILTER_TEXT", value: "" })
+    dispatch({ type: "SET_MODE", mode: "NORMAL" })
+    return
+  }
+  // Unknown command — clear filter text and return to NORMAL
+  dispatch({ type: "SET_FILTER_TEXT", value: "" })
   dispatch({ type: "SET_MODE", mode: "NORMAL" })
-}
-
-// ── Sidebar row mapping (for mouse click position) ────
-//
-// The sidebar renders as:
-//   Row 0: top border
-//   Row 1: margin before "📋 Data"
-//   Row 2: "📋 Data" header text
-//   Rows 3‑7: Data items (List, Find, Add, Edit, Delete)
-//   Row 8: margin before "🏷️ Tags"
-//   Row 9: "🏷️ Tags" header text
-//   Rows 10‑12: Tag items (Tags, Trials, Bulk)
-//   Row 13: margin before "📊 Reports"
-//   Row 14: "📊 Reports" header text
-//   Rows 15‑20: Report items (Summary‥Forecast)
-//   Row 21: margin before "⚙️ System"
-//   Row 22: "⚙️ System" header text
-//   Rows 23‑29: System items (Config‥Help)
-//   Row 30: bottom border
-//
-// Map sidebar‑internal row → SIDEBAR_ITEMS[] index.
-
-const SIDEBAR_ROW_TO_INDEX: Record<number, number> = {
-  3: 0, 4: 1, 5: 2, 6: 3, 7: 4,     // Data
-  10: 5, 11: 6, 12: 7,                // Tags
-  15: 8, 16: 9, 17: 10, 18: 11, 19: 12, 20: 13, // Reports
-  23: 14, 24: 15, 25: 16, 26: 17, 27: 18, 28: 19, 29: 20, // System
-}
-
-// ── Mouse handler component ─────────────────────────
-
-/** Approximate row within the content area where data rows begin.
- *  Row 0 = status bar
- *  Row 1 = flex row (content box border top)
- *  Row 2 = content top padding
- *  Row 3 = ListScreen title "Subscriptions (N total)"
- *  Row 4 = column header row
- *  Row 5 = separator row ("─────")
- *  Row 6 = first data row
- */
-const DATA_ROW_OFFSET = 6
-
-function MouseHandler() {
-  const { state, dispatch } = useTui()
-  const mouse = useMouse()
-
-  // Form screens use @inkjs/ui components — skip global mouse handling
-  const isFormScreen =
-    state.screen === "add" ||
-    state.screen === "edit" ||
-    state.screen === "delete" ||
-    state.screen === "restore" ||
-    state.screen === "tag-manage"
-
-  useEffect(() => {
-    if (!mouse) return
-    if (!mouse.pressed || mouse.button !== 0) return
-    if (isFormScreen) return
-
-    const { x, y } = mouse
-
-    // Sidebar click if column ≤ 24 (sidebar width 22 + 2 border)
-    if (x <= 24) {
-      const sidebarRow = y - 1  // convert to 0‑based inside the flex row
-      const itemIndex = SIDEBAR_ROW_TO_INDEX[sidebarRow]
-      if (itemIndex !== undefined) {
-        dispatch({ type: "SET_SIDEBAR_INDEX", index: itemIndex })
-        dispatch({ type: "SET_SCREEN", screen: SIDEBAR_ITEMS[itemIndex].screen })
-        dispatch({ type: "SET_LIST_INDEX", index: 0 })
-      }
-      return
-    }
-
-    // Content area: route based on current screen
-    if (state.screen === "list") {
-      const idx = y - DATA_ROW_OFFSET
-      if (idx >= 0) {
-        dispatch({ type: "SET_LIST_INDEX", index: idx })
-        dispatch({ type: "SET_FOCUS", focus: "content" })
-      }
-    }
-  }, [mouse, isFormScreen])
-
-  return null
 }
 
 // ── Root App ─────────────────────────────────────────
@@ -503,26 +400,27 @@ export function App() {
 }
 
 function AppInner() {
-  const { state, dispatch } = useTui()
+  const { state } = useTui()
+  const focusColor = state.focus === "sidebar" ? "cyan" : "gray"
 
   return (
     <Box flexDirection="column" height="100%">
       <KeyboardHandler />
-      <MouseHandler />
 
-      {/* Status bar */}
       <StatusBar />
 
-      {/* Main content: sidebar + screen */}
       <Box flexGrow={1} flexDirection="row" height="100%">
         <Sidebar />
-        <Box flexGrow={1} borderStyle="round" borderColor="gray" height="100%">
+        <Box flexGrow={1} borderStyle="round" borderColor={focusColor} height="100%">
           <CurrentScreen />
         </Box>
       </Box>
 
-      {/* Command bar */}
+      <Toast />
+
       <CommandBar />
+
+      {state.paletteOpen && <CommandPalette />}
     </Box>
   )
 }

@@ -1,6 +1,7 @@
 import { Box, Text, useInput } from "ink"
 import { TextInput, Select } from "@inkjs/ui"
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
+import { useSetFormActive } from "../context/app-context.tsx"
 import type { AddSharedArgs, Cycle, Status } from "../../types.ts"
 
 // ── Types ──────────────────────────────────────────────
@@ -94,6 +95,39 @@ const STEP_LABELS: Record<FormStep, string> = {
   confirm: "Confirm",
 }
 
+const STEP_SHORT: Record<FormStep, string> = {
+  name: "Name",
+  price: "Price",
+  currency: "Currency",
+  cycle: "Cycle",
+  billingDay: "Billing Day",
+  status: "Status",
+  paymentMethod: "Payment",
+  tags: "Tags",
+  notes: "Notes",
+  confirm: "Done",
+}
+
+// ── Progress bar ───────────────────────────────────────
+
+function ProgressBar({ current, total }: { current: number; total: number }) {
+  const barWidth = 20
+  const filled = Math.round((current / total) * barWidth)
+  const empty = barWidth - filled
+
+  return (
+    <Box>
+      <Text color="cyan">{"█".repeat(filled)}</Text>
+      <Text dimColor>{"░".repeat(empty)}</Text>
+      <Text>
+        {" "}
+        <Text bold>{current}</Text>
+        <Text dimColor>/{total}</Text>
+      </Text>
+    </Box>
+  )
+}
+
 // ── Validation ─────────────────────────────────────────
 
 function validateStep(step: FormStep, data: FormData): string | null {
@@ -115,6 +149,39 @@ function validateStep(step: FormStep, data: FormData): string | null {
   return null
 }
 
+// ── Emitted values panel ──────────────────────────────
+
+function ValuesPanel({ data }: { data: FormData }) {
+  const fields: [string, string][] = [
+    ["Name", data.name || "—"],
+    ["Price", data.price ? `${data.price} ${data.currency}` : "—"],
+    ["Cycle", data.cycle],
+    ["Status", data.status],
+  ]
+  if (data.billingDay.trim()) fields.push(["Bill Day", data.billingDay])
+  if (data.paymentMethod.trim()) fields.push(["Method", data.paymentMethod.trim()])
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} width={30}>
+      <Text bold dimColor underline>
+        Current Values
+      </Text>
+      {fields.map(([label, value]) => (
+        <Box key={label}>
+          <Box width={10}><Text dimColor>{label}:</Text></Box>
+          <Text bold wrap="truncate-end">{value}</Text>
+        </Box>
+      ))}
+      {data.tags.trim() && (
+        <Box>
+          <Box width={10}><Text dimColor>Tags:</Text></Box>
+          <Text dimColor wrap="truncate-end">{data.tags}</Text>
+        </Box>
+      )}
+    </Box>
+  )
+}
+
 // ── Component ─────────────────────────────────────────
 
 export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
@@ -122,6 +189,13 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
   const [stepIdx, setStepIdx] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const step = STEPS[stepIdx]
+  const setFormActive = useSetFormActive()
+
+  // Prevent global key handler conflicts while form is active
+  useEffect(() => {
+    setFormActive(true)
+    return () => setFormActive(false)
+  }, [setFormActive])
 
   const goNext = useCallback(() => {
     const err = validateStep(step, data)
@@ -190,42 +264,66 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
     })
   }, [data, onSave])
 
-  // ── Render step ──
+  // ── Render ──
 
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1}>
-      <Box marginBottom={1}>
-        <Text bold>{title}</Text>
-        <Text dimColor>
-          {" "}— Step {stepIdx + 1}/{STEPS.length}
-        </Text>
+    <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
+      {/* Title + progress */}
+      <Box marginBottom={1} flexDirection="column">
+        <Box>
+          <Text bold inverse color="cyan">
+            {" "}{title}{" "}
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <ProgressBar current={stepIdx + 1} total={STEPS.length} />
+          <Text dimColor>
+            {"  →  "}{STEP_SHORT[step]}
+          </Text>
+        </Box>
       </Box>
 
-      <Box flexDirection="column" marginBottom={1}>
-        <Text bold underline>
+      {/* Step label */}
+      <Box marginBottom={1}>
+        <Text bold underline color="cyan">
           {STEP_LABELS[step]}
         </Text>
       </Box>
 
+      {/* Error */}
       {error && (
-        <Box marginBottom={1}>
-          <Text color="red">{error}</Text>
+        <Box marginBottom={1} borderStyle="round" borderColor="red" paddingX={1} paddingY={0}>
+          <Text color="red">⚠ {error}</Text>
         </Box>
       )}
 
-      <Box flexDirection="column" flexGrow={1}>
-        {renderStep(step, data, updateField, goNext)}
+      {/* Main content row: input + values panel */}
+      <Box flexGrow={1} flexDirection="row" gap={2}>
+        {/* Input area */}
+        <Box flexGrow={1} flexDirection="column">
+          <Box
+            borderStyle="round"
+            borderColor="cyan"
+            paddingX={1}
+            paddingY={1}
+            flexGrow={step === "confirm" ? 0 : 1}
+          >
+            {renderStep(step, data, updateField, goNext)}
+          </Box>
+        </Box>
+
+        {/* Right sidebar: submitted values (hide on confirm, shown there already) */}
+        {step !== "confirm" && (
+          <ValuesPanel data={data} />
+        )}
       </Box>
 
-      {/* Summary footer */}
-      <Box marginTop={1} flexDirection="column">
-        <Text dimColor wrap="truncate-end">
-          Name: <Text bold>{data.name || "—"}</Text>
-          {" | "}Price: <Text bold>{data.price || "—"}</Text>
-          {" | "}Cycle: <Text bold>{data.cycle}</Text>
-        </Text>
+      {/* Key hints */}
+      <Box marginTop={1} borderStyle="single" borderColor="gray" paddingX={1}>
         <Text dimColor>
-          {step === "confirm" ? "[y] confirm  [n] cancel" : "[Enter] next  [Esc] cancel"}
+          {step === "confirm"
+            ? "  y  confirm    n  cancel"
+            : "  Enter  next    Esc  cancel"}
         </Text>
       </Box>
     </Box>
@@ -243,22 +341,26 @@ function renderStep(
   switch (step) {
     case "name":
       return (
-        <TextInput
-          placeholder="e.g. Netflix"
-          defaultValue={data.name}
-          onChange={(v) => update("name", v)}
-          onSubmit={next}
-        />
+        <Box flexDirection="column">
+          <TextInput
+            placeholder="e.g. Netflix"
+            defaultValue={data.name}
+            onChange={(v) => update("name", v)}
+            onSubmit={next}
+          />
+        </Box>
       )
 
     case "price":
       return (
-        <TextInput
-          placeholder="e.g. 1490"
-          defaultValue={data.price}
-          onChange={(v) => update("price", v)}
-          onSubmit={next}
-        />
+        <Box flexDirection="column">
+          <TextInput
+            placeholder="e.g. 1490"
+            defaultValue={data.price}
+            onChange={(v) => update("price", v)}
+            onSubmit={next}
+          />
+        </Box>
       )
 
     case "currency":
@@ -287,12 +389,14 @@ function renderStep(
 
     case "billingDay":
       return (
-        <TextInput
-          placeholder="e.g. 15 (leave empty for unknown)"
-          defaultValue={data.billingDay}
-          onChange={(v) => update("billingDay", v)}
-          onSubmit={next}
-        />
+        <Box flexDirection="column">
+          <TextInput
+            placeholder="e.g. 15 (leave empty for unknown)"
+            defaultValue={data.billingDay}
+            onChange={(v) => update("billingDay", v)}
+            onSubmit={next}
+          />
+        </Box>
       )
 
     case "status":
@@ -309,32 +413,38 @@ function renderStep(
 
     case "paymentMethod":
       return (
-        <TextInput
-          placeholder="e.g. credit_card (optional)"
-          defaultValue={data.paymentMethod}
-          onChange={(v) => update("paymentMethod", v)}
-          onSubmit={next}
-        />
+        <Box flexDirection="column">
+          <TextInput
+            placeholder="e.g. credit_card (optional)"
+            defaultValue={data.paymentMethod}
+            onChange={(v) => update("paymentMethod", v)}
+            onSubmit={next}
+          />
+        </Box>
       )
 
     case "tags":
       return (
-        <TextInput
-          placeholder="e.g. video, entertainment (comma-separated)"
-          defaultValue={data.tags}
-          onChange={(v) => update("tags", v)}
-          onSubmit={next}
-        />
+        <Box flexDirection="column">
+          <TextInput
+            placeholder="e.g. video, entertainment (comma-separated)"
+            defaultValue={data.tags}
+            onChange={(v) => update("tags", v)}
+            onSubmit={next}
+          />
+        </Box>
       )
 
     case "notes":
       return (
-        <TextInput
-          placeholder="Optional notes..."
-          defaultValue={data.notes}
-          onChange={(v) => update("notes", v)}
-          onSubmit={next}
-        />
+        <Box flexDirection="column">
+          <TextInput
+            placeholder="Optional notes..."
+            defaultValue={data.notes}
+            onChange={(v) => update("notes", v)}
+            onSubmit={next}
+          />
+        </Box>
       )
 
     case "confirm": {
@@ -387,5 +497,3 @@ function renderStep(
     }
   }
 }
-
-

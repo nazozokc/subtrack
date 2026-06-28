@@ -10,8 +10,8 @@ export function EditScreen() {
   const [error, setError] = useState<string | null>(null)
 
   const sub = useMemo(
-    () => (state.editId ? getSubscription(state.editId) : undefined),
-    [state.editId],
+    () => (state.selectedId ? getSubscription(state.selectedId) : undefined),
+    [state.selectedId],
   )
 
   if (!sub) {
@@ -25,16 +25,20 @@ export function EditScreen() {
   const handleSave = (data: AddSharedArgs) => {
     try {
       updateSubscription(sub.id, data)
-      dispatch({ type: "SET_SCREEN", screen: "list" })
-      dispatch({ type: "SET_EDIT_ID", id: null })
+      dispatch({ type: "GO_BACK" })
+      dispatch({ type: "SET_SELECTED_ID", id: null })
+      dispatch({
+        type: "SET_TOAST",
+        toast: { message: `Updated ${data.name}`, type: "success" },
+      })
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     }
   }
 
   const handleCancel = () => {
-    dispatch({ type: "SET_SCREEN", screen: "list" })
-    dispatch({ type: "SET_EDIT_ID", id: null })
+    dispatch({ type: "GO_BACK" })
+    dispatch({ type: "SET_SELECTED_ID", id: null })
   }
 
   return (

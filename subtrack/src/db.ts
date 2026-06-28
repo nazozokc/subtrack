@@ -474,7 +474,7 @@ export function mapTags(subs: SharedArgs[]): SharedArgs[] {
   return subs
 }
 
-const SORT_FIELDS = ["id", "name", "price", "currency", "cycle"] as const
+const SORT_FIELDS = ["id", "name", "price", "currency", "cycle", "status"] as const
 
 export const getSubscriptions = (sort?: string, desc?: boolean): SharedArgs[] => {
   const db = getDb()
