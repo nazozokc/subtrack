@@ -1,4 +1,5 @@
 import { Box, Text } from "ink"
+import Gradient from "ink-gradient"
 import { useTui } from "../context/app-context.tsx"
 import { SCREEN_TITLES } from "../types.ts"
 
@@ -9,7 +10,7 @@ export function StatusBar() {
   return (
     <Box width="100%" borderStyle="single" borderColor="gray" minHeight={1}>
       <Box paddingLeft={1} flexGrow={1}>
-        <Text bold color="cyan">subtrack</Text>
+        <Gradient name="cristal"><Text bold>subtrack</Text></Gradient>
         <Text dimColor> TUI</Text>
       </Box>
 

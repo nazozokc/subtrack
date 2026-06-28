@@ -1,11 +1,16 @@
 import { Box, Text } from "ink"
+import Gradient from "ink-gradient"
 import { SIDEBAR_ITEMS } from "../types.ts"
 
 export function HelpScreen() {
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1}>
       <Box marginBottom={1}>
-        <Text bold underline>Help & Keybindings</Text>
+        <Gradient name="pastel">
+          <Text bold underline>
+            Help & Keybindings
+          </Text>
+        </Gradient>
       </Box>
 
       <Box flexDirection="column" gap={1} marginBottom={1}>

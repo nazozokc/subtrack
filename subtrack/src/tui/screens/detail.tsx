@@ -1,4 +1,5 @@
 import { Box, Text, useInput } from "ink"
+import Gradient from "ink-gradient"
 import { useMemo, useState } from "react"
 import { getSubscription } from "../../db.ts"
 import { useTui } from "../context/app-context.tsx"
@@ -78,9 +79,11 @@ export function DetailScreen() {
     <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold inverse color="cyan">
-          {" Subscription Detail "}
-        </Text>
+        <Gradient name="pastel">
+          <Text bold inverse>
+            {" Subscription Detail "}
+          </Text>
+        </Gradient>
       </Box>
 
       {/* Main card */}

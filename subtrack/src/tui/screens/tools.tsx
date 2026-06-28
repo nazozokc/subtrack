@@ -1,4 +1,6 @@
 import { Box, Text } from "ink"
+import Gradient from "ink-gradient"
+import Spinner from "ink-spinner"
 import { TextInput, Select } from "@inkjs/ui"
 import { useState, useCallback, useMemo, useEffect } from "react"
 import { useTui, useSetFormActive } from "../context/app-context.tsx"
@@ -68,6 +70,7 @@ const EXPORTERS: Record<string, { ext: string; fn: (subs: SharedArgs[]) => strin
 
 function ExportTab() {
   const [format, setFormat] = useState<string | null>(null)
+  const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<string>("")
   const subs = useMemo(() => getSubscriptions(), [])
   const setFormActive = useSetFormActive()
@@ -77,17 +80,21 @@ function ExportTab() {
   }, [format, setFormActive])
 
   const doExport = useCallback((fmt: string) => {
-    try {
-      const entry = EXPORTERS[fmt]
-      if (!entry) { setResult(`Unknown format: ${fmt}`); return }
-      const output = entry.fn(subs)
-      const filename = `subtrack-export.${entry.ext}`
-      const filePath = join(cwd(), filename)
-      writeFileSync(filePath, output, "utf-8")
-      setResult(`Exported as ${fmt.toUpperCase()} to ${filePath}`)
-    } catch (e: unknown) {
-      setResult(`Error: ${e instanceof Error ? e.message : String(e)}`)
-    }
+    setProcessing(true)
+    queueMicrotask(() => {
+      try {
+        const entry = EXPORTERS[fmt]
+        if (!entry) { setResult(`Unknown format: ${fmt}`); return }
+        const output = entry.fn(subs)
+        const filename = `subtrack-export.${entry.ext}`
+        const filePath = join(cwd(), filename)
+        writeFileSync(filePath, output, "utf-8")
+        setResult(`Exported as ${fmt.toUpperCase()} to ${filePath}`)
+      } catch (e: unknown) {
+        setResult(`Error: ${e instanceof Error ? e.message : String(e)}`)
+      }
+      setProcessing(false)
+    })
   }, [subs])
 
   return (
@@ -102,6 +109,10 @@ function ExportTab() {
           ]}
           onChange={(v) => { setFormat(v); doExport(v) }}
         />
+      ) : processing ? (
+        <Text>
+          <Spinner type="dots" /> Exporting…
+        </Text>
       ) : (
         <Text color={result.startsWith("Error") ? "red" : "green"}>{result}</Text>
       )}
@@ -113,68 +124,77 @@ function ExportTab() {
 
 function ImportTab() {
   const [filePath, setFilePath] = useState("")
+  const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const setFormActive = useSetFormActive()
 
   useEffect(() => {
-    setFormActive(!result)
-  }, [result, setFormActive])
+    setFormActive(!result && !processing)
+  }, [result, processing, setFormActive])
 
   const doImport = useCallback(() => {
     if (!filePath.trim()) { setResult("Please enter a file path"); return }
-    try {
-      const content = readFileSync(filePath.trim(), "utf-8")
-      const clean = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
-      const lines = clean.split("\n").map((l) => l.trim()).filter(Boolean)
-
-      let success = 0
-      let failed = 0
-      const errors: string[] = []
-      const db = getDb()
-      db.run("BEGIN TRANSACTION")
+    setProcessing(true)
+    queueMicrotask(() => {
       try {
-        for (let i = 1; i < lines.length; i++) {
-          const fields = parseCsvLine(lines[i])
-          if (fields.length < 5) { failed++; continue }
-          if (!isValidCurrency(fields[4]) || !isValidCycle(fields[1])) { failed++; continue }
-          const price = Number(fields[3])
-          if (isNaN(price) || price < 0 || !Number.isInteger(price)) { failed++; errors.push(`Line ${i + 1}: invalid price "${fields[3]}"`); continue }
-          // Direct insert to avoid nested transaction from writeSubscription
-          db.run(
-            "INSERT INTO subscriptions (name, price, currency, cycle, status, created_at) VALUES (?, ?, ?, ?, 'active', date('now'))",
-            [fields[0].trim(), price, fields[4], fields[1]],
-          )
-          const idRow = db.exec("SELECT last_insert_rowid() AS id")
-          if (idRow.length > 0 && idRow[0].values.length > 0) {
-            const subId = Number(idRow[0].values[0][0])
-            const tags = fields[2].split(";").map((t) => t.trim()).filter(Boolean)
-            for (const t of tags) {
-              db.run("INSERT OR IGNORE INTO tags (name) VALUES (?)", [t])
-              const tagRow = db.exec("SELECT id FROM tags WHERE name = ?", [t])
-              if (tagRow.length > 0 && tagRow[0].values.length > 0) {
-                db.run("INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)", [subId, Number(tagRow[0].values[0][0])])
+        const content = readFileSync(filePath.trim(), "utf-8")
+        const clean = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
+        const lines = clean.split("\n").map((l) => l.trim()).filter(Boolean)
+
+        let success = 0
+        let failed = 0
+        const errors: string[] = []
+        const db = getDb()
+        db.run("BEGIN TRANSACTION")
+        try {
+          for (let i = 1; i < lines.length; i++) {
+            const fields = parseCsvLine(lines[i])
+            if (fields.length < 5) { failed++; continue }
+            if (!isValidCurrency(fields[4]) || !isValidCycle(fields[1])) { failed++; continue }
+            const price = Number(fields[3])
+            if (isNaN(price) || price < 0 || !Number.isInteger(price)) { failed++; errors.push(`Line ${i + 1}: invalid price "${fields[3]}"`); continue }
+            // Direct insert to avoid nested transaction from writeSubscription
+            db.run(
+              "INSERT INTO subscriptions (name, price, currency, cycle, status, created_at) VALUES (?, ?, ?, ?, 'active', date('now'))",
+              [fields[0].trim(), price, fields[4], fields[1]],
+            )
+            const idRow = db.exec("SELECT last_insert_rowid() AS id")
+            if (idRow.length > 0 && idRow[0].values.length > 0) {
+              const subId = Number(idRow[0].values[0][0])
+              const tags = fields[2].split(";").map((t) => t.trim()).filter(Boolean)
+              for (const t of tags) {
+                db.run("INSERT OR IGNORE INTO tags (name) VALUES (?)", [t])
+                const tagRow = db.exec("SELECT id FROM tags WHERE name = ?", [t])
+                if (tagRow.length > 0 && tagRow[0].values.length > 0) {
+                  db.run("INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)", [subId, Number(tagRow[0].values[0][0])])
+                }
               }
             }
+            success++
           }
-          success++
+          db.run("COMMIT")
+          saveDb()
+        } catch (e) {
+          db.run("ROLLBACK")
+          throw e
         }
-        db.run("COMMIT")
-        saveDb()
-      } catch (e) {
-        db.run("ROLLBACK")
-        throw e
+        const msg = `Imported ${success} subscription${success !== 1 ? "s" : ""} from ${filePath}${failed > 0 ? ` (${failed} failed)` : ""}`
+        setResult(errors.length > 0 ? `${msg}\n${errors.join("\n")}` : msg)
+      } catch (e: unknown) {
+        setResult(`Error: ${e instanceof Error ? e.message : String(e)}`)
       }
-      const msg = `Imported ${success} subscription${success !== 1 ? "s" : ""} from ${filePath}${failed > 0 ? ` (${failed} failed)` : ""}`
-      setResult(errors.length > 0 ? `${msg}\n${errors.join("\n")}` : msg)
-    } catch (e: unknown) {
-      setResult(`Error: ${e instanceof Error ? e.message : String(e)}`)
-    }
+      setProcessing(false)
+    })
   }, [filePath])
 
   return (
     <Box flexDirection="column">
       <Box marginBottom={1}><Text bold underline>Import from CSV</Text></Box>
-      {result ? (
+      {processing ? (
+        <Text>
+          <Spinner type="dots" /> Importing…
+        </Text>
+      ) : result ? (
         <Text color={result.startsWith("Error") ? "red" : "green"}>{result}</Text>
       ) : (
         <TextInput
@@ -191,7 +211,7 @@ function ImportTab() {
 // ── Backup tab ────────────────────────────────────────
 
 function BackupTab() {
-  const [step, setStep] = useState<"path" | "encrypt" | "done">("path")
+  const [step, setStep] = useState<"path" | "encrypt" | "processing" | "done">("path")
   const [dest, setDest] = useState(getDefaultBackupDir())
   const [result, setResult] = useState<string | null>(null)
   const setFormActive = useSetFormActive()
@@ -201,30 +221,33 @@ function BackupTab() {
   }, [step, setFormActive])
 
   const doBackup = useCallback((encrypt: boolean) => {
-    try {
-      saveDb()
-      mkdirSync(dest, { recursive: true })
-      const ts = new Date().toISOString().replace(/[:.]/g, "-")
-      const destPath = join(dest, `subtrack-${ts}.db`)
-      const dbPath = join(getDbDir(), "subtrack.db")
-
-      if (encrypt) {
-        if (!hasEncryptionKey()) {
-          setResult("Cannot encrypt: no encryption key configured. Run 'subtrack backup' in CLI to set up encryption.")
-          setStep("done")
-          return
-        }
-        const data = readFileSync(dbPath)
-        const encrypted = encryptBuffer(data)
-        writeFileSync(destPath, encrypted)
-      } else {
-        copyFileSync(dbPath, destPath)
-      }
-      setResult(`Backup saved to ${destPath}`)
-    } catch (e: unknown) {
-      setResult(`Backup failed: ${e instanceof Error ? e.message : String(e)}`)
+    if (encrypt && !hasEncryptionKey()) {
+      setResult("Cannot encrypt: no encryption key configured. Run 'subtrack backup' in CLI to set up encryption.")
+      setStep("done")
+      return
     }
-    setStep("done")
+    setStep("processing")
+    queueMicrotask(() => {
+      try {
+        saveDb()
+        mkdirSync(dest, { recursive: true })
+        const ts = new Date().toISOString().replace(/[:.]/g, "-")
+        const destPath = join(dest, `subtrack-${ts}.db`)
+        const dbPath = join(getDbDir(), "subtrack.db")
+
+        if (encrypt) {
+          const data = readFileSync(dbPath)
+          const encrypted = encryptBuffer(data)
+          writeFileSync(destPath, encrypted)
+        } else {
+          copyFileSync(dbPath, destPath)
+        }
+        setResult(`Backup saved to ${destPath}`)
+      } catch (e: unknown) {
+        setResult(`Backup failed: ${e instanceof Error ? e.message : String(e)}`)
+      }
+      setStep("done")
+    })
   }, [dest])
 
   return (
@@ -250,6 +273,11 @@ function BackupTab() {
           />
         </Box>
       )}
+      {step === "processing" && (
+        <Text>
+          <Spinner type="dots" /> Creating backup…
+        </Text>
+      )}
       {step === "done" && (
         <Text color={result?.startsWith("Backup") ? "green" : "red"}>{result}</Text>
       )}
@@ -260,7 +288,7 @@ function BackupTab() {
 // ── Restore tab ──────────────────────────────────────
 
 function RestoreTab() {
-  const [step, setStep] = useState<"choose" | "confirm" | "done">("choose")
+  const [step, setStep] = useState<"choose" | "confirm" | "processing" | "done">("choose")
   const [source, setSource] = useState("")
   const [result, setResult] = useState<string | null>(null)
   const setFormActive = useSetFormActive()
@@ -281,13 +309,16 @@ function RestoreTab() {
       setStep("done")
       return
     }
-    try {
-      restoreDb(source)
-      setResult(`Restored from ${source}`)
-    } catch (e: unknown) {
-      setResult(`Restore failed: ${e instanceof Error ? e.message : String(e)}`)
-    }
-    setStep("done")
+    setStep("processing")
+    queueMicrotask(() => {
+      try {
+        restoreDb(source)
+        setResult(`Restored from ${source}`)
+      } catch (e: unknown) {
+        setResult(`Restore failed: ${e instanceof Error ? e.message : String(e)}`)
+      }
+      setStep("done")
+    })
   }, [source])
 
   return (
@@ -329,6 +360,11 @@ function RestoreTab() {
             }}
           />
         </Box>
+      )}
+      {step === "processing" && (
+        <Text>
+          <Spinner type="dots" /> Restoring…
+        </Text>
       )}
       {step === "done" && (
         <Text color={result?.startsWith("Restored") ? "green" : "red"}>
@@ -395,9 +431,11 @@ export function ToolsScreen() {
     <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
       <Box marginBottom={1} flexDirection="column">
         <Box>
-          <Text bold inverse color="cyan">
+        <Gradient name="pastel">
+          <Text bold inverse>
             {" Tools "}
           </Text>
+        </Gradient>
         </Box>
       </Box>
 

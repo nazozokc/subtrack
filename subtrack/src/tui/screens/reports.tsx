@@ -1,4 +1,5 @@
 import { Box, Text } from "ink"
+import Gradient from "ink-gradient"
 import { useMemo } from "react"
 import { getSubscriptions } from "../../db.ts"
 import { formatPrice } from "../../price.ts"
@@ -491,9 +492,11 @@ export function ReportsScreen() {
     <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
       <Box marginBottom={1} flexDirection="column">
         <Box>
-          <Text bold inverse color="cyan">
+        <Gradient name="pastel">
+          <Text bold inverse>
             {" Reports "}
           </Text>
+        </Gradient>
         </Box>
       </Box>
 

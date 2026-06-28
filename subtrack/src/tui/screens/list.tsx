@@ -1,4 +1,5 @@
 import { Box, Text, useWindowSize } from "ink"
+import Gradient from "ink-gradient"
 import { getSubscriptions } from "../../db.ts"
 import { useTui, type SortField } from "../context/app-context.tsx"
 import type { Status } from "../../types.ts"
@@ -147,9 +148,11 @@ export function ListScreen() {
       {/* Title bar */}
       <Box marginTop={1}>
         <Box flexGrow={1}>
-          <Text bold color="white">
-            Subscriptions{" "}
-          </Text>
+          <Gradient name="pastel">
+            <Text bold>
+              Subscriptions{" "}
+            </Text>
+          </Gradient>
           <Text dimColor>
             {subs.length} total · {activeCount} active
           </Text>
