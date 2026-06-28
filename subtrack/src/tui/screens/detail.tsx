@@ -1,4 +1,4 @@
-import { Box, Text, useInput } from "ink"
+import { Box, Text, useInput, useWindowSize } from "ink"
 import Gradient from "ink-gradient"
 import { useMemo, useState } from "react"
 import { getSubscription } from "../../db.ts"
@@ -7,6 +7,7 @@ import { formatPrice } from "../../price.ts"
 
 export function DetailScreen() {
   const { state, dispatch } = useTui()
+  const { columns: termCols } = useWindowSize()
   const [showRaw, setShowRaw] = useState(false)
 
   const sub = useMemo(
@@ -97,7 +98,7 @@ export function DetailScreen() {
         {/* Name + status row */}
         <Box marginBottom={1}>
           <Box flexGrow={1}>
-            <Text bold color="white">
+            <Text bold color="white" wrap="truncate-end">
               {sub.name}
             </Text>
           </Box>
@@ -108,7 +109,7 @@ export function DetailScreen() {
           </Box>
         </Box>
 
-        <Text dimColor>{"─".repeat(50)}</Text>
+        <Text dimColor>{"─".repeat(Math.min(50, Math.max(termCols - 12, 20)))}</Text>
 
         {/* Price */}
         <Box marginTop={1}>
@@ -157,7 +158,7 @@ export function DetailScreen() {
         {/* Notes */}
         {sub.notes && (
           <>
-            <Box marginTop={1}><Text dimColor>{"─".repeat(50)}</Text></Box>
+            <Box marginTop={1}><Text dimColor>{"─".repeat(Math.min(50, Math.max(termCols - 12, 20)))}</Text></Box>
             <Box marginTop={1} flexDirection="column">
               <Text dimColor>Notes:</Text>
               <Box

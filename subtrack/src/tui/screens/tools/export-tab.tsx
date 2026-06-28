@@ -8,18 +8,23 @@ import { exportCsv, exportJson, exportMd } from "../../../export.ts"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { cwd } from "node:process"
+import type { Subscription } from "../../../types.ts"
 
-const EXPORTERS: Record<string, { ext: string; fn: (subs: any[]) => string }> = {
+const EXPORTERS: Record<string, { ext: string; fn: (subs: Subscription[]) => string }> = {
   csv: { ext: "csv", fn: exportCsv },
   json: { ext: "json", fn: exportJson },
   md: { ext: "md", fn: exportMd },
 }
 
-export function ExportTab() {
+type Props = {
+  refreshKey: number
+}
+
+export function ExportTab({ refreshKey }: Props) {
   const [format, setFormat] = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<string>("")
-  const subs = useMemo(() => getSubscriptions(), [])
+  const subs = useMemo(() => getSubscriptions(), [refreshKey])
   const setFormActive = useSetFormActive()
 
   useEffect(() => {

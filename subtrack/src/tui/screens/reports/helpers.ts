@@ -1,11 +1,31 @@
 import { OCCURRENCES_PER_YEAR, type Cycle } from "../../../types.ts"
 
+const CYCLES = Object.keys(OCCURRENCES_PER_YEAR) as Cycle[]
+
+function isValidCycle(cycle: string): cycle is Cycle {
+  return CYCLES.includes(cycle as Cycle)
+}
+
 export function monthlyFactor(cycle: string): number {
-  return (OCCURRENCES_PER_YEAR[cycle as Cycle] ?? 12) / 12
+  const occurrences = isValidCycle(cycle)
+    ? OCCURRENCES_PER_YEAR[cycle]
+    : undefined
+  if (occurrences === undefined) {
+    // Unknown cycle — default to monthly
+    return 1
+  }
+  return occurrences / 12
 }
 
 export function yearlyFactor(cycle: string): number {
-  return OCCURRENCES_PER_YEAR[cycle as Cycle] ?? 12
+  const occurrences = isValidCycle(cycle)
+    ? OCCURRENCES_PER_YEAR[cycle]
+    : undefined
+  if (occurrences === undefined) {
+    // Unknown cycle — default to 12 (monthly)
+    return 12
+  }
+  return occurrences
 }
 
 export function computeNextBill(day: number, from: Date, until: Date): Date | null {

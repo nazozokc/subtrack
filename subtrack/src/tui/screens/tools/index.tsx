@@ -11,6 +11,7 @@ import { UsageTab } from "./usage-tab.tsx"
 
 export function ToolsScreen() {
   const { state, dispatch } = useTui()
+  const refreshKey = state.refreshKey
 
   useInput(
     (input: string, key) => {
@@ -44,7 +45,7 @@ export function ToolsScreen() {
 
       <TabBar tabs={TOOLS_TABS} activeTab={state.toolsTab} tabLabels={TOOLS_TAB_LABELS} />
 
-      {state.toolsTab === "export" && <ExportTab />}
+      {state.toolsTab === "export" && <ExportTab refreshKey={refreshKey} />}
       {state.toolsTab === "import" && <ImportTab />}
       {state.toolsTab === "backup" && <BackupTab />}
       {state.toolsTab === "restore" && <RestoreTab />}

@@ -18,14 +18,16 @@ export function Toast() {
   const { state, dispatch } = useTui()
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Clear toast on screen change (only if not on list)
+  // Intentionally only re-runs on screen change, not when toast is set
   useEffect(() => {
     if (state.toast && state.screen !== "list") {
-      // Clear on screen change if not list
       dispatch({ type: "CLEAR_TOAST" })
-      return
     }
-  }, [state.screen, state.toast, dispatch])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.screen, dispatch])
 
+  // Auto-dismiss toast after 2s
   useEffect(() => {
     if (state.toast) {
       if (timerRef.current) clearTimeout(timerRef.current)
@@ -44,7 +46,7 @@ export function Toast() {
   const icon = TOAST_ICONS[state.toast.type] ?? "•"
 
   return (
-    <Box width="100%" justifyContent="center" marginBottom={1}>
+    <Box position="absolute" bottom={1} width="100%" justifyContent="center">
       <Box
         borderStyle="round"
         borderColor={color}

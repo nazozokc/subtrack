@@ -37,6 +37,9 @@ export type SidebarItem = {
   section: SidebarSection
 }
 
+/** Sidebar panel width in characters (including border) */
+export const SIDEBAR_WIDTH = 22
+
 export const SIDEBAR_ITEMS: SidebarItem[] = [
   // Data
   { screen: "list", label: "List", icon: "📋", section: "data" },

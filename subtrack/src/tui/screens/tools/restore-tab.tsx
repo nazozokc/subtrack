@@ -18,7 +18,7 @@ export function RestoreTab() {
 
   const backups = getBackupFiles(getDbDir())
   const options = backups.map((b) => ({
-    label: `${b.name} (${b.mtime.toISOString().slice(0, 10)})`,
+    label: `${b.name} (${b.mtime?.toISOString()?.slice(0, 10) ?? "unknown"})`,
     value: b.path,
   }))
 
