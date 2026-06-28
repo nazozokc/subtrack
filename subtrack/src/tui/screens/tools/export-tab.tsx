@@ -8,9 +8,9 @@ import { exportCsv, exportJson, exportMd } from "../../../export.ts"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { cwd } from "node:process"
-import type { Subscription } from "../../../types.ts"
+import type { SharedArgs } from "../../../types.ts"
 
-const EXPORTERS: Record<string, { ext: string; fn: (subs: Subscription[]) => string }> = {
+const EXPORTERS: Record<string, { ext: string; fn: (subs: SharedArgs[]) => string }> = {
   csv: { ext: "csv", fn: exportCsv },
   json: { ext: "json", fn: exportJson },
   md: { ext: "md", fn: exportMd },
