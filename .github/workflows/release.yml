@@ -100,7 +100,7 @@ jobs:
       # Generate npm-shrinkwrap.json for reproducible installs
       - name: Generate shrinkwrap
         working-directory: ./subtrack
-        run: pnpm shrinkwrap
+        run: npm shrinkwrap
 
       - run: pnpm build
 
