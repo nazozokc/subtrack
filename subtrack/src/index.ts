@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { cli, define } from "gunshi"
-import { consola } from "consola"
-import { saveDb } from "./db.ts"
+import { cli, define } from "gunshi";
+import { consola } from "consola";
+import { saveDb } from "./db.ts";
 import {
   handleList,
   handleAdd,
@@ -35,16 +35,16 @@ import {
   handleBulkTagRemove,
   handleForecast,
   handleTui,
-} from "./commands.ts"
+} from "./commands.ts";
 import {
   handleUsageAdd,
   handleUsageList,
   handleUsageDelete,
   handleUsageImport,
   handleUsageRefresh,
-} from "./usage.ts"
-import { handleImport } from "./import-csv.ts"
-import type { Cycle, UsageRefreshFlags } from "./types.ts"
+} from "./usage.ts";
+import { handleImport } from "./import-csv.ts";
+import type { Cycle, UsageRefreshFlags } from "./types.ts";
 
 // ── Command definitions ──────────────────────────────────
 
@@ -52,15 +52,30 @@ const listCommand = define({
   name: "list",
   description: "List all subscriptions",
   args: {
-    currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
-    sort: { type: "string", description: "Sort field: name, price, currency, cycle" },
+    currency: {
+      type: "string",
+      short: "c",
+      description: "Convert all prices to target currency",
+    },
+    sort: {
+      type: "string",
+      description: "Sort field: name, price, currency, cycle",
+    },
     desc: { type: "boolean", short: "d", description: "Sort descending" },
-    api: { type: "boolean", short: "a", description: "Include LLM API usage for current month" },
+    api: {
+      type: "boolean",
+      short: "a",
+      description: "Include LLM API usage for current month",
+    },
     notes: { type: "boolean", short: "n", description: "Show notes column" },
-    method: { type: "boolean", short: "m", description: "Show payment method column" },
+    method: {
+      type: "boolean",
+      short: "m",
+      description: "Show payment method column",
+    },
   },
   run: (ctx) => handleList(ctx.values),
-})
+});
 
 const addCommand = define({
   name: "add",
@@ -72,72 +87,100 @@ const addCommand = define({
     cycle: { type: "string", description: "Billing cycle" },
     tags: { type: "string", description: "Comma-separated tags" },
     billingDay: { type: "string", description: "Billing day of month (1-31)" },
-    status: { type: "string", description: "Status: active, paused, cancelled (default: active)" },
-    paymentMethod: { type: "string", description: "Payment method (e.g. credit_card, paypal)" },
+    status: {
+      type: "string",
+      description: "Status: active, paused, cancelled (default: active)",
+    },
+    paymentMethod: {
+      type: "string",
+      description: "Payment method (e.g. credit_card, paypal)",
+    },
   },
   run: (ctx) => handleAdd(ctx.values),
-})
+});
 
 const editCommand = define({
   name: "edit",
   description: "Edit a subscription",
   args: {
-    id: { type: "positional", description: "Subscription ID (omit for interactive selection)", required: false },
+    id: {
+      type: "positional",
+      description: "Subscription ID (omit for interactive selection)",
+      required: false,
+    },
     name: { type: "string", description: "Subscription name" },
     price: { type: "string", description: "Monthly payment amount" },
     currency: { type: "string", description: "Currency" },
     cycle: { type: "string", description: "Billing cycle" },
     tags: { type: "string", description: "Comma-separated tags" },
-    status: { type: "string", description: "Status: active, paused, cancelled" },
+    status: {
+      type: "string",
+      description: "Status: active, paused, cancelled",
+    },
     billingDay: { type: "string", description: "Billing day of month (1-31)" },
     paymentMethod: { type: "string", description: "Payment method" },
   },
-  run: (ctx) => handleEdit(ctx.values.id ? Number(ctx.values.id) : undefined, ctx.values),
-})
+  run: (ctx) =>
+    handleEdit(ctx.values.id ? Number(ctx.values.id) : undefined, ctx.values),
+});
 
 const deleteCommand = define({
   name: "delete",
   description: "Delete subscriptions",
   args: {
-    id: { type: "positional", array: true, description: "Subscription ID(s) to delete (omit for interactive selection)", required: false },
+    id: {
+      type: "positional",
+      array: true,
+      description:
+        "Subscription ID(s) to delete (omit for interactive selection)",
+      required: false,
+    },
   },
   run: (ctx) => {
-    const ids = ctx.positionals.slice(1).map(Number).filter((n) => !isNaN(n))
-    handleDelete(ids.length > 0 ? ids : undefined)
+    const ids = ctx.positionals
+      .slice(1)
+      .map(Number)
+      .filter((n) => !isNaN(n));
+    handleDelete(ids.length > 0 ? ids : undefined);
   },
-})
+});
 
 const tagsCommand = define({
   name: "tags",
   description: "Filter subscriptions by tags (AND logic)",
   args: {
-    names: { type: "positional", array: true, description: "Tag names", required: false },
+    names: {
+      type: "positional",
+      array: true,
+      description: "Tag names",
+      required: false,
+    },
   },
   run: (ctx) => {
-    const tagNames = ctx.positionals.slice(1) as string[]
+    const tagNames = ctx.positionals.slice(1) as string[];
     if (tagNames.length === 0) {
-      consola.error("Please specify at least one tag")
-      return
+      consola.error("Please specify at least one tag");
+      return;
     }
-    handleTags(tagNames)
+    handleTags(tagNames);
   },
-})
+});
 
 const tagListCmd = define({
   name: "list",
   description: "List all tags with usage count",
   run: () => handleTagList(),
-})
+});
 
 const tagRenameCmd = define({
   name: "rename",
   description: "Rename a tag",
   args: {
     old: { type: "positional", description: "Current tag name" },
-    "new": { type: "positional", description: "New tag name" },
+    new: { type: "positional", description: "New tag name" },
   },
   run: (ctx) => handleTagRename(ctx.values.old, ctx.values["new"]),
-})
+});
 
 const tagDeleteCmd = define({
   name: "delete",
@@ -146,13 +189,13 @@ const tagDeleteCmd = define({
     name: { type: "positional", description: "Tag name to delete" },
   },
   run: (ctx) => handleTagDelete(ctx.values.name),
-})
+});
 
 const tagPruneCmd = define({
   name: "prune",
   description: "Remove orphaned tags",
   run: () => handleTagPrune(),
-})
+});
 
 const tagCommand = define({
   name: "tag",
@@ -164,7 +207,7 @@ const tagCommand = define({
     prune: tagPruneCmd,
   },
   run: () => consola.info("Usage: subtrack tag list|rename|delete|prune"),
-})
+});
 
 // ── Search ──────────────────────────────────────────────
 
@@ -178,11 +221,15 @@ const searchCommand = define({
     tags: { type: "boolean", description: "Search in tags only" },
   },
   run: (ctx) => {
-    const positionals = ctx.positionals as string[]
-    const query = ctx.values.query ?? positionals[1]
-    handleSearch(query, { names: ctx.values.names, notes: ctx.values.notes, tags: ctx.values.tags })
+    const positionals = ctx.positionals as string[];
+    const query = ctx.values.query ?? positionals[1];
+    handleSearch(query, {
+      names: ctx.values.names,
+      notes: ctx.values.notes,
+      tags: ctx.values.tags,
+    });
   },
-})
+});
 
 // ── Trial ──────────────────────────────────────────────
 
@@ -199,37 +246,49 @@ const trialAddCmd = define({
     notes: { type: "string", description: "Notes" },
   },
   run: (ctx) => handleTrialAdd(ctx.values),
-})
+});
 
 const trialListCmd = define({
   name: "list",
   description: "List all free trials",
   run: () => handleTrialList(),
-})
+});
 
 const trialExpiringCmd = define({
   name: "expiring",
   description: "Show trials expiring within a number of days",
   args: {
-    days: { type: "positional", description: "Number of days (default: 7)", required: false },
+    days: {
+      type: "positional",
+      description: "Number of days (default: 7)",
+      required: false,
+    },
   },
   run: (ctx) => {
-    const days = ctx.values.days !== undefined ? Number(ctx.values.days) : 7
-    handleTrialExpiring(days)
+    const days = ctx.values.days !== undefined ? Number(ctx.values.days) : 7;
+    handleTrialExpiring(days);
   },
-})
+});
 
 const trialDeleteCmd = define({
   name: "delete",
   description: "Delete free trials",
   args: {
-    id: { type: "positional", array: true, description: "Trial ID(s) to delete (omit for interactive selection)", required: false },
+    id: {
+      type: "positional",
+      array: true,
+      description: "Trial ID(s) to delete (omit for interactive selection)",
+      required: false,
+    },
   },
   run: (ctx) => {
-    const ids = ctx.positionals.slice(1).map(Number).filter((n: number) => !isNaN(n))
-    handleTrialDelete(ids.length > 0 ? ids : undefined)
+    const ids = ctx.positionals
+      .slice(1)
+      .map(Number)
+      .filter((n: number) => !isNaN(n));
+    handleTrialDelete(ids.length > 0 ? ids : undefined);
   },
-})
+});
 
 const trialCommand = define({
   name: "trial",
@@ -241,7 +300,7 @@ const trialCommand = define({
     delete: trialDeleteCmd,
   },
   run: () => consola.info("Usage: subtrack trial add|list|expiring|delete"),
-})
+});
 
 // ── Bulk ───────────────────────────────────────────────
 
@@ -249,14 +308,23 @@ const bulkStatusCmd = define({
   name: "status",
   description: "Bulk change subscription status",
   args: {
-    set: { type: "string", description: "Target status: active, paused, cancelled", required: true },
+    set: {
+      type: "string",
+      description: "Target status: active, paused, cancelled",
+      required: true,
+    },
     tag: { type: "string", description: "Filter by tag" },
     status: { type: "string", description: "Filter by current status" },
     name: { type: "string", description: "Filter by name pattern" },
     force: { type: "boolean", short: "f", description: "Skip confirmation" },
   },
-  run: (ctx) => handleBulkStatus(ctx.values.set, { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }, { force: ctx.values.force }),
-})
+  run: (ctx) =>
+    handleBulkStatus(
+      ctx.values.set,
+      { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name },
+      { force: ctx.values.force },
+    ),
+});
 
 const bulkDeleteCmd = define({
   name: "delete",
@@ -267,8 +335,12 @@ const bulkDeleteCmd = define({
     name: { type: "string", description: "Filter by name pattern" },
     force: { type: "boolean", short: "f", description: "Skip confirmation" },
   },
-  run: (ctx) => handleBulkDelete({ tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }, { force: ctx.values.force }),
-})
+  run: (ctx) =>
+    handleBulkDelete(
+      { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name },
+      { force: ctx.values.force },
+    ),
+});
 
 const bulkTagAddCmd = define({
   name: "add",
@@ -279,8 +351,13 @@ const bulkTagAddCmd = define({
     status: { type: "string", description: "Filter by current status" },
     name: { type: "string", description: "Filter by name pattern" },
   },
-  run: (ctx) => handleBulkTagAdd(ctx.values.add, { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }),
-})
+  run: (ctx) =>
+    handleBulkTagAdd(ctx.values.add, {
+      tag: ctx.values.tag,
+      status: ctx.values.status,
+      name: ctx.values.name,
+    }),
+});
 
 const bulkTagRemoveCmd = define({
   name: "remove",
@@ -291,8 +368,13 @@ const bulkTagRemoveCmd = define({
     status: { type: "string", description: "Filter by current status" },
     name: { type: "string", description: "Filter by name pattern" },
   },
-  run: (ctx) => handleBulkTagRemove(ctx.values.remove, { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }),
-})
+  run: (ctx) =>
+    handleBulkTagRemove(ctx.values.remove, {
+      tag: ctx.values.tag,
+      status: ctx.values.status,
+      name: ctx.values.name,
+    }),
+});
 
 const bulkTagCmd = define({
   name: "tag",
@@ -302,7 +384,7 @@ const bulkTagCmd = define({
     remove: bulkTagRemoveCmd,
   },
   run: () => consola.info("Usage: subtrack bulk tag add|remove"),
-})
+});
 
 const bulkCommand = define({
   name: "bulk",
@@ -313,7 +395,7 @@ const bulkCommand = define({
     tag: bulkTagCmd,
   },
   run: () => consola.info("Usage: subtrack bulk status|delete|tag"),
-})
+});
 
 // ── TUI ────────────────────────────────────────────────
 
@@ -321,7 +403,7 @@ const tuiCommand = define({
   name: "tui",
   description: "Interactive terminal UI",
   run: () => handleTui(),
-})
+});
 
 // ── Forecast ──────────────────────────────────────────
 
@@ -329,36 +411,75 @@ const forecastCommand = define({
   name: "forecast",
   description: "Show spending forecast and what-if scenarios",
   args: {
-    months: { type: "string", description: "Number of months to forecast (default: 12)" },
-    cancel: { type: "string", description: "Comma-separated subscription names to exclude" },
-    addName: { type: "string", description: "Hypothetical subscription name to add" },
-    addPrice: { type: "string", description: "Hypothetical subscription price" },
-    addCurrency: { type: "string", description: "Hypothetical subscription currency" },
-    addCycle: { type: "string", description: "Hypothetical subscription cycle" },
-    currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
+    months: {
+      type: "string",
+      description: "Number of months to forecast (default: 12)",
+    },
+    cancel: {
+      type: "string",
+      description: "Comma-separated subscription names to exclude",
+    },
+    addName: {
+      type: "string",
+      description: "Hypothetical subscription name to add",
+    },
+    addPrice: {
+      type: "string",
+      description: "Hypothetical subscription price",
+    },
+    addCurrency: {
+      type: "string",
+      description: "Hypothetical subscription currency",
+    },
+    addCycle: {
+      type: "string",
+      description: "Hypothetical subscription cycle",
+    },
+    currency: {
+      type: "string",
+      short: "c",
+      description: "Convert all prices to target currency",
+    },
   },
-  run: (ctx) => handleForecast({
-    months: ctx.values.months ? Number(ctx.values.months) : undefined,
-    cancel: ctx.values.cancel?.split(",").map((s: string) => s.trim()).filter(Boolean),
-    addName: ctx.values.addName,
-    addPrice: ctx.values.addPrice,
-    addCurrency: ctx.values.addCurrency,
-    addCycle: ctx.values.addCycle,
-    currency: ctx.values.currency,
-  }),
-})
+  run: (ctx) =>
+    handleForecast({
+      months: ctx.values.months ? Number(ctx.values.months) : undefined,
+      cancel: ctx.values.cancel
+        ?.split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean),
+      addName: ctx.values.addName,
+      addPrice: ctx.values.addPrice,
+      addCurrency: ctx.values.addCurrency,
+      addCycle: ctx.values.addCycle,
+      currency: ctx.values.currency,
+    }),
+});
 
 const exportCommand = define({
   name: "export",
   description: "Export subscriptions",
   args: {
     format: { type: "positional", description: "Export format: csv, json, md" },
-    currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
+    currency: {
+      type: "string",
+      short: "c",
+      description: "Convert all prices to target currency",
+    },
     tags: { type: "string", description: "Filter by comma-separated tags" },
-    output: { type: "string", short: "o", description: "Output file path (default: stdout)" },
+    output: {
+      type: "string",
+      short: "o",
+      description: "Output file path (default: stdout)",
+    },
   },
-  run: (ctx) => handleExport(ctx.values.format, { currency: ctx.values.currency, tags: ctx.values.tags, output: ctx.values.output }),
-})
+  run: (ctx) =>
+    handleExport(ctx.values.format, {
+      currency: ctx.values.currency,
+      tags: ctx.values.tags,
+      output: ctx.values.output,
+    }),
+});
 
 const importCommand = define({
   name: "import",
@@ -369,51 +490,88 @@ const importCommand = define({
     dryRun: { type: "boolean", description: "Validate without importing" },
   },
   run: (ctx) => handleImport(ctx.values.file, { dryRun: ctx.values.dryRun }),
-})
+});
 
 const summaryCommand = define({
   name: "summary",
   description: "Show subscription summary statistics",
   run: () => handleSummary(),
-})
+});
 
 const backupCommand = define({
   name: "backup",
   description: "Backup database (gzip compressed)",
   args: {
-    destination: { type: "positional", description: "Backup destination directory (default: ~/.config/subtrack/backups/)", required: false },
-    encrypt: { type: "boolean", short: "e", description: "Encrypt the backup with your database key" },
+    destination: {
+      type: "positional",
+      description:
+        "Backup destination directory (default: ~/.config/subtrack/backups/)",
+      required: false,
+    },
+    encrypt: {
+      type: "boolean",
+      short: "e",
+      description: "Encrypt the backup with your database key",
+    },
   },
   run: (ctx) => {
-    handleBackup(ctx.values.destination, { encrypt: ctx.values.encrypt })
+    handleBackup(ctx.values.destination, { encrypt: ctx.values.encrypt });
   },
-})
+});
 
 const restoreCommand = define({
   name: "restore",
   description: "Restore database from a backup",
   args: {
-    file: { type: "positional", description: "Backup file to restore (omit for interactive selection)", required: false },
+    file: {
+      type: "positional",
+      description: "Backup file to restore (omit for interactive selection)",
+      required: false,
+    },
     force: { type: "boolean", short: "f", description: "Skip confirmation" },
     dir: { type: "string", description: "Directory to scan for backup files" },
   },
-  run: (ctx) => handleRestore(ctx.values.file, { force: ctx.values.force, dir: ctx.values.dir }),
-})
+  run: (ctx) =>
+    handleRestore(ctx.values.file, {
+      force: ctx.values.force,
+      dir: ctx.values.dir,
+    }),
+});
 
 const paymentCommand = define({
   name: "payment",
   description: "Show payment totals",
   args: {
-    period: { type: "positional", description: "Billing period (default: monthly)", required: false },
-    currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
-    api: { type: "boolean", short: "a", description: "Include LLM API usage costs" },
-    method: { type: "boolean", short: "m", description: "Group by payment method" },
+    period: {
+      type: "positional",
+      description: "Billing period (default: monthly)",
+      required: false,
+    },
+    currency: {
+      type: "string",
+      short: "c",
+      description: "Convert all prices to target currency",
+    },
+    api: {
+      type: "boolean",
+      short: "a",
+      description: "Include LLM API usage costs",
+    },
+    method: {
+      type: "boolean",
+      short: "m",
+      description: "Group by payment method",
+    },
   },
   run: (ctx) => {
-    const period = (ctx.values.period || "monthly") as Cycle
-    handlePayment(period, { currency: ctx.values.currency, api: ctx.values.api, method: ctx.values.method })
+    const period = (ctx.values.period || "monthly") as Cycle;
+    handlePayment(period, {
+      currency: ctx.values.currency,
+      api: ctx.values.api,
+      method: ctx.values.method,
+    });
   },
-})
+});
 
 // ── Upcoming ──────────────────────────────────────────────
 
@@ -421,21 +579,25 @@ const upcomingCommand = define({
   name: "upcoming",
   description: "Show upcoming bills within a number of days",
   args: {
-    days: { type: "positional", description: "Number of days (default: 7)", required: false },
+    days: {
+      type: "positional",
+      description: "Number of days (default: 7)",
+      required: false,
+    },
   },
   run: (ctx) => {
     if (ctx.values.days !== undefined) {
-      const parsed = Number(ctx.values.days)
+      const parsed = Number(ctx.values.days);
       if (isNaN(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
-        consola.error("days must be a non-negative integer")
-        return
+        consola.error("days must be a non-negative integer");
+        return;
       }
-      handleUpcoming(parsed)
+      handleUpcoming(parsed);
     } else {
-      handleUpcoming(undefined)
+      handleUpcoming(undefined);
     }
   },
-})
+});
 
 // ── Analytics ─────────────────────────────────────────────
 
@@ -443,7 +605,7 @@ const analyticsCommand = define({
   name: "analytics",
   description: "Show detailed subscription analytics",
   run: () => handleAnalytics(),
-})
+});
 
 // ── Compare ────────────────────────────────────────────────
 
@@ -451,15 +613,30 @@ const compareCommand = define({
   name: "compare",
   description: "Compare spending between current and previous period",
   args: {
-    period: { type: "positional", description: "Period: monthly, quarterly, yearly (default: monthly)", required: false },
-    currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
-    api: { type: "boolean", short: "a", description: "Include LLM API usage costs" },
+    period: {
+      type: "positional",
+      description: "Period: monthly, quarterly, yearly (default: monthly)",
+      required: false,
+    },
+    currency: {
+      type: "string",
+      short: "c",
+      description: "Convert all prices to target currency",
+    },
+    api: {
+      type: "boolean",
+      short: "a",
+      description: "Include LLM API usage costs",
+    },
   },
   run: (ctx) => {
-    const period = (ctx.values.period || "monthly") as Cycle
-    handleCompare(period, { currency: ctx.values.currency, api: ctx.values.api })
+    const period = (ctx.values.period || "monthly") as Cycle;
+    handleCompare(period, {
+      currency: ctx.values.currency,
+      api: ctx.values.api,
+    });
   },
-})
+});
 
 // ── Config ────────────────────────────────────────────────
 
@@ -467,7 +644,7 @@ const configListCmd = define({
   name: "list",
   description: "List all config values",
   run: () => handleConfigList(),
-})
+});
 
 const configGetCmd = define({
   name: "get",
@@ -476,7 +653,7 @@ const configGetCmd = define({
     key: { type: "positional", description: "Config key" },
   },
   run: (ctx) => handleConfigGet(ctx.values.key),
-})
+});
 
 const configSetCmd = define({
   name: "set",
@@ -486,13 +663,13 @@ const configSetCmd = define({
     value: { type: "positional", description: "Config value" },
   },
   run: (ctx) => handleConfigSet(ctx.values.key, ctx.values.value),
-})
+});
 
 const configResetCmd = define({
   name: "reset",
   description: "Reset config to defaults",
   run: () => handleConfigReset(),
-})
+});
 
 const configCommand = define({
   name: "config",
@@ -504,7 +681,7 @@ const configCommand = define({
     reset: configResetCmd,
   },
   run: () => consola.info("Usage: subtrack config list|get|set|reset"),
-})
+});
 
 // ── Usage commands ───────────────────────────────────────
 
@@ -513,16 +690,23 @@ const usageAddCommand = define({
   description: "Add an LLM API usage entry",
   toKebab: true,
   args: {
-    provider: { type: "string", description: "Provider name (openai, anthropic, ...)" },
+    provider: {
+      type: "string",
+      description: "Provider name (openai, anthropic, ...)",
+    },
     model: { type: "string", description: "Model name (e.g. gpt-4o)" },
     inputTokens: { type: "string", description: "Input tokens used" },
     outputTokens: { type: "string", description: "Output tokens used" },
     date: { type: "string", description: "Date (YYYY-MM-DD, default: today)" },
     description: { type: "string", description: "Optional description" },
-    cost: { type: "string", description: "Total cost in USD (e.g. 0.50 for 50 cents; overrides auto-pricing)" },
+    cost: {
+      type: "string",
+      description:
+        "Total cost in USD (e.g. 0.50 for 50 cents; overrides auto-pricing)",
+    },
   },
   run: (ctx) => handleUsageAdd(ctx.values),
-})
+});
 
 const usageListCommand = define({
   name: "list",
@@ -533,41 +717,56 @@ const usageListCommand = define({
     to: { type: "string", description: "End date (YYYY-MM-DD)" },
   },
   run: (ctx) => handleUsageList(ctx.values),
-})
+});
 
 const usageDeleteCommand = define({
   name: "delete",
   description: "Delete LLM API usage entries",
   args: {
-    id: { type: "positional", array: true, description: "Entry ID(s) to delete (omit for interactive selection)", required: false },
+    id: {
+      type: "positional",
+      array: true,
+      description: "Entry ID(s) to delete (omit for interactive selection)",
+      required: false,
+    },
   },
   run: (ctx) => {
-    const ids = ctx.positionals.slice(1).map(Number).filter((n) => !isNaN(n))
-    handleUsageDelete(ids.length > 0 ? ids : undefined)
+    const ids = ctx.positionals
+      .slice(1)
+      .map(Number)
+      .filter((n) => !isNaN(n));
+    handleUsageDelete(ids.length > 0 ? ids : undefined);
   },
-})
+});
 
 const usageImportCommand = define({
   name: "import",
   description: "Import LLM API usage from JSONL/JSON response log files",
   toKebab: true,
   args: {
-    file: { type: "positional", description: "JSONL/JSON file to import (use - for stdin)" },
+    file: {
+      type: "positional",
+      description: "JSONL/JSON file to import (use - for stdin)",
+    },
     dryRun: { type: "boolean", description: "Validate without importing" },
   },
   run: (ctx) => handleUsageImport(ctx.values),
-})
+});
 
 const usageRefreshCommand = define({
   name: "refresh",
-  description: "Auto-scan known sources (OpenCode DB, Claude Code, Codex CLI, Cursor, Copilot, Windsurf) and import usage data — defaults to current month",
+  description:
+    "Auto-scan known sources (OpenCode DB, Claude Code, Codex CLI, Cursor, Copilot, Windsurf) and import usage data — defaults to current month",
   args: {
     from: { type: "string", description: "Start date (YYYY-MM-DD)" },
     to: { type: "string", description: "End date (YYYY-MM-DD)" },
-    all: { type: "boolean", description: "Scan all historical data (ignore date range)" },
+    all: {
+      type: "boolean",
+      description: "Scan all historical data (ignore date range)",
+    },
   },
   run: (ctx) => handleUsageRefresh(ctx.values as UsageRefreshFlags),
-})
+});
 
 const usageCommand = define({
   name: "usage",
@@ -579,34 +778,39 @@ const usageCommand = define({
     import: usageImportCommand,
     refresh: usageRefreshCommand,
   },
-  run: () => consola.info("Usage: subtrack usage add|list|delete|import|refresh"),
-})
+  run: () =>
+    consola.info("Usage: subtrack usage add|list|delete|import|refresh"),
+});
 
 const mainCommand = define({
   name: "subtrack",
   description: "Manage subscription services from your terminal",
   run: () => consola.info('Run "subtrack --help" for available commands'),
-})
+});
 
 // Signal handlers for clean shutdown
-let exiting = false
+let exiting = false;
 const handleSignal = (signal: string) => {
-  if (exiting) return
-  exiting = true
-  consola.info(`Received ${signal}, saving data...`)
-  try { saveDb() } catch { /* best-effort */ }
-  process.exit(0)
-}
-process.on("SIGINT", () => handleSignal("SIGINT"))
-process.on("SIGTERM", () => handleSignal("SIGTERM"))
+  if (exiting) return;
+  exiting = true;
+  consola.info(`Received ${signal}, saving data...`);
+  try {
+    saveDb();
+  } catch {
+    /* best-effort */
+  }
+  process.exit(0);
+};
+process.on("SIGINT", () => handleSignal("SIGINT"));
+process.on("SIGTERM", () => handleSignal("SIGTERM"));
 
 // Restrict file permissions for all created files
-process.umask(0o077)
+process.umask(0o077);
 
 try {
   await cli(process.argv.slice(2), mainCommand, {
     name: "subtrack",
-    version: "6.0.0",
+    version: "7.0.7",
     subCommands: {
       list: listCommand,
       add: addCommand,
@@ -631,17 +835,17 @@ try {
       config: configCommand,
       usage: usageCommand,
     },
-  })
+  });
 } catch (error) {
   if (error instanceof Error && error.name === "ExitPromptError") {
     // User cancelled the prompt (Ctrl+C/D) — exit gracefully
-    process.exit(0)
+    process.exit(0);
   }
   if (error instanceof AggregateError) {
     for (const e of error.errors) {
-      consola.error(String(e))
+      consola.error(String(e));
     }
-    process.exit(1)
+    process.exit(1);
   }
-  throw error
+  throw error;
 }
