@@ -2,6 +2,7 @@ import { consola } from "consola"
 import pc from "picocolors"
 import CliTable3 from "cli-table3"
 import type { SharedArgs, Currency, Cycle } from "./types.ts"
+import { periodFactor } from "./types.ts"
 import { getSubscriptions, getLlmUsageTotal, getLlmUsageTotalByProvider } from "./db.ts"
 import { formatPrice } from "./display.ts"
 import { getPeriodDateRange, getPreviousPeriodDateRange } from "./payment.ts"
@@ -54,7 +55,7 @@ function calcSubTotal(
   const totals: Record<string, number> = {}
   for (const sub of subs) {
     if (sub.status === "cancelled") continue
-    const monthly = sub.price // already in its own cycle
+    const monthly = sub.price * periodFactor(sub.cycle, "monthly")
     if (targetCurrency && rates) {
       try {
         const converted = convertPrice(monthly, sub.currency, targetCurrency, rates.rates)
@@ -231,16 +232,19 @@ export async function showCompare(
     grandPrevious += Math.round(prevApiDisplay)
   }
 
-  // Grand total
-  rows.push({ label: "", current: "", previous: "", change: "", isDivider: true })
-  const totalCcy = targetCurrency ?? (currencies[0] ?? "USD")
-  rows.push({
-    label: pc.bold("Grand Total"),
-    current: formatPrice(grandCurrent, totalCcy),
-    previous: formatPrice(grandPrevious, totalCcy),
-    change: fmtChange(grandCurrent, grandPrevious, totalCcy),
-    isGrandTotal: true,
-  })
+  // Grand total — only show when a target currency is set or there's a single currency
+  const canGrandTotal = targetCurrency || currencies.length <= 1
+  if (canGrandTotal) {
+    rows.push({ label: "", current: "", previous: "", change: "", isDivider: true })
+    const totalCcy = targetCurrency ?? (currencies[0] ?? "USD")
+    rows.push({
+      label: pc.bold("Grand Total"),
+      current: formatPrice(grandCurrent, totalCcy),
+      previous: formatPrice(grandPrevious, totalCcy),
+      change: fmtChange(grandCurrent, grandPrevious, totalCcy),
+      isGrandTotal: true,
+    })
+  }
 
   renderCompareTable(rows, currentLabel, previousLabel)
   consola.log("")

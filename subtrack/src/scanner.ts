@@ -1,3 +1,4 @@
+import { consola } from "consola"
 import type { Scanner, ScanResult } from "./scanner-types.ts"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { createOpenCodeScanner } from "./opencode-scanner.ts"
@@ -57,7 +58,13 @@ export function runAllScanners(from?: string, to?: string): ScanResult {
   const allEntries: AddLlmUsageFromLogArgs[] = []
 
   for (const scanner of scanners) {
-    const result = scanner.scan(from, to)
+    let result: ScanResult
+    try {
+      result = scanner.scan(from, to)
+    } catch (err) {
+      consola.warn(`Scanner "${scanner.name}" failed: ${String(err)}`)
+      continue
+    }
     for (const entry of result.entries) {
       if (entry.generation_id && seen.has(entry.generation_id)) continue
       if (entry.generation_id) seen.add(entry.generation_id)

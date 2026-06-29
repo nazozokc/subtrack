@@ -527,8 +527,8 @@ test("calcSummary totals by tag", async () => {
     makeSub({ name: "B", price: 500, currency: "JPY", cycle: "monthly", tags: ["video"] }),
     makeSub({ name: "C", price: 10, currency: "USD", cycle: "monthly", tags: ["storage"] }),
   ])
-  expect(result.monthlyByTag.video).toEqual({ count: 2, monthly: 2000 })
-  expect(result.monthlyByTag.storage).toEqual({ count: 1, monthly: 10 })
+  expect(result.monthlyByTag.video).toEqual({ count: 2, monthly: { JPY: 2000 } })
+  expect(result.monthlyByTag.storage).toEqual({ count: 1, monthly: { USD: 10 } })
 })
 
 test("calcSummary identifies most expensive subscription", async () => {

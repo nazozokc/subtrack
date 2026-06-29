@@ -32,7 +32,7 @@ export function ToolsScreen() {
   )
 
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
+    <Box flexDirection="column" flexGrow={1} paddingX={1}>
       <Box marginBottom={1} flexDirection="column">
         <Box>
           <Gradient name="pastel">

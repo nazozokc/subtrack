@@ -76,7 +76,7 @@ export function HelpScreen() {
         ))}
       </Box>
 
-      <Box marginTop={1}>
+      <Box>
         <Text dimColor>Press Esc or q to go back</Text>
       </Box>
     </Box>

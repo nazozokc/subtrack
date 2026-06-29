@@ -5,7 +5,7 @@ import { consola } from "consola"
 import initSqlJs from "sql.js"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
-import { isInDateRange, dateToStartOfDayMs, dateToEndOfDayMs } from "./date-utils.ts"
+import { isInDateRange, dateToStartOfDayMs, dateToEndOfDayMs, estimateTokenSplit } from "./date-utils.ts"
 
 const _SQL = await initSqlJs()
 
@@ -65,9 +65,7 @@ export function scanCodexCli(from?: string, to?: string): ScanResult {
 
       if (tokensUsed <= 0) continue
 
-      // Codex CLI only stores total tokens — split 2:1 as rough estimate
-      const inputTokens = Math.round(tokensUsed * 2 / 3)
-      const outputTokens = tokensUsed - inputTokens
+      const { inputTokens, outputTokens } = estimateTokenSplit(tokensUsed)
 
       const date = createdAtMs > 0
         ? new Date(createdAtMs).toISOString().split("T")[0]

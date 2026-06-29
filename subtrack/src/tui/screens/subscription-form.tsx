@@ -162,7 +162,7 @@ function ValuesPanel({ data }: { data: FormData }) {
   if (data.paymentMethod.trim()) fields.push(["Method", data.paymentMethod.trim()])
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} width={30}>
+    <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} minWidth={26} flexGrow={0}>
       <Text bold dimColor underline>
         Current Values
       </Text>
@@ -271,7 +271,7 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
   // ── Render ──
 
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
+    <Box flexDirection="column" flexGrow={1}>
       {/* Title + progress */}
       <Box marginBottom={1} flexDirection="column">
         <Box>

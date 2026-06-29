@@ -21,13 +21,9 @@ export function ConfigScreen() {
   }, [editKey, setFormActive])
 
   useInput((input, key) => {
-    if (key.escape) {
-      if (editKey) {
-        setEditKey(null)
-        setResult(null)
-      } else {
-        dispatch({ type: "GO_BACK" })
-      }
+    if (key.escape && editKey) {
+      setEditKey(null)
+      setResult(null)
     }
     if (!editKey && /^\d$/.test(input)) {
       const idx = Number(input) - 1
@@ -50,7 +46,7 @@ export function ConfigScreen() {
   }, [])
 
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
+    <Box flexDirection="column" flexGrow={1} paddingX={1}>
       <Box marginBottom={1}>
         <Gradient name="pastel">
           <Text bold inverse>

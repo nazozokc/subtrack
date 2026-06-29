@@ -64,10 +64,11 @@ export function Sidebar() {
       borderColor={isFocused ? "cyan" : "gray"}
       flexGrow={1}
     >
-      {rows.map((row) => {
+      {rows.map((row, ri) => {
         if (row.kind === "head") {
+          const isFirst = ri === 0
           return (
-            <Box key={`head-${row.section}`} marginTop={1}>
+            <Box key={`head-${row.section}`} marginTop={isFirst ? 0 : 1} paddingLeft={1}>
               <Text dimColor bold>
                 {" "}{SECTION_HEADS[row.section]}
               </Text>

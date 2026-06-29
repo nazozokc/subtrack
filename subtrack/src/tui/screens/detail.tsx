@@ -17,10 +17,6 @@ export function DetailScreen() {
 
   useInput(
     (input, key) => {
-      if (key.escape || input === "q") {
-        handleBack()
-        return
-      }
       if (input === "e") {
         if (state.selectedId !== null) {
           dispatch({ type: "SET_SCREEN", screen: "edit" })
@@ -77,7 +73,7 @@ export function DetailScreen() {
   }
 
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
+    <Box flexDirection="column" flexGrow={1}>
       {/* Header */}
       <Box marginBottom={1}>
         <Gradient name="pastel">

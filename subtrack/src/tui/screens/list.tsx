@@ -82,11 +82,10 @@ export function ListScreen() {
 
   const { sortField, sortDesc } = state
 
-  const availableWidth = Math.max(40, termCols - SIDEBAR_WIDTH - 2) // -2 for sidebar border + screen padding
-  const LAYOUT_OVERHEAD = 2  // StatusBar + CommandBar rows outside ListScreen
-  const headerHeight = 4
-  const footerHeight = 3
-  const availableHeight = Math.max(5, termRows - LAYOUT_OVERHEAD - headerHeight - footerHeight)
+  const availableWidth = Math.max(40, termCols - SIDEBAR_WIDTH - 2) // sidebar border
+  const LAYOUT_OVERHEAD = 3  // StatusBar + CommandBar + merged header
+  const footerHeight = 1
+  const availableHeight = Math.max(5, termRows - LAYOUT_OVERHEAD - footerHeight)
 
   const widths = calcWidths(availableWidth)
 
@@ -119,8 +118,8 @@ export function ListScreen() {
     }
   }, [clampedListIndex, subs, dispatch])
 
-  // Scroll position + visual scrollbar
-  const maxVisible = Math.max(1, availableHeight - 2)
+  // Visible rows + scroll position
+  const maxVisible = Math.max(1, availableHeight - 1)
   const scrollPosition = subs.length > 0
     ? `${clampedListIndex + 1}/${subs.length}`
     : ""
@@ -271,10 +270,10 @@ export function ListScreen() {
   // ── Render ──
 
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1}>
-      {/* Title bar */}
-      <Box marginTop={1}>
-        <Box flexGrow={1}>
+    <Box flexDirection="column" flexGrow={1}>
+      {/* Merged header: title + stats + column headers + scroll */}
+      <Box>
+        <Box flexGrow={1} flexWrap="wrap">
           <Gradient name="pastel">
             <Text bold>
               Subscriptions{" "}
@@ -295,8 +294,16 @@ export function ListScreen() {
               {" "}[{state.multiSelect.size}]
             </Text>
           )}
+          <Text>{"  "}</Text>
+          {COLUMNS.map((col, i) => (
+            <Text key={col.key} bold underline color={col.sortField === sortField ? "cyan" : "gray"}>
+              {col.align === "right"
+                ? (col.label + sortArrow(col.sortField, sortField, sortDesc)).padStart(widths[i])
+                : (col.label + sortArrow(col.sortField, sortField, sortDesc)).padEnd(widths[i])}
+            </Text>
+          ))}
         </Box>
-        <Box>
+        <Box flexShrink={0}>
           {scrollPosition && (
             <>
               <Text color="gray">{scrollBar}</Text>
@@ -308,24 +315,7 @@ export function ListScreen() {
         </Box>
       </Box>
 
-      {/* Column headers with sort indicators */}
-      <Box marginTop={1}>
-        {COLUMNS.map((col, i) => (
-          <Box key={col.key} width={widths[i]}>
-            <Text bold underline color={col.sortField === sortField ? "cyan" : "gray"}>
-              {col.align === "right"
-                ? (col.label + sortArrow(col.sortField, sortField, sortDesc)).padStart(widths[i])
-                : (col.label + sortArrow(col.sortField, sortField, sortDesc)).padEnd(widths[i])}
-            </Text>
-          </Box>
-        ))}
-      </Box>
-
-      <Text dimColor>
-        {"─".repeat(availableWidth)}
-      </Text>
-
-      {/* Data rows */}
+      {/* Data rows - fills remaining space */}
       {visibleSubs.length === 0 ? (
         <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
           {state.filterText ? (
@@ -456,25 +446,16 @@ export function ListScreen() {
 
       {/* Totals */}
       {totals.size > 0 && (
-        <>
-          <Text dimColor>
-            {"─".repeat(availableWidth)}
+        <Box>
+          <Text bold dimColor underline>
+            Total{"  "}
           </Text>
           {Array.from(totals.entries()).map(([currency, total]) => (
-            <Box key={currency}>
-              <Box width={availableWidth - widths[widths.length - 1]}>
-                <Text bold dimColor>
-                  {"Total".padEnd(availableWidth - widths[widths.length - 1])}
-                </Text>
-              </Box>
-              <Box width={widths[widths.length - 1]} justifyContent="flex-end">
-                <Text bold color="yellow">
-                  {formatPrice(total, currency)}
-                </Text>
-              </Box>
-            </Box>
+            <Text key={currency} bold color="yellow">
+              {formatPrice(total, currency)}{"  "}
+            </Text>
           ))}
-        </>
+        </Box>
       )}
     </Box>
   )
