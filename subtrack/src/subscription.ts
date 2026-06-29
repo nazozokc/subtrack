@@ -308,7 +308,14 @@ export async function handleEdit(
     // Non-interactive: update only flagged fields
     const newData: Partial<AddSharedArgs> = {}
     if (flags.name !== undefined) newData.name = flags.name
-    if (flags.price !== undefined) newData.price = Number(flags.price)
+    if (flags.price !== undefined) {
+      const err = validatePrice(flags.price)
+      if (err !== true) {
+        consola.error(`Invalid price: ${err}`)
+        return
+      }
+      newData.price = Number(flags.price)
+    }
     if (flags.currency !== undefined) newData.currency = flags.currency
     if (flags.cycle !== undefined) newData.cycle = flags.cycle as Cycle
     if (flags.status !== undefined) newData.status = flags.status as Status

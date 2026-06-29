@@ -47,19 +47,27 @@ export function showAnalytics(): void {
   // Budget
   if (config.monthlyBudget > 0) {
     const defaultCurrency = config.defaultCurrency || "USD"
-    // Sum all monthly costs in their original currencies
-    const monthlyTotal = list.reduce((sum, sub) => sum + sub.price * periodFactor(sub.cycle, "monthly"), 0)
-    // For budget display, use default currency as reference
+    const currencies = new Set(list.map((s) => s.currency))
     const budgetDisplay = formatPrice(config.monthlyBudget, defaultCurrency)
-    const spentDisplay = formatPrice(monthlyTotal, "USD")
     consola.log(`  ${pc.dim("─".repeat(30))}`)
     consola.log(`  Budget:     ${pc.bold(budgetDisplay)}`)
-    const remaining = config.monthlyBudget - monthlyTotal
-    const remainingDisplay = formatPrice(remaining, "USD")
-    if (remaining >= 0) {
-      consola.log(`  Remaining:  ${pc.green(remainingDisplay)}`)
+
+    if (currencies.size === 1) {
+      const ccy = [...currencies][0]
+      const monthlyTotal = list.reduce((sum, sub) => sum + sub.price * periodFactor(sub.cycle, "monthly"), 0)
+      const remaining = config.monthlyBudget - monthlyTotal
+      if (ccy === defaultCurrency) {
+        const remainingDisplay = formatPrice(remaining, defaultCurrency)
+        if (remaining >= 0) {
+          consola.log(`  Remaining:  ${pc.green(remainingDisplay)}`)
+        } else {
+          consola.log(`  Over budget: ${pc.red(remainingDisplay.replace("-", ""))}`)
+        }
+      } else {
+        consola.log(`  Spending:   ${formatPrice(Math.round(monthlyTotal), ccy)}/${pc.dim(defaultCurrency)}`)
+      }
     } else {
-      consola.log(`  Over budget: ${pc.red(remainingDisplay.replace("-", ""))}`)
+      consola.log(pc.dim("  (Multiple currencies — set a defaultCurrency for budget comparison)"))
     }
   }
 
@@ -67,10 +75,16 @@ export function showAnalytics(): void {
   if (Object.keys(data.monthlyByTag).length > 0) {
     consola.log("")
     consola.log(pc.bold("Monthly by tag:"))
-    const sorted = Object.entries(data.monthlyByTag).sort((a, b) => b[1].monthly - a[1].monthly)
+    const sorted = Object.entries(data.monthlyByTag).sort(
+      (a, b) => Object.values(b[1].monthly).reduce((s, v) => s + v, 0) - Object.values(a[1].monthly).reduce((s, v) => s + v, 0),
+    )
     for (const [tag, info] of sorted) {
+      const ccyEntries = Object.entries(info.monthly)
+      const priceStr = ccyEntries.length === 1
+        ? formatPrice(Math.round(ccyEntries[0][1]), ccyEntries[0][0])
+        : ccyEntries.map(([ccy, total]) => formatPrice(Math.round(total), ccy)).join(" + ")
       consola.log(
-        `  ${tag.padEnd(16)} ${formatPrice(Math.round(info.monthly), "USD")}/month (${info.count} sub${info.count > 1 ? "s" : ""})`,
+        `  ${tag.padEnd(16)} ${priceStr}/month (${info.count} sub${info.count > 1 ? "s" : ""})`,
       )
     }
   }
