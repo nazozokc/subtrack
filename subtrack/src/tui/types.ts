@@ -33,23 +33,22 @@ export type SidebarSection = "data" | "reports" | "system"
 export type SidebarItem = {
   screen: Screen
   label: string
-  icon: string
   section: SidebarSection
 }
 
-/** Sidebar panel width in characters (including border) */
-export const SIDEBAR_WIDTH = 22
+/** Sidebar panel width in characters */
+export const SIDEBAR_WIDTH = 20
 
 export const SIDEBAR_ITEMS: SidebarItem[] = [
   // Data
-  { screen: "list", label: "List", icon: "📋", section: "data" },
-  { screen: "add", label: "Add", icon: "➕", section: "data" },
+  { screen: "list", label: "List", section: "data" },
+  { screen: "add", label: "Add", section: "data" },
   // Reports
-  { screen: "reports", label: "Reports", icon: "📊", section: "reports" },
+  { screen: "reports", label: "Reports", section: "reports" },
   // System
-  { screen: "config", label: "Config", icon: "⚙️", section: "system" },
-  { screen: "tools", label: "Tools", icon: "🔧", section: "system" },
-  { screen: "help", label: "Help", icon: "❓", section: "system" },
+  { screen: "config", label: "Config", section: "system" },
+  { screen: "tools", label: "Tools", section: "system" },
+  { screen: "help", label: "Help", section: "system" },
 ]
 
 export const SCREEN_TITLES: Record<Screen, string> = {

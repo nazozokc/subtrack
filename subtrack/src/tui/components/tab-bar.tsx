@@ -1,5 +1,6 @@
-import { Box, Text, useWindowSize } from "ink"
+import { Box, Text } from "ink"
 import { useMemo } from "react"
+import { SIDEBAR_WIDTH } from "../types.ts"
 
 type Props = {
   tabs: readonly string[]
@@ -7,44 +8,43 @@ type Props = {
   tabLabels: Record<string, string>
 }
 
+/**
+ * Compact 1-line tab bar.
+ * Tabs shrink/grow with available width using fixed-width segments.
+ */
 export function TabBar({ tabs, activeTab, tabLabels }: Props) {
-  const { columns: termCols } = useWindowSize()
-
-  // Derive tab width from available columns (after sidebar + padding)
-  const tabWidth = useMemo(() => {
-    const available = Math.max(40, termCols - 26) // 22 sidebar + 4 padding
-    const perTab = Math.max(10, Math.floor(available / tabs.length))
-    return perTab
-  }, [termCols, tabs.length])
-
-  const barWidth = tabs.length * tabWidth
+  // Available width = full terminal minus sidebar + padding
+  // We don't have useWindowSize here; rely on parent to give us room.
+  // Calculate proportional widths based on tab count.
+  const barWidth = useMemo(() => {
+    // Tabs render inside the content area; the content area is
+    // columns - SIDEBAR_WIDTH - 4 (border + padding). We'll use a
+    // reasonable default of 80 and let the parent Box handle overflow.
+    return undefined // let Box fill naturally
+  }, [tabs.length])
 
   return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Box width={barWidth}>
-        {tabs.map((tab, i) => {
+    <Box flexDirection="column" marginBottom={0}>
+      <Box flexGrow={1}>
+        {tabs.map((tab) => {
           const isActive = tab === activeTab
-          const label = `${tabLabels[tab] ?? tab}`
-          const paddedLabel = ` ${label.padEnd(tabWidth - 3)} `
-          const separator = i < tabs.length - 1 ? (
-            <Text dimColor>│</Text>
-          ) : null
+          const label = tabLabels[tab] ?? tab
 
           return (
-            <Box key={tab} width={tabWidth}>
+            <Box key={tab} marginRight={1}>
               {isActive ? (
-                <Text bold color="cyan" inverse wrap="truncate-end">{paddedLabel}</Text>
+                <Text bold color="cyan" inverse>
+                  {" "}{label}{" "}
+                </Text>
               ) : (
-                <Text dimColor wrap="truncate-end">{paddedLabel}</Text>
+                <Text dimColor>
+                  {" "}{label}{" "}
+                </Text>
               )}
-              {separator}
             </Box>
           )
         })}
       </Box>
-      <Text dimColor>
-        {"─".repeat(barWidth)}
-      </Text>
     </Box>
   )
 }

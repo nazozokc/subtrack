@@ -46,12 +46,11 @@ export function Toast() {
   const icon = TOAST_ICONS[state.toast.type] ?? "•"
 
   return (
-    <Box position="absolute" bottom={1} width="100%" justifyContent="center">
+    <Box position="absolute" bottom={0} width="100%" justifyContent="center">
       <Box
         borderStyle="round"
         borderColor={color}
         paddingX={1}
-        minHeight={1}
       >
         <Text color={color} bold>
           {" "}{icon} {state.toast.message}{" "}

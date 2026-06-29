@@ -2,6 +2,7 @@ import { Box, Text, useInput, useWindowSize } from "ink"
 import { useMemo, useState, useEffect } from "react"
 import { getSubscription, deleteSubscription } from "../../db.ts"
 import { useTui, useSetFormActive } from "../context/app-context.tsx"
+import { SIDEBAR_WIDTH } from "../types.ts"
 import { formatPrice } from "../../price.ts"
 
 export function DeleteScreen() {
@@ -51,11 +52,13 @@ export function DeleteScreen() {
     )
   }
 
+  const cardWidth = Math.min(50, Math.max(30, termCols - SIDEBAR_WIDTH - 8))
+
   return (
     <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
       {error && (
         <Box marginBottom={1} borderStyle="round" borderColor="red" paddingX={1}>
-          <Text color="red">⚠ {error}</Text>
+          <Text color="red">{error}</Text>
         </Box>
       )}
 
@@ -76,7 +79,7 @@ export function DeleteScreen() {
         paddingX={2}
         paddingY={1}
         flexDirection="column"
-        width={Math.min(50, Math.max(termCols - 12, 30))}
+        width={cardWidth}
       >
         <Box>
           <Box width={14}><Text dimColor>Name:</Text></Box>

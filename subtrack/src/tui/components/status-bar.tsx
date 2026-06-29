@@ -1,13 +1,11 @@
 import { Box, Text } from "ink"
-import Gradient from "ink-gradient"
 import { useTui } from "../context/app-context.tsx"
-import type { Screen } from "../types.ts"
 
-const SCREEN_LABELS: Record<Screen, string> = {
+const SCREEN_LABEL: Record<string, string> = {
   list: "List",
   add: "Add",
   edit: "Edit",
-  delete: "Delete",
+  delete: "Del",
   detail: "Detail",
   reports: "Reports",
   config: "Config",
@@ -15,70 +13,47 @@ const SCREEN_LABELS: Record<Screen, string> = {
   help: "Help",
 }
 
-function Breadcrumb({ history, current }: { history: Screen[]; current: Screen }) {
-  // Build breadcrumb trail: unique screens in order, last 3 max + current
-  const trail: string[] = []
-  const seen = new Set<string>()
-  for (const s of history) {
-    const label = SCREEN_LABELS[s]
-    if (!seen.has(label) && label !== SCREEN_LABELS[current]) {
-      trail.push(label)
-      seen.add(label)
-    }
-  }
-  // Keep only last 3
-  const displayTrail = trail.slice(-3)
-
-  return (
-    <Text dimColor>
-      {" "}
-      {displayTrail.map((l) => (
-        <Text key={l} dimColor>
-          {l} <Text bold color="gray">›</Text>{" "}
-        </Text>
-      ))}
-      <Text bold color="white">{SCREEN_LABELS[current]}</Text>{" "}
-    </Text>
-  )
-}
-
+/**
+ * Compact 1-line status bar.
+ *   left:  subtrack · MODE · ScreenName
+ *   right: filter indicator · multi-select count
+ */
 export function StatusBar() {
   const { state } = useTui()
   const modeColor = state.mode === "NORMAL" ? "green" : "yellow"
+  const modeLabel = state.mode === "NORMAL" ? "NORMAL" : "CMD"
+
+  const screenLabel = SCREEN_LABEL[state.screen] ?? state.screen
 
   return (
-    <Box width="100%" minHeight={1}>
-      <Box paddingLeft={1} flexGrow={1}>
-        <Gradient name="cristal"><Text bold>subtrack</Text></Gradient>
-        <Text dimColor> TUI</Text>
+    <Box width="100%" minHeight={1} paddingX={1}>
+      {/* Left side — brand + mode + screen */}
+      <Box flexGrow={1}>
+        <Text bold color="cyan">
+          subtrack
+        </Text>
+        <Text color={modeColor} bold>
+          {" · "}{modeLabel}
+        </Text>
+        <Text bold>
+          {" · "}{screenLabel}
+        </Text>
       </Box>
 
+      {/* Right side — filter + multi-select */}
       <Box>
-        <Breadcrumb history={state.history} current={state.screen} />
-      </Box>
-
-      {state.filterText && (
-        <Box>
+        {state.filterText && (
           <Text color="blue">
-            {" "}&gt; {state.filterText.length > 20
-              ? state.filterText.slice(0, 20) + "…"
+            /{state.filterText.length > 16
+              ? state.filterText.slice(0, 16) + "…"
               : state.filterText}{" "}
           </Text>
-        </Box>
-      )}
-
-      {state.multiSelect.size > 0 && (
-        <Box>
+        )}
+        {state.multiSelect.size > 0 && (
           <Text color="yellow" bold>
-            {" "}[{state.multiSelect.size}]{" "}
+            [{state.multiSelect.size}]{" "}
           </Text>
-        </Box>
-      )}
-
-      <Box paddingRight={1}>
-        <Text color={modeColor} bold inverse>
-          {" "}{state.mode === "NORMAL" ? " NORMAL " : " CMD "}{" "}
-        </Text>
+        )}
       </Box>
     </Box>
   )
