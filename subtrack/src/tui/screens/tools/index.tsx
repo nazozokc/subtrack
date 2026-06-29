@@ -1,4 +1,5 @@
 import { Box, Text, useInput } from "ink"
+import Gradient from "ink-gradient"
 import { useTui } from "../../context/app-context.tsx"
 import { TabBar } from "../../components/tab-bar.tsx"
 import { TOOLS_TABS, TOOLS_TAB_LABELS } from "../../types.ts"
@@ -31,11 +32,15 @@ export function ToolsScreen() {
   )
 
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
-      <Box marginBottom={1}>
-        <Text bold inverse color="cyan">
-          {" Tools "}
-        </Text>
+    <Box flexDirection="column" flexGrow={1} paddingX={1}>
+      <Box marginBottom={1} flexDirection="column">
+        <Box>
+          <Gradient name="pastel">
+            <Text bold inverse>
+              {" Tools "}
+            </Text>
+          </Gradient>
+        </Box>
       </Box>
 
       <TabBar tabs={TOOLS_TABS} activeTab={state.toolsTab} tabLabels={TOOLS_TAB_LABELS} />

@@ -70,7 +70,8 @@ function parseMessage(
 function extractDate(data: Record<string, unknown>): string {
   const timestamp = (data.time as Record<string, unknown>)?.created as number | undefined
   if (timestamp) {
-    return new Date(Math.floor(timestamp / 1000) * 1000).toISOString().split("T")[0]
+    // OpenCode stores timestamps in milliseconds — use directly
+    return new Date(timestamp).toISOString().split("T")[0]
   }
   return new Date().toISOString().split("T")[0]
 }

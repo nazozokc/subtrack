@@ -237,15 +237,20 @@ export const showPayment = async (
   // Group by payment method
   if (byMethod) {
     const methodGroups: Record<string, number> = {}
+    const methodCurrencies: Record<string, Set<string>> = {}
     for (const entry of entries) {
       const method = entry.paymentMethod || "unspecified"
       methodGroups[method] = (methodGroups[method] ?? 0) + entry.convertedPrice
+      if (!methodCurrencies[method]) methodCurrencies[method] = new Set()
+      methodCurrencies[method].add(entry.currency)
     }
     consola.log("")
     consola.log(pc.bold("By payment method:"))
     for (const [method, total] of Object.entries(methodGroups).sort()) {
       const rounded = Math.round(total)
-      consola.log(`  ${method.padEnd(16)} ${formatPrice(rounded, "USD")}/${fmtPeriod}`)
+      const ccies = [...(methodCurrencies[method] ?? new Set())]
+      const ccy = ccies.length === 1 ? ccies[0] : "USD"
+      consola.log(`  ${method.padEnd(16)} ${formatPrice(rounded, ccy)}/${fmtPeriod}`)
     }
   }
 
@@ -271,13 +276,13 @@ export const showPayment = async (
 export type SummaryData = {
   totalCount: number
   monthlyByCurrency: Record<string, number>
-  monthlyByTag: Record<string, { count: number; monthly: number }>
+  monthlyByTag: Record<string, { count: number; monthly: Record<string, number> }>
   mostExpensive: SharedArgs | undefined
 }
 
 export function calcSummary(subs: SharedArgs[]): SummaryData {
   const monthlyByCurrency: Record<string, number> = {}
-  const monthlyByTag: Record<string, { count: number; monthly: number }> = {}
+  const monthlyByTag: Record<string, { count: number; monthly: Record<string, number> }> = {}
 
   for (const sub of subs) {
     const monthly = sub.price * periodFactor(sub.cycle, "monthly")
@@ -285,9 +290,9 @@ export function calcSummary(subs: SharedArgs[]): SummaryData {
     monthlyByCurrency[sub.currency] = (monthlyByCurrency[sub.currency] ?? 0) + monthly
 
     for (const tag of sub.tags) {
-      if (!monthlyByTag[tag]) monthlyByTag[tag] = { count: 0, monthly: 0 }
+      if (!monthlyByTag[tag]) monthlyByTag[tag] = { count: 0, monthly: {} }
       monthlyByTag[tag].count++
-      monthlyByTag[tag].monthly += monthly
+      monthlyByTag[tag].monthly[sub.currency] = (monthlyByTag[tag].monthly[sub.currency] ?? 0) + monthly
     }
   }
 
@@ -331,10 +336,16 @@ export function showSummary(subs?: SharedArgs[]): void {
   if (Object.keys(data.monthlyByTag).length > 0) {
     consola.log("")
     consola.log(pc.bold("Monthly by tag:"))
-    const sorted = Object.entries(data.monthlyByTag).sort((a, b) => b[1].monthly - a[1].monthly)
+    const sorted = Object.entries(data.monthlyByTag).sort(
+      (a, b) => Object.values(b[1].monthly).reduce((s, v) => s + v, 0) - Object.values(a[1].monthly).reduce((s, v) => s + v, 0),
+    )
     for (const [tag, info] of sorted) {
+      const ccyEntries = Object.entries(info.monthly)
+      const priceStr = ccyEntries.length === 1
+        ? formatPrice(Math.round(ccyEntries[0][1]), ccyEntries[0][0])
+        : ccyEntries.map(([ccy, total]) => formatPrice(Math.round(total), ccy)).join(" + ")
       consola.log(
-        `  ${tag.padEnd(16)} ${formatPrice(Math.round(info.monthly), "USD")}/month (${info.count} sub${info.count > 1 ? "s" : ""})`,
+        `  ${tag.padEnd(16)} ${priceStr}/month (${info.count} sub${info.count > 1 ? "s" : ""})`,
       )
     }
   }
