@@ -3,8 +3,6 @@ import { useMemo, useState, useEffect } from "react"
 import { getSubscription, deleteSubscription } from "../../db.ts"
 import { useTui, useSetFormActive } from "../context/app-context.tsx"
 import { formatPrice } from "../../price.ts"
-import { colors, borderStyle } from "../theme.ts"
-import { Header } from "../components/header.tsx"
 
 export function DeleteScreen() {
   const { state, dispatch } = useTui()
@@ -46,7 +44,7 @@ export function DeleteScreen() {
   if (!sub) {
     return (
       <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
-        <Text color={colors.textDim}>Subscription not found</Text>
+        <Text dimColor>Subscription not found</Text>
       </Box>
     )
   }
@@ -54,58 +52,54 @@ export function DeleteScreen() {
   return (
     <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
       {error && (
-        <Box marginBottom={1} borderStyle={borderStyle} borderColor={colors.borderDanger} paddingX={1}>
-          <Text color={colors.danger}>{error}</Text>
+        <Box marginBottom={1} borderStyle="round" borderColor="red" paddingX={1}>
+          <Text color="red">{error}</Text>
         </Box>
       )}
 
       {/* Warning header */}
-      <Box marginBottom={1} borderStyle={borderStyle} borderColor={colors.borderDanger} paddingX={2} paddingY={1}>
+      <Box marginBottom={1} borderStyle="round" borderColor="red" paddingX={2} paddingY={1}>
         <Box flexDirection="column" alignItems="center">
-          <Header danger>Delete Subscription</Header>
-          <Text color={colors.textDim}>This action cannot be undone</Text>
+          <Text bold color="red" inverse>
+            {" Delete Subscription "}
+          </Text>
+          <Text dimColor>This action cannot be undone</Text>
         </Box>
       </Box>
 
       {/* Subscription details */}
-      <Box
-        borderStyle={borderStyle}
-        borderColor={colors.border}
-        paddingX={2}
-        paddingY={1}
-        flexDirection="column"
-      >
+      <Box paddingX={2} paddingY={1} flexDirection="column">
         <Box>
-          <Box width={14}><Text color={colors.textDim}>Name:</Text></Box>
+          <Box width={14}><Text dimColor>Name:</Text></Box>
           <Text bold>{sub.name}</Text>
         </Box>
         <Box>
-          <Box width={14}><Text color={colors.textDim}>Price:</Text></Box>
-          <Text bold color={colors.warning}>{formatPrice(sub.price, sub.currency)}</Text>
+          <Box width={14}><Text dimColor>Price:</Text></Box>
+          <Text bold color="yellow">{formatPrice(sub.price, sub.currency)}</Text>
         </Box>
         <Box>
-          <Box width={14}><Text color={colors.textDim}>Cycle:</Text></Box>
+          <Box width={14}><Text dimColor>Cycle:</Text></Box>
           <Text bold>{sub.cycle}</Text>
         </Box>
         <Box>
-          <Box width={14}><Text color={colors.textDim}>Status:</Text></Box>
+          <Box width={14}><Text dimColor>Status:</Text></Box>
           <Text bold>{sub.status}</Text>
         </Box>
         {sub.tags.length > 0 && (
           <Box>
-            <Box width={14}><Text color={colors.textDim}>Tags:</Text></Box>
+            <Box width={14}><Text dimColor>Tags:</Text></Box>
             <Text bold>{sub.tags.join(", ")}</Text>
           </Box>
         )}
       </Box>
 
       {/* Confirmation */}
-      <Box marginTop={1} paddingX={2} paddingY={1} borderStyle={borderStyle} borderColor={colors.warning}>
+      <Box marginTop={1} paddingX={2} paddingY={1} borderStyle="round" borderColor="yellow">
         <Text>
           Are you sure?{"  "}
-          <Text bold color={colors.success} inverse> y </Text>
+          <Text bold color="green" inverse> y </Text>
           {"  to delete  "}
-          <Text bold color={colors.danger} inverse> n </Text>
+          <Text bold color="red" inverse> n </Text>
           {"  to cancel"}
         </Text>
       </Box>

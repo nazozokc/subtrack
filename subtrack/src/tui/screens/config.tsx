@@ -4,8 +4,6 @@ import { useState, useMemo, useEffect, useCallback } from "react"
 import { useTui, useSetFormActive } from "../context/app-context.tsx"
 import { loadConfig, setConfig, CONFIG_KEYS } from "../../config.ts"
 import type { ConfigKey } from "../../config.ts"
-import { colors, borderStyle } from "../theme.ts"
-import { Header } from "../components/header.tsx"
 
 export function ConfigScreen() {
   const { dispatch } = useTui()
@@ -47,21 +45,18 @@ export function ConfigScreen() {
   }, [])
 
   return (
-    <Box flexDirection="column" flexGrow={1}>
-      <Header>Configuration</Header>
+    <Box flexDirection="column" flexGrow={1} paddingX={1}>
+      <Box marginBottom={1}>
+        <Text bold inverse color="cyan">
+          {" Configuration "}
+        </Text>
+      </Box>
 
-      <Box
-        borderStyle={borderStyle}
-        borderColor={colors.border}
-        paddingX={1}
-        paddingY={1}
-        flexDirection="column"
-        flexGrow={1}
-      >
+      <Box flexDirection="column">
         {CONFIG_KEYS.map((k, i) => (
           <Box key={k}>
             <Box width={4}>
-              <Text color={colors.textDim}>{i + 1}.</Text>
+              <Text dimColor>{i + 1}.</Text>
             </Box>
             <Box width={20}>
               <Text bold>{k}:</Text>
@@ -74,7 +69,7 @@ export function ConfigScreen() {
                   onSubmit={(v) => save(k, v)}
                 />
               ) : (
-                <Text color={colors.textDim}>{String(config[k])}</Text>
+                <Text dimColor>{String(config[k])}</Text>
               )}
             </Box>
           </Box>
@@ -82,13 +77,13 @@ export function ConfigScreen() {
       </Box>
 
       {result && (
-        <Box marginTop={1} borderStyle={borderStyle} borderColor={colors.success} paddingX={1}>
-          <Text color={colors.success}>{result}</Text>
+        <Box marginTop={1} borderStyle="round" borderColor="green" paddingX={1}>
+          <Text color="green">{result}</Text>
         </Box>
       )}
 
       <Box marginTop={1}>
-        <Text color={colors.textDim}>
+        <Text dimColor>
           Press a number to edit, Enter to save, Esc to go back
         </Text>
       </Box>
