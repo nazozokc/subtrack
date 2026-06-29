@@ -323,7 +323,7 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
       </Box>
 
       {/* Key hints */}
-      <Box borderStyle="single" borderColor="gray" paddingX={1}>
+      <Box paddingLeft={1}>
         <Text dimColor>
           {step === "confirm"
             ? "  y  confirm    n  cancel"

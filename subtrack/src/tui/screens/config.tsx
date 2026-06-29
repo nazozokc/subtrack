@@ -52,13 +52,7 @@ export function ConfigScreen() {
         </Text>
       </Box>
 
-      <Box
-        borderStyle="round"
-        borderColor="gray"
-        paddingX={1}
-        paddingY={1}
-        flexDirection="column"
-      >
+      <Box flexDirection="column">
         {CONFIG_KEYS.map((k, i) => (
           <Box key={k}>
             <Box width={4}>

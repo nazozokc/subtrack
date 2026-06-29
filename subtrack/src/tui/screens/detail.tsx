@@ -157,13 +157,7 @@ export function DetailScreen() {
             <Box marginTop={1}><Text dimColor>{"─".repeat(Math.min(50, Math.max(termCols - 12, 20)))}</Text></Box>
             <Box marginTop={1} flexDirection="column">
               <Text dimColor>Notes:</Text>
-              <Box
-                borderStyle="single"
-                borderColor="gray"
-                paddingX={1}
-                paddingY={1}
-                marginTop={1}
-              >
+              <Box paddingLeft={2} marginTop={1}>
                 <Text wrap="wrap">{sub.notes}</Text>
               </Box>
             </Box>
