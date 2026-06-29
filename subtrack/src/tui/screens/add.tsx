@@ -4,6 +4,7 @@ import { writeSubscription } from "../../db.ts"
 import { useTui } from "../context/app-context.tsx"
 import { useState } from "react"
 import type { AddSharedArgs } from "../../types.ts"
+import { colors } from "../theme.ts"
 
 export function AddScreen() {
   const { dispatch } = useTui()
@@ -29,7 +30,7 @@ export function AddScreen() {
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {error && <Box paddingX={1}><Text color="red">{error}</Text></Box>}
+      {error && <Box paddingX={1}><Text color={colors.danger}>{error}</Text></Box>}
       <SubscriptionForm
         title="Add Subscription"
         onSave={handleSave}

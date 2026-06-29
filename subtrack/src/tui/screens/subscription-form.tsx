@@ -3,6 +3,9 @@ import { TextInput, Select } from "@inkjs/ui"
 import { useState, useCallback, useEffect } from "react"
 import { useSetFormActive } from "../context/app-context.tsx"
 import type { AddSharedArgs, Cycle, Status } from "../../types.ts"
+import { colors, borderStyle, statusColor } from "../theme.ts"
+import { Header } from "../components/header.tsx"
+import { Divider } from "../components/divider.tsx"
 
 // ── Types ──────────────────────────────────────────────
 
@@ -117,12 +120,12 @@ function ProgressBar({ current, total }: { current: number; total: number }) {
 
   return (
     <Box>
-      <Text color="cyan">{"█".repeat(filled)}</Text>
-      <Text dimColor>{"░".repeat(empty)}</Text>
+      <Text color={colors.primary}>{"█".repeat(filled)}</Text>
+      <Text color={colors.textDim}>{"░".repeat(empty)}</Text>
       <Text>
         {" "}
         <Text bold>{current}</Text>
-        <Text dimColor>/{total}</Text>
+        <Text color={colors.textDim}>/{total}</Text>
       </Text>
     </Box>
   )
@@ -162,20 +165,20 @@ function ValuesPanel({ data }: { data: FormData }) {
   if (data.paymentMethod.trim()) fields.push(["Method", data.paymentMethod.trim()])
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} minWidth={26} flexGrow={0}>
-      <Text bold dimColor underline>
+    <Box flexDirection="column" borderStyle={borderStyle} borderColor={colors.border} paddingX={1} minWidth={26} flexGrow={0}>
+      <Text bold color={colors.textDim} underline>
         Current Values
       </Text>
       {fields.map(([label, value]) => (
         <Box key={label}>
-          <Box width={10}><Text dimColor>{label}:</Text></Box>
+          <Box width={10}><Text color={colors.textDim}>{label}:</Text></Box>
           <Text bold wrap="truncate-end">{value}</Text>
         </Box>
       ))}
       {data.tags.trim() && (
         <Box>
-          <Box width={10}><Text dimColor>Tags:</Text></Box>
-          <Text dimColor wrap="truncate-end">{data.tags}</Text>
+          <Box width={10}><Text color={colors.textDim}>Tags:</Text></Box>
+          <Text color={colors.textDim} wrap="truncate-end">{data.tags}</Text>
         </Box>
       )}
     </Box>
@@ -191,7 +194,6 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
   const step = STEPS[stepIdx]
   const setFormActive = useSetFormActive()
 
-  // Prevent global key handler conflicts while form is active
   useEffect(() => {
     setFormActive(true)
     return () => setFormActive(false)
@@ -217,7 +219,6 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
     [],
   )
 
-  // Handle input for the current step
   useInput(
     (input, key) => {
       if (step === "confirm") {
@@ -272,16 +273,13 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {/* Title + progress */}
       <Box marginBottom={0} flexDirection="column">
         <Box>
-          <Text bold inverse color="cyan">
-            {" "}{title}{" "}
-          </Text>
+          <Header>{title}</Header>
         </Box>
         <Box marginTop={0}>
           <ProgressBar current={stepIdx + 1} total={STEPS.length} />
-          <Text dimColor>
+          <Text color={colors.textDim}>
             {" "}{STEP_SHORT[step] ?? step}
           </Text>
         </Box>
@@ -289,15 +287,17 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
 
       {/* Step label */}
       <Box>
-        <Text bold underline color="cyan">
+        <Text bold underline color={colors.primary}>
           {STEP_LABELS[step] ?? step}
         </Text>
       </Box>
 
+      <Divider />
+
       {/* Error */}
       {error && (
-        <Box borderStyle="round" borderColor="red" paddingX={1} paddingY={0}>
-          <Text color="red">{error}</Text>
+        <Box borderStyle={borderStyle} borderColor={colors.borderDanger} paddingX={1} paddingY={0}>
+          <Text color={colors.danger}>{error}</Text>
         </Box>
       )}
 
@@ -306,8 +306,8 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
         {/* Input area */}
         <Box flexGrow={1} flexDirection="column">
           <Box
-            borderStyle="round"
-            borderColor="cyan"
+            borderStyle={borderStyle}
+            borderColor={colors.primary}
             paddingX={1}
             paddingY={1}
             flexGrow={step === "confirm" ? 0 : 1}
@@ -316,15 +316,15 @@ export function SubscriptionForm({ initial, onSave, onCancel, title }: Props) {
           </Box>
         </Box>
 
-        {/* Right sidebar: submitted values (hide on confirm, shown there already) */}
+        {/* Right sidebar: submitted values */}
         {step !== "confirm" && (
           <ValuesPanel data={data} />
         )}
       </Box>
 
       {/* Key hints */}
-      <Box borderStyle="single" borderColor="gray" paddingX={1}>
-        <Text dimColor>
+      <Box borderStyle={borderStyle} borderColor={colors.border} paddingX={1}>
+        <Text color={colors.textDim}>
           {step === "confirm"
             ? "  y  confirm    n  cancel"
             : "  Enter  next    Esc  cancel"}
@@ -343,7 +343,6 @@ function renderStep(
   next: () => void,
 ) {
   switch (step) {
-    // Each case defined below — check STEPS + STEP_LABELS when adding a new step
     case "name":
       return (
         <Box flexDirection="column">
@@ -458,42 +457,42 @@ function renderStep(
       return (
         <Box flexDirection="column" gap={1}>
           <Box>
-            <Box width={16}><Text dimColor>Name:</Text></Box>
+            <Box width={16}><Text color={colors.textDim}>Name:</Text></Box>
             <Text bold>{data.name}</Text>
           </Box>
           <Box>
-            <Box width={16}><Text dimColor>Price:</Text></Box>
+            <Box width={16}><Text color={colors.textDim}>Price:</Text></Box>
             <Text bold>{isNaN(price) ? "—" : `${price} ${data.currency}`}</Text>
           </Box>
           <Box>
-            <Box width={16}><Text dimColor>Cycle:</Text></Box>
+            <Box width={16}><Text color={colors.textDim}>Cycle:</Text></Box>
             <Text bold>{data.cycle}</Text>
           </Box>
           <Box>
-            <Box width={16}><Text dimColor>Status:</Text></Box>
+            <Box width={16}><Text color={colors.textDim}>Status:</Text></Box>
             <Text bold>{data.status}</Text>
           </Box>
           {billingDay && (
             <Box>
-              <Box width={16}><Text dimColor>Billing Day:</Text></Box>
+              <Box width={16}><Text color={colors.textDim}>Billing Day:</Text></Box>
               <Text bold>{billingDay}</Text>
             </Box>
           )}
           {data.paymentMethod.trim() && (
             <Box>
-              <Box width={16}><Text dimColor>Method:</Text></Box>
+              <Box width={16}><Text color={colors.textDim}>Method:</Text></Box>
               <Text bold>{data.paymentMethod.trim()}</Text>
             </Box>
           )}
           {data.tags.trim() && (
             <Box>
-              <Box width={16}><Text dimColor>Tags:</Text></Box>
+              <Box width={16}><Text color={colors.textDim}>Tags:</Text></Box>
               <Text bold>{data.tags}</Text>
             </Box>
           )}
           {data.notes.trim() && (
             <Box>
-              <Box width={16}><Text dimColor>Notes:</Text></Box>
+              <Box width={16}><Text color={colors.textDim}>Notes:</Text></Box>
               <Text bold wrap="truncate-end">{data.notes}</Text>
             </Box>
           )}

@@ -3,6 +3,7 @@ import { useMemo } from "react"
 import { getSubscriptions } from "../../../db.ts"
 import { formatPrice } from "../../../price.ts"
 import { BarChart } from "../../components/bar-chart.tsx"
+import { colors } from "../../theme.ts"
 import { monthlyFactor } from "./helpers.ts"
 
 type Props = {
@@ -30,24 +31,24 @@ export function SummaryTab({ refreshKey }: Props) {
     <Box flexDirection="column">
       <Box marginBottom={1} flexDirection="column">
         <Box marginBottom={1}>
-          <Text bold underline>At a Glance</Text>
+          <Text bold underline color={colors.primary}>At a Glance</Text>
         </Box>
-        <Box><Box width={20}><Text dimColor>Total subscriptions:</Text></Box><Text bold>{subs.length}</Text></Box>
-        <Box><Box width={20}><Text dimColor>Active:</Text></Box><Text bold color="green">{totalActive}</Text></Box>
-        <Box><Box width={20}><Text dimColor>Paused:</Text></Box><Text bold color="yellow">{totalPaused}</Text></Box>
-        <Box><Box width={20}><Text dimColor>Cancelled:</Text></Box><Text bold color="red">{totalCancelled}</Text></Box>
+        <Box><Box width={20}><Text color={colors.textDim}>Total subscriptions:</Text></Box><Text bold>{subs.length}</Text></Box>
+        <Box><Box width={20}><Text color={colors.textDim}>Active:</Text></Box><Text bold color={colors.statusActive}>{totalActive}</Text></Box>
+        <Box><Box width={20}><Text color={colors.textDim}>Paused:</Text></Box><Text bold color={colors.statusPaused}>{totalPaused}</Text></Box>
+        <Box><Box width={20}><Text color={colors.textDim}>Cancelled:</Text></Box><Text bold color={colors.statusCancelled}>{totalCancelled}</Text></Box>
       </Box>
 
       {monthlyByCurrency.size > 0 && (
         <Box flexDirection="column" marginTop={1}>
           <Box marginBottom={1}>
-            <Text bold underline>Monthly Cost</Text>
+            <Text bold underline color={colors.primary}>Monthly Cost</Text>
           </Box>
           {Array.from(monthlyByCurrency.entries()).map(([currency, total]) => (
             <Box key={currency} flexDirection="column">
               <Box marginBottom={1}>
-                <Text bold color="cyan">{currency}</Text>
-                <Text dimColor>  {formatPrice(total, currency)}/mo</Text>
+                <Text bold color={colors.primary}>{currency}</Text>
+                <Text color={colors.textDim}>  {formatPrice(total, currency)}/mo</Text>
               </Box>
               <BarChart
                 items={[{ label: "Total", value: total }]}

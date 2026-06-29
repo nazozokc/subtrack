@@ -4,6 +4,7 @@ import { SubscriptionForm } from "./subscription-form.tsx"
 import { getSubscription, updateSubscription } from "../../db.ts"
 import { useTui } from "../context/app-context.tsx"
 import type { AddSharedArgs } from "../../types.ts"
+import { colors } from "../theme.ts"
 
 export function EditScreen() {
   const { state, dispatch } = useTui()
@@ -17,7 +18,7 @@ export function EditScreen() {
   if (!sub) {
     return (
       <Box flexGrow={1} alignItems="center" justifyContent="center">
-        <Text dimColor>Subscription not found</Text>
+        <Text color={colors.textDim}>Subscription not found</Text>
       </Box>
     )
   }
@@ -43,7 +44,7 @@ export function EditScreen() {
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {error && <Box paddingX={1}><Text color="red">{error}</Text></Box>}
+      {error && <Box paddingX={1}><Text color={colors.danger}>{error}</Text></Box>}
       <SubscriptionForm
         title={`Edit: ${sub.name}`}
         initial={{

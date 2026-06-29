@@ -1,7 +1,7 @@
 import { Box, Text, useInput } from "ink"
-import Gradient from "ink-gradient"
 import { useTui } from "../../context/app-context.tsx"
 import { TabBar } from "../../components/tab-bar.tsx"
+import { Header } from "../../components/header.tsx"
 import { REPORT_TABS, REPORT_TAB_LABELS } from "../../types.ts"
 import { SummaryTab } from "./summary-tab.tsx"
 import { PaymentTab } from "./payment-tab.tsx"
@@ -33,25 +33,19 @@ export function ReportsScreen() {
   )
 
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1}>
-      <Box marginBottom={1} flexDirection="column">
-        <Box>
-          <Gradient name="pastel">
-            <Text bold inverse>
-              {" Reports "}
-            </Text>
-          </Gradient>
-        </Box>
-      </Box>
+    <Box flexDirection="column" flexGrow={1}>
+      <Header gradient>Reports</Header>
 
       <TabBar tabs={REPORT_TABS} activeTab={state.reportsTab} tabLabels={REPORT_TAB_LABELS} />
 
-      {state.reportsTab === "summary" && <SummaryTab refreshKey={refreshKey} />}
-      {state.reportsTab === "payment" && <PaymentTab refreshKey={refreshKey} />}
-      {state.reportsTab === "upcoming" && <UpcomingTab refreshKey={refreshKey} />}
-      {state.reportsTab === "analytics" && <AnalyticsTab refreshKey={refreshKey} />}
-      {state.reportsTab === "compare" && <CompareTab refreshKey={refreshKey} />}
-      {state.reportsTab === "forecast" && <ForecastTab refreshKey={refreshKey} />}
+      <Box flexGrow={1}>
+        {state.reportsTab === "summary" && <SummaryTab refreshKey={refreshKey} />}
+        {state.reportsTab === "payment" && <PaymentTab refreshKey={refreshKey} />}
+        {state.reportsTab === "upcoming" && <UpcomingTab refreshKey={refreshKey} />}
+        {state.reportsTab === "analytics" && <AnalyticsTab refreshKey={refreshKey} />}
+        {state.reportsTab === "compare" && <CompareTab refreshKey={refreshKey} />}
+        {state.reportsTab === "forecast" && <ForecastTab refreshKey={refreshKey} />}
+      </Box>
     </Box>
   )
 }

@@ -2,6 +2,7 @@ import { Box, Text } from "ink"
 import { useMemo } from "react"
 import { getSubscriptions } from "../../../db.ts"
 import { BarChart } from "../../components/bar-chart.tsx"
+import { colors } from "../../theme.ts"
 
 type Props = {
   refreshKey: number
@@ -41,17 +42,17 @@ export function AnalyticsTab({ refreshKey }: Props) {
     <Box flexDirection="column">
       <Box marginBottom={1}><Text bold underline>Analytics</Text></Box>
       {activeSubs.length === 0 ? (
-        <Text dimColor>No active subscriptions</Text>
+        <Text color={colors.textDim}>No active subscriptions</Text>
       ) : (
         <>
           <Box flexDirection="column" marginBottom={1}>
-            <Text bold color="cyan">Most Expensive (top 5)</Text>
+            <Text bold color={colors.primary}>Most Expensive (top 5)</Text>
             <Box marginTop={1}>
               <BarChart
                 items={sortedByPrice.map((sub) => ({
                   label: sub.name,
                   value: sub.price,
-                  color: "yellow",
+                  color: colors.warning,
                 }))}
                 maxWidth={16}
                 currency={sortedByPrice[0]?.currency ?? "USD"}
@@ -60,20 +61,20 @@ export function AnalyticsTab({ refreshKey }: Props) {
             <Box marginTop={1}>
               {sortedByPrice.map((sub, i) => (
                 <Box key={sub.id}>
-                  <Box width={4}><Text dimColor>{(i + 1) + "."}</Text></Box>
+                  <Box width={4}><Text color={colors.textDim}>{(i + 1) + "."}</Text></Box>
                   <Box width={24}><Text bold wrap="truncate-end">{sub.name}</Text></Box>
-                  <Text dimColor>/{sub.cycle}</Text>
+                  <Text color={colors.textDim}>/{sub.cycle}</Text>
                 </Box>
               ))}
             </Box>
           </Box>
 
           <Box flexDirection="column" marginBottom={1}>
-            <Text bold color="cyan">Cost by Cycle</Text>
+            <Text bold color={colors.primary}>Cost by Cycle</Text>
             <Box marginTop={1}>
               {Array.from(new Set(cycleCost.map((c) => c.currency))).map((currency) => (
                 <Box key={currency} flexDirection="column" marginBottom={1}>
-                  <Text dimColor>{currency}:</Text>
+                  <Text color={colors.textDim}>{currency}:</Text>
                   <BarChart
                     items={cycleCost
                       .filter((c) => c.currency === currency)
@@ -87,14 +88,14 @@ export function AnalyticsTab({ refreshKey }: Props) {
           </Box>
 
           <Box flexDirection="column">
-            <Text bold color="cyan">Top Tags</Text>
+            <Text bold color={colors.primary}>Top Tags</Text>
             {tagFreq.length === 0 ? (
-              <Text dimColor>No tags</Text>
+              <Text color={colors.textDim}>No tags</Text>
             ) : (
               tagFreq.slice(0, 10).map(([tag, count]) => (
                 <Box key={tag}>
                   <Box width={20}><Text bold wrap="truncate-end">{tag}</Text></Box>
-                  <Text dimColor>{count} subscription{count !== 1 ? "s" : ""}</Text>
+                  <Text color={colors.textDim}>{count} subscription{count !== 1 ? "s" : ""}</Text>
                 </Box>
               ))
             )}

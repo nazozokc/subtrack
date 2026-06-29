@@ -8,6 +8,7 @@ import { exportCsv, exportJson, exportMd } from "../../../export.ts"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { cwd } from "node:process"
+import { colors } from "../../theme.ts"
 import type { SharedArgs } from "../../../types.ts"
 
 const EXPORTERS: Record<string, { ext: string; fn: (subs: SharedArgs[]) => string }> = {
@@ -17,10 +18,10 @@ const EXPORTERS: Record<string, { ext: string; fn: (subs: SharedArgs[]) => strin
 }
 
 type Props = {
-  refreshKey: number
+  refreshKey?: number
 }
 
-export function ExportTab({ refreshKey }: Props) {
+export function ExportTab({ refreshKey = 0 }: Props) {
   const [format, setFormat] = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<string>("")
@@ -66,7 +67,7 @@ export function ExportTab({ refreshKey }: Props) {
           <Spinner type="dots" /> Exporting…
         </Text>
       ) : (
-        <Text color={result.startsWith("Error") ? "red" : "green"}>{result}</Text>
+        <Text color={result.startsWith("Error") ? colors.danger : colors.success}>{result}</Text>
       )}
     </Box>
   )

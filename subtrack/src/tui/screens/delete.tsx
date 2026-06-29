@@ -1,17 +1,16 @@
-import { Box, Text, useInput, useWindowSize } from "ink"
+import { Box, Text, useInput } from "ink"
 import { useMemo, useState, useEffect } from "react"
 import { getSubscription, deleteSubscription } from "../../db.ts"
 import { useTui, useSetFormActive } from "../context/app-context.tsx"
-import { SIDEBAR_WIDTH } from "../types.ts"
 import { formatPrice } from "../../price.ts"
+import { colors, borderStyle } from "../theme.ts"
+import { Header } from "../components/header.tsx"
 
 export function DeleteScreen() {
   const { state, dispatch } = useTui()
-  const { columns: termCols } = useWindowSize()
   const [error, setError] = useState<string | null>(null)
   const setFormActive = useSetFormActive()
 
-  // Prevent global key handler from firing alongside our own
   useEffect(() => {
     setFormActive(true)
     return () => setFormActive(false)
@@ -47,71 +46,66 @@ export function DeleteScreen() {
   if (!sub) {
     return (
       <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
-        <Text dimColor>Subscription not found</Text>
+        <Text color={colors.textDim}>Subscription not found</Text>
       </Box>
     )
   }
 
-  const cardWidth = Math.min(50, Math.max(30, termCols - SIDEBAR_WIDTH - 8))
-
   return (
     <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
       {error && (
-        <Box marginBottom={1} borderStyle="round" borderColor="red" paddingX={1}>
-          <Text color="red">{error}</Text>
+        <Box marginBottom={1} borderStyle={borderStyle} borderColor={colors.borderDanger} paddingX={1}>
+          <Text color={colors.danger}>{error}</Text>
         </Box>
       )}
 
       {/* Warning header */}
-      <Box marginBottom={1} borderStyle="round" borderColor="red" paddingX={2} paddingY={1}>
+      <Box marginBottom={1} borderStyle={borderStyle} borderColor={colors.borderDanger} paddingX={2} paddingY={1}>
         <Box flexDirection="column" alignItems="center">
-          <Text bold color="red" inverse>
-            {" Delete Subscription "}
-          </Text>
-          <Text dimColor>This action cannot be undone</Text>
+          <Header danger>Delete Subscription</Header>
+          <Text color={colors.textDim}>This action cannot be undone</Text>
         </Box>
       </Box>
 
       {/* Subscription details */}
       <Box
-        borderStyle="round"
-        borderColor="gray"
+        borderStyle={borderStyle}
+        borderColor={colors.border}
         paddingX={2}
         paddingY={1}
         flexDirection="column"
-        width={cardWidth}
       >
         <Box>
-          <Box width={14}><Text dimColor>Name:</Text></Box>
+          <Box width={14}><Text color={colors.textDim}>Name:</Text></Box>
           <Text bold>{sub.name}</Text>
         </Box>
         <Box>
-          <Box width={14}><Text dimColor>Price:</Text></Box>
-          <Text bold color="yellow">{formatPrice(sub.price, sub.currency)}</Text>
+          <Box width={14}><Text color={colors.textDim}>Price:</Text></Box>
+          <Text bold color={colors.warning}>{formatPrice(sub.price, sub.currency)}</Text>
         </Box>
         <Box>
-          <Box width={14}><Text dimColor>Cycle:</Text></Box>
+          <Box width={14}><Text color={colors.textDim}>Cycle:</Text></Box>
           <Text bold>{sub.cycle}</Text>
         </Box>
         <Box>
-          <Box width={14}><Text dimColor>Status:</Text></Box>
+          <Box width={14}><Text color={colors.textDim}>Status:</Text></Box>
           <Text bold>{sub.status}</Text>
         </Box>
         {sub.tags.length > 0 && (
           <Box>
-            <Box width={14}><Text dimColor>Tags:</Text></Box>
+            <Box width={14}><Text color={colors.textDim}>Tags:</Text></Box>
             <Text bold>{sub.tags.join(", ")}</Text>
           </Box>
         )}
       </Box>
 
-      {/* Confirmation prompt */}
-      <Box marginTop={1} paddingX={2} paddingY={1} borderStyle="round" borderColor="yellow">
+      {/* Confirmation */}
+      <Box marginTop={1} paddingX={2} paddingY={1} borderStyle={borderStyle} borderColor={colors.warning}>
         <Text>
           Are you sure?{"  "}
-          <Text bold color="green" inverse> y </Text>
+          <Text bold color={colors.success} inverse> y </Text>
           {"  to delete  "}
-          <Text bold color="red" inverse> n </Text>
+          <Text bold color={colors.danger} inverse> n </Text>
           {"  to cancel"}
         </Text>
       </Box>

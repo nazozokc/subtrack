@@ -3,6 +3,7 @@ import { useMemo } from "react"
 import { getSubscriptions } from "../../../db.ts"
 import { formatPrice } from "../../../price.ts"
 import { BarChart } from "../../components/bar-chart.tsx"
+import { colors } from "../../theme.ts"
 import { monthlyFactor } from "./helpers.ts"
 
 type Props = {
@@ -29,13 +30,13 @@ export function CompareTab({ refreshKey }: Props) {
     <Box flexDirection="column">
       <Box marginBottom={1}><Text bold underline>Period Comparison</Text></Box>
       {active.length === 0 ? (
-        <Text dimColor>No active subscriptions</Text>
+        <Text color={colors.textDim}>No active subscriptions</Text>
       ) : (
         Array.from(monthlyTotal.entries()).map(([currency, total]) => (
           <Box key={currency} flexDirection="column" marginBottom={1}>
             <Box marginBottom={1}>
-              <Text bold color="cyan">{currency}/month</Text>
-              <Text bold color="yellow">  {formatPrice(total, currency)}</Text>
+              <Text bold color={colors.primary}>{currency}/month</Text>
+              <Text bold color={colors.warning}>  {formatPrice(total, currency)}</Text>
             </Box>
             <BarChart
               items={[{ label: currency, value: total }]}

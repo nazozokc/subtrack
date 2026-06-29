@@ -47,6 +47,12 @@ export type AppState = {
   paletteQuery: string
   /** Command palette selection index */
   paletteIndex: number
+  /** 3-pane: show detail preview alongside list */
+  showDetail: boolean
+  /** Toggle sidebar visibility (auto-hide on narrow terminals) */
+  showSidebar: boolean
+  /** Split ratio between list and detail (0.5 = 50/50) */
+  splitRatio: number
 }
 
 export type AppAction =
@@ -71,6 +77,11 @@ export type AppAction =
   | { type: "SET_PALETTE_OPEN"; open: boolean }
   | { type: "SET_PALETTE_QUERY"; query: string }
   | { type: "SET_PALETTE_INDEX"; index: number }
+  | { type: "TOGGLE_DETAIL" }
+  | { type: "SET_DETAIL_VISIBLE"; visible: boolean }
+  | { type: "TOGGLE_SIDEBAR" }
+  | { type: "SET_SPLIT_RATIO"; ratio: number }
+  | { type: "SET_SPLIT_RATIO_STEP"; delta: number }
 
 const initialState: AppState = {
   screen: "list",
@@ -92,6 +103,9 @@ const initialState: AppState = {
   paletteOpen: false,
   paletteQuery: "",
   paletteIndex: 0,
+  showDetail: false,
+  showSidebar: true,
+  splitRatio: 0.6,
 }
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -184,6 +198,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, paletteQuery: action.query, paletteIndex: 0 }
     case "SET_PALETTE_INDEX":
       return { ...state, paletteIndex: action.index }
+    case "TOGGLE_DETAIL":
+      return { ...state, showDetail: !state.showDetail }
+    case "SET_DETAIL_VISIBLE":
+      return { ...state, showDetail: action.visible }
+    case "TOGGLE_SIDEBAR":
+      return { ...state, showSidebar: !state.showSidebar }
+    case "SET_SPLIT_RATIO":
+      return { ...state, splitRatio: Math.max(0.3, Math.min(0.8, action.ratio)) }
+    case "SET_SPLIT_RATIO_STEP": {
+      const next = state.splitRatio + action.delta
+      return { ...state, splitRatio: Math.max(0.3, Math.min(0.8, next)) }
+    }
     default:
       return state
   }

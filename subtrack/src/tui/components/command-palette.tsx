@@ -8,6 +8,8 @@ import {
   TOOLS_TABS,
   TOOLS_TAB_LABELS,
 } from "../types.ts"
+import { colors, borderStyle } from "../theme.ts"
+import { Divider } from "./divider.tsx"
 
 
 type PaletteEntry = {
@@ -204,7 +206,7 @@ export function CommandPalette() {
     { isActive: true },
   )
 
-  const maxVisible = 12
+  const maxVisible = Math.min(12, Math.max(3, filtered.length))
   const scrollOffset = Math.max(
     0,
     Math.min(clampedIndex - Math.floor(maxVisible / 2), Math.max(0, filtered.length - maxVisible)),
@@ -226,8 +228,8 @@ export function CommandPalette() {
       {/* Palette container */}
       <Box flexDirection="column" width="100%" alignItems="center">
         <Box
-          borderStyle="round"
-          borderColor="cyan"
+          borderStyle={borderStyle}
+          borderColor={colors.primary}
           width={60}
           flexDirection="column"
           paddingX={1}
@@ -235,18 +237,18 @@ export function CommandPalette() {
         >
           {/* Input */}
           <Box>
-            <Text bold color="cyan">
+            <Text bold color={colors.primary}>
               &gt;{" "}
             </Text>
-            <Text>{state.paletteQuery || <Text dimColor>Type to search…</Text>}</Text>
+            <Text>{state.paletteQuery || <Text color={colors.textDim}>Type to search…</Text>}</Text>
           </Box>
 
-          <Text dimColor>{"─".repeat(56)}</Text>
+          <Divider width={56} />
 
           {/* Results */}
           {visibleEntries.length === 0 ? (
             <Box paddingY={1}>
-              <Text dimColor>No matching commands</Text>
+              <Text color={colors.textDim}>No matching commands</Text>
             </Box>
           ) : (
             <Box flexDirection="column" minHeight={3}>
@@ -257,21 +259,21 @@ export function CommandPalette() {
                   <Box key={entry.id}>
                     <Box width={2}>
                       {isSelected ? (
-                        <Text color="cyan">▸</Text>
+                        <Text color={colors.primary}>▸</Text>
                       ) : (
                         <Text> </Text>
                       )}
                     </Box>
                     <Box width={56}>
                       {isSelected ? (
-                        <Text bold inverse wrap="truncate-end">
+                        <Text bold backgroundColor={colors.selectedBg} color={colors.selectedFg} wrap="truncate-end">
                           {" "}{entry.label.padEnd(40)}{" "}
-                          <Text dimColor>{entry.category}</Text>{" "}
+                          <Text color={colors.textDim}>{entry.category}</Text>{" "}
                         </Text>
                       ) : (
                         <Text wrap="truncate-end">
                           {" "}{entry.label.padEnd(40)}{" "}
-                          <Text dimColor>{entry.category}</Text>{" "}
+                          <Text color={colors.textDim}>{entry.category}</Text>{" "}
                         </Text>
                       )}
                     </Box>
@@ -281,20 +283,16 @@ export function CommandPalette() {
             </Box>
           )}
 
-          {filtered.length > maxVisible && (
-            <Text dimColor>
-              {"─".repeat(56)}
-            </Text>
-          )}
+          <Divider width={56} />
 
           {/* Footer */}
-          <Box marginTop={filtered.length > maxVisible ? 0 : 0}>
-            <Text dimColor>
+          <Box>
+            <Text color={colors.textDim}>
               {filtered.length > 0
                 ? `${clampedIndex + 1} / ${filtered.length}`
                 : ""}{" "}
             </Text>
-            <Text dimColor>
+            <Text color={colors.textDim}>
               ↑↓ navigate · Enter select · Esc close
             </Text>
           </Box>

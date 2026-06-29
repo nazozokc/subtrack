@@ -6,28 +6,7 @@ import type { Status } from "../../types.ts"
 import { SIDEBAR_WIDTH } from "../types.ts"
 import { useMemo, useEffect } from "react"
 import { formatPrice } from "../../price.ts"
-
-// ── Sort types ─────────────────────────────────────────
-
-// ── Status color helpers ──────────────────────────────
-
-function statusColor(status: Status): string {
-  switch (status) {
-    case "active": return "green"
-    case "paused": return "yellow"
-    case "cancelled": return "red"
-    default: return "white"
-  }
-}
-
-function statusLabel(status: Status): string {
-  switch (status) {
-    case "active": return "● active"
-    case "paused": return "◐ paused"
-    case "cancelled": return "○ cancelled"
-    default: return status
-  }
-}
+import { colors, statusColor, statusLabel } from "../theme.ts"
 
 // ── Column layout ────────────────────────────────────
 
@@ -82,14 +61,16 @@ export function ListScreen() {
 
   const { sortField, sortDesc } = state
 
-  const availableWidth = Math.max(40, termCols - SIDEBAR_WIDTH - 2) // sidebar border
-  const LAYOUT_OVERHEAD = 3  // StatusBar + CommandBar + merged header
-  const footerHeight = 1
-  const availableHeight = Math.max(5, termRows - LAYOUT_OVERHEAD - footerHeight)
+  // Available width: full terminal minus sidebar (if shown) minus border(2)
+  const sidebarW = state.showSidebar ? SIDEBAR_WIDTH + 1 : 0 // +1 for │ separator
+  const availableWidth = Math.max(40, termCols - sidebarW - 3)
+  const LAYOUT_OVERHEAD = 3 // StatusBar + CommandBar + border top/bottom
+  const availableHeight = Math.max(5, termRows - LAYOUT_OVERHEAD - 1) // -1 for header
 
   const widths = calcWidths(availableWidth)
 
-  // Fetch, sort, and filter subscriptions
+  // ── Data ──
+
   const subs = useMemo(() => {
     const all = getSubscriptions(sortField, sortDesc)
     if (state.filterText) {
@@ -104,7 +85,7 @@ export function ListScreen() {
     return all
   }, [state.filterText, sortField, sortDesc, state.refreshKey])
 
-  // Clamp listIndex to valid range
+  // Clamp listIndex
   const clampedListIndex = useMemo(() => {
     if (subs.length === 0) return 0
     return Math.min(state.listIndex, subs.length - 1)
@@ -118,8 +99,9 @@ export function ListScreen() {
     }
   }, [clampedListIndex, subs, dispatch])
 
-  // Visible rows + scroll position
-  const maxVisible = Math.max(1, availableHeight - 1)
+  // ── Scroll ──
+
+  const maxVisible = Math.max(1, availableHeight - 1) // -1 for totals row
   const scrollPosition = subs.length > 0
     ? `${clampedListIndex + 1}/${subs.length}`
     : ""
@@ -129,16 +111,17 @@ export function ListScreen() {
   )
   const visibleSubs = subs.slice(scrollOffset, scrollOffset + maxVisible)
 
-  // Visual scrollbar (horizontal, like a progress bar)
-  const scrollBarWidth = 8
+  // Visual scrollbar (thin, right side)
+  const scrollBarWidth = 6
   const scrollBar = useMemo(() => {
-    if (subs.length <= maxVisible) return "        ".split("").map(() => "░").join("")
+    if (subs.length <= maxVisible) return ""
     const pos = clampedListIndex / (subs.length - 1)
     const filled = Math.round(pos * scrollBarWidth)
     return "▓".repeat(filled) + "░".repeat(scrollBarWidth - filled)
   }, [clampedListIndex, subs.length, maxVisible])
 
-  // Totals by currency
+  // ── Totals ──
+
   const totals = useMemo(() => {
     const map = new Map<string, number>()
     for (const sub of subs) {
@@ -150,7 +133,8 @@ export function ListScreen() {
   const activeCount = useMemo(() => subs.filter((s) => s.status === "active").length, [subs])
   const { exit } = useApp()
 
-  // ── Keyboard handler ──
+  // ── Keyboard ──
+
   useInput(
     (input: string, key) => {
       if (state.focus !== "content") return
@@ -165,12 +149,12 @@ export function ListScreen() {
         return
       }
       if (key.pageUp || (key.ctrl && input === "u")) {
-        const jump = Math.max(1, Math.floor((process.stdout.rows ?? 24) / 2))
+        const jump = Math.max(1, Math.floor(termRows / 2))
         dispatch({ type: "SET_LIST_INDEX", index: Math.max(0, state.listIndex - jump) })
         return
       }
       if (key.pageDown || (key.ctrl && input === "d")) {
-        const jump = Math.max(1, Math.floor((process.stdout.rows ?? 24) / 2))
+        const jump = Math.max(1, Math.floor(termRows / 2))
         dispatch({ type: "SET_LIST_INDEX", index: state.listIndex + jump })
         return
       }
@@ -183,13 +167,26 @@ export function ListScreen() {
         return
       }
 
+      // 3-pane: toggle detail preview
+      if (input === "|") {
+        if (state.selectedId !== null) {
+          dispatch({ type: "TOGGLE_DETAIL" })
+        }
+        return
+      }
+
       // Actions
       if (input === "a") {
         dispatch({ type: "SET_SCREEN", screen: "add" })
         return
       }
+      // Enter in 3-pane mode: toggle detail; without 3-pane: go to detail screen
       if (key.return && state.selectedId !== null) {
-        dispatch({ type: "SET_SCREEN", screen: "detail" })
+        if (state.showDetail) {
+          dispatch({ type: "SET_SCREEN", screen: "detail" })
+        } else {
+          dispatch({ type: "TOGGLE_DETAIL" })
+        }
         return
       }
       if (input === "e" && state.selectedId !== null) {
@@ -269,189 +266,212 @@ export function ListScreen() {
 
   // ── Render ──
 
+  const barshow = scrollBar && scrollPosition ? `${scrollBar} ${scrollPosition}` : ""
+
   return (
     <Box flexDirection="column" flexGrow={1}>
-      {/* Merged header: title + stats + column headers + scroll */}
+      {/* ── Row 1: Title + stats ── */}
       <Box>
-        <Box flexGrow={1} flexWrap="wrap">
+        <Box flexGrow={1}>
           <Gradient name="pastel">
             <Text bold>
               Subscriptions{" "}
             </Text>
           </Gradient>
-          <Text dimColor>
+          <Text color={colors.textDim}>
             {subs.length} total · {activeCount} active
           </Text>
           {state.filterText && (
-            <Text color="blue">
-              {" "}▶ "{state.filterText.length > 16
-                ? state.filterText.slice(0, 16) + "…"
-                : state.filterText}"
+            <Text color={colors.info}>
+              {"  ▶ "}
+              {state.filterText.length > 20
+                ? state.filterText.slice(0, 20) + "…"
+                : state.filterText}
             </Text>
           )}
           {state.multiSelect.size > 0 && (
-            <Text color="yellow" bold>
-              {" "}[{state.multiSelect.size}]
+            <Text bold color={colors.warning}>
+              {"  ["}{state.multiSelect.size}{"]"}
             </Text>
           )}
-          <Text>{"  "}</Text>
-          {COLUMNS.map((col, i) => (
-            <Text key={col.key} bold underline color={col.sortField === sortField ? "cyan" : "gray"}>
+        </Box>
+        {barshow && (
+          <Box flexShrink={0}>
+            <Text color={colors.textDim}>{barshow}</Text>
+          </Box>
+        )}
+      </Box>
+
+      {/* ── Row 2: Column headers ── */}
+      <Box>
+        {/* Multi-select spacer */}
+        <Box width={2} />
+        {COLUMNS.map((col, i) => (
+          <Box key={col.key} width={widths[i]}>
+            <Text
+              bold
+              underline
+              color={col.sortField === sortField ? colors.primary : colors.textDim}
+            >
               {col.align === "right"
                 ? (col.label + sortArrow(col.sortField, sortField, sortDesc)).padStart(widths[i])
                 : (col.label + sortArrow(col.sortField, sortField, sortDesc)).padEnd(widths[i])}
             </Text>
-          ))}
-        </Box>
-        <Box flexShrink={0}>
-          {scrollPosition && (
-            <>
-              <Text color="gray">{scrollBar}</Text>
-              <Text dimColor>
-                {" "}{scrollPosition}{" "}
-              </Text>
-            </>
-          )}
-        </Box>
+          </Box>
+        ))}
       </Box>
 
-      {/* Data rows - fills remaining space */}
-      {visibleSubs.length === 0 ? (
-        <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
-          {state.filterText ? (
-            <>
-              <Text dimColor>🔍 No subscriptions match filter</Text>
-              <Box marginTop={1}>
-                <Text color="blue">  Esc or Ctrl+L</Text>
-                <Text dimColor>  Clear filter</Text>
-              </Box>
-            </>
-          ) : (
-            <>
+      {/* ── Data rows ── */}
+      <Box flexGrow={1} flexDirection="column" minHeight={0}>
+        {visibleSubs.length === 0 ? (
+          <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
+            {state.filterText ? (
+              <>
+                <Text color={colors.textDim}>🔍 No subscriptions match filter</Text>
+                <Box marginTop={1}>
+                  <Text color={colors.info}>  Esc or Ctrl+L</Text>
+                  <Text color={colors.textDim}>  Clear filter</Text>
+                </Box>
+              </>
+            ) : (
               <Box
                 borderStyle="round"
-                borderColor="cyan"
+                borderColor={colors.primary}
                 paddingX={2}
                 paddingY={1}
                 flexDirection="column"
                 alignItems="center"
               >
-                <Text bold color="cyan">📋 No subscriptions yet</Text>
+                <Text bold color={colors.primary}>📋 No subscriptions yet</Text>
                 <Box marginTop={1}>
-                  <Text dimColor>
-                    Press  <Text bold color="green">a</Text>  to add your first subscription
+                  <Text color={colors.textDim}>
+                    Press  <Text bold color={colors.success}>a</Text>  to add your first subscription
                   </Text>
                 </Box>
                 <Box marginTop={1}>
-                  <Text dimColor>
-                    Or use  <Text bold color="green">Ctrl+P</Text>  to open command palette
+                  <Text color={colors.textDim}>
+                    Or use  <Text bold color={colors.success}>Ctrl+P</Text>  to open command palette
+                  </Text>
+                </Box>
+              </Box>
+            )}
+          </Box>
+        ) : (
+          visibleSubs.map((sub, idx) => {
+            const globalIdx = scrollOffset + idx
+            const isSelected = globalIdx === clampedListIndex
+            const isActiveFocus = state.focus === "content"
+            const isMultiSelected = state.multiSelect.has(sub.id)
+            const isEven = globalIdx % 2 === 0
+
+            // Selection: use background-color highlight (not inverse)
+            const selStyle = isSelected && isActiveFocus
+
+            return (
+              <Box key={sub.id} minHeight={1}>
+                {/* Multi-select / selection marker */}
+                <Box width={2} flexShrink={0}>
+                  {isMultiSelected ? (
+                    <Text bold color={colors.warning}>●</Text>
+                  ) : selStyle ? (
+                    <Text color={colors.primary}>▸</Text>
+                  ) : (
+                    <Text color={colors.textDim}> </Text>
+                  )}
+                </Box>
+
+                {/* Name */}
+                <Box width={widths[0]}>
+                  {selStyle ? (
+                    <Text
+                      bold
+                      color={colors.selectedFg}
+                      backgroundColor={colors.selectedBg}
+                      wrap="truncate-end"
+                    >
+                      {sub.name.padEnd(widths[0]).slice(0, widths[0])}
+                    </Text>
+                  ) : (
+                    <Text
+                      color={isEven ? colors.textDim : colors.text}
+                      wrap="truncate-end"
+                    >
+                      {sub.name.padEnd(widths[0]).slice(0, widths[0])}
+                    </Text>
+                  )}
+                </Box>
+
+                {/* Status */}
+                <Box width={widths[1]}>
+                  <Text
+                    color={statusColor(sub.status)}
+                    backgroundColor={selStyle ? colors.selectedBg : undefined}
+                  >
+                    {statusLabel(sub.status).padEnd(widths[1]).slice(0, widths[1])}
                   </Text>
                 </Box>
 
-              </Box>
-            </>
-          )}
-        </Box>
-      ) : (
-        visibleSubs.map((sub, idx) => {
-          const globalIdx = scrollOffset + idx
-          const isSelected = globalIdx === clampedListIndex
-          const isActiveFocus = state.focus === "content"
-          const isMultiSelected = state.multiSelect.has(sub.id)
-          const isEven = globalIdx % 2 === 0
+                {/* Cycle */}
+                <Box width={widths[2]}>
+                  <Text
+                    color={isEven && !selStyle ? colors.textDim : colors.text}
+                    backgroundColor={selStyle ? colors.selectedBg : undefined}
+                  >
+                    {sub.cycle.padEnd(widths[2]).slice(0, widths[2])}
+                  </Text>
+                </Box>
 
-          // Selection glow: selected rows get bold + inverse (swap fg/bg)
-          // Multi-selected items get a yellow arrow marker
-          const selStyle = isSelected && isActiveFocus
+                {/* Billing Day */}
+                <Box width={widths[3]} justifyContent="flex-end">
+                  <Text
+                    color={isEven && !selStyle ? colors.textDim : colors.text}
+                    backgroundColor={selStyle ? colors.selectedBg : undefined}
+                  >
+                    {sub.billingDay
+                      ? String(sub.billingDay).padStart(widths[3]).slice(0, widths[3])
+                      : "—".padStart(widths[3])}
+                  </Text>
+                </Box>
 
-          return (
-            <Box key={sub.id}>
-              {/* Multi-select marker column */}
-              <Box width={2}>
-                {isMultiSelected ? (
-                  <Text bold color="yellow">▶</Text>
-                ) : selStyle ? (
-                  <Text color="cyan">▸</Text>
-                ) : (
-                  <Text dimColor> </Text>
-                )}
-              </Box>
-              {/* Name */}
-              <Box width={widths[0]}>
-                <Text
-                  bold={selStyle}
-                  inverse={selStyle}
-                  wrap="truncate-end"
-                  color={selStyle ? "white" : isEven ? "gray" : "white"}
-                >
-                  {sub.name.padEnd(widths[0]).slice(0, widths[0])}
-                </Text>
-              </Box>
-              {/* Status */}
-              <Box width={widths[1]}>
-                <Text
-                  color={statusColor(sub.status)}
-                  inverse={selStyle}
-                  dimColor={!selStyle && isEven}
-                >
-                  {statusLabel(sub.status).padEnd(widths[1]).slice(0, widths[1])}
-                </Text>
-              </Box>
-              {/* Cycle */}
-              <Box width={widths[2]}>
-                <Text
-                  inverse={selStyle}
-                  dimColor={!selStyle}
-                >
-                  {sub.cycle.padEnd(widths[2]).slice(0, widths[2])}
-                </Text>
-              </Box>
-              {/* Billing Day */}
-              <Box width={widths[3]} justifyContent="flex-end">
-                <Text
-                  inverse={selStyle}
-                  dimColor={!selStyle && isEven}
-                >
-                  {sub.billingDay ? String(sub.billingDay).padStart(widths[3]).slice(0, widths[3]) : "—".padStart(widths[3])}
-                </Text>
-              </Box>
-              {/* Tags */}
-              <Box width={widths[4]}>
-                <Text
-                  inverse={selStyle}
-                  wrap="truncate-end"
-                  dimColor={!selStyle && isEven}
-                >
-                  {(sub.tags.length > 0
-                    ? sub.tags.join(", ")
-                    : "—"
-                  ).padEnd(widths[4]).slice(0, widths[4])}
-                </Text>
-              </Box>
-              {/* Price */}
-              <Box width={widths[5]} justifyContent="flex-end">
-                <Text
-                  bold
-                  inverse={selStyle}
-                  dimColor={!selStyle && isEven}
-                  color={selStyle ? "white" : "yellow"}
-                >
-                  {formatPrice(sub.price, sub.currency).padStart(widths[5]).slice(0, widths[5])}
-                </Text>
-              </Box>
-            </Box>
-          )
-        })
-      )}
+                {/* Tags */}
+                <Box width={widths[4]}>
+                  <Text
+                    wrap="truncate-end"
+                    color={isEven && !selStyle ? colors.textDim : colors.text}
+                    backgroundColor={selStyle ? colors.selectedBg : undefined}
+                  >
+                    {(sub.tags.length > 0
+                      ? sub.tags.join(", ")
+                      : "—"
+                    ).padEnd(widths[4]).slice(0, widths[4])}
+                  </Text>
+                </Box>
 
-      {/* Totals */}
+                {/* Price */}
+                <Box width={widths[5]} justifyContent="flex-end">
+                  <Text
+                    bold
+                    color={selStyle ? colors.selectedFg : colors.warning}
+                    backgroundColor={selStyle ? colors.selectedBg : undefined}
+                  >
+                    {formatPrice(sub.price, sub.currency).padStart(widths[5]).slice(0, widths[5])}
+                  </Text>
+                </Box>
+              </Box>
+            )
+          })
+        )}
+      </Box>
+
+      {/* ── Totals footer ── */}
       {totals.size > 0 && (
         <Box>
-          <Text bold dimColor underline>
+          <Box width={2} />
+          <Text bold color={colors.textDim} underline>
             Total{"  "}
           </Text>
           {Array.from(totals.entries()).map(([currency, total]) => (
-            <Text key={currency} bold color="yellow">
+            <Text key={currency} bold color={colors.warning}>
               {formatPrice(total, currency)}{"  "}
             </Text>
           ))}

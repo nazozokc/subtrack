@@ -6,6 +6,7 @@ import { useSetFormActive } from "../../context/app-context.tsx"
 import { getDb, saveDb } from "../../../db.ts"
 import { parseCsvLine } from "../../../import-csv.ts"
 import { isValidCurrency, isValidCycle } from "../../../prompts.ts"
+import { colors } from "../../theme.ts"
 import { readFileSync } from "node:fs"
 
 export function ImportTab() {
@@ -80,7 +81,7 @@ export function ImportTab() {
           <Spinner type="dots" /> Importing…
         </Text>
       ) : result ? (
-        <Text color={result.startsWith("Error") ? "red" : "green"}>{result}</Text>
+        <Text color={result.startsWith("Error") ? colors.danger : colors.success}>{result}</Text>
       ) : (
         <TextInput
           placeholder="Path to CSV file..."
