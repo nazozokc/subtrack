@@ -103,8 +103,8 @@ export function scanWindsurf(from?: string, to?: string): ScanResult {
       return { source: "windsurf", entries: [] }
     }
 
-    // Fetch all key-value pairs that might contain usage data
-    const results = db.exec(`SELECT key, value FROM "${tableName}"`)
+    // Fetch key-value pairs matching usage-related patterns
+    const results = db.exec(`SELECT key, value FROM "${tableName}" WHERE key LIKE '%token%' OR key LIKE '%usage%' OR key LIKE '%completion%'`)
 
     if (results.length === 0) {
       consola.info("No data found in Windsurf DB")

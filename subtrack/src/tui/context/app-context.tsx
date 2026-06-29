@@ -163,9 +163,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case "SET_SORT": {
       const SORT_CYCLE: SortField[] = ["name", "price", "cycle", "status", "id"]
       const idx = SORT_CYCLE.indexOf(state.sortField)
-      // Advance to next field in cycle; reset desc on field change
       const next = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length]
-      return { ...state, sortField: next, sortDesc: false }
+      // When wrapping back to first field, toggle sort direction
+      const wrapped = idx === SORT_CYCLE.length - 1
+      const sortDesc = wrapped ? !state.sortDesc : state.sortDesc
+      return { ...state, sortField: next, sortDesc }
     }
     case "SET_TOAST":
       return { ...state, toast: action.toast }

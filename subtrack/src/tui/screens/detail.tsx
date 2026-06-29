@@ -1,8 +1,8 @@
 import { Box, Text, useInput, useWindowSize } from "ink"
+import Gradient from "ink-gradient"
 import { useMemo, useState } from "react"
 import { getSubscription } from "../../db.ts"
 import { useTui } from "../context/app-context.tsx"
-import { SIDEBAR_WIDTH } from "../types.ts"
 import { formatPrice } from "../../price.ts"
 
 export function DetailScreen() {
@@ -17,10 +17,6 @@ export function DetailScreen() {
 
   useInput(
     (input, key) => {
-      if (key.escape || input === "q") {
-        dispatch({ type: "GO_BACK" })
-        return
-      }
       if (input === "e") {
         if (state.selectedId !== null) {
           dispatch({ type: "SET_SCREEN", screen: "edit" })
@@ -41,6 +37,10 @@ export function DetailScreen() {
     { isActive: true },
   )
 
+  function handleBack() {
+    dispatch({ type: "GO_BACK" })
+  }
+
   if (!sub) {
     return (
       <Box flexGrow={1} alignItems="center" justifyContent="center">
@@ -49,6 +49,8 @@ export function DetailScreen() {
     )
   }
 
+  // ── Computed fields ──
+
   const statusColor: Record<string, string> = {
     active: "green",
     paused: "yellow",
@@ -56,9 +58,9 @@ export function DetailScreen() {
   }
 
   const statusLabel: Record<string, string> = {
-    active: "Active",
-    paused: "Paused",
-    cancelled: "Cancelled",
+    active: "● Active",
+    paused: "◐ Paused",
+    cancelled: "○ Cancelled",
   }
 
   const cycleLabel: Record<string, string> = {
@@ -70,15 +72,15 @@ export function DetailScreen() {
     yearly: "/year",
   }
 
-  const cardWidth = Math.min(60, Math.max(30, termCols - SIDEBAR_WIDTH - 8))
-
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
+    <Box flexDirection="column" flexGrow={1}>
       {/* Header */}
       <Box marginBottom={1}>
-        <Text bold inverse color="cyan">
-          {" Subscription Detail "}
-        </Text>
+        <Gradient name="pastel">
+          <Text bold inverse>
+            {" Subscription Detail "}
+          </Text>
+        </Gradient>
       </Box>
 
       {/* Main card */}
@@ -88,9 +90,8 @@ export function DetailScreen() {
         paddingX={2}
         paddingY={1}
         flexDirection="column"
-        width={cardWidth}
       >
-        {/* Name + status */}
+        {/* Name + status row */}
         <Box marginBottom={1}>
           <Box flexGrow={1}>
             <Text bold color="white" wrap="truncate-end">
@@ -104,51 +105,56 @@ export function DetailScreen() {
           </Box>
         </Box>
 
-        <Text dimColor>{"─".repeat(cardWidth - 4)}</Text>
+        <Text dimColor>{"─".repeat(Math.min(50, Math.max(termCols - 12, 20)))}</Text>
 
         {/* Price */}
         <Box marginTop={1}>
-          <Box width={16}><Text dimColor>Price:</Text></Box>
+          <Box width={18}><Text dimColor>Price:</Text></Box>
           <Text bold color="yellow">
             {formatPrice(sub.price, sub.currency)}
           </Text>
           <Text dimColor>{" "}{cycleLabel[sub.cycle] ?? `/${sub.cycle}`}</Text>
         </Box>
 
+        {/* Cycle */}
         <Box>
-          <Box width={16}><Text dimColor>Cycle:</Text></Box>
+          <Box width={18}><Text dimColor>Billing Cycle:</Text></Box>
           <Text bold>{sub.cycle}</Text>
         </Box>
 
+        {/* Billing day */}
         <Box>
-          <Box width={16}><Text dimColor>Billing Day:</Text></Box>
-          <Text bold>{sub.billingDay ?? "-"}</Text>
+          <Box width={18}><Text dimColor>Billing Day:</Text></Box>
+          <Text bold>{sub.billingDay ?? "—"}</Text>
           {sub.billingDay && (
             <Text dimColor>{" "}(day of month)</Text>
           )}
         </Box>
 
+        {/* Payment method */}
         <Box>
-          <Box width={16}><Text dimColor>Payment:</Text></Box>
-          <Text bold>{sub.paymentMethod ?? "-"}</Text>
+          <Box width={18}><Text dimColor>Payment Method:</Text></Box>
+          <Text bold>{sub.paymentMethod ?? "—"}</Text>
         </Box>
 
+        {/* Created */}
         <Box>
-          <Box width={16}><Text dimColor>Created:</Text></Box>
+          <Box width={18}><Text dimColor>Created:</Text></Box>
           <Text bold>{sub.createdAt}</Text>
         </Box>
 
+        {/* Tags */}
         <Box>
-          <Box width={16}><Text dimColor>Tags:</Text></Box>
+          <Box width={18}><Text dimColor>Tags:</Text></Box>
           <Text bold>
-            {sub.tags.length > 0 ? sub.tags.join(", ") : "-"}
+            {sub.tags.length > 0 ? sub.tags.join(", ") : "—"}
           </Text>
         </Box>
 
         {/* Notes */}
         {sub.notes && (
           <>
-            <Box marginTop={1}><Text dimColor>{"─".repeat(cardWidth - 4)}</Text></Box>
+            <Box marginTop={1}><Text dimColor>{"─".repeat(Math.min(50, Math.max(termCols - 12, 20)))}</Text></Box>
             <Box marginTop={1} flexDirection="column">
               <Text dimColor>Notes:</Text>
               <Box
@@ -166,14 +172,19 @@ export function DetailScreen() {
       </Box>
 
       {/* Actions */}
-      <Box marginTop={1} width={cardWidth}>
-        <Box borderStyle="round" borderColor="gray" paddingX={1} paddingY={0}>
+      <Box marginTop={1} flexDirection="column">
+        <Box
+          borderStyle="round"
+          borderColor="gray"
+          paddingX={1}
+          paddingY={0}
+        >
           <Text dimColor>
-            {" "}e:edit  d:delete  r:raw  q/Esc:back
+            {"  "}e: edit    d: delete    q/ Esc: back
           </Text>
           {showRaw && (
             <Text dimColor>
-              {" "}ID:{sub.id} Price(raw):{sub.price} {sub.currency}
+              {"  "}ID: {sub.id} | Price (raw): {sub.price} {sub.currency}
             </Text>
           )}
         </Box>

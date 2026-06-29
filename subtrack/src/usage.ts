@@ -14,7 +14,7 @@ export async function handleUsageList(options: { provider?: string; from?: strin
     from: options.from,
     to: options.to,
     limit: 100,
-    minCost: 0.01,
+    minCost: 0,
   })
 
   renderUsageTable(entries)
