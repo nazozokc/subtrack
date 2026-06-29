@@ -3,6 +3,7 @@ import { useMemo } from "react"
 import { getSubscriptions } from "../../../db.ts"
 import { formatPrice } from "../../../price.ts"
 import { BarChart } from "../../components/bar-chart.tsx"
+import { colors } from "../../theme.ts"
 import { monthlyFactor, yearlyFactor } from "./helpers.ts"
 
 type Props = {
@@ -35,16 +36,16 @@ export function PaymentTab({ refreshKey }: Props) {
     <Box flexDirection="column">
       <Box marginBottom={1}><Text bold underline>Payment Totals</Text></Box>
       {active.length === 0 ? (
-        <Text dimColor>No active subscriptions</Text>
+        <Text color={colors.textDim}>No active subscriptions</Text>
       ) : (
         <>
           <Box flexDirection="column" marginBottom={1}>
-            <Text bold color="cyan">Monthly</Text>
+            <Text bold color={colors.primary}>Monthly</Text>
             {monthlyByCurrency.map(([currency, total]) => (
               <Box key={currency} flexDirection="column" marginBottom={1}>
                 <Box>
-                  <Text dimColor>{currency}</Text>
-                  <Text bold color="yellow">  {formatPrice(total, currency)}</Text>
+                  <Text color={colors.textDim}>{currency}</Text>
+                  <Text bold color={colors.warning}>  {formatPrice(total, currency)}</Text>
                 </Box>
                 <BarChart
                   items={[{ label: "Monthly", value: total }]}
@@ -55,12 +56,12 @@ export function PaymentTab({ refreshKey }: Props) {
             ))}
           </Box>
           <Box flexDirection="column">
-            <Text bold color="cyan">Yearly</Text>
+            <Text bold color={colors.primary}>Yearly</Text>
             {yearlyByCurrency.map(([currency, total]) => (
               <Box key={currency} flexDirection="column" marginBottom={1}>
                 <Box>
-                  <Text dimColor>{currency}</Text>
-                  <Text bold color="yellow">  {formatPrice(total, currency)}</Text>
+                  <Text color={colors.textDim}>{currency}</Text>
+                  <Text bold color={colors.warning}>  {formatPrice(total, currency)}</Text>
                 </Box>
                 <BarChart
                   items={[{ label: "Yearly", value: total }]}

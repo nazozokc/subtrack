@@ -1,5 +1,6 @@
 import { Box, Text } from "ink"
 import { formatPrice } from "../../price.ts"
+import { colors } from "../theme.ts"
 
 type BarItem = {
   label: string
@@ -29,15 +30,15 @@ export function BarChart({ items, maxWidth = 16, currency = "USD" }: Props) {
         return (
           <Box key={item.label} minHeight={1}>
             <Box width={18}>
-              <Text bold wrap="truncate-end">
+              <Text color={colors.text} bold wrap="truncate-end">
                 {item.label.padEnd(18).slice(0, 18)}
               </Text>
             </Box>
             <Box width={maxWidth + 2}>
-              <Text color={item.color ?? "cyan"}>{bar}</Text>
+              <Text color={item.color ?? colors.primary}>{bar}</Text>
             </Box>
             <Box width={14} justifyContent="flex-end">
-              <Text bold color="yellow">
+              <Text bold color={colors.warning}>
                 {formatPrice(item.value, currency)}
               </Text>
             </Box>

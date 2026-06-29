@@ -5,6 +5,7 @@ import { useState, useCallback, useEffect } from "react"
 import { useSetFormActive } from "../../context/app-context.tsx"
 import { saveDb, getDbDir, getDefaultBackupDir } from "../../../db.ts"
 import { encryptBuffer, hasEncryptionKey } from "../../../crypto.ts"
+import { colors } from "../../theme.ts"
 import { writeFileSync, readFileSync, copyFileSync, mkdirSync } from "node:fs"
 import { join } from "node:path"
 
@@ -61,7 +62,7 @@ export function BackupTab() {
       )}
       {step === "encrypt" && (
         <Box flexDirection="column" gap={1}>
-          <Text dimColor>Encrypt backup?</Text>
+          <Text color={colors.textDim}>Encrypt backup?</Text>
           <Select
             options={[
               { label: "Yes, encrypt", value: "yes" },
@@ -77,7 +78,7 @@ export function BackupTab() {
         </Text>
       )}
       {step === "done" && (
-        <Text color={result?.startsWith("Backup") ? "green" : "red"}>{result}</Text>
+        <Text color={result?.startsWith("Backup") ? colors.success : colors.danger}>{result}</Text>
       )}
     </Box>
   )

@@ -186,3 +186,97 @@ export function DetailScreen() {
     </Box>
   )
 }
+
+// ── Detail Preview — compact 3-pane inline view (no own input handler) ──
+
+export function DetailPreview() {
+  const { state } = useTui()
+
+  const sub = useMemo(
+    () => (state.selectedId ? getSubscription(state.selectedId) : undefined),
+    [state.selectedId],
+  )
+
+  if (!sub) {
+    return (
+      <Box flexGrow={1} alignItems="center" justifyContent="center">
+        <Text dimColor>Not found</Text>
+      </Box>
+    )
+  }
+
+  const statusColor: Record<string, string> = {
+    active: "green",
+    paused: "yellow",
+    cancelled: "red",
+  }
+
+  const cycleLabel: Record<string, string> = {
+    weekly: "/week",
+    "bi-weekly": "/2 weeks",
+    monthly: "/month",
+    quarterly: "/quarter",
+    "semi-annual": "/6 months",
+    yearly: "/year",
+  }
+
+  return (
+    <Box flexDirection="column" flexGrow={1}>
+      {/* Compact header */}
+      <Box>
+        <Box flexGrow={1}>
+          <Text bold color="cyan" wrap="truncate-end">
+            {sub.name}
+          </Text>
+        </Box>
+        <Text bold color={statusColor[sub.status]}>
+          {"●"}
+        </Text>
+      </Box>
+
+      <Text dimColor>{"─".repeat(24)}</Text>
+
+      {/* 2-column compact info */}
+      <Box flexDirection="column" gap={0}>
+        <Box flexDirection="row">
+          <Box width={12}><Text dimColor>Price:</Text></Box>
+          <Text bold color="yellow">
+            {formatPrice(sub.price, sub.currency)}
+          </Text>
+          <Text dimColor>{" "}{cycleLabel[sub.cycle] ?? `/${sub.cycle}`}</Text>
+        </Box>
+        <Box flexDirection="row">
+          <Box width={12}><Text dimColor>Cycle:</Text></Box>
+          <Text>{sub.cycle}</Text>
+        </Box>
+        <Box flexDirection="row">
+          <Box width={12}><Text dimColor>Bill Day:</Text></Box>
+          <Text>{sub.billingDay ?? "—"}</Text>
+        </Box>
+        <Box flexDirection="row">
+          <Box width={12}><Text dimColor>Method:</Text></Box>
+          <Text>{sub.paymentMethod ?? "—"}</Text>
+        </Box>
+        {sub.tags.length > 0 && (
+          <Box flexDirection="row">
+            <Box width={12}><Text dimColor>Tags:</Text></Box>
+            <Text wrap="truncate-end">{sub.tags.join(", ")}</Text>
+          </Box>
+        )}
+      </Box>
+
+      {sub.notes && (
+        <>
+          <Text dimColor>{"─".repeat(24)}</Text>
+          <Text dimColor wrap="truncate-end">{sub.notes}</Text>
+        </>
+      )}
+
+      <Text dimColor>{"─".repeat(24)}</Text>
+
+      <Text dimColor>
+        e:edit  d:del  |:close  Enter:full
+      </Text>
+    </Box>
+  )
+}

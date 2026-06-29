@@ -2,6 +2,7 @@ import { Box, Text } from "ink"
 import { useMemo } from "react"
 import { getSubscriptions } from "../../../db.ts"
 import { formatPrice } from "../../../price.ts"
+import { colors } from "../../theme.ts"
 import { computeNextBill } from "./helpers.ts"
 
 type Props = {
@@ -28,18 +29,18 @@ export function UpcomingTab({ refreshKey }: Props) {
     <Box flexDirection="column">
       <Box marginBottom={1}><Text bold underline>Upcoming Bills (next 7 days)</Text></Box>
       {upcoming.length === 0 ? (
-        <Text dimColor>No bills due in the next 7 days</Text>
+        <Text color={colors.textDim}>No bills due in the next 7 days</Text>
       ) : (
         upcoming.map((s) => (
           <Box key={s.id}>
             <Box width={24}><Text bold wrap="truncate-end">{s.name}</Text></Box>
             <Box width={16}>
-              <Text color="yellow">
+              <Text color={colors.warning}>
                 {s.nextBill!.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </Text>
             </Box>
             <Box width={14}><Text>{formatPrice(s.price, s.currency)}</Text></Box>
-            <Text dimColor>/{s.cycle}</Text>
+            <Text color={colors.textDim}>/{s.cycle}</Text>
           </Box>
         ))
       )}

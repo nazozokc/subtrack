@@ -3,6 +3,7 @@ import { useMemo } from "react"
 import { getSubscriptions } from "../../../db.ts"
 import { formatPrice } from "../../../price.ts"
 import { BarChart } from "../../components/bar-chart.tsx"
+import { colors } from "../../theme.ts"
 import { monthlyFactor, yearlyFactor } from "./helpers.ts"
 
 type Props = {
@@ -35,17 +36,17 @@ export function ForecastTab({ refreshKey }: Props) {
     <Box flexDirection="column">
       <Box marginBottom={1}><Text bold underline>Spending Forecast</Text></Box>
       {active.length === 0 ? (
-        <Text dimColor>No active subscriptions</Text>
+        <Text color={colors.textDim}>No active subscriptions</Text>
       ) : (
         <>
           <Box marginBottom={1} flexDirection="column">
-            <Text bold color="cyan">Monthly Costs</Text>
+            <Text bold color={colors.primary}>Monthly Costs</Text>
             <Box marginTop={1}>
               {Array.from(monthly.entries()).map(([c, t]) => (
                 <Box key={c} flexDirection="column" marginBottom={1}>
                   <Box>
-                    <Text dimColor>{c}:</Text>
-                    <Text bold color="yellow">  {formatPrice(t, c)}</Text>
+                    <Text color={colors.textDim}>{c}:</Text>
+                    <Text bold color={colors.warning}>  {formatPrice(t, c)}</Text>
                   </Box>
                   <BarChart items={[{ label: "Monthly", value: t }]} maxWidth={12} currency={c} />
                 </Box>
@@ -53,13 +54,13 @@ export function ForecastTab({ refreshKey }: Props) {
             </Box>
           </Box>
           <Box flexDirection="column">
-            <Text bold color="cyan">Yearly Total</Text>
+            <Text bold color={colors.primary}>Yearly Total</Text>
             <Box marginTop={1}>
               {Array.from(yearly.entries()).map(([c, t]) => (
                 <Box key={c} flexDirection="column" marginBottom={1}>
                   <Box>
-                    <Text dimColor>{c}:</Text>
-                    <Text bold color="yellow">  {formatPrice(t, c)}</Text>
+                    <Text color={colors.textDim}>{c}:</Text>
+                    <Text bold color={colors.warning}>  {formatPrice(t, c)}</Text>
                   </Box>
                   <BarChart items={[{ label: "Yearly", value: t }]} maxWidth={12} currency={c} />
                 </Box>

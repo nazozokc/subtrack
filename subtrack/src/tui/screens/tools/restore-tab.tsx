@@ -4,6 +4,7 @@ import { TextInput, Select } from "@inkjs/ui"
 import { useState, useCallback, useEffect } from "react"
 import { useSetFormActive } from "../../context/app-context.tsx"
 import { getDbDir, getBackupFiles, restoreDb } from "../../../db.ts"
+import { colors } from "../../theme.ts"
 import { existsSync } from "node:fs"
 
 export function RestoreTab() {
@@ -45,14 +46,14 @@ export function RestoreTab() {
       <Box marginBottom={1}><Text bold underline>Restore Database</Text></Box>
       {step === "choose" && (
         <Box flexDirection="column" gap={1}>
-          <Text dimColor>Select a backup file:</Text>
+          <Text color={colors.textDim}>Select a backup file:</Text>
           {options.length > 0 ? (
             <Select
               options={options}
               onChange={(v) => { setSource(v); setStep("confirm") }}
             />
           ) : (
-            <Text dimColor>No backups found</Text>
+            <Text color={colors.textDim}>No backups found</Text>
           )}
           <TextInput
             placeholder="Or enter path manually..."
@@ -67,7 +68,7 @@ export function RestoreTab() {
           <Text>
             Restore from <Text bold>{source}</Text>?
           </Text>
-          <Text dimColor>This will overwrite the current database.</Text>
+          <Text color={colors.textDim}>This will overwrite the current database.</Text>
           <Select
             options={[
               { label: "Yes, restore", value: "yes" },
@@ -86,7 +87,7 @@ export function RestoreTab() {
         </Text>
       )}
       {step === "done" && (
-        <Text color={result?.startsWith("Restored") ? "green" : "red"}>
+        <Text color={result?.startsWith("Restored") ? colors.success : colors.danger}>
           {result}
         </Text>
       )}

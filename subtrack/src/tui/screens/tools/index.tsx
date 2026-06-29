@@ -1,7 +1,7 @@
-import { Box, Text, useInput } from "ink"
-import Gradient from "ink-gradient"
+import { Box, useInput } from "ink"
 import { useTui } from "../../context/app-context.tsx"
 import { TabBar } from "../../components/tab-bar.tsx"
+import { Header } from "../../components/header.tsx"
 import { TOOLS_TABS, TOOLS_TAB_LABELS } from "../../types.ts"
 import { ExportTab } from "./export-tab.tsx"
 import { ImportTab } from "./import-tab.tsx"
@@ -11,7 +11,6 @@ import { UsageTab } from "./usage-tab.tsx"
 
 export function ToolsScreen() {
   const { state, dispatch } = useTui()
-  const refreshKey = state.refreshKey
 
   useInput(
     (input: string, key) => {
@@ -32,24 +31,18 @@ export function ToolsScreen() {
   )
 
   return (
-    <Box flexDirection="column" flexGrow={1} paddingX={1}>
-      <Box marginBottom={1} flexDirection="column">
-        <Box>
-          <Gradient name="pastel">
-            <Text bold inverse>
-              {" Tools "}
-            </Text>
-          </Gradient>
-        </Box>
-      </Box>
+    <Box flexDirection="column" flexGrow={1}>
+      <Header>Tools</Header>
 
       <TabBar tabs={TOOLS_TABS} activeTab={state.toolsTab} tabLabels={TOOLS_TAB_LABELS} />
 
-      {state.toolsTab === "export" && <ExportTab refreshKey={refreshKey} />}
-      {state.toolsTab === "import" && <ImportTab />}
-      {state.toolsTab === "backup" && <BackupTab />}
-      {state.toolsTab === "restore" && <RestoreTab />}
-      {state.toolsTab === "usage" && <UsageTab />}
+      <Box flexGrow={1}>
+        {state.toolsTab === "export" && <ExportTab />}
+        {state.toolsTab === "import" && <ImportTab />}
+        {state.toolsTab === "backup" && <BackupTab />}
+        {state.toolsTab === "restore" && <RestoreTab />}
+        {state.toolsTab === "usage" && <UsageTab />}
+      </Box>
     </Box>
   )
 }

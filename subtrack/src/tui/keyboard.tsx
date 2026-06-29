@@ -123,6 +123,16 @@ export function KeyboardHandler() {
         return
       }
 
+      // + / - — adjust split ratio (3-pane mode)
+      if (input === "=" || input === "+") {
+        dispatch({ type: "SET_SPLIT_RATIO_STEP", delta: 0.05 })
+        return
+      }
+      if (input === "-") {
+        dispatch({ type: "SET_SPLIT_RATIO_STEP", delta: -0.05 })
+        return
+      }
+
       // ? — help screen (global, any screen)
       if (input === "?") {
         dispatch({ type: "SET_SCREEN", screen: "help" })

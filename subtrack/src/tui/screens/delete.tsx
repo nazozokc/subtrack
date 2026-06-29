@@ -9,7 +9,6 @@ export function DeleteScreen() {
   const [error, setError] = useState<string | null>(null)
   const setFormActive = useSetFormActive()
 
-  // Prevent global key handler from firing alongside our own
   useEffect(() => {
     setFormActive(true)
     return () => setFormActive(false)
@@ -94,7 +93,7 @@ export function DeleteScreen() {
         )}
       </Box>
 
-      {/* Confirmation prompt */}
+      {/* Confirmation */}
       <Box marginTop={1} paddingX={2} paddingY={1} borderStyle="round" borderColor="yellow">
         <Text>
           Are you sure?{"  "}

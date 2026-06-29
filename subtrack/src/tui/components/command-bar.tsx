@@ -1,51 +1,59 @@
 import { Box, Text } from "ink"
 import { useTui } from "../context/app-context.tsx"
+import { colors } from "../theme.ts"
 import type { Screen } from "../types.ts"
 
-type HintGroup = {
+type Hint = {
   label: string
   color: string
-  hints: string
+  keys: string
 }
 
-const HINT_GROUPS: Record<Screen, HintGroup[]> = {
+const HINTS: Record<Screen, Hint[]> = {
   list: [
-    { label: "Nav", color: "cyan", hints: "j/k · g/G · /" },
-    { label: "Action", color: "green", hints: "a:add · e:edit · d:del · Enter:detail" },
-    { label: "Data", color: "yellow", hints: "s:sort · S:status · v:sel" },
-    { label: "System", color: "blue", hints: "r:rpt · c:cfg · R:ref · ?:help · q:quit" },
+    { label: "Nav", color: colors.primary, keys: "j/k g/G /" },
+    { label: "Action", color: colors.success, keys: "a e d Enter" },
+    { label: "Data", color: colors.warning, keys: "s S v" },
+    { label: "View", color: colors.info, keys: "| detail · Esc close" },
+    { label: "System", color: colors.textDim, keys: "r c R ? q" },
   ],
   add: [
-    { label: "Form", color: "green", hints: "Enter:next · Esc:cancel" },
+    { label: "Form", color: colors.success, keys: "Enter next · Esc cancel" },
   ],
   edit: [
-    { label: "Form", color: "green", hints: "Enter:next · Esc:cancel" },
+    { label: "Form", color: colors.success, keys: "Enter next · Esc cancel" },
   ],
   delete: [
-    { label: "Confirm", color: "red", hints: "y:delete · n:cancel" },
+    { label: "Confirm", color: colors.danger, keys: "y delete · n cancel" },
   ],
   detail: [
-    { label: "Action", color: "green", hints: "e:edit · d:delete" },
-    { label: "View", color: "cyan", hints: "r:raw" },
-    { label: "Back", color: "gray", hints: "q/Esc:back" },
+    { label: "Action", color: colors.success, keys: "e edit · d delete" },
+    { label: "View", color: colors.primary, keys: "r raw" },
+    { label: "Back", color: colors.textDim, keys: "q/Esc back" },
   ],
   reports: [
-    { label: "Tab", color: "cyan", hints: "← → · h/l" },
-    { label: "Back", color: "gray", hints: "Esc:back" },
+    { label: "Tab", color: colors.primary, keys: "← → · h/l" },
+    { label: "Back", color: colors.textDim, keys: "Esc back" },
   ],
   config: [
-    { label: "Edit", color: "green", hints: "1-9:edit · Enter:save" },
-    { label: "Back", color: "gray", hints: "Esc:back" },
+    { label: "Edit", color: colors.success, keys: "1-9 edit · Enter save" },
+    { label: "Back", color: colors.textDim, keys: "Esc back" },
   ],
   tools: [
-    { label: "Tab", color: "cyan", hints: "← → · h/l" },
-    { label: "Back", color: "gray", hints: "Esc:back" },
+    { label: "Tab", color: colors.primary, keys: "← → · h/l" },
+    { label: "Back", color: colors.textDim, keys: "Esc back" },
   ],
   help: [
-    { label: "Back", color: "gray", hints: "Esc/q:back" },
+    { label: "Back", color: colors.textDim, keys: "Esc/q back" },
   ],
 }
 
+/**
+ * Flat 1-row command bar (no border — lazygit-style).
+ *
+ * Normal mode:  contextual keybinding hints separated by │
+ * Command mode: `:input▎` prompt
+ */
 export function CommandBar() {
   const { state } = useTui()
 
@@ -53,28 +61,35 @@ export function CommandBar() {
     const cmdText = state.filterText || ""
     return (
       <Box width="100%" minHeight={1}>
-        <Text bold color="yellow">
-          :{cmdText}
-        </Text>
-        <Text bold color="yellow">
-          ▎
-        </Text>
+        <Box paddingLeft={1}>
+          <Text bold color={colors.warning}>
+            :{cmdText}
+          </Text>
+          <Text bold color={colors.warning}>
+            ▎
+          </Text>
+        </Box>
       </Box>
     )
   }
 
-  const groups = HINT_GROUPS[state.screen] ?? []
+  const hints = HINTS[state.screen] ?? []
 
   return (
     <Box width="100%" minHeight={1}>
-      <Box paddingLeft={1} gap={1}>
-        {groups.map((g) => (
-          <Box key={g.label}>
-            <Text color={g.color} bold>
-              {g.label}
+      <Box paddingLeft={1} gap={0}>
+        {hints.map((h, i) => (
+          <Box key={h.label}>
+            {i > 0 && (
+              <Text dimColor color={colors.textDim}>
+                {"  │  "}
+              </Text>
+            )}
+            <Text color={h.color} bold>
+              {h.label}
             </Text>
             <Text dimColor>
-              : {g.hints}
+              :{" "}{h.keys}
             </Text>
           </Box>
         ))}
