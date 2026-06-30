@@ -75,7 +75,7 @@ afterEach(() => {
 test("showUpcoming shows info when no subscriptions", async () => {
   const { showUpcoming } = await import("../upcoming.ts")
   showUpcoming(7)
-  expect(infoMessages.some((m) => m.includes("No active subscriptions"))).toBe(true)
+  expect(infoMessages.some((m) => m.includes("No upcoming bills"))).toBe(true)
 })
 
 test("showUpcoming shows info when no upcoming bills", async () => {

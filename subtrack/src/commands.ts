@@ -21,23 +21,27 @@ import { writeFileSync } from "node:fs"
 import type { Currency, Cycle, SubtrackConfig } from "./types.ts"
 import { tagsSubscription, getSubscriptions } from "./db.ts"
 import { formatPrice } from "./display.ts"
-import { showPayment, showSummary } from "./payment.ts"
-import { showUpcoming } from "./upcoming.ts"
+import { showPayment, showSummary, calcSummary } from "./payment.ts"
+import { showUpcoming, calcUpcoming } from "./upcoming.ts"
 import { showAnalytics } from "./analytics.ts"
 import { showCompare } from "./compare.ts"
-import { exportCsv, exportMd, exportJson } from "./export.ts"
+import { exportCsv, exportMd, exportJson, exportExcel, exportIcs } from "./export.ts"
+import { showCalendar, calcCalendarEntries } from "./calendar.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import { loadConfig, setConfig, resetConfig, CONFIG_KEYS, getConfigPath } from "./config.ts"
 import { unlinkSync, existsSync } from "node:fs"
 import os from "node:os"
 import { resolveSafeOutputPath } from "./path-utils.ts"
+import type { SharedArgs } from "./types.ts"
+import { periodFactor } from "./types.ts"
 
 export async function handleExport(
   format: string,
   options: { currency?: string; tags?: string; output?: string },
 ) {
-  if (format !== "csv" && format !== "json" && format !== "md") {
-    consola.error(`Unsupported export format: "${format}". Supported: csv, json, md`)
+  const supported = ["csv", "json", "md", "excel", "ics"] as const
+  if (!(supported as readonly string[]).includes(format)) {
+    consola.error(`Unsupported export format: "${format}". Supported: ${supported.join(", ")}`)
     return
   }
 
@@ -68,7 +72,30 @@ export async function handleExport(
     }
   }
 
-  const content = format === "csv" ? exportCsv(list) : format === "json" ? exportJson(list) : exportMd(list)
+  if (format === "excel") {
+    const buf = await exportExcel(list)
+    if (options.output) {
+      const safePath = resolveSafeOutputPath([os.homedir(), os.tmpdir()], options.output)
+      if (!safePath) {
+        consola.error(`Invalid output path — must be within home directory`)
+        return
+      }
+      writeFileSync(safePath, buf, { mode: 0o600 })
+      consola.success(`Exported to: ${safePath}`)
+    } else {
+      process.stdout.write(buf)
+    }
+    return
+  }
+
+  const content = format === "csv"
+    ? exportCsv(list)
+    : format === "json"
+      ? exportJson(list)
+      : format === "md"
+        ? exportMd(list)
+        : exportIcs(list)
+
   if (options.output) {
     const safePath = resolveSafeOutputPath([os.homedir(), os.tmpdir()], options.output)
     if (!safePath) {
@@ -84,18 +111,55 @@ export async function handleExport(
 
 // ── Thin CLI wrappers ───────────────────────────────────
 
+export type JsonOptions = { json?: boolean }
+
 export async function handlePayment(
   period: Cycle,
-  options: { currency?: string; api?: boolean; method?: boolean },
+  options: { currency?: string; api?: boolean; method?: boolean } & JsonOptions,
 ) {
+  if (options.json) {
+    const subs = getSubscriptions()
+    const data = subs.map((sub) => ({
+      id: sub.id,
+      name: sub.name,
+      price: sub.price,
+      currency: sub.currency,
+      cycle: sub.cycle,
+      convertedPrice: Math.round(sub.price * periodFactor(sub.cycle, period)),
+      status: sub.status,
+    }))
+    process.stdout.write(JSON.stringify(data, null, 2) + "\n")
+    return
+  }
   await showPayment(period, options.currency as Currency | undefined, undefined, options.api, options.method)
 }
 
-export async function handleSummary() {
+export async function handleSummary(options: JsonOptions = {}) {
+  if (options.json) {
+    const subs = getSubscriptions()
+    const data = calcSummary(subs)
+    process.stdout.write(JSON.stringify(data, null, 2) + "\n")
+    return
+  }
   await showSummary()
 }
 
-export function handleUpcoming(days?: number): void {
+export function handleUpcoming(days: number = 7, options: JsonOptions = {}): void {
+  if (options.json) {
+    const entries = calcUpcoming(days)
+    const data = entries.map((e) => ({
+      id: e.sub.id,
+      name: e.sub.name,
+      price: e.sub.price,
+      currency: e.sub.currency,
+      cycle: e.sub.cycle,
+      nextDate: `${e.nextDate.getFullYear()}-${String(e.nextDate.getMonth() + 1).padStart(2, "0")}-${String(e.nextDate.getDate()).padStart(2, "0")}`,
+      amount: Math.round(e.amount),
+      tags: e.sub.tags,
+    }))
+    process.stdout.write(JSON.stringify(data, null, 2) + "\n")
+    return
+  }
   showUpcoming(days)
 }
 
@@ -108,6 +172,19 @@ export async function handleCompare(
   options: { currency?: string; api?: boolean },
 ): Promise<void> {
   await showCompare(period, options)
+}
+
+// ── Calendar handler ────────────────────────────────────
+
+export function handleCalendar(options: { month?: number; year?: number; json?: boolean }): void {
+  showCalendar(options)
+}
+
+// ── MCP handler ─────────────────────────────────────────
+
+export async function handleMcp(): Promise<void> {
+  const { startMcpServer } = await import("./mcp.ts")
+  await startMcpServer()
 }
 
 // ── Config handlers ─────────────────────────────────────

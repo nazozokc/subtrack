@@ -1,20 +1,24 @@
 import { Box, Text } from "ink"
 import Spinner from "ink-spinner"
 import { Select } from "@inkjs/ui"
-import { useState, useCallback, useMemo, useEffect } from "react"
-import { useSetFormActive } from "../../context/app-context.tsx"
+import { useState, useCallback, useMemo } from "react"
 import { getSubscriptions } from "../../../db.ts"
-import { exportCsv, exportJson, exportMd } from "../../../export.ts"
+import { exportCsv, exportJson, exportMd, exportExcel, exportIcs } from "../../../export.ts"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { cwd } from "node:process"
 import { colors } from "../../theme.ts"
 import type { SharedArgs } from "../../../types.ts"
 
-const EXPORTERS: Record<string, { ext: string; fn: (subs: SharedArgs[]) => string }> = {
+type ExporterSync = { ext: string; fn: (subs: SharedArgs[]) => string; binary?: false }
+type ExporterAsync = { ext: string; fn: (subs: SharedArgs[]) => Promise<Buffer>; binary: true }
+
+const EXPORTERS: Record<string, ExporterSync | ExporterAsync> = {
   csv: { ext: "csv", fn: exportCsv },
   json: { ext: "json", fn: exportJson },
   md: { ext: "md", fn: exportMd },
+  ics: { ext: "ics", fn: exportIcs },
+  excel: { ext: "xlsx", fn: exportExcel, binary: true },
 }
 
 type Props = {
@@ -26,28 +30,29 @@ export function ExportTab({ refreshKey = 0 }: Props) {
   const [processing, setProcessing] = useState(false)
   const [result, setResult] = useState<string>("")
   const subs = useMemo(() => getSubscriptions(), [refreshKey])
-  const setFormActive = useSetFormActive()
 
-  useEffect(() => {
-    setFormActive(!format)
-  }, [format, setFormActive])
-
-  const doExport = useCallback((fmt: string) => {
+  const doExport = useCallback(async (fmt: string) => {
     setProcessing(true)
-    queueMicrotask(() => {
-      try {
-        const entry = EXPORTERS[fmt]
-        if (!entry) { setResult(`Unknown format: ${fmt}`); return }
-        const output = entry.fn(subs)
-        const filename = `subtrack-export.${entry.ext}`
-        const filePath = join(cwd(), filename)
+    try {
+      const entry = EXPORTERS[fmt]
+      if (!entry) { setResult(`Unknown format: ${fmt}`); return }
+
+      const filename = `subtrack-export.${entry.ext}`
+      const filePath = join(cwd(), filename)
+
+      if ("binary" in entry && entry.binary) {
+        const buf = await entry.fn(subs)
+        writeFileSync(filePath, buf)
+      } else {
+        const fn = entry.fn as (subs: SharedArgs[]) => string
+        const output = fn(subs)
         writeFileSync(filePath, output, "utf-8")
-        setResult(`Exported as ${fmt.toUpperCase()} to ${filePath}`)
-      } catch (e: unknown) {
-        setResult(`Error: ${e instanceof Error ? e.message : String(e)}`)
       }
-      setProcessing(false)
-    })
+      setResult(`Exported as ${fmt.toUpperCase()} to ${filePath}`)
+    } catch (e: unknown) {
+      setResult(`Error: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    setProcessing(false)
   }, [subs])
 
   return (
@@ -59,6 +64,8 @@ export function ExportTab({ refreshKey = 0 }: Props) {
             { label: "CSV", value: "csv" },
             { label: "JSON", value: "json" },
             { label: "Markdown", value: "md" },
+            { label: "Excel (.xlsx)", value: "excel" },
+            { label: "iCal (.ics)", value: "ics" },
           ]}
           onChange={(v) => { setFormat(v); doExport(v) }}
         />

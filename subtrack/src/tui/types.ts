@@ -5,6 +5,7 @@ export type Screen =
   | "delete"
   | "detail"
   | "reports"
+  | "calendar"
   | "config"
   | "tools"
   | "help"
@@ -46,6 +47,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { screen: "add", label: "Add", icon: "➕", section: "data" },
   // Reports
   { screen: "reports", label: "Reports", icon: "📊", section: "reports" },
+  { screen: "calendar", label: "Calendar", icon: "📅", section: "reports" },
   // System
   { screen: "config", label: "Config", icon: "⚙️", section: "system" },
   { screen: "tools", label: "Tools", icon: "🔧", section: "system" },
@@ -59,6 +61,7 @@ export const SCREEN_TITLES: Record<Screen, string> = {
   delete: "Delete Subscription",
   detail: "Subscription Detail",
   reports: "Reports",
+  calendar: "Calendar",
   config: "Configuration",
   tools: "Tools",
   help: "Help",

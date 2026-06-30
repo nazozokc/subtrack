@@ -57,8 +57,10 @@
   "dependencies": {
     "@inkjs/ui": "^2.0.0",
     "@inquirer/prompts": "^8.5.2",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "cli-table3": "^0.6.5",
     "consola": "^3.4.2",
+    "exceljs": "^4.4.0",
     "gunshi": "^0.35.1",
     "ink": "^7.1.0",
     "ink-gradient": "^4.0.1",

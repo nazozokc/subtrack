@@ -35,6 +35,10 @@ const HINTS: Record<Screen, Hint[]> = {
     { label: "Tab", color: colors.primary, keys: "← → · h/l" },
     { label: "Back", color: colors.textDim, keys: "Esc back" },
   ],
+  calendar: [
+    { label: "Nav", color: colors.primary, keys: "← → month" },
+    { label: "Back", color: colors.textDim, keys: "Esc back" },
+  ],
   config: [
     { label: "Edit", color: colors.success, keys: "1-9 edit · Enter save" },
     { label: "Back", color: colors.textDim, keys: "Esc back" },

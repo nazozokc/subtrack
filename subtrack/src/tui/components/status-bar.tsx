@@ -9,6 +9,7 @@ const SCREEN_LABEL: Record<string, string> = {
   delete: "Del",
   detail: "Detail",
   reports: "Reports",
+  calendar: "Calendar",
   config: "Config",
   tools: "Tools",
   help: "Help",
