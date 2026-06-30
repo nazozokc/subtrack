@@ -35,6 +35,8 @@ import {
   handleBulkTagRemove,
   handleForecast,
   handleTui,
+  handleCalendar,
+  handleMcp,
 } from "./commands.ts";
 import {
   handleUsageAdd,
@@ -72,6 +74,11 @@ const listCommand = define({
       type: "boolean",
       short: "m",
       description: "Show payment method column",
+    },
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
     },
   },
   run: (ctx) => handleList(ctx.values),
@@ -219,6 +226,11 @@ const searchCommand = define({
     names: { type: "boolean", description: "Search in names only" },
     notes: { type: "boolean", description: "Search in notes only" },
     tags: { type: "boolean", description: "Search in tags only" },
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
   },
   run: (ctx) => {
     const positionals = ctx.positionals as string[];
@@ -227,6 +239,7 @@ const searchCommand = define({
       names: ctx.values.names,
       notes: ctx.values.notes,
       tags: ctx.values.tags,
+      json: ctx.values.json,
     });
   },
 });
@@ -397,6 +410,45 @@ const bulkCommand = define({
   run: () => consola.info("Usage: subtrack bulk status|delete|tag"),
 });
 
+// ── Calendar ──────────────────────────────────────────
+
+const calendarCommand = define({
+  name: "calendar",
+  description: "Show a monthly calendar with billing days marked",
+  args: {
+    month: {
+      type: "string",
+      description: "Month (1-12, default: current)",
+    },
+    year: {
+      type: "string",
+      description: "Year (default: current)",
+    },
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
+  },
+  run: (ctx) => {
+    const rawMonth = ctx.values.month !== undefined ? Number(ctx.values.month) : undefined
+    if (rawMonth !== undefined && (isNaN(rawMonth) || rawMonth < 1 || rawMonth > 12 || !Number.isInteger(rawMonth))) {
+      consola.error("month must be an integer between 1 and 12")
+      return
+    }
+    const rawYear = ctx.values.year !== undefined ? Number(ctx.values.year) : undefined
+    if (rawYear !== undefined && (isNaN(rawYear) || rawYear < 1 || !Number.isInteger(rawYear))) {
+      consola.error("year must be a positive integer")
+      return
+    }
+    handleCalendar({
+      month: rawMonth,
+      year: rawYear,
+      json: ctx.values.json,
+    })
+  },
+})
+
 // ── TUI ────────────────────────────────────────────────
 
 const tuiCommand = define({
@@ -460,7 +512,7 @@ const exportCommand = define({
   name: "export",
   description: "Export subscriptions",
   args: {
-    format: { type: "positional", description: "Export format: csv, json, md" },
+    format: { type: "positional", description: "Export format: csv, json, md, excel, ics" },
     currency: {
       type: "string",
       short: "c",
@@ -495,7 +547,14 @@ const importCommand = define({
 const summaryCommand = define({
   name: "summary",
   description: "Show subscription summary statistics",
-  run: () => handleSummary(),
+  args: {
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
+  },
+  run: (ctx) => handleSummary({ json: ctx.values.json }),
 });
 
 const backupCommand = define({
@@ -562,13 +621,19 @@ const paymentCommand = define({
       short: "m",
       description: "Group by payment method",
     },
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
   },
   run: (ctx) => {
     const period = (ctx.values.period || "monthly") as Cycle;
-    handlePayment(period, {
+    return handlePayment(period, {
       currency: ctx.values.currency,
       api: ctx.values.api,
       method: ctx.values.method,
+      json: ctx.values.json,
     });
   },
 });
@@ -584,18 +649,19 @@ const upcomingCommand = define({
       description: "Number of days (default: 7)",
       required: false,
     },
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
   },
   run: (ctx) => {
-    if (ctx.values.days !== undefined) {
-      const parsed = Number(ctx.values.days);
-      if (isNaN(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
-        consola.error("days must be a non-negative integer");
-        return;
-      }
-      handleUpcoming(parsed);
-    } else {
-      handleUpcoming(undefined);
+    const days = ctx.values.days !== undefined ? Number(ctx.values.days) : undefined;
+    if (days !== undefined && (isNaN(days) || days < 0 || !Number.isInteger(days))) {
+      consola.error("days must be a non-negative integer");
+      return;
     }
+    handleUpcoming(days, { json: ctx.values.json });
   },
 });
 
@@ -715,6 +781,11 @@ const usageListCommand = define({
     provider: { type: "string", description: "Filter by provider" },
     from: { type: "string", description: "Start date (YYYY-MM-DD)" },
     to: { type: "string", description: "End date (YYYY-MM-DD)" },
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
   },
   run: (ctx) => handleUsageList(ctx.values),
 });
@@ -782,6 +853,14 @@ const usageCommand = define({
     consola.info("Usage: subtrack usage add|list|delete|import|refresh"),
 });
 
+// ── MCP ──────────────────────────────────────────────────
+
+const mcpCommand = define({
+  name: "mcp",
+  description: "Start MCP server for AI agent integration (stdio transport)",
+  run: () => handleMcp(),
+});
+
 const mainCommand = define({
   name: "subtrack",
   description: "Manage subscription services from your terminal",
@@ -830,6 +909,8 @@ try {
       restore: restoreCommand,
       payment: paymentCommand,
       upcoming: upcomingCommand,
+      calendar: calendarCommand,
+      mcp: mcpCommand,
       analytics: analyticsCommand,
       compare: compareCommand,
       config: configCommand,

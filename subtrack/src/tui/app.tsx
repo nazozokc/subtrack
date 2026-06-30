@@ -8,7 +8,9 @@ import { CommandBar } from "./components/command-bar.tsx"
 import { Toast } from "./components/toast.tsx"
 import { CommandPalette } from "./components/command-palette.tsx"
 import { DetailPreview } from "./screens/detail.tsx"
-import { colors, borderStyle } from "./theme.ts"
+import { Frame } from "./components/frame.tsx"
+import { colors } from "./theme.ts"
+import { SIDEBAR_WIDTH } from "./types.ts"
 
 // ── Root App ─────────────────────────────────────────
 
@@ -43,6 +45,27 @@ function AppInner() {
 
   const tooSmall = termCols < 60
 
+  // Detail preview dimensions
+  const showDetail = state.screen === "list" && state.showDetail && state.selectedId !== null
+  // Content area width = termCols - 2 (left/right border characters)
+  const contentWidth = Math.max(10, termCols - 2)
+  const detailWidth = showDetail
+    ? Math.max(30, Math.floor(contentWidth * (1 - state.splitRatio)))
+    : 0
+
+  // Separator positions (0-indexed within the content area)
+  const sepPositions: number[] = []
+  if (state.showSidebar && SIDEBAR_WIDTH < contentWidth) {
+    sepPositions.push(SIDEBAR_WIDTH)
+  }
+  if (showDetail && detailWidth > 0) {
+    // Second separator goes before detail pane.
+    // Ensure it stays after the sidebar separator (if visible).
+    const sidebarSep = state.showSidebar ? SIDEBAR_WIDTH : 0
+    const sepPos = Math.max(sidebarSep + 1, contentWidth - detailWidth)
+    sepPositions.push(sepPos)
+  }
+
   return (
     <Box flexDirection="column" height="100%" position="relative">
       <KeyboardHandler />
@@ -63,10 +86,8 @@ function AppInner() {
 
       {/* ── Main content area — single unified border ── */}
       {/* All 3 panes (sidebar / screen / detail-preview) live inside ONE frame */}
-      <Box
-        flexGrow={1}
-        minHeight={0}
-        borderStyle={borderStyle}
+      <Frame
+        separatorPositions={sepPositions}
         borderColor={colors.border}
       >
         {/* Sidebar (no border — inside the outer frame) */}
@@ -92,14 +113,14 @@ function AppInner() {
               <Text color={colors.border}>│</Text>
             </Box>
             <Box
-              width={Math.max(30, Math.floor(termCols * (1 - state.splitRatio)))}
+              width={detailWidth}
               flexShrink={0}
             >
               <DetailPreview />
             </Box>
           </>
         )}
-      </Box>
+      </Frame>
 
       {/* ── 1-row flat command bar ── */}
       <Box flexShrink={0}>

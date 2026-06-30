@@ -8,7 +8,9 @@ export { handleUsageAdd } from "./usage-add.ts"
 export { handleUsageImport } from "./usage-import.ts"
 export { handleUsageRefresh } from "./usage-refresh.ts"
 
-export async function handleUsageList(options: { provider?: string; from?: string; to?: string }) {
+export async function handleUsageList(
+  options: { provider?: string; from?: string; to?: string; json?: boolean },
+) {
   const entries = getLlmUsage({
     provider: options.provider,
     from: options.from,
@@ -16,6 +18,11 @@ export async function handleUsageList(options: { provider?: string; from?: strin
     limit: 100,
     minCost: 0,
   })
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(entries, null, 2) + "\n")
+    return
+  }
 
   renderUsageTable(entries)
 }

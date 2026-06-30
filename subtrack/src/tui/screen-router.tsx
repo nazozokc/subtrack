@@ -6,6 +6,7 @@ import { EditScreen } from "./screens/edit.tsx"
 import { DeleteScreen } from "./screens/delete.tsx"
 import { DetailScreen } from "./screens/detail.tsx"
 import { ReportsScreen } from "./screens/reports/index.tsx"
+import { CalendarScreen } from "./screens/calendar-screen.tsx"
 import { ConfigScreen } from "./screens/config.tsx"
 import { ToolsScreen } from "./screens/tools/index.tsx"
 import { HelpScreen } from "./screens/help.tsx"
@@ -26,6 +27,8 @@ export function CurrentScreen() {
       return <DetailScreen />
     case "reports":
       return <ReportsScreen />
+    case "calendar":
+      return <CalendarScreen />
     case "config":
       return <ConfigScreen />
     case "tools":

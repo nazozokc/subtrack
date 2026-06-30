@@ -11,10 +11,14 @@ import type { SqlValue } from "sql.js"
  */
 export async function handleSearch(
   query: string,
-  options: { names?: boolean; notes?: boolean; tags?: boolean },
+  options: { names?: boolean; notes?: boolean; tags?: boolean; json?: boolean },
 ): Promise<void> {
   // Interactive prompt if no query provided
   if (!query) {
+    if (options.json) {
+      process.stdout.write("[]\n")
+      return
+    }
     const answer = await input({
       message: "search query",
       validate: (v: string) => (v.trim() ? true : "Query cannot be empty"),
@@ -29,6 +33,11 @@ export async function handleSearch(
   }
 
   const results = searchSubscriptions(query, fields)
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(results, null, 2) + "\n")
+    return
+  }
 
   if (results.length === 0) {
     consola.info(`No results for "${query}"`)

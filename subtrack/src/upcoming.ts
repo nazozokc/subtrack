@@ -3,13 +3,7 @@ import pc from "picocolors"
 import type { SharedArgs, Cycle } from "./types.ts"
 import { getSubscriptions } from "./db.ts"
 import { formatPrice } from "./display.ts"
-import { periodFactor } from "./types.ts"
 
-type UpcomingEntry = {
-  sub: SharedArgs
-  nextDate: Date
-  amount: number
-}
 
 function toDate(dateStr: string): Date {
   const [y, m, d] = dateStr.split("-").map(Number)
@@ -68,7 +62,7 @@ function nextDateForCycle(anchorDay: number, anchorDate: Date, cycle: Cycle, fro
   }
 }
 
-function calculateNextBilling(sub: SharedArgs, fromDate: Date): Date {
+export function calculateNextBilling(sub: SharedArgs, fromDate: Date): Date {
   const anchorDate = toDate(sub.createdAt)
   const day = getBillingDay(sub)
 
@@ -100,12 +94,15 @@ function daysUntil(d: Date): number {
   return Math.ceil((target.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
 }
 
-export function showUpcoming(days: number = 7): void {
+export type UpcomingEntry = {
+  sub: SharedArgs
+  nextDate: Date
+  amount: number
+}
+
+export function calcUpcoming(days: number = 7): UpcomingEntry[] {
   const list = getSubscriptions().filter((s) => s.status !== "cancelled")
-  if (list.length === 0) {
-    consola.info("No active subscriptions found")
-    return
-  }
+  if (list.length === 0) return []
 
   const now = new Date()
   now.setHours(0, 0, 0, 0)
@@ -117,13 +114,17 @@ export function showUpcoming(days: number = 7): void {
   for (const sub of list) {
     const next = calculateNextBilling(sub, now)
     if (next >= now && next <= endDate) {
-      // Calculate amount for this period
-      const amount = sub.price * periodFactor(sub.cycle, "monthly")
+      const amount = sub.price
       entries.push({ sub, nextDate: next, amount })
     }
   }
 
   entries.sort((a, b) => a.nextDate.getTime() - b.nextDate.getTime())
+  return entries
+}
+
+export function showUpcoming(days: number = 7): void {
+  const entries = calcUpcoming(days)
 
   if (entries.length === 0) {
     consola.info(`No upcoming bills in the next ${days} day${days > 1 ? "s" : ""}`)
