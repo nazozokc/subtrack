@@ -47,19 +47,23 @@ function AppInner() {
 
   // Detail preview dimensions
   const showDetail = state.screen === "list" && state.showDetail && state.selectedId !== null
+  // Content area width = termCols - 2 (left/right border characters)
+  const contentWidth = Math.max(10, termCols - 2)
   const detailWidth = showDetail
-    ? Math.max(30, Math.floor(termCols * (1 - state.splitRatio)))
+    ? Math.max(30, Math.floor(contentWidth * (1 - state.splitRatio)))
     : 0
 
-  // Separator positions (0-indexed within the content area, between left/right border)
+  // Separator positions (0-indexed within the content area)
   const sepPositions: number[] = []
-  if (state.showSidebar) {
+  if (state.showSidebar && SIDEBAR_WIDTH < contentWidth) {
     sepPositions.push(SIDEBAR_WIDTH)
   }
-  if (showDetail) {
-    // Content area width = termCols - 2 (left/right border)
-    // Second separator is before the detail pane
-    sepPositions.push(termCols - detailWidth - 3)
+  if (showDetail && detailWidth > 0) {
+    // Second separator goes before detail pane.
+    // Ensure it stays after the sidebar separator (if visible).
+    const sidebarSep = state.showSidebar ? SIDEBAR_WIDTH : 0
+    const sepPos = Math.max(sidebarSep + 1, contentWidth - detailWidth)
+    sepPositions.push(sepPos)
   }
 
   return (
@@ -109,7 +113,7 @@ function AppInner() {
               <Text color={colors.border}>│</Text>
             </Box>
             <Box
-              width={Math.max(30, Math.floor(termCols * (1 - state.splitRatio)))}
+              width={detailWidth}
               flexShrink={0}
             >
               <DetailPreview />

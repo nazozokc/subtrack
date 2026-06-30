@@ -39,7 +39,7 @@ export function Frame({
   const { columns: termCols } = useWindowSize()
 
   // Content area width = total width minus left/right border characters
-  const innerWidth = termCols - 2
+  const innerWidth = Math.max(0, termCols - 2)
 
   function buildLine(
     cornerLeft: string,
@@ -53,6 +53,11 @@ export function Frame({
       }
     }
     return cornerLeft + chars.join("") + cornerRight
+  }
+
+  // No visible frame on ultra-narrow terminals
+  if (termCols < 2) {
+    return <Box flexDirection="column" flexGrow={1} minHeight={0}>{children}</Box>
   }
 
   const topLine = buildLine("╭", "╮", "┬")

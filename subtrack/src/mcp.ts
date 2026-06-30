@@ -15,7 +15,7 @@ import {
 import { calcSummary } from "./payment.ts"
 import { calcCalendarEntries } from "./calendar.ts"
 import { exportCsv, exportJson, exportMd } from "./export.ts"
-import { periodFactor } from "./types.ts"
+
 import type { SharedArgs, AddSharedArgs, Cycle, Status } from "./types.ts"
 import type { SqlValue } from "sql.js"
 
@@ -120,7 +120,7 @@ function calcUpcoming(days: number) {
   for (const sub of list) {
     const next = calculateNextBilling(sub, now)
     if (next >= now && next <= endDate) {
-      const amount = sub.price * periodFactor(sub.cycle, "monthly")
+      const amount = sub.price
       entries.push({ sub, nextDate: next, amount })
     }
   }

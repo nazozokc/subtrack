@@ -430,12 +430,23 @@ const calendarCommand = define({
       description: "Output as JSON",
     },
   },
-  run: (ctx) =>
+  run: (ctx) => {
+    const rawMonth = ctx.values.month !== undefined ? Number(ctx.values.month) : undefined
+    if (rawMonth !== undefined && (isNaN(rawMonth) || rawMonth < 1 || rawMonth > 12 || !Number.isInteger(rawMonth))) {
+      consola.error("month must be an integer between 1 and 12")
+      return
+    }
+    const rawYear = ctx.values.year !== undefined ? Number(ctx.values.year) : undefined
+    if (rawYear !== undefined && (isNaN(rawYear) || rawYear < 1 || !Number.isInteger(rawYear))) {
+      consola.error("year must be a positive integer")
+      return
+    }
     handleCalendar({
-      month: ctx.values.month ? Number(ctx.values.month) : undefined,
-      year: ctx.values.year ? Number(ctx.values.year) : undefined,
+      month: rawMonth,
+      year: rawYear,
       json: ctx.values.json,
-    }),
+    })
+  },
 })
 
 // ── TUI ────────────────────────────────────────────────
@@ -618,7 +629,7 @@ const paymentCommand = define({
   },
   run: (ctx) => {
     const period = (ctx.values.period || "monthly") as Cycle;
-    handlePayment(period, {
+    return handlePayment(period, {
       currency: ctx.values.currency,
       api: ctx.values.api,
       method: ctx.values.method,

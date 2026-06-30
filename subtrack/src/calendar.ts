@@ -4,14 +4,21 @@ import { getSubscriptions } from "./db.ts"
 import { formatPrice } from "./display.ts"
 import type { SharedArgs } from "./types.ts"
 
+/** Options for the calendar command */
 export type CalendarOptions = {
+  /** Month number (1-12). Default: current month */
   month?: number
+  /** Year. Default: current year */
   year?: number
+  /** If true, output JSON to stdout instead of table */
   json?: boolean
 }
 
+/** A single day's billing events in the calendar */
 export type CalendarEntry = {
+  /** Day of month (1-31) */
   day: number
+  /** Subscriptions billing on this day */
   subs: { name: string; price: number; currency: string; status: string; id: number }[]
 }
 
@@ -23,6 +30,12 @@ function clampDay(day: number, year: number, month: number): number {
   return Math.min(day, daysInMonth(year, month))
 }
 
+/**
+ * Calculate billing events for a given month.
+ * @param month - Month number (1-12)
+ * @param year - Year
+ * @returns Array of calendar entries keyed by day
+ */
 export function calcCalendarEntries(month: number, year: number): CalendarEntry[] {
   const subs = getSubscriptions()
   const active = subs.filter((s) => s.status !== "cancelled" && s.billingDay != null)
@@ -57,6 +70,10 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ]
 
+/**
+ * Display (or JSON-print) a monthly calendar with billing days highlighted.
+ * When `options.json` is true, writes JSON array to stdout instead of rendering.
+ */
 export function showCalendar(options: CalendarOptions): void {
   const now = new Date()
   const rawMonth = options.month ?? now.getMonth() + 1

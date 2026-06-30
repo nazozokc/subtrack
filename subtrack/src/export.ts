@@ -48,22 +48,8 @@ export function exportMd(subs: SharedArgs[]): string {
 }
 
 export async function exportExcel(subs: SharedArgs[]): Promise<Buffer> {
-  if (subs.length === 0) {
-    return Buffer.alloc(0)
-  }
-
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet("Subscriptions")
-
-  const headerStyle = {
-    font: { bold: true },
-    fill: {
-      type: "pattern" as const,
-      pattern: "solid" as const,
-      fgColor: { argb: "FF4472C4" },
-    },
-    fontColor: { argb: "FFFFFFFF" },
-  }
 
   const headers = [
     "ID",
@@ -167,6 +153,7 @@ function cycleToRrule(cycle: SharedArgs["cycle"]): string {
 
 export function exportIcs(subs: SharedArgs[]): string {
   const now = new Date()
+  now.setHours(0, 0, 0, 0)
   const nowStr = icsFormatDate(now)
 
   let cal = [

@@ -13,7 +13,7 @@ export function CalendarScreen() {
 
   useInput(
     (input, key) => {
-      if (key.leftArrow) {
+      if (key.leftArrow || input === "h") {
         if (month === 1) {
           setMonth(12)
           setYear(year - 1)
@@ -22,7 +22,7 @@ export function CalendarScreen() {
         }
         return
       }
-      if (key.rightArrow) {
+      if (key.rightArrow || input === "l") {
         if (month === 12) {
           setMonth(1)
           setYear(year + 1)
@@ -53,22 +53,21 @@ export function CalendarScreen() {
   const firstDay = new Date(year, month - 1, 1).getDay()
   const totalDays = new Date(year, month, 0).getDate()
 
-  const calendarRows: string[] = []
-  let line = ""
-  for (let i = 0; i < firstDay; i++) line += "   "
+  type DayCell = { day: number; hasEvents: boolean }
+  const calendarRows: DayCell[][] = []
+  let row: DayCell[] = []
+  for (let i = 0; i < firstDay; i++) {
+    row.push({ day: 0, hasEvents: false })
+  }
   for (let day = 1; day <= totalDays; day++) {
     const dayEntries = entryMap.get(day)
-    if (dayEntries) {
-      line += ` ${colors.primary}${String(day).padStart(2)}`
-    } else {
-      line += ` ${String(day).padStart(2)}`
-    }
+    row.push({ day, hasEvents: !!dayEntries })
     if ((firstDay + day) % 7 === 0) {
-      calendarRows.push(line)
-      line = ""
+      calendarRows.push(row)
+      row = []
     }
   }
-  if (line !== "") calendarRows.push(line)
+  if (row.length > 0) calendarRows.push(row)
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -81,11 +80,23 @@ export function CalendarScreen() {
 
       {/* Calendar grid */}
       <Box>
-        <Box paddingLeft={2}>
-          <Text>
-            <Text dimColor>Su Mo Tu We Th Fr Sa{"\n"}</Text>
-            {calendarRows.join("\n")}
-          </Text>
+        <Box paddingLeft={2} flexDirection="column">
+          <Text dimColor>Su Mo Tu We Th Fr Sa</Text>
+          {calendarRows.map((row, ri) => (
+            <Box key={ri}>
+              {row.map((cell, ci) => (
+                <Box key={ci} width={3}>
+                  {cell.day === 0 ? (
+                    <Text>{" "}</Text>
+                  ) : cell.hasEvents ? (
+                    <Text bold color="green">{String(cell.day).padStart(2)}</Text>
+                  ) : (
+                    <Text>{String(cell.day).padStart(2)}</Text>
+                  )}
+                </Box>
+              ))}
+            </Box>
+          ))}
         </Box>
       </Box>
 
@@ -133,7 +144,7 @@ export function CalendarScreen() {
       {/* Navigation hint */}
       <Box marginTop={1}>
         <Text dimColor>
-          ← → navigate month · q/Esc back
+          ← → / h l navigate month · q/Esc back
         </Text>
       </Box>
     </Box>

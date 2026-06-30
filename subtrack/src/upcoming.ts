@@ -3,7 +3,7 @@ import pc from "picocolors"
 import type { SharedArgs, Cycle } from "./types.ts"
 import { getSubscriptions } from "./db.ts"
 import { formatPrice } from "./display.ts"
-import { periodFactor } from "./types.ts"
+
 
 function toDate(dateStr: string): Date {
   const [y, m, d] = dateStr.split("-").map(Number)
@@ -114,7 +114,7 @@ export function calcUpcoming(days: number = 7): UpcomingEntry[] {
   for (const sub of list) {
     const next = calculateNextBilling(sub, now)
     if (next >= now && next <= endDate) {
-      const amount = sub.price * periodFactor(sub.cycle, "monthly")
+      const amount = sub.price
       entries.push({ sub, nextDate: next, amount })
     }
   }

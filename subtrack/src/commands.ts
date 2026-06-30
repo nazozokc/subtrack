@@ -19,15 +19,15 @@ export async function handleTui(): Promise<void> {
 import { consola } from "consola"
 import { writeFileSync } from "node:fs"
 import type { Currency, Cycle, SubtrackConfig } from "./types.ts"
-import { tagsSubscription, getSubscriptions } from "./db.ts"
+import { tagsSubscription, getSubscriptions, getLlmUsageTotal, getLlmUsageTotalByProvider } from "./db.ts"
 import { formatPrice } from "./display.ts"
-import { showPayment, showSummary, calcSummary } from "./payment.ts"
+import { showPayment, showSummary, calcSummary, getPeriodDateRange } from "./payment.ts"
 import { showUpcoming, calcUpcoming } from "./upcoming.ts"
 import { showAnalytics } from "./analytics.ts"
 import { showCompare } from "./compare.ts"
 import { exportCsv, exportMd, exportJson, exportExcel, exportIcs } from "./export.ts"
 import { showCalendar, calcCalendarEntries } from "./calendar.ts"
-import { fetchFxRates, convertPrice } from "./fx.ts"
+import { fetchFxRates, convertPrice, type FxRates } from "./fx.ts"
 import { loadConfig, setConfig, resetConfig, CONFIG_KEYS, getConfigPath } from "./config.ts"
 import { unlinkSync, existsSync } from "node:fs"
 import os from "node:os"
@@ -119,16 +119,96 @@ export async function handlePayment(
 ) {
   if (options.json) {
     const subs = getSubscriptions()
-    const data = subs.map((sub) => ({
-      id: sub.id,
-      name: sub.name,
-      price: sub.price,
+    if (subs.length === 0) {
+      process.stdout.write(JSON.stringify({ period, total: 0, subscriptions: [] }, null, 2) + "\n")
+      return
+    }
+
+    const entries = subs.map((sub) => ({
+      convertedPrice: sub.price * periodFactor(sub.cycle, period),
       currency: sub.currency,
-      cycle: sub.cycle,
-      convertedPrice: Math.round(sub.price * periodFactor(sub.cycle, period)),
-      status: sub.status,
+      paymentMethod: sub.paymentMethod,
+      sub,
     }))
-    process.stdout.write(JSON.stringify(data, null, 2) + "\n")
+
+    // API usage
+    let apiTotal = 0
+    let apiByProvider: { provider: string; total: number }[] = []
+    if (options.api) {
+      const { from, to } = getPeriodDateRange(period)
+      apiTotal = getLlmUsageTotal(from, to)
+      apiByProvider = getLlmUsageTotalByProvider(from, to)
+    }
+
+    let targetCurrency = options.currency as Currency | undefined
+    let finalCurrency: string | undefined
+    let subTotal = 0
+
+    // Currency conversion
+    if (targetCurrency) {
+      let rates: FxRates | null = null
+      try {
+        rates = await fetchFxRates()
+      } catch {
+        consola.fail("Failed to fetch exchange rates; reporting in original currencies")
+      }
+      if (rates) {
+        for (const entry of entries) {
+          try {
+            subTotal += convertPrice(entry.convertedPrice, entry.currency, targetCurrency, rates.rates)
+          } catch {
+            consola.warn(`Missing exchange rate for ${entry.currency} → ${targetCurrency}`)
+          }
+        }
+        finalCurrency = targetCurrency
+      }
+    }
+
+    if (!finalCurrency) {
+      // Per-currency totals
+      const byCurrency: Record<string, number> = {}
+      for (const entry of entries) {
+        byCurrency[entry.currency] = (byCurrency[entry.currency] ?? 0) + entry.convertedPrice
+      }
+      subTotal = Object.values(byCurrency).reduce((a, b) => a + b, 0)
+    }
+
+    // Payment method grouping
+    const byMethod: Record<string, { total: number; currencies: string[] }> = {}
+    if (options.method) {
+      for (const entry of entries) {
+        const method = entry.paymentMethod || "unspecified"
+        if (!byMethod[method]) byMethod[method] = { total: 0, currencies: [] }
+        byMethod[method].total += entry.convertedPrice
+        if (!byMethod[method].currencies.includes(entry.currency)) {
+          byMethod[method].currencies.push(entry.currency)
+        }
+      }
+    }
+
+    const output: Record<string, unknown> = {
+      period,
+      total: Math.round(subTotal),
+      currency: finalCurrency ?? null,
+      subscriptions: entries.map((e) => ({
+        id: e.sub.id,
+        name: e.sub.name,
+        price: e.sub.price,
+        currency: e.sub.currency,
+        cycle: e.sub.cycle,
+        status: e.sub.status,
+        periodPrice: Math.round(e.convertedPrice),
+      })),
+    }
+
+    if (options.api && apiTotal > 0) {
+      output.apiUsage = { total: apiTotal, byProvider: apiByProvider }
+    }
+    if (options.method && Object.keys(byMethod).length > 0) {
+      output.byMethod = byMethod
+    }
+
+    process.stdout.write(JSON.stringify(output, null, 2) + "\n")
     return
   }
   await showPayment(period, options.currency as Currency | undefined, undefined, options.api, options.method)
