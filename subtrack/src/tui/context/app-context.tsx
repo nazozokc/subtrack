@@ -53,6 +53,10 @@ export type AppState = {
   showSidebar: boolean
   /** Split ratio between list and detail (0.5 = 50/50) */
   splitRatio: number
+  /** Column visibility in list screen */
+  showTagsCol: boolean
+  showNotesCol: boolean
+  showMethodCol: boolean
 }
 
 export type AppAction =
@@ -82,6 +86,7 @@ export type AppAction =
   | { type: "TOGGLE_SIDEBAR" }
   | { type: "SET_SPLIT_RATIO"; ratio: number }
   | { type: "SET_SPLIT_RATIO_STEP"; delta: number }
+  | { type: "TOGGLE_COLUMN"; column: "tags" | "notes" | "method" }
 
 const initialState: AppState = {
   screen: "list",
@@ -106,6 +111,9 @@ const initialState: AppState = {
   showDetail: false,
   showSidebar: true,
   splitRatio: 0.6,
+  showTagsCol: false,
+  showNotesCol: false,
+  showMethodCol: false,
 }
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -209,6 +217,17 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case "SET_SPLIT_RATIO_STEP": {
       const next = state.splitRatio + action.delta
       return { ...state, splitRatio: Math.max(0.3, Math.min(0.8, next)) }
+    }
+    case "TOGGLE_COLUMN": {
+      switch (action.column) {
+        case "tags":
+          return { ...state, showTagsCol: !state.showTagsCol }
+        case "notes":
+          return { ...state, showNotesCol: !state.showNotesCol }
+        case "method":
+          return { ...state, showMethodCol: !state.showMethodCol }
+      }
+      return state
     }
     default:
       return state

@@ -133,6 +133,16 @@ beforeAll(async () => {
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (date('now'))
   )`)
+  testDb.run(`CREATE TABLE IF NOT EXISTS price_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subscription_id INTEGER NOT NULL,
+    old_price INTEGER,
+    new_price INTEGER NOT NULL,
+    old_currency TEXT,
+    new_currency TEXT NOT NULL,
+    changed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
+  )`)
 
   const db = await import("../db.ts")
   db.__setDb(testDb)
@@ -149,6 +159,7 @@ beforeAll(async () => {
 })
 
 beforeEach(() => {
+  testDb.run("DELETE FROM price_history")
   testDb.run("DELETE FROM subscription_tags")
   testDb.run("DELETE FROM tags")
   testDb.run("DELETE FROM subscriptions")

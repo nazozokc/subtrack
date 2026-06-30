@@ -27,9 +27,12 @@ const HINTS: Record<Screen, Hint[]> = {
     { label: "Confirm", color: colors.danger, keys: "y delete · n cancel" },
   ],
   detail: [
-    { label: "Action", color: colors.success, keys: "e edit · d delete" },
-    { label: "View", color: colors.primary, keys: "r raw" },
-    { label: "Back", color: colors.textDim, keys: "q/Esc back" },
+    { label: "Edit", color: colors.success, keys: "e edit" },
+    { label: "History", color: colors.info, keys: "h view" },
+    { label: "Back", color: colors.textDim, keys: "Esc back" },
+  ],
+  history: [
+    { label: "Back", color: colors.textDim, keys: "Esc back" },
   ],
   reports: [
     { label: "Tab", color: colors.primary, keys: "← → · h/l" },

@@ -37,6 +37,8 @@ import {
   handleTui,
   handleCalendar,
   handleMcp,
+  handleHistory,
+  handleNotify,
 } from "./commands.ts";
 import {
   handleUsageAdd,
@@ -853,6 +855,85 @@ const usageCommand = define({
     consola.info("Usage: subtrack usage add|list|delete|import|refresh"),
 });
 
+// ── History ───────────────────────────────────────────────
+
+const historyCommand = define({
+  name: "history",
+  description: "Show price change history for a subscription",
+  args: {
+    id: {
+      type: "positional",
+      description: "Subscription ID",
+      required: false,
+    },
+    all: {
+      type: "boolean",
+      description: "Show all price changes across all subscriptions",
+    },
+    days: {
+      type: "string",
+      description: "Filter to recent N days (used with --all)",
+    },
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
+  },
+  run: (ctx) => {
+    const positionals = ctx.positionals as string[]
+    const id = ctx.values.id !== undefined ? Number(ctx.values.id) : positionals[1] ? Number(positionals[1]) : undefined
+    if (id !== undefined && (isNaN(id) || !Number.isInteger(id) || id < 1)) {
+      consola.error("id must be a positive integer")
+      return
+    }
+    const days = ctx.values.days !== undefined ? Number(ctx.values.days) : undefined
+    if (days !== undefined && (isNaN(days) || days < 1 || !Number.isInteger(days))) {
+      consola.error("days must be a positive integer")
+      return
+    }
+    handleHistory(id, {
+      all: ctx.values.all,
+      json: ctx.values.json,
+      days,
+    })
+  },
+})
+
+// ── Notify ────────────────────────────────────────────────
+
+const notifyCommand = define({
+  name: "notify",
+  description: "Send desktop notification for upcoming bills",
+  args: {
+    days: {
+      type: "string",
+      description: "Number of days (default: config notifyDays or 7)",
+    },
+    dryRun: {
+      type: "boolean",
+      description: "Show upcoming bills without sending notification",
+    },
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
+  },
+  run: (ctx) => {
+    const days = ctx.values.days !== undefined ? Number(ctx.values.days) : undefined
+    if (days !== undefined && (isNaN(days) || days < 0 || !Number.isInteger(days))) {
+      consola.error("days must be a non-negative integer")
+      return
+    }
+    handleNotify({
+      days,
+      dryRun: ctx.values.dryRun,
+      json: ctx.values.json,
+    })
+  },
+})
+
 // ── MCP ──────────────────────────────────────────────────
 
 const mcpCommand = define({
@@ -910,6 +991,8 @@ try {
       payment: paymentCommand,
       upcoming: upcomingCommand,
       calendar: calendarCommand,
+      history: historyCommand,
+      notify: notifyCommand,
       mcp: mcpCommand,
       analytics: analyticsCommand,
       compare: compareCommand,

@@ -150,4 +150,5 @@ export type SubtrackConfig = {
   defaultCurrency: string
   monthlyBudget: number
   theme: string
+  notifyDays: number
 }

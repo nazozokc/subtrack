@@ -4,6 +4,7 @@ export type Screen =
   | "edit"
   | "delete"
   | "detail"
+  | "history"
   | "reports"
   | "calendar"
   | "config"
@@ -60,6 +61,7 @@ export const SCREEN_TITLES: Record<Screen, string> = {
   edit: "Edit Subscription",
   delete: "Delete Subscription",
   detail: "Subscription Detail",
+  history: "Price History",
   reports: "Reports",
   calendar: "Calendar",
   config: "Configuration",
