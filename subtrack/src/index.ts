@@ -910,7 +910,7 @@ const notifyCommand = define({
       type: "string",
       description: "Number of days (default: config notifyDays or 7)",
     },
-    dryRun: {
+    "dry-run": {
       type: "boolean",
       description: "Show upcoming bills without sending notification",
     },
@@ -928,7 +928,7 @@ const notifyCommand = define({
     }
     handleNotify({
       days,
-      dryRun: ctx.values.dryRun,
+      dryRun: ctx.values["dry-run"],
       json: ctx.values.json,
     })
   },
