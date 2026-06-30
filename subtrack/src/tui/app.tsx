@@ -8,7 +8,9 @@ import { CommandBar } from "./components/command-bar.tsx"
 import { Toast } from "./components/toast.tsx"
 import { CommandPalette } from "./components/command-palette.tsx"
 import { DetailPreview } from "./screens/detail.tsx"
-import { colors, borderStyle } from "./theme.ts"
+import { Frame } from "./components/frame.tsx"
+import { colors } from "./theme.ts"
+import { SIDEBAR_WIDTH } from "./types.ts"
 
 // ── Root App ─────────────────────────────────────────
 
@@ -43,6 +45,23 @@ function AppInner() {
 
   const tooSmall = termCols < 60
 
+  // Detail preview dimensions
+  const showDetail = state.screen === "list" && state.showDetail && state.selectedId !== null
+  const detailWidth = showDetail
+    ? Math.max(30, Math.floor(termCols * (1 - state.splitRatio)))
+    : 0
+
+  // Separator positions (0-indexed within the content area, between left/right border)
+  const sepPositions: number[] = []
+  if (state.showSidebar) {
+    sepPositions.push(SIDEBAR_WIDTH)
+  }
+  if (showDetail) {
+    // Content area width = termCols - 2 (left/right border)
+    // Second separator is before the detail pane
+    sepPositions.push(termCols - detailWidth - 3)
+  }
+
   return (
     <Box flexDirection="column" height="100%" position="relative">
       <KeyboardHandler />
@@ -63,10 +82,8 @@ function AppInner() {
 
       {/* ── Main content area — single unified border ── */}
       {/* All 3 panes (sidebar / screen / detail-preview) live inside ONE frame */}
-      <Box
-        flexGrow={1}
-        minHeight={0}
-        borderStyle={borderStyle}
+      <Frame
+        separatorPositions={sepPositions}
         borderColor={colors.border}
       >
         {/* Sidebar (no border — inside the outer frame) */}
@@ -99,7 +116,7 @@ function AppInner() {
             </Box>
           </>
         )}
-      </Box>
+      </Frame>
 
       {/* ── 1-row flat command bar ── */}
       <Box flexShrink={0}>
