@@ -12,7 +12,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: step-security/harden-runner@v2
+      - uses: step-security/harden-runner@v3
         with:
           egress-policy: audit
 
@@ -34,3 +34,8 @@ jobs:
         run: pnpm lint:types
 
       - run: pnpm test
+
+      - name: Scan dependencies with OSV-Scanner
+        uses: google/osv-scanner-action@v2
+        with:
+          fail-on-vuln: false

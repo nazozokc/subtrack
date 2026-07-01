@@ -11,7 +11,7 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - uses: step-security/harden-runner@v2
+      - uses: step-security/harden-runner@v3
         with:
           egress-policy: audit
 

@@ -9,7 +9,8 @@
     "subtrack": "./dist/index.mjs"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "description": "CLI tool to manage subscription services from the terminal",
   "keywords": [

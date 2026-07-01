@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.actor == 'renovate[bot]'
     steps:
-      - uses: step-security/harden-runner@v2
+      - uses: step-security/harden-runner@v3
         with:
           egress-policy: audit
 
