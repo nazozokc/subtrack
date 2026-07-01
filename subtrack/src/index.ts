@@ -41,6 +41,7 @@ import {
   handleNotify,
   handleTimeline,
   handleOptimize,
+  handleProfile,
 } from "./commands.ts";
 import {
   handleUsageAdd,
@@ -50,7 +51,7 @@ import {
   handleUsageRefresh,
 } from "./usage.ts";
 import { handleImport } from "./import-csv.ts";
-import type { Cycle, UsageRefreshFlags } from "./types.ts";
+import type { Cycle, Status, UsageRefreshFlags } from "./types.ts";
 
 // ── Command definitions ──────────────────────────────────
 
@@ -945,6 +946,92 @@ const notifyCommand = define({
   },
 })
 
+// ── Profile ──────────────────────────────────────────────
+
+const profileSaveCmd = define({
+  name: "save",
+  description: "Save a filter profile",
+  toKebab: true,
+  args: {
+    name: { type: "positional", description: "Profile name" },
+    tag: {
+      type: "string",
+      array: true,
+      description: "Filter by tags (comma-separated or multiple flags)",
+    },
+    status: { type: "string", description: "Filter by status: active, paused, cancelled" },
+    "payment-method": { type: "string", description: "Filter by payment method" },
+  },
+  run: (ctx) => {
+    const name = ctx.values.name
+    if (!name) {
+      consola.error("Profile name required")
+      return
+    }
+    const tagValues = ctx.values.tag as string[] | undefined
+    const tags = tagValues
+      ? tagValues.flatMap((t: string) => t.split(",").map((s: string) => s.trim()).filter(Boolean))
+      : undefined
+    handleProfile("save", name, {
+      tags: tags && tags.length > 0 ? tags : undefined,
+      status: ctx.values.status as Status | undefined,
+      paymentMethod: ctx.values["payment-method"],
+    })
+  },
+})
+
+const profileSwitchCmd = define({
+  name: "switch",
+  description: "Switch to a saved profile",
+  args: {
+    name: { type: "positional", description: "Profile name" },
+  },
+  run: (ctx) => {
+    handleProfile("switch", ctx.values.name)
+  },
+})
+
+const profileListCmd = define({
+  name: "list",
+  description: "List saved profiles",
+  run: () => handleProfile("list"),
+})
+
+const profileShowCmd = define({
+  name: "show",
+  description: "Show profile details",
+  args: {
+    name: { type: "positional", description: "Profile name", required: false },
+  },
+  run: (ctx) => {
+    handleProfile("show", ctx.values.name)
+  },
+})
+
+const profileDeleteCmd = define({
+  name: "delete",
+  description: "Delete a profile",
+  args: {
+    name: { type: "positional", description: "Profile name" },
+  },
+  run: (ctx) => {
+    handleProfile("delete", ctx.values.name)
+  },
+})
+
+const profileCommand = define({
+  name: "profile",
+  description: "Manage filter profiles",
+  subCommands: {
+    save: profileSaveCmd,
+    switch: profileSwitchCmd,
+    list: profileListCmd,
+    show: profileShowCmd,
+    delete: profileDeleteCmd,
+  },
+  run: () => consola.info("Usage: subtrack profile save|switch|list|show|delete"),
+})
+
 // ── Optimize ─────────────────────────────────────────────
 
 const optimizeCommand = define({
@@ -1068,6 +1155,7 @@ try {
       calendar: calendarCommand,
       history: historyCommand,
       notify: notifyCommand,
+      profile: profileCommand,
       optimize: optimizeCommand,
       timeline: timelineCommand,
       mcp: mcpCommand,

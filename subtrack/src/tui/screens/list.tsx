@@ -3,6 +3,7 @@ import Gradient from "ink-gradient"
 import { getSubscriptions, getSubscription, updateSubscription, deleteSubscription } from "../../db.ts"
 import { useTui, type SortField } from "../context/app-context.tsx"
 import type { Status } from "../../types.ts"
+import { getActiveFilter, buildFilterParams, getActiveProfileName } from "../../profile.ts"
 import { SIDEBAR_WIDTH } from "../types.ts"
 import { useMemo, useEffect, useState } from "react"
 import { formatPrice } from "../../price.ts"
@@ -84,17 +85,38 @@ export function ListScreen() {
   // ── Data ──
 
   const subs = useMemo(() => {
-    const all = getSubscriptions(sortField, sortDesc)
+    let list = getSubscriptions(sortField, sortDesc)
+
+    // Apply profile filter (if active)
+    const activeFilter = getActiveFilter()
+    if (activeFilter) {
+      const params = buildFilterParams(activeFilter)
+      if (params.tags && params.tags.length > 0) {
+        list = list.filter((s) =>
+          params.tags!.some((t) => s.tags.includes(t)),
+        )
+      }
+      if (params.status) {
+        list = list.filter((s) => s.status === params.status)
+      }
+      if (params.paymentMethod) {
+        list = list.filter(
+          (s) => s.paymentMethod === params.paymentMethod,
+        )
+      }
+    }
+
+    // Apply text filter
     if (state.filterText) {
       const q = state.filterText.toLowerCase()
-      return all.filter(
+      list = list.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
           s.tags.some((t) => t.toLowerCase().includes(q)) ||
           (s.notes ?? "").toLowerCase().includes(q),
       )
     }
-    return all
+    return list
   }, [state.filterText, sortField, sortDesc, state.refreshKey])
 
   // Clamp listIndex
@@ -389,6 +411,11 @@ export function ListScreen() {
           <Text color={colors.textDim}>
             {subs.length} total · {activeCount} active
           </Text>
+          {getActiveProfileName() && (
+            <Text color={colors.info}>
+              {"  "}● {getActiveProfileName()}
+            </Text>
+          )}
           {state.filterText && (
             <Text color={colors.info}>
               {"  ▶ "}

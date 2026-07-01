@@ -124,7 +124,7 @@ export function saveTuiColumns(settings: TuiColumnSettings): void {
   saveConfig(config)
 }
 
-function saveConfig(config: SubtrackConfig): void {
+export function saveConfig(config: SubtrackConfig): void {
   const configPath = getConfigPath()
   const dir = path.dirname(configPath)
   if (!existsSync(dir)) {
