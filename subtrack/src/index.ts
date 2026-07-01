@@ -40,6 +40,7 @@ import {
   handleHistory,
   handleNotify,
   handleTimeline,
+  handleOptimize,
 } from "./commands.ts";
 import {
   handleUsageAdd,
@@ -944,6 +945,35 @@ const notifyCommand = define({
   },
 })
 
+// ── Optimize ─────────────────────────────────────────────
+
+const optimizeCommand = define({
+  name: "optimize",
+  description: "Analyze subscriptions and suggest cost optimizations",
+  args: {
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
+    "min-savings": {
+      type: "string",
+      description: "Minimum yearly savings to show (default: 0)",
+    },
+  },
+  run: (ctx) => {
+    const minSavings = ctx.values["min-savings"] !== undefined ? Number(ctx.values["min-savings"]) : undefined
+    if (minSavings !== undefined && (isNaN(minSavings) || minSavings < 0)) {
+      consola.error("min-savings must be a non-negative number")
+      return
+    }
+    handleOptimize({
+      json: ctx.values.json,
+      minSavings,
+    })
+  },
+})
+
 // ── Timeline ─────────────────────────────────────────────
 
 const timelineCommand = define({
@@ -1038,6 +1068,7 @@ try {
       calendar: calendarCommand,
       history: historyCommand,
       notify: notifyCommand,
+      optimize: optimizeCommand,
       timeline: timelineCommand,
       mcp: mcpCommand,
       analytics: analyticsCommand,
