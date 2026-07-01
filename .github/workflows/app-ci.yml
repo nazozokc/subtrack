@@ -43,7 +43,7 @@ jobs:
             node-version: 22
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: step-security/harden-runner@v3
+      - uses: step-security/harden-runner@f808768d1510423e55283889c910610ca9b43176 # v2.17.0
         with:
           egress-policy: audit
 
