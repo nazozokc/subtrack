@@ -39,6 +39,7 @@ import {
   handleMcp,
   handleHistory,
   handleNotify,
+  handleTimeline,
 } from "./commands.ts";
 import {
   handleUsageAdd,
@@ -943,6 +944,41 @@ const notifyCommand = define({
   },
 })
 
+// ── Timeline ─────────────────────────────────────────────
+
+const timelineCommand = define({
+  name: "timeline",
+  description: "Show monthly spending timeline with bar chart",
+  args: {
+    months: {
+      type: "string",
+      description: "Number of months (default: 12)",
+    },
+    categories: {
+      type: "boolean",
+      short: "c",
+      description: "Show breakdown by category (first tag)",
+    },
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
+  },
+  run: (ctx) => {
+    const months = ctx.values.months !== undefined ? Number(ctx.values.months) : undefined
+    if (months !== undefined && (isNaN(months) || months < 1 || !Number.isInteger(months))) {
+      consola.error("months must be a positive integer")
+      return
+    }
+    handleTimeline({
+      months,
+      categories: ctx.values.categories,
+      json: ctx.values.json,
+    })
+  },
+})
+
 // ── MCP ──────────────────────────────────────────────────
 
 const mcpCommand = define({
@@ -1002,6 +1038,7 @@ try {
       calendar: calendarCommand,
       history: historyCommand,
       notify: notifyCommand,
+      timeline: timelineCommand,
       mcp: mcpCommand,
       analytics: analyticsCommand,
       compare: compareCommand,

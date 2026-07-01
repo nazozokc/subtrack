@@ -7,6 +7,7 @@ export { handleBulkStatus, handleBulkDelete, handleBulkTagAdd, handleBulkTagRemo
 export { handleForecast } from "./forecast.ts"
 export { handleHistory } from "./history.ts"
 export { handleNotify } from "./notify.ts"
+export { handleTimeline } from "./timeline.ts"
 export { handleBackup, handleRestore } from "./backup.ts"
 export { handleTagList, handleTagRename, handleTagDelete, handleTagPrune } from "./tag.ts"
 
