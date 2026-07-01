@@ -10,7 +10,7 @@ export type NotifyOptions = {
   json?: boolean
 }
 
-export function handleNotify(options: NotifyOptions = {}): void {
+export async function handleNotify(options: NotifyOptions = {}): Promise<void> {
   const config = loadConfig()
   const days = options.days ?? config.notifyDays ?? 7
 
@@ -45,15 +45,15 @@ export function handleNotify(options: NotifyOptions = {}): void {
   }
 
   // ── Send OS notification ──
-  sendNotification(entries, days)
+  await sendNotification(entries, days)
 }
 
-function sendNotification(
+async function sendNotification(
   entries: { sub: { name: string; price: number; currency: string; cycle: string } }[],
   days: number,
-): void {
+): Promise<void> {
   // Lazy-import to avoid loading the notifier when not needed
-  const notifier = require("node-notifier") as typeof import("node-notifier")
+  const { default: notifier } = await import("node-notifier")
 
   const count = entries.length
   let message: string

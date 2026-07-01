@@ -9,14 +9,22 @@ import {
   getSubscription,
   writeSubscription,
   deleteSubscription,
+  updateSubscription,
   getDb,
   mapTags,
+  getPriceHistory,
+  getAllPriceChanges,
+  getTrials,
+  getTrialsExpiringSoon,
 } from "./db.ts"
-import { calcSummary } from "./payment.ts"
+import { calcSummary, getPeriodDateRange, getPreviousPeriodDateRange } from "./payment.ts"
 import { calcCalendarEntries } from "./calendar.ts"
 import { exportCsv, exportJson, exportMd } from "./export.ts"
+import { fetchFxRates, convertPrice } from "./fx.ts"
+import { periodFactor } from "./types.ts"
 
-import type { SharedArgs, AddSharedArgs, Cycle, Status } from "./types.ts"
+import type { SharedArgs, AddSharedArgs, Cycle, Status, Currency } from "./types.ts"
+import type { FxRates } from "./fx.ts"
 import type { SqlValue } from "sql.js"
 
 // ── Date helpers ────────────────────────────────────────
@@ -201,6 +209,74 @@ export function searchSubscriptions(
   return mapTags(subs)
 }
 
+// ── Compare helpers ──────────────────────────────────────
+
+type CcyTotals = Record<string, number>
+
+function calcSubTotalHelper(
+  subs: SharedArgs[],
+  rates: FxRates | null,
+  targetCurrency: Currency | undefined,
+): CcyTotals {
+  const totals: CcyTotals = {}
+  for (const sub of subs) {
+    if (sub.status === "cancelled") continue
+    const monthly = sub.price * periodFactor(sub.cycle, "monthly")
+    if (targetCurrency && rates) {
+      try {
+        const converted = convertPrice(monthly, sub.currency, targetCurrency, rates.rates)
+        totals[targetCurrency] = (totals[targetCurrency] ?? 0) + converted
+      } catch {
+        totals[sub.currency] = (totals[sub.currency] ?? 0) + monthly
+      }
+    } else {
+      totals[sub.currency] = (totals[sub.currency] ?? 0) + monthly
+    }
+  }
+  return totals
+}
+
+function calcPreviousTotals(
+  activeSubs: SharedArgs[],
+  rates: FxRates | null,
+  targetCurrency: Currency | undefined,
+): CcyTotals {
+  // Check price history to see if any subscriptions had different prices before
+  const priceChanges = getAllPriceChanges()
+  const priceBefore: Record<number, { price: number; currency: string }> = {}
+
+  for (const change of priceChanges) {
+    // The previous price is the old price before the change
+    if (change.oldPrice !== null && !priceBefore[change.subscriptionId]) {
+      priceBefore[change.subscriptionId] = {
+        price: change.oldPrice,
+        currency: change.oldCurrency ?? change.newCurrency,
+      }
+    }
+  }
+
+  const totals: CcyTotals = {}
+  for (const sub of activeSubs) {
+    if (sub.status === "cancelled") continue
+    const prev = priceBefore[sub.id]
+    const price = prev?.price ?? sub.price
+    const currency = prev?.currency ?? sub.currency
+    const monthly = price * periodFactor(sub.cycle, "monthly")
+
+    if (targetCurrency && rates) {
+      try {
+        const converted = convertPrice(monthly, currency, targetCurrency, rates.rates)
+        totals[targetCurrency] = (totals[targetCurrency] ?? 0) + converted
+      } catch {
+        totals[currency] = (totals[currency] ?? 0) + monthly
+      }
+    } else {
+      totals[currency] = (totals[currency] ?? 0) + monthly
+    }
+  }
+  return totals
+}
+
 // ── MCP Server ───────────────────────────────────────────
 
 const server = new Server(
@@ -324,6 +400,112 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["format"],
+        },
+      },
+      {
+        name: "edit_subscription",
+        description: "Edit an existing subscription",
+        inputSchema: {
+          type: "object",
+          properties: {
+            id: { type: "number", description: "Subscription ID to edit" },
+            name: { type: "string", description: "New name" },
+            price: { type: "number", description: "New price in smallest currency unit" },
+            currency: { type: "string", description: "New currency code" },
+            cycle: { type: "string", description: "New billing cycle" },
+            status: { type: "string", description: "New status: active, paused, cancelled" },
+            billingDay: { type: "number", description: "New billing day of month (1-31)" },
+            tags: { type: "string", description: "Comma-separated tags (replaces all)" },
+            paymentMethod: { type: "string", description: "New payment method" },
+            notes: { type: "string", description: "New notes" },
+          },
+          required: ["id"],
+        },
+      },
+      {
+        name: "get_history",
+        description: "Get price change history for subscriptions",
+        inputSchema: {
+          type: "object",
+          properties: {
+            id: { type: "number", description: "Filter by subscription ID" },
+            days: { type: "number", description: "Recent days to include (default: all)" },
+          },
+        },
+      },
+      {
+        name: "get_analytics",
+        description: "Get subscription analytics and statistics",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+      {
+        name: "get_forecast",
+        description: "Get spending forecast for upcoming months",
+        inputSchema: {
+          type: "object",
+          properties: {
+            months: { type: "number", description: "Number of months to forecast (default: 12)" },
+            currency: { type: "string", description: "Convert all to target currency" },
+            cancel: {
+              type: "string",
+              description: "Comma-separated subscription names to exclude from forecast",
+            },
+          },
+        },
+      },
+      {
+        name: "compare",
+        description: "Compare subscription spending between current and previous period",
+        inputSchema: {
+          type: "object",
+          properties: {
+            period: {
+              type: "string",
+              description: "Period to compare: monthly (default), yearly, quarterly",
+            },
+            currency: { type: "string", description: "Convert all to target currency" },
+          },
+        },
+      },
+      {
+        name: "bulk_operations",
+        description: "Perform bulk operations on subscriptions matching filters",
+        inputSchema: {
+          type: "object",
+          properties: {
+            action: {
+              type: "string",
+              description: "Action: status, delete, tag_add, tag_remove",
+            },
+            status: {
+              type: "string",
+              description: "Target status for 'status' action: active, paused, cancelled",
+            },
+            tag_name: {
+              type: "string",
+              description: "Tag name for tag_add / tag_remove actions",
+            },
+            filter_tag: { type: "string", description: "Only affect subscriptions with this tag" },
+            filter_status: { type: "string", description: "Only affect subscriptions with this status" },
+            filter_name: { type: "string", description: "Only affect subscriptions whose name contains this" },
+          },
+          required: ["action"],
+        },
+      },
+      {
+        name: "get_trials",
+        description: "Get trial periods",
+        inputSchema: {
+          type: "object",
+          properties: {
+            expiring_soon: {
+              type: "number",
+              description: "Filter trials expiring within N days",
+            },
+          },
         },
       },
     ],
@@ -454,6 +636,283 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
         }
         return { content: [{ type: "text", text: output }] }
+      }
+
+      case "edit_subscription": {
+        if (args?.id === undefined) {
+          return {
+            content: [{ type: "text", text: "id is required" }],
+            isError: true,
+          }
+        }
+        const editFields: Partial<AddSharedArgs> = {}
+        if (args.name !== undefined) editFields.name = String(args.name)
+        if (args.price !== undefined) editFields.price = Number(args.price)
+        if (args.currency !== undefined) editFields.currency = String(args.currency)
+        if (args.cycle !== undefined) editFields.cycle = String(args.cycle) as Cycle
+        if (args.status !== undefined) editFields.status = String(args.status) as Status
+        if (args.billingDay !== undefined) editFields.billingDay = Number(args.billingDay)
+        if (args.paymentMethod !== undefined) editFields.paymentMethod = String(args.paymentMethod)
+        if (args.notes !== undefined) editFields.notes = String(args.notes)
+        if (args.tags !== undefined) {
+          editFields.tags = String(args.tags).split(",").map((t: string) => t.trim()).filter(Boolean)
+        }
+        const success = updateSubscription(Number(args.id), editFields)
+        return { content: [{ type: "text", text: JSON.stringify({ success }) }] }
+      }
+
+      case "get_history": {
+        const id = args?.id as number | undefined
+        const days = args?.days as number | undefined
+        let entries
+        if (id !== undefined) {
+          entries = getPriceHistory(id)
+        } else {
+          entries = getAllPriceChanges(days)
+        }
+        return { content: [{ type: "text", text: JSON.stringify(entries) }] }
+      }
+
+      case "get_analytics": {
+        const subs = getSubscriptions()
+        const summary = calcSummary(subs)
+        return { content: [{ type: "text", text: JSON.stringify(summary) }] }
+      }
+
+      case "get_forecast": {
+        const months = (args?.months as number | undefined) ?? 12
+        const targetCurrency = args?.currency as string | undefined
+        const cancelNames = args?.cancel
+          ? String(args.cancel).split(",").map((n: string) => n.trim()).filter(Boolean)
+          : []
+
+        let rates: FxRates | null = null
+        if (targetCurrency) {
+          try { rates = await fetchFxRates() } catch { /* fall through */ }
+        }
+
+        const subs = getSubscriptions()
+        const activeSubs = subs.filter(
+          (s) => s.status !== "cancelled" && !cancelNames.includes(s.name),
+        )
+
+        // Calculate monthly forecast per subscription
+        const entries: { name: string; price: number; currency: string; cycle: string; monthly: number; monthlyConverted?: number }[] = []
+
+        for (const sub of activeSubs) {
+          const monthly = sub.price * periodFactor(sub.cycle, "monthly")
+          let monthlyConverted: number | undefined
+          if (targetCurrency && rates) {
+            try {
+              monthlyConverted = Math.round(convertPrice(monthly, sub.currency, targetCurrency, rates.rates))
+            } catch { /* keep original */ }
+          }
+          entries.push({
+            name: sub.name,
+            price: sub.price,
+            currency: sub.currency,
+            cycle: sub.cycle,
+            monthly,
+            ...(monthlyConverted !== undefined ? { monthlyConverted } : {}),
+          })
+        }
+
+        const displayCcy = targetCurrency || "mixed"
+        const monthlyTotal = targetCurrency && rates
+          ? entries.reduce((sum: number, e) => sum + (e.monthlyConverted ?? e.monthly), 0)
+          : entries.reduce((sum: number, e) => sum + e.monthly, 0)
+
+        const years = Math.ceil(months / 12)
+        const yearlyTotal = monthlyTotal * 12
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                months,
+                currency: displayCcy,
+                monthlyTotal: Math.round(monthlyTotal),
+                yearlyTotal: Math.round(yearlyTotal),
+                totalSubscriptions: entries.length,
+                entries,
+              }),
+            },
+          ],
+        }
+      }
+
+      case "compare": {
+        const period = (args?.period as Cycle | undefined) ?? "monthly"
+        const targetCurrency = args?.currency as Currency | undefined
+
+        let rates: FxRates | null = null
+        if (targetCurrency) {
+          try { rates = await fetchFxRates() } catch { /* fall through */ }
+        }
+
+        const subs = getSubscriptions()
+        const activeSubs = subs.filter((s) => s.status !== "cancelled")
+
+        // Current period uses current prices
+        const currentTotals = calcSubTotalHelper(activeSubs, rates, targetCurrency)
+        // Previous period estimates from price history
+        const previousTotals = calcPreviousTotals(activeSubs, rates, targetCurrency)
+
+        const allCurrencies = [...new Set([...Object.keys(currentTotals), ...Object.keys(previousTotals)])].sort()
+
+        const currencyRows = allCurrencies.map((ccy) => ({
+          currency: ccy,
+          current: Math.round(currentTotals[ccy] ?? 0),
+          previous: Math.round(previousTotals[ccy] ?? 0),
+        }))
+
+        const grandCurrent = currencyRows.reduce((s, r) => s + r.current, 0)
+        const grandPrevious = currencyRows.reduce((s, r) => s + r.previous, 0)
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                period,
+                currency: targetCurrency || null,
+                rows: currencyRows,
+                grandTotal: {
+                  current: grandCurrent,
+                  previous: grandPrevious,
+                  change: grandCurrent - grandPrevious,
+                  changePercent: grandPrevious > 0
+                    ? Math.round(((grandCurrent - grandPrevious) / grandPrevious) * 10000) / 100
+                    : 0,
+                },
+              }),
+            },
+          ],
+        }
+      }
+
+      case "bulk_operations": {
+        const action = String(args?.action ?? "")
+        const filters: { tag?: string; status?: string; name?: string } = {}
+        if (args?.filter_tag) filters.tag = String(args.filter_tag)
+        if (args?.filter_status) filters.status = String(args.filter_status)
+        if (args?.filter_name) filters.name = String(args.filter_name)
+
+        const subs = getSubscriptions()
+        let matched = subs
+
+        // Apply filters
+        if (filters.tag) {
+          const tagSet = new Set(filters.tag.split(",").map((t: string) => t.trim()))
+          matched = matched.filter((s) => s.tags?.some((t) => tagSet.has(t)))
+        }
+        if (filters.status) {
+          matched = matched.filter((s) => s.status === filters.status)
+        }
+        if (filters.name) {
+          matched = matched.filter((s) => s.name.toLowerCase().includes(filters.name!.toLowerCase()))
+        }
+
+        // Filter out cancelled for status actions
+        let affected = matched
+        if (action === "status") {
+          affected = matched.filter((s) => s.status !== "cancelled")
+        }
+
+        const affectedIds = affected.map((s) => s.id)
+        let resultCount = 0
+
+        switch (action) {
+          case "status": {
+            const targetStatus = String(args?.status ?? "active")
+            for (const id of affectedIds) {
+              try {
+                updateSubscription(id, { status: targetStatus as Status })
+                resultCount++
+              } catch { /* skip */ }
+            }
+            break
+          }
+          case "delete": {
+            for (const id of affectedIds) {
+              try {
+                deleteSubscription(id)
+                resultCount++
+              } catch { /* skip */ }
+            }
+            break
+          }
+          case "tag_add": {
+            const tagName = String(args?.tag_name ?? "")
+            if (!tagName) {
+              return {
+                content: [{ type: "text", text: "tag_name is required for tag_add action" }],
+                isError: true,
+              }
+            }
+            for (const s of affected) {
+              const currentTags = s.tags ?? []
+              if (!currentTags.includes(tagName)) {
+                try {
+                  updateSubscription(s.id, { tags: [...currentTags, tagName] })
+                  resultCount++
+                } catch { /* skip */ }
+              }
+            }
+            break
+          }
+          case "tag_remove": {
+            const tagName = String(args?.tag_name ?? "")
+            if (!tagName) {
+              return {
+                content: [{ type: "text", text: "tag_name is required for tag_remove action" }],
+                isError: true,
+              }
+            }
+            for (const s of affected) {
+              const currentTags = s.tags ?? []
+              if (currentTags.includes(tagName)) {
+                try {
+                  updateSubscription(s.id, { tags: currentTags.filter((t) => t !== tagName) })
+                  resultCount++
+                } catch { /* skip */ }
+              }
+            }
+            break
+          }
+          default:
+            return {
+              content: [{ type: "text", text: `Unknown bulk action: ${action}. Use: status, delete, tag_add, tag_remove` }],
+              isError: true,
+            }
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                action,
+                filters,
+                matchedCount: affected.length,
+                affectedCount: resultCount,
+                affectedIds,
+              }),
+            },
+          ],
+        }
+      }
+
+      case "get_trials": {
+        const expiringSoon = args?.expiring_soon as number | undefined
+        let entries
+        if (expiringSoon !== undefined) {
+          entries = getTrialsExpiringSoon(expiringSoon)
+        } else {
+          entries = getTrials()
+        }
+        return { content: [{ type: "text", text: JSON.stringify(entries) }] }
       }
 
       default:

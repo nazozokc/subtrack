@@ -181,8 +181,10 @@ async function resolveAddOptions(flags: AddFlags) {
 
 // ── Command handlers ────────────────────────────────────
 
-export async function handleList(options: { currency?: string; sort?: string; desc?: boolean; api?: boolean; notes?: boolean; method?: boolean }) {
-  const list = getSubscriptions(options.sort, options.desc)
+export async function handleList(options: { currency?: string; sort?: string; desc?: boolean; api?: boolean; notes?: boolean; method?: boolean; tags?: string }) {
+  const list = options.tags
+    ? tagsSubscription(options.tags.split(",").map((t) => t.trim()))
+    : getSubscriptions(options.sort, options.desc)
   await spreadSubscription(list, options.currency as Currency | undefined, options.notes, options.method)
 
   if (options.api) {

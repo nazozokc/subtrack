@@ -156,7 +156,7 @@ export function ListScreen() {
 
   useInput(
     (input: string, key) => {
-      if (state.focus !== "content") return
+      if (state.focus !== "content" || state.mode !== "NORMAL") return
 
       // Handle bulk confirm prompt
       if (bulkConfirm === "delete") {
@@ -256,6 +256,11 @@ export function ListScreen() {
       if (input === "/") {
         dispatch({ type: "SET_MODE", mode: "COMMAND" })
         dispatch({ type: "SET_FILTER_TEXT", value: "/" })
+        return
+      }
+      // 3-pane: show history for the selected subscription
+      if (input === "h" && state.showDetail && state.selectedId !== null) {
+        dispatch({ type: "SET_SCREEN", screen: "history" })
         return
       }
       if (input === "v") {

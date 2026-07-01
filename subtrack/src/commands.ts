@@ -41,7 +41,7 @@ import { periodFactor } from "./types.ts"
 
 export async function handleExport(
   format: string,
-  options: { currency?: string; tags?: string; output?: string },
+  options: { currency?: string; tags?: string; output?: string; status?: string },
 ) {
   const supported = ["csv", "json", "md", "excel", "ics"] as const
   if (!(supported as readonly string[]).includes(format)) {
@@ -52,6 +52,11 @@ export async function handleExport(
   let list = options.tags
     ? tagsSubscription(options.tags.split(",").map((t) => t.trim()))
     : getSubscriptions()
+
+  if (options.status) {
+    const statuses = options.status.split(",").map((s) => s.trim().toLowerCase())
+    list = list.filter((s) => statuses.includes(s.status))
+  }
 
   if (list.length === 0) {
     consola.info("No subscriptions found")

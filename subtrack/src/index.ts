@@ -82,6 +82,10 @@ const listCommand = define({
       short: "j",
       description: "Output as JSON",
     },
+    tags: {
+      type: "string",
+      description: "Comma-separated tag names to filter by (AND logic)",
+    },
   },
   run: (ctx) => handleList(ctx.values),
 });
@@ -166,7 +170,7 @@ const tagsCommand = define({
     },
   },
   run: (ctx) => {
-    const tagNames = ctx.positionals.slice(1) as string[];
+    const tagNames = (ctx.values.names as string[] | undefined) ?? [];
     if (tagNames.length === 0) {
       consola.error("Please specify at least one tag");
       return;
@@ -521,6 +525,10 @@ const exportCommand = define({
       description: "Convert all prices to target currency",
     },
     tags: { type: "string", description: "Filter by comma-separated tags" },
+    status: {
+      type: "string",
+      description: "Filter by status: active, paused, cancelled (comma-separated)",
+    },
     output: {
       type: "string",
       short: "o",
@@ -531,6 +539,7 @@ const exportCommand = define({
     handleExport(ctx.values.format, {
       currency: ctx.values.currency,
       tags: ctx.values.tags,
+      status: ctx.values.status,
       output: ctx.values.output,
     }),
 });
@@ -920,13 +929,13 @@ const notifyCommand = define({
       description: "Output as JSON",
     },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const days = ctx.values.days !== undefined ? Number(ctx.values.days) : undefined
     if (days !== undefined && (isNaN(days) || days < 0 || !Number.isInteger(days))) {
       consola.error("days must be a non-negative integer")
       return
     }
-    handleNotify({
+    await handleNotify({
       days,
       dryRun: ctx.values["dry-run"],
       json: ctx.values.json,

@@ -19,7 +19,7 @@ export function DeleteScreen() {
     [state.selectedId],
   )
 
-  useInput((input) => {
+  useInput((input, key) => {
     if (input === "y" || input === "Y") {
       if (sub) {
         try {
@@ -35,7 +35,7 @@ export function DeleteScreen() {
         }
       }
       dispatch({ type: "GO_BACK" })
-    } else if (input === "n" || input === "N") {
+    } else if (input === "n" || input === "N" || key.escape) {
       dispatch({ type: "GO_BACK" })
     }
   })
