@@ -151,4 +151,10 @@ export type SubtrackConfig = {
   monthlyBudget: number
   theme: string
   notifyDays: number
+  /** TUI-specific settings (not shown in CLI config commands) */
+  tui?: {
+    showTagsCol?: boolean
+    showNotesCol?: boolean
+    showMethodCol?: boolean
+  }
 }

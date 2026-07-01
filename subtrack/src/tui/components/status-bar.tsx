@@ -54,7 +54,7 @@ export function StatusBar() {
         {/* Filter indicator */}
         {state.filterText && (
           <Text color={colors.info}>
-            {"  │  "}🔍{" "}
+            {"  │  "}?{" "}
             {state.filterText.length > 20
               ? state.filterText.slice(0, 20) + "…"
               : state.filterText}

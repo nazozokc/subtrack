@@ -1,10 +1,10 @@
 import { Box, Text, useWindowSize, useInput, useApp } from "ink"
 import Gradient from "ink-gradient"
-import { getSubscriptions, getSubscription, updateSubscription } from "../../db.ts"
+import { getSubscriptions, getSubscription, updateSubscription, deleteSubscription } from "../../db.ts"
 import { useTui, type SortField } from "../context/app-context.tsx"
 import type { Status } from "../../types.ts"
 import { SIDEBAR_WIDTH } from "../types.ts"
-import { useMemo, useEffect } from "react"
+import { useMemo, useEffect, useState } from "react"
 import { formatPrice } from "../../price.ts"
 import { colors, statusColor, statusLabel } from "../theme.ts"
 
@@ -145,11 +145,47 @@ export function ListScreen() {
   const activeCount = useMemo(() => subs.filter((s) => s.status === "active").length, [subs])
   const { exit } = useApp()
 
+  // ── Bulk confirm state ──
+  const [bulkConfirm, setBulkConfirm] = useState<"delete" | null>(null)
+
+  useEffect(() => {
+    dispatch({ type: "SET_FORM_ACTIVE", active: bulkConfirm !== null })
+  }, [bulkConfirm, dispatch])
+
   // ── Keyboard ──
 
   useInput(
     (input: string, key) => {
       if (state.focus !== "content") return
+
+      // Handle bulk confirm prompt
+      if (bulkConfirm === "delete") {
+        if (input === "y" || input === "Y") {
+          const ids = Array.from(state.multiSelect)
+          if (ids.length > 0) {
+            let count = 0
+            for (const id of ids) {
+              try {
+                deleteSubscription(id)
+                count++
+              } catch { /* skip failed */ }
+            }
+            dispatch({ type: "MULTI_SELECT_CLEAR" })
+            dispatch({ type: "INCREMENT_REFRESH_KEY" })
+            dispatch({
+              type: "SET_TOAST",
+              toast: { message: `Deleted ${count} subscription${count !== 1 ? "s" : ""}`, type: "success" },
+            })
+          }
+          setBulkConfirm(null)
+          return
+        }
+        if (input === "n" || input === "N" || key.escape) {
+          setBulkConfirm(null)
+          return
+        }
+        return // block other keys during confirm
+      }
 
       // Navigation
       if (key.upArrow || input === "k") {
@@ -205,8 +241,16 @@ export function ListScreen() {
         dispatch({ type: "SET_SCREEN", screen: "edit" })
         return
       }
-      if (input === "d" && state.selectedId !== null) {
-        dispatch({ type: "SET_SCREEN", screen: "delete" })
+      if (input === "d") {
+        // Multi-select: bulk delete
+        if (state.multiSelect.size > 0) {
+          setBulkConfirm("delete")
+          return
+        }
+        if (state.selectedId !== null) {
+          dispatch({ type: "SET_SCREEN", screen: "delete" })
+          return
+        }
         return
       }
       if (input === "/") {
@@ -248,9 +292,10 @@ export function ListScreen() {
         dispatch({ type: "TOGGLE_COLUMN", column: "method" })
         return
       }
-      if (input === "S" && state.selectedId !== null) {
-        const sub = getSubscription(state.selectedId)
-        if (sub) {
+      if (input === "S") {
+        // Multi-select: bulk status toggle
+        if (state.multiSelect.size > 0) {
+          const ids = Array.from(state.multiSelect)
           const cycle: Record<Status, Status> = {
             active: "paused",
             paused: "cancelled",
@@ -261,25 +306,59 @@ export function ListScreen() {
             paused: "Paused",
             cancelled: "Cancelled",
           }
-          const newStatus = cycle[sub.status]
-          try {
-            updateSubscription(sub.id, { status: newStatus })
-            dispatch({ type: "INCREMENT_REFRESH_KEY" })
-            dispatch({
-              type: "SET_TOAST",
-              toast: {
-                message: `${sub.name} → ${label[newStatus]}`,
-                type: "info",
-              },
-            })
-          } catch (e: unknown) {
-            dispatch({
-              type: "SET_TOAST",
-              toast: {
-                message: `Failed to update ${sub.name}: ${e instanceof Error ? e.message : String(e)}`,
-                type: "error",
-              },
-            })
+          let updated = 0
+          for (const id of ids) {
+            const sub = getSubscription(id)
+            if (!sub) continue
+            try {
+              updateSubscription(sub.id, { status: cycle[sub.status] })
+              updated++
+            } catch { /* skip */ }
+          }
+          dispatch({ type: "INCREMENT_REFRESH_KEY" })
+          dispatch({
+            type: "SET_TOAST",
+            toast: {
+              message: `Toggled status for ${updated} subscription${updated !== 1 ? "s" : ""}`,
+              type: "info",
+            },
+          })
+          return
+        }
+        // Single item: cycle status
+        if (state.selectedId !== null) {
+          const sub = getSubscription(state.selectedId)
+          if (sub) {
+            const cycle: Record<Status, Status> = {
+              active: "paused",
+              paused: "cancelled",
+              cancelled: "active",
+            }
+            const label: Record<Status, string> = {
+              active: "Active",
+              paused: "Paused",
+              cancelled: "Cancelled",
+            }
+            const newStatus = cycle[sub.status]
+            try {
+              updateSubscription(sub.id, { status: newStatus })
+              dispatch({ type: "INCREMENT_REFRESH_KEY" })
+              dispatch({
+                type: "SET_TOAST",
+                toast: {
+                  message: `${sub.name} → ${label[newStatus]}`,
+                  type: "info",
+                },
+              })
+            } catch (e: unknown) {
+              dispatch({
+                type: "SET_TOAST",
+                toast: {
+                  message: `Failed to update ${sub.name}: ${e instanceof Error ? e.message : String(e)}`,
+                  type: "error",
+                },
+              })
+            }
           }
         }
         return
@@ -341,6 +420,11 @@ export function ListScreen() {
           {state.showNotesCol ? "[N]" : "[·]"}
           {state.showMethodCol ? "[M]" : "[·]"}
         </Text>
+        {state.multiSelect.size > 0 && (
+          <Text bold color={colors.warning}>
+            {"  "}● {state.multiSelect.size} selected · d:delete S:toggle
+          </Text>
+        )}
       </Box>
 
       {/* ── Row 3: Column headers ── */}
@@ -368,7 +452,7 @@ export function ListScreen() {
           <Box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
             {state.filterText ? (
               <>
-                <Text color={colors.textDim}>🔍 No subscriptions match filter</Text>
+                <Text color={colors.textDim}>No subscriptions match filter</Text>
                 <Box marginTop={1}>
                   <Text color={colors.info}>  Esc or Ctrl+L</Text>
                   <Text color={colors.textDim}>  Clear filter</Text>
@@ -383,7 +467,7 @@ export function ListScreen() {
                 flexDirection="column"
                 alignItems="center"
               >
-                <Text bold color={colors.primary}>📋 No subscriptions yet</Text>
+                <Text bold color={colors.primary}>No subscriptions yet</Text>
                 <Box marginTop={1}>
                   <Text color={colors.textDim}>
                     Press  <Text bold color={colors.success}>a</Text>  to add your first subscription
@@ -530,6 +614,24 @@ export function ListScreen() {
               {formatPrice(total, currency)}{"  "}
             </Text>
           ))}
+        </Box>
+      )}
+
+      {/* ── Bulk confirm prompt ── */}
+      {bulkConfirm === "delete" && (
+        <Box marginTop={1} paddingX={1} paddingY={1} borderStyle="round" borderColor={colors.danger}>
+          <Box flexDirection="column">
+            <Text bold color={colors.danger}>
+              Delete {state.multiSelect.size} selected subscription{state.multiSelect.size !== 1 ? "s" : ""}?
+            </Text>
+            <Text dimColor>
+              This cannot be undone.{"  "}
+              <Text bold color="green" inverse> y </Text>
+              {"  to confirm  "}
+              <Text bold color="red" inverse> n </Text>
+              {"  to cancel"}
+            </Text>
+          </Box>
         </Box>
       )}
     </Box>

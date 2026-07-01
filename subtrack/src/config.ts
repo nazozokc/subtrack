@@ -97,6 +97,33 @@ export function setConfig(key: ConfigKey, value: string): boolean {
   return true
 }
 
+// ── TUI column visibility persistence ──
+
+export type TuiColumnSettings = {
+  showTagsCol: boolean
+  showNotesCol: boolean
+  showMethodCol: boolean
+}
+
+export function loadTuiColumns(): TuiColumnSettings {
+  const config = loadConfig()
+  return {
+    showTagsCol: config.tui?.showTagsCol ?? false,
+    showNotesCol: config.tui?.showNotesCol ?? false,
+    showMethodCol: config.tui?.showMethodCol ?? false,
+  }
+}
+
+export function saveTuiColumns(settings: TuiColumnSettings): void {
+  const config = loadConfig()
+  config.tui = {
+    showTagsCol: settings.showTagsCol,
+    showNotesCol: settings.showNotesCol,
+    showMethodCol: settings.showMethodCol,
+  }
+  saveConfig(config)
+}
+
 function saveConfig(config: SubtrackConfig): void {
   const configPath = getConfigPath()
   const dir = path.dirname(configPath)

@@ -6,6 +6,8 @@ import {
   type ReactNode,
 } from "react"
 import type { Screen, Mode, Focus, ReportsTab, ToolsTab } from "../types.ts"
+import { loadTuiColumns, saveTuiColumns } from "../../config.ts"
+import type { TuiColumnSettings } from "../../config.ts"
 
 export type SortField = "name" | "price" | "cycle" | "status" | "id"
 
@@ -88,7 +90,9 @@ export type AppAction =
   | { type: "SET_SPLIT_RATIO_STEP"; delta: number }
   | { type: "TOGGLE_COLUMN"; column: "tags" | "notes" | "method" }
 
-const initialState: AppState = {
+const columnDefaults = loadTuiColumns()
+
+export const initialState: AppState = {
   screen: "list",
   mode: "NORMAL",
   focus: "content",
@@ -111,12 +115,12 @@ const initialState: AppState = {
   showDetail: false,
   showSidebar: true,
   splitRatio: 0.6,
-  showTagsCol: false,
-  showNotesCol: false,
-  showMethodCol: false,
+  showTagsCol: columnDefaults.showTagsCol,
+  showNotesCol: columnDefaults.showNotesCol,
+  showMethodCol: columnDefaults.showMethodCol,
 }
 
-function appReducer(state: AppState, action: AppAction): AppState {
+export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "SET_SCREEN": {
       // Skip history push when navigating to the same screen
@@ -219,15 +223,28 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, splitRatio: Math.max(0.3, Math.min(0.8, next)) }
     }
     case "TOGGLE_COLUMN": {
+      let next: AppState
       switch (action.column) {
         case "tags":
-          return { ...state, showTagsCol: !state.showTagsCol }
+          next = { ...state, showTagsCol: !state.showTagsCol }
+          break
         case "notes":
-          return { ...state, showNotesCol: !state.showNotesCol }
+          next = { ...state, showNotesCol: !state.showNotesCol }
+          break
         case "method":
-          return { ...state, showMethodCol: !state.showMethodCol }
+          next = { ...state, showMethodCol: !state.showMethodCol }
+          break
+        default:
+          return state
       }
-      return state
+      // Persist to config
+      const settings: TuiColumnSettings = {
+        showTagsCol: next.showTagsCol,
+        showNotesCol: next.showNotesCol,
+        showMethodCol: next.showMethodCol,
+      }
+      try { saveTuiColumns(settings) } catch { /* best-effort */ }
+      return next
     }
     default:
       return state

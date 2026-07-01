@@ -6,7 +6,7 @@ import { loadConfig, setConfig, CONFIG_KEYS } from "../../config.ts"
 import type { ConfigKey } from "../../config.ts"
 
 export function ConfigScreen() {
-  const { dispatch } = useTui()
+  const { state, dispatch } = useTui()
   const [editKey, setEditKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
   const [result, setResult] = useState<string | null>(null)
@@ -20,6 +20,8 @@ export function ConfigScreen() {
   }, [editKey, setFormActive])
 
   useInput((input, key) => {
+    if (state.paletteOpen) return
+
     if (key.escape && editKey) {
       setEditKey(null)
       setResult(null)

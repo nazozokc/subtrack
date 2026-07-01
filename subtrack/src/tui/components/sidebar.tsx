@@ -10,9 +10,9 @@ import { useTui } from "../context/app-context.tsx"
 import { colors } from "../theme.ts"
 
 const SECTION_HEADS: Record<SidebarSection, string> = {
-  data: "📋 Data",
-  reports: "📊 Reports",
-  system: "⚙️ System",
+  data: "[ ] Data",
+  reports: "[~] Reports",
+  system: "[*] System",
 }
 
 type Row =

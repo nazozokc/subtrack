@@ -44,15 +44,15 @@ export const SIDEBAR_WIDTH = 22
 
 export const SIDEBAR_ITEMS: SidebarItem[] = [
   // Data
-  { screen: "list", label: "List", icon: "📋", section: "data" },
-  { screen: "add", label: "Add", icon: "➕", section: "data" },
+  { screen: "list", label: "List", icon: "[ ]", section: "data" },
+  { screen: "add", label: "Add", icon: "[+]", section: "data" },
   // Reports
-  { screen: "reports", label: "Reports", icon: "📊", section: "reports" },
-  { screen: "calendar", label: "Calendar", icon: "📅", section: "reports" },
+  { screen: "reports", label: "Reports", icon: "[~]", section: "reports" },
+  { screen: "calendar", label: "Calendar", icon: "[@]", section: "reports" },
   // System
-  { screen: "config", label: "Config", icon: "⚙️", section: "system" },
-  { screen: "tools", label: "Tools", icon: "🔧", section: "system" },
-  { screen: "help", label: "Help", icon: "❓", section: "system" },
+  { screen: "config", label: "Config", icon: "[*]", section: "system" },
+  { screen: "tools", label: "Tools", icon: "[&]", section: "system" },
+  { screen: "help", label: "Help", icon: "[?]", section: "system" },
 ]
 
 export const SCREEN_TITLES: Record<Screen, string> = {

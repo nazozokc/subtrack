@@ -21,7 +21,7 @@ import type { SqlValue } from "sql.js"
 
 // ── Date helpers ────────────────────────────────────────
 
-function formatDateISO(d: Date): string {
+export function formatDateISO(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, "0")
   const day = String(d.getDate()).padStart(2, "0")
@@ -40,7 +40,7 @@ function addMonths(date: Date, n: number): Date {
   return result
 }
 
-function nextDateForCycle(
+export function nextDateForCycle(
   anchorDay: number,
   anchorDate: Date,
   cycle: Cycle,
@@ -107,7 +107,7 @@ function calculateNextBilling(sub: SharedArgs, fromDate: Date): Date {
 
 // ── Upcoming calculation ────────────────────────────────
 
-function calcUpcoming(days: number) {
+export function calcUpcoming(days: number) {
   const list = getSubscriptions().filter((s) => s.status !== "cancelled")
   const now = new Date()
   now.setHours(0, 0, 0, 0)
@@ -141,7 +141,7 @@ function calcUpcoming(days: number) {
 
 // ── Search implementation ────────────────────────────────
 
-function searchSubscriptions(
+export function searchSubscriptions(
   query: string,
   fields: { names?: boolean; notes?: boolean; tags?: boolean },
 ): SharedArgs[] {

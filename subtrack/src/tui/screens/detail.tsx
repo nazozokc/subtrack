@@ -180,7 +180,7 @@ export function DetailScreen() {
           paddingY={0}
         >
           <Text dimColor>
-            {"  "}e: edit    d: delete    h: history    q/ Esc: back
+            {"  "}            e: edit    d: delete    h: history    r: raw    q/ Esc: back
           </Text>
           {showRaw && (
             <Text dimColor>
@@ -281,7 +281,7 @@ export function DetailPreview() {
       <Text dimColor>{"─".repeat(24)}</Text>
 
       <Text dimColor>
-        e:edit  d:del  h:hist  |:close  Enter:full
+        e:edit  d:del  h:hist  |:toggle  Enter:full
       </Text>
     </Box>
   )

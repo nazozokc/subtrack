@@ -18,7 +18,7 @@ export function showAnalytics(): void {
   const data = calcSummary(list)
 
   // Header
-  consola.log(pc.bold("📊 Subscription Analytics"))
+  consola.log(pc.bold("Subscription Analytics"))
   consola.log("")
 
   // Overview
