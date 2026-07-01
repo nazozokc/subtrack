@@ -9,6 +9,7 @@ export const CONFIG_KEYS = [
   "defaultCurrency",
   "monthlyBudget",
   "theme",
+  "notifyDays",
 ] as const
 
 export type ConfigKey = (typeof CONFIG_KEYS)[number]
@@ -17,6 +18,7 @@ const DEFAULT_CONFIG: SubtrackConfig = {
   defaultCurrency: "USD",
   monthlyBudget: 0,
   theme: "default",
+  notifyDays: 7,
 }
 
 function getConfigDir(): string {
@@ -76,6 +78,15 @@ export function setConfig(key: ConfigKey, value: string): boolean {
     case "theme":
       config.theme = value
       break
+    case "notifyDays": {
+      const num = Number(value)
+      if (isNaN(num) || num < 0 || !Number.isInteger(num)) {
+        consola.error("notifyDays must be a non-negative integer")
+        return false
+      }
+      config.notifyDays = num
+      break
+    }
     default:
       consola.error(`Unknown config key: "${key}"`)
       return false
@@ -86,7 +97,34 @@ export function setConfig(key: ConfigKey, value: string): boolean {
   return true
 }
 
-function saveConfig(config: SubtrackConfig): void {
+// ── TUI column visibility persistence ──
+
+export type TuiColumnSettings = {
+  showTagsCol: boolean
+  showNotesCol: boolean
+  showMethodCol: boolean
+}
+
+export function loadTuiColumns(): TuiColumnSettings {
+  const config = loadConfig()
+  return {
+    showTagsCol: config.tui?.showTagsCol ?? false,
+    showNotesCol: config.tui?.showNotesCol ?? false,
+    showMethodCol: config.tui?.showMethodCol ?? false,
+  }
+}
+
+export function saveTuiColumns(settings: TuiColumnSettings): void {
+  const config = loadConfig()
+  config.tui = {
+    showTagsCol: settings.showTagsCol,
+    showNotesCol: settings.showNotesCol,
+    showMethodCol: settings.showMethodCol,
+  }
+  saveConfig(config)
+}
+
+export function saveConfig(config: SubtrackConfig): void {
   const configPath = getConfigPath()
   const dir = path.dirname(configPath)
   if (!existsSync(dir)) {

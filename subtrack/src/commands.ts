@@ -5,6 +5,11 @@ export { handleSearch } from "./search.ts"
 export { handleTrialAdd, handleTrialList, handleTrialExpiring, handleTrialDelete } from "./trial.ts"
 export { handleBulkStatus, handleBulkDelete, handleBulkTagAdd, handleBulkTagRemove } from "./bulk.ts"
 export { handleForecast } from "./forecast.ts"
+export { handleHistory } from "./history.ts"
+export { handleNotify } from "./notify.ts"
+export { handleTimeline } from "./timeline.ts"
+export { handleOptimize } from "./optimize.ts"
+export { handleProfile } from "./profile.ts"
 export { handleBackup, handleRestore } from "./backup.ts"
 export { handleTagList, handleTagRename, handleTagDelete, handleTagPrune } from "./tag.ts"
 
@@ -27,6 +32,8 @@ import { showAnalytics } from "./analytics.ts"
 import { showCompare } from "./compare.ts"
 import { exportCsv, exportMd, exportJson, exportExcel, exportIcs } from "./export.ts"
 import { showCalendar, calcCalendarEntries } from "./calendar.ts"
+import { handleHistory } from "./history.ts"
+import { handleNotify } from "./notify.ts"
 import { fetchFxRates, convertPrice, type FxRates } from "./fx.ts"
 import { loadConfig, setConfig, resetConfig, CONFIG_KEYS, getConfigPath } from "./config.ts"
 import { unlinkSync, existsSync } from "node:fs"
@@ -37,7 +44,7 @@ import { periodFactor } from "./types.ts"
 
 export async function handleExport(
   format: string,
-  options: { currency?: string; tags?: string; output?: string },
+  options: { currency?: string; tags?: string; output?: string; status?: string },
 ) {
   const supported = ["csv", "json", "md", "excel", "ics"] as const
   if (!(supported as readonly string[]).includes(format)) {
@@ -48,6 +55,11 @@ export async function handleExport(
   let list = options.tags
     ? tagsSubscription(options.tags.split(",").map((t) => t.trim()))
     : getSubscriptions()
+
+  if (options.status) {
+    const statuses = options.status.split(",").map((s) => s.trim().toLowerCase())
+    list = list.filter((s) => statuses.includes(s.status))
+  }
 
   if (list.length === 0) {
     consola.info("No subscriptions found")

@@ -10,6 +10,7 @@ import { CalendarScreen } from "./screens/calendar-screen.tsx"
 import { ConfigScreen } from "./screens/config.tsx"
 import { ToolsScreen } from "./screens/tools/index.tsx"
 import { HelpScreen } from "./screens/help.tsx"
+import { HistoryScreen } from "./screens/history-screen.tsx"
 
 export function CurrentScreen() {
   const { state } = useTui()
@@ -25,6 +26,8 @@ export function CurrentScreen() {
       return <DeleteScreen />
     case "detail":
       return <DetailScreen />
+    case "history":
+      return <HistoryScreen />
     case "reports":
       return <ReportsScreen />
     case "calendar":

@@ -12,7 +12,7 @@ const TOAST_COLORS: Record<string, string> = {
 const TOAST_ICONS: Record<string, string> = {
   success: "✓",
   error: "✗",
-  info: "ℹ",
+  info: "i",
 }
 
 /**

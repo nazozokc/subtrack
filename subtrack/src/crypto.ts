@@ -100,9 +100,9 @@ function getOrCreateKey(): Buffer {
   writeFileSync(keyPath, key, { mode: 0o600 })
   consola.warn(
     `Encryption key created at: ${keyPath}\n` +
-    `  ⚠  BACKUP THIS KEY! If lost, your encrypted database cannot be recovered.\n` +
-    `  💡  Copy the file to a secure location (e.g. password manager).\n` +
-    `  🔑  Or set SUBSC_CLI_DB_PASSPHRASE to derive the key from a passphrase instead.`,
+    `  !! BACKUP THIS KEY! If lost, your encrypted database cannot be recovered.\n` +
+    `  >> Copy the file to a secure location (e.g. password manager).\n` +
+    `  >> Or set SUBSC_CLI_DB_PASSPHRASE to derive the key from a passphrase instead.`,
   )
   return key
 }

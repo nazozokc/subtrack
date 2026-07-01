@@ -146,8 +146,25 @@ export type BackupFileInfo = {
   size: number
 }
 
+export type ProfileFilter = {
+  tags?: string[]
+  status?: Status
+  paymentMethod?: string
+}
+
 export type SubtrackConfig = {
   defaultCurrency: string
   monthlyBudget: number
   theme: string
+  notifyDays: number
+  /** Saved filter profiles */
+  profiles?: Record<string, ProfileFilter>
+  /** Currently active profile name */
+  activeProfile?: string
+  /** TUI-specific settings (not shown in CLI config commands) */
+  tui?: {
+    showTagsCol?: boolean
+    showNotesCol?: boolean
+    showMethodCol?: boolean
+  }
 }

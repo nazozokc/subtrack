@@ -27,7 +27,7 @@ export function EditScreen() {
     try {
       updateSubscription(sub.id, data)
       dispatch({ type: "GO_BACK" })
-      dispatch({ type: "SET_SELECTED_ID", id: null })
+      dispatch({ type: "INCREMENT_REFRESH_KEY" })
       dispatch({
         type: "SET_TOAST",
         toast: { message: `Updated ${data.name}`, type: "success" },
@@ -39,7 +39,6 @@ export function EditScreen() {
 
   const handleCancel = () => {
     dispatch({ type: "GO_BACK" })
-    dispatch({ type: "SET_SELECTED_ID", id: null })
   }
 
   return (

@@ -37,6 +37,11 @@ import {
   handleTui,
   handleCalendar,
   handleMcp,
+  handleHistory,
+  handleNotify,
+  handleTimeline,
+  handleOptimize,
+  handleProfile,
 } from "./commands.ts";
 import {
   handleUsageAdd,
@@ -46,7 +51,7 @@ import {
   handleUsageRefresh,
 } from "./usage.ts";
 import { handleImport } from "./import-csv.ts";
-import type { Cycle, UsageRefreshFlags } from "./types.ts";
+import type { Cycle, Status, UsageRefreshFlags } from "./types.ts";
 
 // ── Command definitions ──────────────────────────────────
 
@@ -79,6 +84,10 @@ const listCommand = define({
       type: "boolean",
       short: "j",
       description: "Output as JSON",
+    },
+    tags: {
+      type: "string",
+      description: "Comma-separated tag names to filter by (AND logic)",
     },
   },
   run: (ctx) => handleList(ctx.values),
@@ -164,7 +173,7 @@ const tagsCommand = define({
     },
   },
   run: (ctx) => {
-    const tagNames = ctx.positionals.slice(1) as string[];
+    const tagNames = (ctx.values.names as string[] | undefined) ?? [];
     if (tagNames.length === 0) {
       consola.error("Please specify at least one tag");
       return;
@@ -519,6 +528,10 @@ const exportCommand = define({
       description: "Convert all prices to target currency",
     },
     tags: { type: "string", description: "Filter by comma-separated tags" },
+    status: {
+      type: "string",
+      description: "Filter by status: active, paused, cancelled (comma-separated)",
+    },
     output: {
       type: "string",
       short: "o",
@@ -529,6 +542,7 @@ const exportCommand = define({
     handleExport(ctx.values.format, {
       currency: ctx.values.currency,
       tags: ctx.values.tags,
+      status: ctx.values.status,
       output: ctx.values.output,
     }),
 });
@@ -853,6 +867,235 @@ const usageCommand = define({
     consola.info("Usage: subtrack usage add|list|delete|import|refresh"),
 });
 
+// ── History ───────────────────────────────────────────────
+
+const historyCommand = define({
+  name: "history",
+  description: "Show price change history for a subscription",
+  args: {
+    id: {
+      type: "positional",
+      description: "Subscription ID",
+      required: false,
+    },
+    all: {
+      type: "boolean",
+      description: "Show all price changes across all subscriptions",
+    },
+    days: {
+      type: "string",
+      description: "Filter to recent N days (used with --all)",
+    },
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
+  },
+  run: (ctx) => {
+    const positionals = ctx.positionals as string[]
+    const id = ctx.values.id !== undefined ? Number(ctx.values.id) : positionals[1] ? Number(positionals[1]) : undefined
+    if (id !== undefined && (isNaN(id) || !Number.isInteger(id) || id < 1)) {
+      consola.error("id must be a positive integer")
+      return
+    }
+    const days = ctx.values.days !== undefined ? Number(ctx.values.days) : undefined
+    if (days !== undefined && (isNaN(days) || days < 1 || !Number.isInteger(days))) {
+      consola.error("days must be a positive integer")
+      return
+    }
+    handleHistory(id, {
+      all: ctx.values.all,
+      json: ctx.values.json,
+      days,
+    })
+  },
+})
+
+// ── Notify ────────────────────────────────────────────────
+
+const notifyCommand = define({
+  name: "notify",
+  description: "Send desktop notification for upcoming bills",
+  args: {
+    days: {
+      type: "string",
+      description: "Number of days (default: config notifyDays or 7)",
+    },
+    "dry-run": {
+      type: "boolean",
+      description: "Show upcoming bills without sending notification",
+    },
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
+  },
+  run: async (ctx) => {
+    const days = ctx.values.days !== undefined ? Number(ctx.values.days) : undefined
+    if (days !== undefined && (isNaN(days) || days < 0 || !Number.isInteger(days))) {
+      consola.error("days must be a non-negative integer")
+      return
+    }
+    await handleNotify({
+      days,
+      dryRun: ctx.values["dry-run"],
+      json: ctx.values.json,
+    })
+  },
+})
+
+// ── Profile ──────────────────────────────────────────────
+
+const profileSaveCmd = define({
+  name: "save",
+  description: "Save a filter profile",
+  toKebab: true,
+  args: {
+    name: { type: "positional", description: "Profile name" },
+    tag: {
+      type: "string",
+      array: true,
+      description: "Filter by tags (comma-separated or multiple flags)",
+    },
+    status: { type: "string", description: "Filter by status: active, paused, cancelled" },
+    "payment-method": { type: "string", description: "Filter by payment method" },
+  },
+  run: (ctx) => {
+    const name = ctx.values.name
+    if (!name) {
+      consola.error("Profile name required")
+      return
+    }
+    const tagValues = ctx.values.tag as string[] | undefined
+    const tags = tagValues
+      ? tagValues.flatMap((t: string) => t.split(",").map((s: string) => s.trim()).filter(Boolean))
+      : undefined
+    handleProfile("save", name, {
+      tags: tags && tags.length > 0 ? tags : undefined,
+      status: ctx.values.status as Status | undefined,
+      paymentMethod: ctx.values["payment-method"],
+    })
+  },
+})
+
+const profileSwitchCmd = define({
+  name: "switch",
+  description: "Switch to a saved profile",
+  args: {
+    name: { type: "positional", description: "Profile name" },
+  },
+  run: (ctx) => {
+    handleProfile("switch", ctx.values.name)
+  },
+})
+
+const profileListCmd = define({
+  name: "list",
+  description: "List saved profiles",
+  run: () => handleProfile("list"),
+})
+
+const profileShowCmd = define({
+  name: "show",
+  description: "Show profile details",
+  args: {
+    name: { type: "positional", description: "Profile name", required: false },
+  },
+  run: (ctx) => {
+    handleProfile("show", ctx.values.name)
+  },
+})
+
+const profileDeleteCmd = define({
+  name: "delete",
+  description: "Delete a profile",
+  args: {
+    name: { type: "positional", description: "Profile name" },
+  },
+  run: (ctx) => {
+    handleProfile("delete", ctx.values.name)
+  },
+})
+
+const profileCommand = define({
+  name: "profile",
+  description: "Manage filter profiles",
+  subCommands: {
+    save: profileSaveCmd,
+    switch: profileSwitchCmd,
+    list: profileListCmd,
+    show: profileShowCmd,
+    delete: profileDeleteCmd,
+  },
+  run: () => consola.info("Usage: subtrack profile save|switch|list|show|delete"),
+})
+
+// ── Optimize ─────────────────────────────────────────────
+
+const optimizeCommand = define({
+  name: "optimize",
+  description: "Analyze subscriptions and suggest cost optimizations",
+  args: {
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
+    "min-savings": {
+      type: "string",
+      description: "Minimum yearly savings to show (default: 0)",
+    },
+  },
+  run: (ctx) => {
+    const minSavings = ctx.values["min-savings"] !== undefined ? Number(ctx.values["min-savings"]) : undefined
+    if (minSavings !== undefined && (isNaN(minSavings) || minSavings < 0)) {
+      consola.error("min-savings must be a non-negative number")
+      return
+    }
+    handleOptimize({
+      json: ctx.values.json,
+      minSavings,
+    })
+  },
+})
+
+// ── Timeline ─────────────────────────────────────────────
+
+const timelineCommand = define({
+  name: "timeline",
+  description: "Show monthly spending timeline with bar chart",
+  args: {
+    months: {
+      type: "string",
+      description: "Number of months (default: 12)",
+    },
+    categories: {
+      type: "boolean",
+      short: "c",
+      description: "Show breakdown by category (first tag)",
+    },
+    json: {
+      type: "boolean",
+      short: "j",
+      description: "Output as JSON",
+    },
+  },
+  run: (ctx) => {
+    const months = ctx.values.months !== undefined ? Number(ctx.values.months) : undefined
+    if (months !== undefined && (isNaN(months) || months < 1 || !Number.isInteger(months))) {
+      consola.error("months must be a positive integer")
+      return
+    }
+    handleTimeline({
+      months,
+      categories: ctx.values.categories,
+      json: ctx.values.json,
+    })
+  },
+})
+
 // ── MCP ──────────────────────────────────────────────────
 
 const mcpCommand = define({
@@ -910,6 +1153,11 @@ try {
       payment: paymentCommand,
       upcoming: upcomingCommand,
       calendar: calendarCommand,
+      history: historyCommand,
+      notify: notifyCommand,
+      profile: profileCommand,
+      optimize: optimizeCommand,
+      timeline: timelineCommand,
       mcp: mcpCommand,
       analytics: analyticsCommand,
       compare: compareCommand,

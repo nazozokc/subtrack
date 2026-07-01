@@ -74,7 +74,7 @@ export function CalendarScreen() {
       {/* Header */}
       <Box marginBottom={1}>
         <Text bold color={colors.primary}>
-          {"📅 "}{MONTH_NAMES[month - 1]} {year}
+          {MONTH_NAMES[month - 1]} {year}
         </Text>
       </Box>
 

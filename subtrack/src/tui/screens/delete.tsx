@@ -19,11 +19,12 @@ export function DeleteScreen() {
     [state.selectedId],
   )
 
-  useInput((input) => {
+  useInput((input, key) => {
     if (input === "y" || input === "Y") {
       if (sub) {
         try {
           deleteSubscription(sub.id)
+          dispatch({ type: "INCREMENT_REFRESH_KEY" })
           dispatch({
             type: "SET_TOAST",
             toast: { message: `Deleted ${sub.name}`, type: "success" },
@@ -34,10 +35,8 @@ export function DeleteScreen() {
         }
       }
       dispatch({ type: "GO_BACK" })
-      dispatch({ type: "SET_SELECTED_ID", id: null })
-    } else if (input === "n" || input === "N") {
+    } else if (input === "n" || input === "N" || key.escape) {
       dispatch({ type: "GO_BACK" })
-      dispatch({ type: "SET_SELECTED_ID", id: null })
     }
   })
 

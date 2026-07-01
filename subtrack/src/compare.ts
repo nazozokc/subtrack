@@ -3,7 +3,7 @@ import pc from "picocolors"
 import CliTable3 from "cli-table3"
 import type { SharedArgs, Currency, Cycle } from "./types.ts"
 import { periodFactor } from "./types.ts"
-import { getSubscriptions, getLlmUsageTotal, getLlmUsageTotalByProvider } from "./db.ts"
+import { getSubscriptions, getLlmUsageTotal, getLlmUsageTotalByProvider, getAllPriceChanges } from "./db.ts"
 import { formatPrice } from "./display.ts"
 import { getPeriodDateRange, getPreviousPeriodDateRange } from "./payment.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
@@ -166,18 +166,35 @@ export async function showCompare(
 
   const targetCurrency = options.currency as Currency | undefined
 
-  // Calculate subscription totals for current and previous period
-  // For subscriptions, price is per-cycle, so we need to compare per-cycle totals
-  // Since subscriptions are ongoing, we use the same active list for both periods
   const activeSubs = subs.filter((s) => s.status !== "cancelled")
   if (activeSubs.length === 0) {
     consola.info("No active subscriptions found")
     return
   }
 
+  // Current period uses current prices
   const currentTotals = calcSubTotal(activeSubs, rates, targetCurrency)
-  // Same subscriptions for previous period (they were active then too)
-  const previousTotals = calcSubTotal(activeSubs, rates, targetCurrency)
+
+  // Previous period — estimate from price history when available
+  const priceChanges = getAllPriceChanges()
+  const priceBefore: Record<number, { price: number; currency: string }> = {}
+  for (const change of priceChanges) {
+    if (change.oldPrice !== null && !priceBefore[change.subscriptionId]) {
+      priceBefore[change.subscriptionId] = {
+        price: change.oldPrice,
+        currency: change.oldCurrency ?? change.newCurrency,
+      }
+    }
+  }
+
+  const previousSubs = activeSubs.map((s) => {
+    const prev = priceBefore[s.id]
+    if (prev) {
+      return { ...s, price: prev.price, currency: prev.currency }
+    }
+    return s
+  })
+  const previousTotals = calcSubTotal(previousSubs, rates, targetCurrency)
 
   consola.log("")
   consola.log(pc.bold(`Comparing ${periodStr}: ${currentLabel} vs ${previousLabel}`))

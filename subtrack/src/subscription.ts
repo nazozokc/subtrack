@@ -11,6 +11,7 @@ import {
   tagsSubscription,
   getLlmUsageTotal,
   getLlmUsageTotalByProvider,
+  writePriceHistory,
 } from "./db.ts"
 import {
   formatPrice,
@@ -180,8 +181,10 @@ async function resolveAddOptions(flags: AddFlags) {
 
 // ── Command handlers ────────────────────────────────────
 
-export async function handleList(options: { currency?: string; sort?: string; desc?: boolean; api?: boolean; notes?: boolean; method?: boolean }) {
-  const list = getSubscriptions(options.sort, options.desc)
+export async function handleList(options: { currency?: string; sort?: string; desc?: boolean; api?: boolean; notes?: boolean; method?: boolean; tags?: string }) {
+  const list = options.tags
+    ? tagsSubscription(options.tags.split(",").map((t) => t.trim()))
+    : getSubscriptions(options.sort, options.desc)
   await spreadSubscription(list, options.currency as Currency | undefined, options.notes, options.method)
 
   if (options.api) {
@@ -335,6 +338,7 @@ export async function handleEdit(
       newData.paymentMethod = trimmed || null
     }
     updateSubscription(sub.id, newData)
+    writePriceHistory(sub.id, sub.price, newData.price ?? sub.price, sub.currency, newData.currency ?? sub.currency)
     const updated = getSubscription(sub.id)!
     consola.success(
       `Updated: ${updated.name} — ${formatPrice(updated.price, updated.currency)}/${updated.cycle}`,
@@ -441,6 +445,7 @@ export async function handleEdit(
   }
 
   updateSubscription(sub.id, newData)
+  writePriceHistory(sub.id, sub.price, newData.price ?? sub.price, sub.currency, newData.currency ?? sub.currency)
   const updated = getSubscription(sub.id)
   if (!updated) {
     consola.error("Failed to retrieve updated subscription")

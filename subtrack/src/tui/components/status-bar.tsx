@@ -1,6 +1,7 @@
 import { Box, Text } from "ink"
 import { useTui } from "../context/app-context.tsx"
 import { colors } from "../theme.ts"
+import { getActiveProfileName } from "../../profile.ts"
 
 const SCREEN_LABEL: Record<string, string> = {
   list: "List",
@@ -51,10 +52,17 @@ export function StatusBar() {
           {screenLabel}
         </Text>
 
+        {/* Active profile indicator */}
+        {getActiveProfileName() && (
+          <Text color={colors.info}>
+            {"  │  "}● {getActiveProfileName()}
+          </Text>
+        )}
+
         {/* Filter indicator */}
         {state.filterText && (
           <Text color={colors.info}>
-            {"  │  "}🔍{" "}
+            {"  │  "}?{" "}
             {state.filterText.length > 20
               ? state.filterText.slice(0, 20) + "…"
               : state.filterText}
