@@ -21,11 +21,12 @@ import { calcSummary, getPeriodDateRange, getPreviousPeriodDateRange } from "./p
 import { calcCalendarEntries } from "./calendar.ts"
 import { exportCsv, exportJson, exportMd } from "./export.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
-import { periodFactor } from "./types.ts"
+import { periodFactor } from "./date-utils.ts"
+import { searchSubscriptions } from "./search.ts"
+import { calcUpcoming } from "./upcoming.ts"
 
 import type { SharedArgs, AddSharedArgs, Cycle, Status, Currency } from "./types.ts"
 import type { FxRates } from "./fx.ts"
-import type { SqlValue } from "sql.js"
 
 // ── Date helpers ────────────────────────────────────────
 
@@ -34,179 +35,6 @@ export function formatDateISO(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0")
   const day = String(d.getDate()).padStart(2, "0")
   return `${y}-${m}-${day}`
-}
-
-function getBillingDay(sub: SharedArgs): number {
-  if (sub.billingDay) return sub.billingDay
-  const [y, m, d] = sub.createdAt.split("-").map(Number)
-  return new Date(y, m - 1, d).getDate()
-}
-
-function addMonths(date: Date, n: number): Date {
-  const result = new Date(date)
-  result.setMonth(result.getMonth() + n)
-  return result
-}
-
-export function nextDateForCycle(
-  anchorDay: number,
-  anchorDate: Date,
-  cycle: Cycle,
-  fromDate: Date,
-): Date {
-  switch (cycle) {
-    case "monthly": {
-      const candidate = new Date(fromDate.getFullYear(), fromDate.getMonth(), anchorDay)
-      if (candidate > fromDate) return candidate
-      return new Date(fromDate.getFullYear(), fromDate.getMonth() + 1, anchorDay)
-    }
-    case "yearly": {
-      const candidate = new Date(fromDate.getFullYear(), anchorDate.getMonth(), anchorDay)
-      if (candidate > fromDate) return candidate
-      return new Date(fromDate.getFullYear() + 1, anchorDate.getMonth(), anchorDay)
-    }
-    case "weekly": {
-      const diff = fromDate.getTime() - anchorDate.getTime()
-      const weeksSince = Math.ceil(diff / (7 * 24 * 60 * 60 * 1000))
-      return new Date(anchorDate.getTime() + weeksSince * 7 * 24 * 60 * 60 * 1000)
-    }
-    case "bi-weekly": {
-      const diff = fromDate.getTime() - anchorDate.getTime()
-      const periodsSince = Math.ceil(diff / (14 * 24 * 60 * 60 * 1000))
-      return new Date(anchorDate.getTime() + periodsSince * 14 * 24 * 60 * 60 * 1000)
-    }
-    case "quarterly": {
-      const monthsSince =
-        (fromDate.getFullYear() - anchorDate.getFullYear()) * 12 +
-        (fromDate.getMonth() - anchorDate.getMonth())
-      const quartersSince = Math.ceil(monthsSince / 3)
-      return addMonths(new Date(anchorDate), quartersSince * 3)
-    }
-    case "semi-annual": {
-      const monthsSince =
-        (fromDate.getFullYear() - anchorDate.getFullYear()) * 12 +
-        (fromDate.getMonth() - anchorDate.getMonth())
-      const halvesSince = Math.ceil(monthsSince / 6)
-      return addMonths(new Date(anchorDate), halvesSince * 6)
-    }
-  }
-}
-
-function calculateNextBilling(sub: SharedArgs, fromDate: Date): Date {
-  const [y, m, d] = sub.createdAt.split("-").map(Number)
-  const anchorDate = new Date(y, m - 1, d)
-  const day = getBillingDay(sub)
-
-  if (
-    sub.cycle === "monthly" ||
-    sub.cycle === "yearly" ||
-    sub.cycle === "quarterly" ||
-    sub.cycle === "semi-annual"
-  ) {
-    const candidate = nextDateForCycle(day, anchorDate, sub.cycle, fromDate)
-    if (candidate.getDate() !== day) {
-      candidate.setDate(0)
-    }
-    return candidate
-  }
-
-  return nextDateForCycle(day, anchorDate, sub.cycle, fromDate)
-}
-
-// ── Upcoming calculation ────────────────────────────────
-
-export function calcUpcoming(days: number) {
-  const list = getSubscriptions().filter((s) => s.status !== "cancelled")
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  const endDate = new Date(now)
-  endDate.setDate(endDate.getDate() + days)
-
-  type UpcomingEntry = { sub: SharedArgs; nextDate: Date; amount: number }
-  const entries: UpcomingEntry[] = []
-
-  for (const sub of list) {
-    const next = calculateNextBilling(sub, now)
-    if (next >= now && next <= endDate) {
-      const amount = sub.price
-      entries.push({ sub, nextDate: next, amount })
-    }
-  }
-
-  entries.sort((a, b) => a.nextDate.getTime() - b.nextDate.getTime())
-
-  return entries.map((e) => ({
-    id: e.sub.id,
-    name: e.sub.name,
-    price: e.sub.price,
-    currency: e.sub.currency,
-    cycle: e.sub.cycle,
-    amount: Math.round(e.amount),
-    nextDate: formatDateISO(e.nextDate),
-    tags: e.sub.tags,
-  }))
-}
-
-// ── Search implementation ────────────────────────────────
-
-export function searchSubscriptions(
-  query: string,
-  fields: { names?: boolean; notes?: boolean; tags?: boolean },
-): SharedArgs[] {
-  const db = getDb()
-  const pattern = `%${query}%`
-  const conditions: string[] = []
-  const params: SqlValue[] = []
-
-  const searchFields = {
-    names: fields.names ?? (!fields.notes && !fields.tags),
-    notes: fields.notes ?? (!fields.names && !fields.tags),
-    tags: fields.tags ?? (!fields.names && !fields.notes),
-  }
-
-  if (searchFields.names) {
-    conditions.push("s.name LIKE ?")
-    params.push(pattern)
-  }
-  if (searchFields.notes) {
-    conditions.push("s.notes LIKE ?")
-    params.push(pattern)
-  }
-  if (searchFields.tags) {
-    conditions.push(
-      "s.id IN (SELECT st.subscription_id FROM subscription_tags st JOIN tags t ON t.id = st.tag_id WHERE t.name LIKE ?)",
-    )
-    params.push(pattern)
-  }
-
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" OR ")}` : ""
-  const sql = `SELECT DISTINCT s.id, s.name, s.price, s.currency, s.cycle, s.status, s.billing_day AS billingDay, s.created_at AS createdAt, s.notes, s.payment_method AS paymentMethod FROM subscriptions s ${whereClause} ORDER BY s.name`
-
-  const results = db.exec(sql, params)
-  if (!results.length) return []
-
-  const { columns, values } = results[0]
-  const subs: SharedArgs[] = values.map((row) => {
-    const obj: Record<string, unknown> = {}
-    for (let i = 0; i < columns.length; i++) {
-      obj[columns[i]] = row[i]
-    }
-    return {
-      id: Number(obj.id),
-      name: String(obj.name),
-      price: Number(obj.price),
-      currency: String(obj.currency),
-      cycle: String(obj.cycle) as Cycle,
-      status: String(obj.status) as Status,
-      billingDay: obj.billingDay !== null ? Number(obj.billingDay) : null,
-      createdAt: String(obj.createdAt),
-      notes: obj.notes !== null ? String(obj.notes) : null,
-      paymentMethod: obj.paymentMethod !== null ? String(obj.paymentMethod) : null,
-      tags: [],
-    } as SharedArgs
-  })
-
-  return mapTags(subs)
 }
 
 // ── Compare helpers ──────────────────────────────────────

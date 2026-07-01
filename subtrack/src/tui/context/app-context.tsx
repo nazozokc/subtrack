@@ -6,8 +6,7 @@ import {
   type ReactNode,
 } from "react"
 import type { Screen, Mode, Focus, ReportsTab, ToolsTab } from "../types.ts"
-import { loadTuiColumns, saveTuiColumns } from "../../config.ts"
-import type { TuiColumnSettings } from "../../config.ts"
+import { loadTuiColumns, saveTuiColumns, type TuiColumnSettings } from "../config.ts"
 
 export type SortField = "name" | "price" | "cycle" | "status" | "id"
 

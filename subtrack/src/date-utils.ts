@@ -1,3 +1,26 @@
+import type { Cycle } from "./types.ts"
+
+/**
+ * Number of occurrences per year for each billing cycle.
+ */
+export const OCCURRENCES_PER_YEAR: Record<Cycle, number> = {
+  weekly: 52,
+  "bi-weekly": 26,
+  monthly: 12,
+  quarterly: 4,
+  "semi-annual": 2,
+  yearly: 1,
+}
+
+/**
+ * Returns the multiplier to convert a price from one cycle to another.
+ * e.g. periodFactor("yearly", "monthly") => 1/12
+ *      periodFactor("monthly", "yearly") => 12
+ */
+export function periodFactor(from: Cycle, to: Cycle = "monthly"): number {
+  return OCCURRENCES_PER_YEAR[from] / OCCURRENCES_PER_YEAR[to]
+}
+
 /**
  * Convert a YYYY-MM-DD date string to a Unix timestamp in milliseconds
  * representing the start of that day (00:00:00 UTC).

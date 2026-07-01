@@ -67,7 +67,7 @@ describe("MCP helper functions", () => {
   })
 
   test("nextDateForCycle — monthly basic case", async () => {
-    const { nextDateForCycle } = await import("../mcp.ts")
+    const { nextDateForCycle } = await import("../upcoming.ts")
     // Use local date constructors for timezone safety
     const anchor = new Date(2026, 0, 15)  // Jan 15
     const from = new Date(2026, 5, 1)     // Jun 1
@@ -78,7 +78,7 @@ describe("MCP helper functions", () => {
   })
 
   test("nextDateForCycle — monthly rolls to next month", async () => {
-    const { nextDateForCycle } = await import("../mcp.ts")
+    const { nextDateForCycle } = await import("../upcoming.ts")
     const anchor = new Date(2026, 0, 15)  // Jan 15
     const from = new Date(2026, 5, 20)    // Jun 20 (past billing day 15)
     const next = nextDateForCycle(15, anchor, "monthly", from)
@@ -87,7 +87,7 @@ describe("MCP helper functions", () => {
   })
 
   test("nextDateForCycle — yearly returns next year", async () => {
-    const { nextDateForCycle } = await import("../mcp.ts")
+    const { nextDateForCycle } = await import("../upcoming.ts")
     const anchor = new Date(2026, 2, 10)  // Mar 10
     const from = new Date(2026, 5, 1)     // Jun 1
     const next = nextDateForCycle(10, anchor, "yearly", from)
@@ -97,7 +97,7 @@ describe("MCP helper functions", () => {
   })
 
   test("nextDateForCycle — weekly returns next week", async () => {
-    const { nextDateForCycle } = await import("../mcp.ts")
+    const { nextDateForCycle } = await import("../upcoming.ts")
     const anchor = new Date(2026, 5, 1)   // Jun 1 (Monday)
     const from = new Date(2026, 5, 15)    // Jun 15
     const next = nextDateForCycle(1, anchor, "weekly", from)
@@ -109,7 +109,7 @@ describe("MCP helper functions", () => {
   })
 
   test("nextDateForCycle — bi-weekly returns correct date", async () => {
-    const { nextDateForCycle } = await import("../mcp.ts")
+    const { nextDateForCycle } = await import("../upcoming.ts")
     const anchor = new Date(2026, 5, 1)   // Jun 1
     const from = new Date(2026, 5, 15)    // Jun 15
     const next = nextDateForCycle(1, anchor, "bi-weekly", from)
@@ -119,7 +119,7 @@ describe("MCP helper functions", () => {
   })
 
   test("nextDateForCycle — quarterly returns next quarter", async () => {
-    const { nextDateForCycle } = await import("../mcp.ts")
+    const { nextDateForCycle } = await import("../upcoming.ts")
     const anchor = new Date(2026, 0, 15)  // Jan 15
     const from = new Date(2026, 5, 1)     // Jun 1
     const next = nextDateForCycle(15, anchor, "quarterly", from)
@@ -137,9 +137,9 @@ describe("calcUpcoming", () => {
               (3, 'GitHub Copilot', 1000, 'USD', 'monthly', 'cancelled', 5, '2026-03-01')`,
     )
 
-    const { calcUpcoming } = await import("../mcp.ts")
+    const { calcUpcoming } = await import("../upcoming.ts")
     const result = calcUpcoming(30)
-    const names = result.map((e: { name: string }) => e.name)
+    const names = result.map((e: { sub: { name: string } }) => e.sub.name)
     expect(names).toContain("Netflix")
     expect(names).not.toContain("GitHub Copilot")
   })
@@ -153,7 +153,7 @@ describe("searchSubscriptions", () => {
               (2, 'Spotify', 980, 'JPY', 'monthly', 'active', 1, '2026-01-10', NULL)`,
     )
 
-    const { searchSubscriptions } = await import("../mcp.ts")
+    const { searchSubscriptions } = await import("../search.ts")
     const results = searchSubscriptions("net", {})
     expect(results.length).toBeGreaterThanOrEqual(1)
     expect(results.some((r: { name: string }) => r.name === "Netflix")).toBe(true)
@@ -165,7 +165,7 @@ describe("searchSubscriptions", () => {
        VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01')`,
     )
 
-    const { searchSubscriptions } = await import("../mcp.ts")
+    const { searchSubscriptions } = await import("../search.ts")
     const results = searchSubscriptions("zzzzz", {})
     expect(results.length).toBe(0)
   })

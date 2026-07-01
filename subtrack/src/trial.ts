@@ -4,7 +4,8 @@ import pc from "picocolors"
 import CliTable3 from "cli-table3"
 import type { TrialEntry, AddTrialArgs, TrialAddFlags, Cycle } from "./types.ts"
 import { writeTrial, getTrials, getTrial, deleteTrial, getTrialsExpiringSoon } from "./db.ts"
-import { formatPrice } from "./display.ts"
+import { formatPrice } from "./price.ts"
+import { TABLE_CHARS, TABLE_STYLE } from "./display-constants.ts"
 import {
   CURRENCY_CHOICES,
   CYCLE_CHOICES,
@@ -14,32 +15,6 @@ import {
   promptString,
   promptSelect,
 } from "./prompts.ts"
-
-const TABLE_CHARS = {
-  top: "─",
-  "top-mid": "┬",
-  "top-left": "┌",
-  "top-right": "┐",
-  bottom: "─",
-  "bottom-mid": "┴",
-  "bottom-left": "└",
-  "bottom-right": "┘",
-  left: "│",
-  "left-mid": "├",
-  mid: "─",
-  "mid-mid": "┼",
-  right: "│",
-  "right-mid": "┤",
-  middle: "│",
-} as const
-
-const TABLE_STYLE = {
-  border: ["\x1b[90m", "\x1b[0m"],
-  head: ["\x1b[1m\x1b[38;5;75m", "\x1b[0m"],
-  "padding-left": 1,
-  "padding-right": 1,
-  compact: false,
-} satisfies Record<string, unknown>
 
 // ── Helpers ────────────────────────────────────────────
 

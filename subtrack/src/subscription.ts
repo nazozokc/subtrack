@@ -13,8 +13,8 @@ import {
   getLlmUsageTotalByProvider,
   writePriceHistory,
 } from "./db.ts"
+import { formatPrice } from "./price.ts"
 import {
-  formatPrice,
   spreadSubscription,
   showApiUsage,
 } from "./display.ts"

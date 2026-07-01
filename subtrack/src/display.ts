@@ -7,7 +7,7 @@ import { fetchFxRates, convertPrice } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
 
 import { formatPrice } from "./price.ts"
-export { formatPrice }
+import { TABLE_CHARS, TABLE_STYLE } from "./display-constants.ts"
 
 function statusColor(status: Status): string {
   switch (status) {
@@ -125,32 +125,6 @@ function calcColumnWidths(rows: string[][], config: ColumnConfig): number[] {
 
   return widths
 }
-
-const TABLE_CHARS = {
-  top: "─",
-  "top-mid": "┬",
-  "top-left": "┌",
-  "top-right": "┐",
-  bottom: "─",
-  "bottom-mid": "┴",
-  "bottom-left": "└",
-  "bottom-right": "┘",
-  left: "│",
-  "left-mid": "├",
-  mid: "─",
-  "mid-mid": "┼",
-  right: "│",
-  "right-mid": "┤",
-  middle: "│",
-} as const
-
-const TABLE_STYLE = {
-  border: ["\x1b[90m", "\x1b[0m"],
-  head: ["\x1b[1m\x1b[38;5;75m", "\x1b[0m"],
-  "padding-left": 1,
-  "padding-right": 1,
-  compact: false,
-} satisfies Record<string, unknown>
 
 function renderTable(rows: string[][], config: ColumnConfig): string {
   const widths = calcColumnWidths(rows, config)

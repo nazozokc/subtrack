@@ -2,10 +2,10 @@ import { consola } from "consola"
 import pc from "picocolors"
 import type { SharedArgs } from "./types.ts"
 import { getSubscriptions } from "./db.ts"
-import { formatPrice } from "./display.ts"
+import { formatPrice } from "./price.ts"
 import { calcSummary } from "./payment.ts"
 import { loadConfig } from "./config.ts"
-import { periodFactor } from "./types.ts"
+import { periodFactor } from "./date-utils.ts"
 
 export function showAnalytics(): void {
   const list = getSubscriptions().filter((s) => s.status !== "cancelled")

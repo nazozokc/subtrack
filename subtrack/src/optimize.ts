@@ -2,7 +2,7 @@ import { consola } from "consola"
 import pc from "picocolors"
 import { getSubscriptions, getAllPriceChanges } from "./db.ts"
 import type { SharedArgs } from "./types.ts"
-import { periodFactor, OCCURRENCES_PER_YEAR } from "./types.ts"
+import { periodFactor, OCCURRENCES_PER_YEAR } from "./date-utils.ts"
 import { formatPrice } from "./price.ts"
 
 export type OptimizeOptions = {
