@@ -47,7 +47,7 @@ subtrack takes supply chain security seriously:
 - **Dependabot**: Defense-in-depth alongside Renovate — catches vulnerabilities faster via GitHub Advisory Database integration.
 - **Lockfile**: A `pnpm-lock.yaml` is committed and verified with `--frozen-lockfile` in CI. An `npm-shrinkwrap.json` is generated at publish time for downstream reproducability.
 - **Limited build scripts**: Only `esbuild` is permitted to run install scripts (`allowBuilds` in `pnpm-workspace.yaml`).
-- **Harden-Runner**: Every CI workflow uses `step-security/harden-runner@v3` for runtime egress monitoring and threat detection.
+- **Harden-Runner**: Every CI workflow uses `step-security/harden-runner` (pinned to v2.19.4 SHA) for runtime egress monitoring and threat detection.
 - **CodeQL**: Static analysis runs on every push and PR.
 - **pnpm audit**: Runs in CI to catch known vulnerabilities.
 - **OpenSSF Scorecard**: Automated supply chain health assessment with results published to the repository's Security tab.
