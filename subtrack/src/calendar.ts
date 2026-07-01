@@ -1,7 +1,7 @@
 import { consola } from "consola"
 import pc from "picocolors"
 import { getSubscriptions } from "./db.ts"
-import { formatPrice } from "./display.ts"
+import { formatPrice } from "./price.ts"
 import type { SharedArgs } from "./types.ts"
 
 /** Options for the calendar command */

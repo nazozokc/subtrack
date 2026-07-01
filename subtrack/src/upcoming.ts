@@ -2,7 +2,7 @@ import { consola } from "consola"
 import pc from "picocolors"
 import type { SharedArgs, Cycle } from "./types.ts"
 import { getSubscriptions } from "./db.ts"
-import { formatPrice } from "./display.ts"
+import { formatPrice } from "./price.ts"
 
 
 function toDate(dateStr: string): Date {
@@ -23,7 +23,7 @@ function addMonths(date: Date, n: number): Date {
   return result
 }
 
-function nextDateForCycle(anchorDay: number, anchorDate: Date, cycle: Cycle, fromDate: Date): Date {
+export function nextDateForCycle(anchorDay: number, anchorDate: Date, cycle: Cycle, fromDate: Date): Date {
   switch (cycle) {
     case "monthly": {
       // Calculate next billing date based on anchor day

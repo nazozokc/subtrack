@@ -1,4 +1,5 @@
-import { OCCURRENCES_PER_YEAR, type Cycle } from "../../../types.ts"
+import { OCCURRENCES_PER_YEAR } from "../../../date-utils.ts"
+import type { Cycle } from "../../../types.ts"
 
 const CYCLES = Object.keys(OCCURRENCES_PER_YEAR) as Cycle[]
 

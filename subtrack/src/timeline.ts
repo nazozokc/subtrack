@@ -2,7 +2,7 @@ import { consola } from "consola"
 import pc from "picocolors"
 import { getSubscriptions } from "./db.ts"
 import type { SharedArgs } from "./types.ts"
-import { periodFactor } from "./types.ts"
+import { periodFactor } from "./date-utils.ts"
 import { formatPrice } from "./price.ts"
 
 export type TimelineOptions = {

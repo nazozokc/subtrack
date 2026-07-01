@@ -25,22 +25,18 @@ import { consola } from "consola"
 import { writeFileSync } from "node:fs"
 import type { Currency, Cycle, SubtrackConfig } from "./types.ts"
 import { tagsSubscription, getSubscriptions, getLlmUsageTotal, getLlmUsageTotalByProvider } from "./db.ts"
-import { formatPrice } from "./display.ts"
+import { formatPrice } from "./price.ts"
 import { showPayment, showSummary, calcSummary, getPeriodDateRange } from "./payment.ts"
 import { showUpcoming, calcUpcoming } from "./upcoming.ts"
 import { showAnalytics } from "./analytics.ts"
 import { showCompare } from "./compare.ts"
 import { exportCsv, exportMd, exportJson, exportExcel, exportIcs } from "./export.ts"
 import { showCalendar, calcCalendarEntries } from "./calendar.ts"
-import { handleHistory } from "./history.ts"
-import { handleNotify } from "./notify.ts"
 import { fetchFxRates, convertPrice, type FxRates } from "./fx.ts"
-import { loadConfig, setConfig, resetConfig, CONFIG_KEYS, getConfigPath } from "./config.ts"
-import { unlinkSync, existsSync } from "node:fs"
 import os from "node:os"
 import { resolveSafeOutputPath } from "./path-utils.ts"
 import type { SharedArgs } from "./types.ts"
-import { periodFactor } from "./types.ts"
+import { periodFactor } from "./date-utils.ts"
 
 export async function handleExport(
   format: string,
@@ -281,40 +277,4 @@ export async function handleMcp(): Promise<void> {
 
 // ── Config handlers ─────────────────────────────────────
 
-export function handleConfigList(): void {
-  const config = loadConfig()
-  for (const key of CONFIG_KEYS) {
-    consola.log(`${key}: ${config[key]}`)
-  }
-}
-
-export function handleConfigGet(key: string): void {
-  const config = loadConfig()
-  if (!(CONFIG_KEYS as readonly string[]).includes(key)) {
-    consola.error(`Unknown config key: "${key}". Valid: ${CONFIG_KEYS.join(", ")}`)
-    return
-  }
-  consola.log(`${key}: ${config[key as keyof SubtrackConfig]}`)
-}
-
-export function handleConfigSet(key: string, value: string): void {
-  if (!(CONFIG_KEYS as readonly string[]).includes(key)) {
-    consola.error(`Unknown config key: "${key}". Valid: ${CONFIG_KEYS.join(", ")}`)
-    return
-  }
-  setConfig(key as (typeof CONFIG_KEYS)[number], value)
-}
-
-export async function handleConfigReset(): Promise<void> {
-  const configPath = getConfigPath()
-  if (existsSync(configPath)) {
-    try {
-      unlinkSync(configPath)
-    } catch (err) {
-      consola.error(`Failed to remove config file: ${err instanceof Error ? err.message : String(err)}`)
-      return
-    }
-  }
-  resetConfig()
-  consola.success("Config reset to defaults")
-}
+export { handleConfigList, handleConfigGet, handleConfigSet, handleConfigReset } from "./config.ts"

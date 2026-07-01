@@ -50,10 +50,16 @@ export async function handleSearch(
   await spreadSubscription(results)
 }
 
-function searchSubscriptions(
+export function searchSubscriptions(
   query: string,
-  fields: { names: boolean; notes: boolean; tags: boolean },
+  fields: { names?: boolean; notes?: boolean; tags?: boolean },
 ): SharedArgs[] {
+  // Apply defaults: search all fields if none specified
+  fields = {
+    names: fields.names ?? (!fields.notes && !fields.tags),
+    notes: fields.notes ?? (!fields.names && !fields.tags),
+    tags: fields.tags ?? (!fields.names && !fields.notes),
+  }
   const db = getDb()
   const pattern = `%${query}%`
   const conditions: string[] = []

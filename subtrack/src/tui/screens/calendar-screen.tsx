@@ -3,7 +3,7 @@ import { useState, useMemo } from "react"
 import { calcCalendarEntries } from "../../calendar.ts"
 import { useTui } from "../context/app-context.tsx"
 import { colors } from "../theme.ts"
-import { formatPrice } from "../../display.ts"
+import { formatPrice } from "../../price.ts"
 
 export function CalendarScreen() {
   const { dispatch } = useTui()

@@ -1,5 +1,5 @@
 import type { SharedArgs } from "./types.ts"
-import { formatPrice } from "./display.ts"
+import { formatPrice } from "./price.ts"
 import ExcelJS from "exceljs"
 import { calculateNextBilling } from "./upcoming.ts"
 
