@@ -111,6 +111,12 @@ export function scanCursor(from?: string, to?: string): ScanResult {
       return { source: "cursor", entries: [] }
     }
 
+    // Sanitize table name: must match exactly a known table name (prevents SQL injection from malicious DB)
+    if (!knownTables.includes(tableName)) {
+      consola.warn(`Cursor DB has suspicious table name "${tableName}" — skipping`)
+      return { source: "cursor", entries: [] }
+    }
+
     const results = db.exec(`SELECT key, value FROM "${tableName}" WHERE key LIKE 'bubbleId:%'`)
 
     if (results.length === 0) {

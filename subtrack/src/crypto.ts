@@ -1,4 +1,4 @@
-import { randomBytes, createCipheriv, createDecipheriv, scryptSync } from "node:crypto"
+import { randomBytes, createCipheriv, createDecipheriv, scryptSync, createHash } from "node:crypto"
 import { readFileSync, writeFileSync, existsSync, mkdirSync, lstatSync, chmodSync } from "node:fs"
 import path from "node:path"
 import { homedir } from "node:os"
@@ -21,6 +21,40 @@ function getKeyPath(): string {
 
 function getSaltPath(): string {
   return path.join(getConfigDir(), ".key.salt")
+}
+
+// ── Key integrity (SHA-256 sidecar) ─────────────────────────
+
+function getKeyIntegrityPath(): string {
+  return path.join(getConfigDir(), ".key.sha256")
+}
+
+/** Write a SHA-256 integrity hash for the key file. */
+function writeKeyIntegrity(keyContent: Buffer): void {
+  const hash = createHash("sha256").update(keyContent).digest("hex")
+  writeFileSync(getKeyIntegrityPath(), hash + "\n", { mode: 0o600 })
+}
+
+/**
+ * Verify the key file's SHA-256 integrity against the stored hash.
+ * Returns true if the hash matches or no sidecar exists (first run migration).
+ * Returns false if the hash exists but doesn't match (tampered key).
+ */
+function verifyKeyIntegrity(keyContent: Buffer): boolean {
+  const integrityPath = getKeyIntegrityPath()
+  if (!existsSync(integrityPath)) {
+    // No integrity file yet — create one for future checks
+    writeKeyIntegrity(keyContent)
+    return true
+  }
+  try {
+    verifySecureFilePermission(integrityPath, "Key integrity file")
+    const expected = readFileSync(integrityPath, "utf-8").trim()
+    const actual = createHash("sha256").update(keyContent).digest("hex")
+    return expected === actual
+  } catch {
+    return false
+  }
 }
 
 // ---- Internal helpers ----
@@ -91,13 +125,34 @@ function getOrCreateKey(): Buffer {
   const keyPath = getKeyPath()
   if (existsSync(keyPath)) {
     verifySecureFilePermission(keyPath, "Encryption key file")
-    return readFileSync(keyPath)
+    const keyContent = readFileSync(keyPath)
+
+    // Verify key size
+    if (keyContent.length !== KEY_LENGTH) {
+      throw new Error(
+        `Encryption key has unexpected size (${keyContent.length} bytes, expected ${KEY_LENGTH}). ` +
+        "The key file may be corrupted. Restore from backup or delete the key file to generate a new one.",
+      )
+    }
+
+    // Verify integrity (detect tampering early, before GCM decryption fails)
+    if (!verifyKeyIntegrity(keyContent)) {
+      consola.error(
+        "Encryption key integrity check FAILED. The key file may have been tampered with.\n" +
+        "  Restore the original .key file from a backup, or delete it to generate a new key.\n" +
+        "  If you generate a new key, encrypted backups will NOT be recoverable.",
+      )
+      throw new Error("Encryption key integrity check failed — possible tampering detected")
+    }
+
+    return keyContent
   }
 
   const dir = getConfigDir()
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
   const key = generateKey()
   writeFileSync(keyPath, key, { mode: 0o600 })
+  writeKeyIntegrity(key) // Write integrity hash for future verification
   consola.warn(
     `Encryption key created at: ${keyPath}\n` +
     `  !! BACKUP THIS KEY! If lost, your encrypted database cannot be recovered.\n` +

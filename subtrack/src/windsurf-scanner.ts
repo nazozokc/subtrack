@@ -103,6 +103,12 @@ export function scanWindsurf(from?: string, to?: string): ScanResult {
       return { source: "windsurf", entries: [] }
     }
 
+    // Sanitize table name: must match exactly a known table name (prevents SQL injection from malicious DB)
+    if (!knownTables.includes(tableName)) {
+      consola.warn(`Windsurf DB has suspicious table name "${tableName}" — skipping`)
+      return { source: "windsurf", entries: [] }
+    }
+
     // Fetch key-value pairs matching usage-related patterns
     const results = db.exec(`SELECT key, value FROM "${tableName}" WHERE key LIKE '%token%' OR key LIKE '%usage%' OR key LIKE '%completion%'`)
 

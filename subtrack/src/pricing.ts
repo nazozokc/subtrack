@@ -19,6 +19,8 @@ let _cachePromise: Promise<PricingCache | null> | null = null
 
 const CACHE_FRESHNESS_MS = 24 * 60 * 60 * 1000
 const FETCH_TIMEOUT_MS = 15_000
+const MAX_PRICING_JSON_BYTES = 10 * 1024 * 1024 // 10 MB
+const MIN_PRICING_KEYS = 10 // sanity check: at least 10 model entries
 const GITHUB_JSON_URL =
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
 
@@ -64,8 +66,38 @@ export async function ensurePricingCache(): Promise<PricingCache | null> {
       try {
         const res = await fetch(GITHUB_JSON_URL, { signal: controller.signal })
         if (!res.ok) throw new Error(`GitHub responded with ${res.status}`)
-        const text = await res.text()
+
+        // Read with size limit to prevent memory exhaustion
+        const reader = res.body?.getReader()
+        if (!reader) throw new Error("No response body")
+        const chunks: Uint8Array[] = []
+        let totalBytes = 0
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          totalBytes += value.length
+          if (totalBytes > MAX_PRICING_JSON_BYTES) {
+            throw new Error(`Pricing data too large (exceeded ${MAX_PRICING_JSON_BYTES / 1024 / 1024} MB)`)
+          }
+          chunks.push(value)
+        }
+        const allBytes = new Uint8Array(totalBytes)
+        let offset = 0
+        for (const chunk of chunks) {
+          allBytes.set(chunk, offset)
+          offset += chunk.length
+        }
+        const text = new TextDecoder().decode(allBytes)
         data = safeJsonParse<PricingCache>(text)
+
+        // Validate structure: must be an object with at least MIN_PRICING_KEYS entries
+        if (typeof data !== "object" || data === null || Array.isArray(data)) {
+          throw new Error("Pricing data is not a valid JSON object")
+        }
+        const keys = Object.keys(data)
+        if (keys.length < MIN_PRICING_KEYS) {
+          throw new Error(`Pricing data has only ${keys.length} entries (expected >= ${MIN_PRICING_KEYS})`)
+        }
       } finally {
         clearTimeout(timer)
       }
@@ -73,7 +105,7 @@ export async function ensurePricingCache(): Promise<PricingCache | null> {
       writeFileSync(cachePath, JSON.stringify(data), { mode: 0o600 })
       _cache = data
       return data
-    } catch {
+    } catch (fetchErr) {
       if (staleCache) {
         _cache = staleCache
         return staleCache

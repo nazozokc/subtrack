@@ -1,10 +1,14 @@
-import { readFileSync } from "node:fs"
+import { readFileSync, statSync } from "node:fs"
 import os from "node:os"
 import { consola } from "consola"
 import type { UsageImportFlags } from "./types.ts"
 import { addLlmUsageFromLog } from "./db.ts"
 import { safeJsonParse } from "./safe-json.ts"
 import { resolveSafePath } from "./path-utils.ts"
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
+const MAX_STDIN_SIZE = 10 * 1024 * 1024 // 10 MB (stdin is unbounded)
+const STDIN_TIMEOUT_MS = 30_000 // 30 seconds
 import {
   ensurePricingCache,
   lookupModelKey,
@@ -134,10 +138,27 @@ export async function handleUsageImport(flags: UsageImportFlags) {
   // Read file (or stdin)
   let content: string
   if (filePath === "-") {
-    // Read from stdin
+    // Read from stdin with size and timeout protection
     const chunks: Buffer[] = []
-    for await (const chunk of process.stdin) {
-      chunks.push(Buffer.from(chunk))
+    let totalBytes = 0
+    const stdinTimer = setTimeout(() => {
+      consola.error("Stdin read timed out — exceeded 30 seconds")
+      process.exit(1)
+    }, STDIN_TIMEOUT_MS)
+    try {
+      for await (const chunk of process.stdin) {
+        const buf = Buffer.from(chunk)
+        totalBytes += buf.length
+        if (totalBytes > MAX_STDIN_SIZE) {
+          consola.error(
+            `Stdin input too large (max ${MAX_STDIN_SIZE / 1024 / 1024} MB)`,
+          )
+          return
+        }
+        chunks.push(buf)
+      }
+    } finally {
+      clearTimeout(stdinTimer)
     }
     content = Buffer.concat(chunks).toString("utf-8")
   } else {
@@ -146,6 +167,19 @@ export async function handleUsageImport(flags: UsageImportFlags) {
       consola.error(
         `File not found or path not allowed — must be within home or temp directory`,
       )
+      return
+    }
+    // Check file size before reading
+    try {
+      const st = statSync(safeFile)
+      if (st.size > MAX_FILE_SIZE) {
+        consola.error(
+          `File too large (${(st.size / 1024 / 1024).toFixed(1)} MB). Maximum: ${MAX_FILE_SIZE / 1024 / 1024} MB`,
+        )
+        return
+      }
+    } catch (err) {
+      consola.error(`Cannot stat file: ${safeFile} — ${String(err)}`)
       return
     }
     try {
