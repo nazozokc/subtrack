@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from "node:fs"
+import { openSync, fstatSync, readSync, closeSync } from "node:fs"
 import os from "node:os"
 import { consola } from "consola"
 import type { UsageImportFlags } from "./types.ts"
@@ -141,15 +141,18 @@ export async function handleUsageImport(flags: UsageImportFlags) {
     // Read from stdin with size and timeout protection
     const chunks: Buffer[] = []
     let totalBytes = 0
+    let stdinDestroyed = false
     const stdinTimer = setTimeout(() => {
       consola.error("Stdin read timed out — exceeded 30 seconds")
-      process.exit(1)
+      process.stdin.destroy()
+      stdinDestroyed = true
     }, STDIN_TIMEOUT_MS)
     try {
       for await (const chunk of process.stdin) {
         const buf = Buffer.from(chunk)
         totalBytes += buf.length
         if (totalBytes > MAX_STDIN_SIZE) {
+          process.stdin.destroy()
           consola.error(
             `Stdin input too large (max ${MAX_STDIN_SIZE / 1024 / 1024} MB)`,
           )
@@ -157,9 +160,12 @@ export async function handleUsageImport(flags: UsageImportFlags) {
         }
         chunks.push(buf)
       }
+    } catch {
+      // Stream was destroyed (timeout or read error) — partial data in chunks
     } finally {
       clearTimeout(stdinTimer)
     }
+    if (stdinDestroyed) return
     content = Buffer.concat(chunks).toString("utf-8")
   } else {
     const safeFile = resolveSafePath([os.homedir(), os.tmpdir()], filePath)
@@ -169,24 +175,25 @@ export async function handleUsageImport(flags: UsageImportFlags) {
       )
       return
     }
-    // Check file size before reading
+    // Open file once and use the same fd for size check and read (TOCTOU-safe)
+    let fd: number | null = null
     try {
-      const st = statSync(safeFile)
+      fd = openSync(safeFile, "r")
+      const st = fstatSync(fd)
       if (st.size > MAX_FILE_SIZE) {
         consola.error(
           `File too large (${(st.size / 1024 / 1024).toFixed(1)} MB). Maximum: ${MAX_FILE_SIZE / 1024 / 1024} MB`,
         )
         return
       }
-    } catch (err) {
-      consola.error(`Cannot stat file: ${safeFile} — ${String(err)}`)
-      return
-    }
-    try {
-      content = readFileSync(safeFile, "utf-8")
+      const buffer = Buffer.alloc(st.size)
+      readSync(fd, buffer, 0, st.size, 0)
+      content = buffer.toString("utf-8")
     } catch (err) {
       consola.error(`Cannot read file: ${safeFile} — ${String(err)}`)
       return
+    } finally {
+      if (fd !== null) closeSync(fd)
     }
   }
 

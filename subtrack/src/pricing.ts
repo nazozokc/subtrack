@@ -77,6 +77,7 @@ export async function ensurePricingCache(): Promise<PricingCache | null> {
           if (done) break
           totalBytes += value.length
           if (totalBytes > MAX_PRICING_JSON_BYTES) {
+            reader.cancel().catch(() => {})
             throw new Error(`Pricing data too large (exceeded ${MAX_PRICING_JSON_BYTES / 1024 / 1024} MB)`)
           }
           chunks.push(value)
