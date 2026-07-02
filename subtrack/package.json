@@ -34,6 +34,9 @@
     "node": ">=22"
   },
   "sideEffects": false,
+  "pnpm": {
+    "onlyBuiltDependencies": []
+  },
   "files": [
     "dist",
     "npm-shrinkwrap.json",

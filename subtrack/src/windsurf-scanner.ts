@@ -103,6 +103,9 @@ export function scanWindsurf(from?: string, to?: string): ScanResult {
       return { source: "windsurf", entries: [] }
     }
 
+    // tableName is guaranteed to be one of `knownTables` by construction
+    // (see the `.find` above), so no further SQL injection guard is needed
+
     // Fetch key-value pairs matching usage-related patterns
     const results = db.exec(`SELECT key, value FROM "${tableName}" WHERE key LIKE '%token%' OR key LIKE '%usage%' OR key LIKE '%completion%'`)
 

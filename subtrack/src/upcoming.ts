@@ -28,13 +28,13 @@ export function nextDateForCycle(anchorDay: number, anchorDate: Date, cycle: Cyc
     case "monthly": {
       // Calculate next billing date based on anchor day
       const candidate = new Date(fromDate.getFullYear(), fromDate.getMonth(), anchorDay)
-      if (candidate > fromDate) return candidate
+      if (candidate >= fromDate) return candidate
       // Move to next month
       return new Date(fromDate.getFullYear(), fromDate.getMonth() + 1, anchorDay)
     }
     case "yearly": {
       const candidate = new Date(fromDate.getFullYear(), anchorDate.getMonth(), anchorDay)
-      if (candidate > fromDate) return candidate
+      if (candidate >= fromDate) return candidate
       return new Date(fromDate.getFullYear() + 1, anchorDate.getMonth(), anchorDay)
     }
     case "weekly": {

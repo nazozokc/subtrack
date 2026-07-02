@@ -111,6 +111,9 @@ export function scanCursor(from?: string, to?: string): ScanResult {
       return { source: "cursor", entries: [] }
     }
 
+    // tableName is guaranteed to be one of `knownTables` by construction
+    // (see the `.find` above), so no further SQL injection guard is needed
+
     const results = db.exec(`SELECT key, value FROM "${tableName}" WHERE key LIKE 'bubbleId:%'`)
 
     if (results.length === 0) {
