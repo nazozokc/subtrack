@@ -1,4 +1,4 @@
-import { test, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest"
+import { test, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest"
 import initSqlJs from "sql.js"
 import type { Database } from "sql.js"
 import { consola } from "consola"
@@ -98,8 +98,6 @@ afterEach(() => {
   } else {
     process.env.SUBSC_CLI_DB_DIR = originalEnv
   }
-  const { resetConfig } = vi.importActual("../config.ts") as never
-  void resetConfig
 })
 
 afterAll(() => {
