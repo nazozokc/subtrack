@@ -93,6 +93,7 @@ export function addAuditLog(args: AddAuditArgs): void {
 /** Query audit log entries with optional filters. */
 export function getAuditLogs(options: {
   action?: string
+  targetId?: number
   limit?: number
   offset?: number
   from?: string
@@ -104,6 +105,10 @@ export function getAuditLogs(options: {
   if (options.action) {
     conditions.push("action = ?")
     params.push(options.action)
+  }
+  if (options.targetId !== undefined) {
+    conditions.push("target_id = ?")
+    params.push(options.targetId)
   }
   if (options.from) {
     conditions.push("created_at >= ?")

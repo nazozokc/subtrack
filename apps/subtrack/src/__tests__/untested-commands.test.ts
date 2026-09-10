@@ -269,10 +269,18 @@ test("handleNotify JSON output", async () => {
 })
 
 test("handleNotify with days=0 returns early", async () => {
-  // Billing on day 10 — won't be within 0 days so "No upcoming" is expected
-  insertSub({ name: "Netflix", price: 1500, billingDay: 10, createdAt: "2026-06-01" })
+  // Freeze time to July 3 so billingDay 10 is NOT today — within 0 days means only today
+  vi.useFakeTimers()
+  try {
+    vi.setSystemTime(new Date(2026, 6, 3))
 
-  const { handleNotify } = await import("../notify.ts")
-  await handleNotify({ days: 0, dryRun: true })
+    insertSub({ name: "Netflix", price: 1500, billingDay: 10, createdAt: "2026-06-01" })
+
+    const { handleNotify } = await import("../notify.ts")
+    await handleNotify({ days: 0, dryRun: true })
+  } finally {
+    vi.useRealTimers()
+  }
+
   expect(infoMessages.some((m) => m.includes("No upcoming"))).toBe(true)
 })
