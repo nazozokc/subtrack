@@ -23,8 +23,8 @@ export async function handleReceipt(file: string, options: { dryRun?: boolean; r
   let candidates
   try { candidates = readReceipts(file).map(parseEmail).filter((candidate): candidate is NonNullable<ReturnType<typeof parseEmail>> => !!candidate) }
   catch (error) { fail(`Failed to read receipt: ${error instanceof Error ? error.message : String(error)}`); return }
-  if (options.json || options.dryRun) process.stdout.write(JSON.stringify(candidates, null, 2) + "\n")
-  if (options.dryRun) return
+  // json and dryRun are read-only previews: no writes, no console noise mixed into stdout
+  if (options.json || options.dryRun) { process.stdout.write(JSON.stringify(candidates, null, 2) + "\n"); return }
   if (!candidates.length) { consola.info("No receipt candidates found"); return }
   writeSuggestionBatch(candidates)
   logAudit("suggestion.receipt", { details: `${candidates.length} receipt candidate(s) imported` })
