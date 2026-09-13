@@ -145,13 +145,14 @@ function releaseLock(): void {
   }
 }
 
-/** Close the open DB instance and remove its temp backing file. */
+/** Close the open DB instance, release the lock, and remove temp files. */
 export function closeDb(): void {
   if (_db) {
     try { _db.close() } catch { /* ignore */ }
     _db = null
   }
   try { unlinkSync(getOpenDbPath()) } catch { /* ignore */ }
+  releaseLock()
 }
 
 // Release lock + temp DB files on process exit

@@ -1,4 +1,4 @@
-import { test, expect, beforeAll, afterAll, afterEach } from "vitest"
+import { test, expect, vi, beforeAll, afterAll, afterEach } from "vitest"
 import { DatabaseSync } from "node:sqlite"
 import {
   mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync,
@@ -7,6 +7,12 @@ import { join, parse } from "node:path"
 import { tmpdir } from "node:os"
 import { gzipSync } from "node:zlib"
 import { decryptBuffer, isEncrypted } from "../crypto.ts"
+
+// Restore tests do heavy real-file I/O (write → validate → VACUUM INTO →
+// encrypt → replace → reopen). On Windows CI (NTFS + real-time AV scanning)
+// a single restoreDb can exceed the 15s global default, so give this suite
+// generous headroom.
+vi.setConfig({ testTimeout: 60_000 })
 
 const conn = await import("../db/connection.ts")
 
@@ -21,14 +27,32 @@ beforeAll(() => {
   process.env.SUBSC_CLI_DB_DIR = mainDir
 })
 
-afterAll(() => {
+/** Remove a directory, retrying briefly when Windows still holds a lock. */
+async function removeDirWithRetry(dir: string): Promise<void> {
+  const deadline = Date.now() + 5_000
+  for (;;) {
+    try {
+      rmSync(dir, { recursive: true, force: true })
+      return
+    } catch (err) {
+      const nodeErr = err as NodeJS.ErrnoException
+      // EBUSY/EPERM: node:sqlite backing files stay locked for a moment
+      // after close on Windows — retry instead of failing the suite.
+      if (nodeErr.code !== "EBUSY" && nodeErr.code !== "EPERM") throw err
+      if (Date.now() >= deadline) throw err
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+  }
+}
+
+afterAll(async () => {
   // Close the cached DatabaseSync handle first: Windows cannot unlink a
   // file that is still open (POSIX allows it, which is why this only
   // fails on Windows).
   conn.closeDb()
   delete process.env.SUBSC_CLI_DB_DIR
   for (const dir of [mainDir, ...tempDirs]) {
-    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
+    if (existsSync(dir)) await removeDirWithRetry(dir)
   }
 })
 
