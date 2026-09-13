@@ -57,11 +57,12 @@ The source code (`subtrack/src/`) follows a 4-layer separation:
 | Commands | `commands/` | gunshi command definitions (`define()` + `.run()`) |
 | Handlers | `subscription/`, `menu.ts`, `search.ts`, `payment.ts`, … | Command handlers, workflow logic, user interaction |
 | Database | `db.ts`, `db/` | SQLite CRUD, schema, persistence, `__setDb()` for testing |
-| Display | `display.ts` | Table rendering with cli-table3, FX rate conversion |
+| Display | `display.ts` | Table rendering with `@subtrack/lib/table`, FX rate conversion |
 | Prompts | `prompts.ts` | Input validation, interactive prompts, shared choices |
 | FX | `fx.ts` | Exchange rate fetching & conversion (`fetchFxRates`, `convertPrice`, `convertSubsWithRates`, `tryConvert`) |
-| Dates | `date-utils.ts` | Date helpers (`today`, `formatDate`, `daysUntil`, period ranges) |
-| Path safety | `path-utils.ts` | `resolveSafePath` / `resolveSafeOutputPath` (+ `safePath` / `safeOutputPath` shortcuts) |
+| Dates | `@subtrack/lib/date` | Date helpers (`today`, `formatDate`, `daysUntil`, period ranges, `Cycle`) |
+| Path safety | `@subtrack/lib/path` | `resolveSafePath` / `resolveSafeOutputPath` (+ `safePath` / `safeOutputPath` shortcuts) |
+| Shared utils | `lib/src/` | `@subtrack/lib/ansi|logger|table|xlsx|json|path|format|date|crypto` (source package, bundled by tsdown) |
 
 Keep concerns separated. Don't put DB queries in display logic or prompt logic in command handlers.
 

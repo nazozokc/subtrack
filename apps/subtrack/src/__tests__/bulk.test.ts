@@ -1,7 +1,7 @@
 import { test, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { DatabaseSync } from "node:sqlite"
 
-vi.mock("../consola.ts", () => {
+vi.mock("@subtrack/lib/logger", () => {
   const logMessages: string[] = []
   const infoMessages: string[] = []
   const successMessages: string[] = []
@@ -44,7 +44,7 @@ vi.mock("@inquirer/prompts", () => ({
 }))
 
 import { input, confirm, select } from "@inquirer/prompts"
-import { infoMessages, successMessages, errorMessages } from "../consola.ts"
+import { infoMessages, successMessages, errorMessages } from "@subtrack/lib/logger"
 import type { BulkFilters, BulkOptions } from "../bulk.ts"
 
 let testDb: DatabaseSync

@@ -2,8 +2,8 @@
  * Usage total command — aggregated LLM API usage summary.
  */
 
-import { consola } from "./consola.ts"
-import pc from "./color.ts"
+import { consola } from "@subtrack/lib/logger"
+import pc from "@subtrack/lib/ansi"
 import { sectionTitle, divider } from "./display-constants.ts"
 import {
   getLlmUsageTotal,
@@ -11,7 +11,7 @@ import {
   getLlmUsageTotalByProvider,
   getLlmUsageTotalByModel,
 } from "./db.ts"
-import { getPeriodDateRange } from "./date-utils.ts"
+import { getPeriodDateRange } from "@subtrack/lib/date"
 import type { Cycle } from "./types.ts"
 import { formatUsdCost } from "./price.ts"
 

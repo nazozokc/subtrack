@@ -1,6 +1,6 @@
 // ── Trial commands ─────────────────────────────────────
 import { define } from "gunshi"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { handleTrialAdd, handleTrialList, handleTrialExpiring, handleTrialDelete } from "../trial.ts"
 
 const trialAddCmd = define({

@@ -1,0 +1,30 @@
+{
+  "name": "@subtrack/lib",
+  "version": "10.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Shared self-contained utilities for the subtrack monorepo (ANSI colors, logger, table renderer, XLSX generator, safe JSON, path safety, date/billing helpers, encryption).",
+  "exports": {
+    "./ansi": "./src/ansi.ts",
+    "./crypto": "./src/crypto.ts",
+    "./date": "./src/date.ts",
+    "./format": "./src/format.ts",
+    "./json": "./src/json.ts",
+    "./logger": "./src/logger.ts",
+    "./path": "./src/path.ts",
+    "./table": "./src/table.ts",
+    "./xlsx": "./src/xlsx.ts"
+  },
+  "scripts": {
+    "lint:types": "tsc --noEmit",
+    "lint:typos": "command -v typos >/dev/null 2>&1 && typos || echo 'typos not installed, skipping'"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "devDependencies": {
+    "typescript": "^7",
+    "@types/node": "^26.4.1"
+  }
+}

@@ -14,7 +14,7 @@ const makeFn = (arr: string[]) => (...args: unknown[]) => {
   arr.push(args.map((a) => String(a)).join(" "))
 }
 
-vi.mock("../consola.ts", () => ({
+vi.mock("@subtrack/lib/logger", () => ({
   default: {
     log: makeFn(logMessages),
     info: makeFn(infoMessages),

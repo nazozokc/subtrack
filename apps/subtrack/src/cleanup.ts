@@ -2,13 +2,13 @@
  * One-command database cleanup: integrity check + VACUUM + prune audit + prune tags.
  */
 
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { getDb, saveDb, getDbPath } from "./db.ts"
 import { pruneAuditLogs } from "./db.ts"
 import { pruneTags } from "./db.ts"
 import { logAudit } from "./audit.ts"
-import { formatBytes, getFileSize } from "./format.ts"
+import { formatBytes, getFileSize } from "@subtrack/lib/format"
 
 export type CleanupOptions = {
   vacuum?: boolean

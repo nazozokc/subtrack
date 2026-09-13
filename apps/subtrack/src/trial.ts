@@ -1,8 +1,8 @@
 import { input, confirm, checkbox, select } from "@inquirer/prompts"
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
-import pc from "./color.ts"
-import { CliTable3 } from "./table.ts"
+import pc from "@subtrack/lib/ansi"
+import { CliTable3 } from "@subtrack/lib/table"
 import type { TrialEntry, AddTrialArgs, TrialAddFlags } from "./types.ts"
 import { writeTrial, getTrials, getTrial, deleteTrial, getTrialsExpiringSoon } from "./db.ts"
 import { formatPrice } from "./price.ts"
@@ -22,7 +22,7 @@ import {
   promptString,
   promptSelect,
 } from "./prompts.ts"
-import { daysUntil } from "./date-utils.ts"
+import { daysUntil } from "@subtrack/lib/date"
 
 // ── Helpers ────────────────────────────────────────────
 

@@ -1,11 +1,11 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
-import { safeJsonParse } from "./safe-json.ts"
-import { isDateInRange, estimateTokenSplit } from "./date-utils.ts"
+import { safeJsonParse } from "@subtrack/lib/json"
+import { isDateInRange, estimateTokenSplit } from "@subtrack/lib/date"
 
 /**
  * Find Copilot CLI session event files.

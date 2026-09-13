@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs"
 import path from "node:path"
 import { homedir } from "node:os"
-import { safeJsonParse } from "./safe-json.ts"
+import { safeJsonParse } from "@subtrack/lib/json"
 
 export type ModelPricingEntry = {
   input_cost_per_token?: number

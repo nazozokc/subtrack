@@ -1,4 +1,4 @@
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import type { Scanner, ScanResult } from "./scanner-types.ts"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { createOpenCodeScanner } from "./opencode-scanner.ts"

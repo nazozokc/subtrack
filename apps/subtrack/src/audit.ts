@@ -5,14 +5,14 @@
  * the audit trail of all mutating operations.
  */
 
-import { consola } from "./consola.ts"
-import pc from "./color.ts"
-import { CliTable3 } from "./table.ts"
+import { consola } from "@subtrack/lib/logger"
+import pc from "@subtrack/lib/ansi"
+import { CliTable3 } from "@subtrack/lib/table"
 import { getAuditLogs, getAuditLogCount, pruneAuditLogs, addAuditLog } from "./db/audit.ts"
 import type { AuditAction, AddAuditArgs } from "./db/audit.ts"
 import { TABLE_CHARS, getTableStyle, calcColumnWidths, zebraRow } from "./display-constants.ts"
 import type { ColumnConfig } from "./display-constants.ts"
-import { SHORT_MONTH_NAMES, pad2 } from "./date-utils.ts"
+import { SHORT_MONTH_NAMES, pad2 } from "@subtrack/lib/date"
 
 // ── Audit log display ───────────────────────────────────
 

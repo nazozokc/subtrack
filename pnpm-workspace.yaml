@@ -1,4 +1,5 @@
 packages:
+  - "lib"
   - "apps/subtrack"
   - "docs"
 

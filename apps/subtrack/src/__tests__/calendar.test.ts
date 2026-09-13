@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach, beforeAll } from "vitest"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { DatabaseSync } from "node:sqlite"
 
 let testDb: DatabaseSync

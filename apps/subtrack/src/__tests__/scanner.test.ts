@@ -152,19 +152,19 @@ describe("runAllScanners", () => {
 
 describe("date-utils", () => {
   test("dateToStartOfDayMs returns correct timestamp", async () => {
-    const { dateToStartOfDayMs } = await import("../date-utils.ts")
+    const { dateToStartOfDayMs } = await import("@subtrack/lib/date")
     const ts = dateToStartOfDayMs("2026-06-01")
     expect(ts).toBe(new Date("2026-06-01T00:00:00.000Z").getTime())
   })
 
   test("dateToEndOfDayMs returns correct timestamp", async () => {
-    const { dateToEndOfDayMs } = await import("../date-utils.ts")
+    const { dateToEndOfDayMs } = await import("@subtrack/lib/date")
     const ts = dateToEndOfDayMs("2026-06-01")
     expect(ts).toBe(new Date("2026-06-01T23:59:59.999Z").getTime())
   })
 
   test("currentMonthStart returns first day of current month", async () => {
-    const { currentMonthStart } = await import("../date-utils.ts")
+    const { currentMonthStart } = await import("@subtrack/lib/date")
     const result = currentMonthStart()
     const now = new Date()
     expect(result).toBe(
@@ -173,14 +173,14 @@ describe("date-utils", () => {
   })
 
   test("today returns current date", async () => {
-    const { today } = await import("../date-utils.ts")
+    const { today } = await import("@subtrack/lib/date")
     const result = today()
     const now = new Date().toISOString().split("T")[0]
     expect(result).toBe(now)
   })
 
   test("isInDateRange filters correctly", async () => {
-    const { isInDateRange } = await import("../date-utils.ts")
+    const { isInDateRange } = await import("@subtrack/lib/date")
     // Timestamp for 2026-06-15T12:00:00.000Z
     const ts = new Date("2026-06-15T12:00:00.000Z").getTime()
 

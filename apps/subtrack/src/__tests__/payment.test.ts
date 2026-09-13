@@ -1,7 +1,7 @@
 import { test, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest"
 import { DatabaseSync } from "node:sqlite"
 import type { SharedArgs } from "../types.ts"
-import { today } from "../date-utils.ts"
+import { today } from "@subtrack/lib/date"
 
 let testDb: DatabaseSync
 let originalFetch: typeof globalThis.fetch

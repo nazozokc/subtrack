@@ -1,4 +1,4 @@
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 
 /**
  * Report a fatal CLI error and mark the process to exit non-zero.

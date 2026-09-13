@@ -1,6 +1,6 @@
 // ── Core subscription commands ──────────────────────────
 import { define } from "gunshi"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { handleList, handleDelete, handleClone, handleArchive, handleUnarchive } from "../subscription/core.ts"
 import { handleAdd } from "../subscription/add.ts"
 import { handleEdit } from "../subscription/edit.ts"

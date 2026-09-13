@@ -1,5 +1,5 @@
 import type { Cycle, SharedArgs } from "../types.ts"
-import { periodFactor } from "../date-utils.ts"
+import { periodFactor } from "@subtrack/lib/date"
 
 export type CurrencyTotals = Record<string, number>
 

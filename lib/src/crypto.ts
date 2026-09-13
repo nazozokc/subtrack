@@ -2,7 +2,7 @@ import { randomBytes, createCipheriv, createDecipheriv, scryptSync, createHash }
 import { readFileSync, writeFileSync, existsSync, mkdirSync, lstatSync, chmodSync } from "node:fs"
 import path from "node:path"
 import { homedir } from "node:os"
-import { consola } from "./consola.ts"
+import { consola } from "./logger.ts"
 
 const ALGORITHM = "aes-256-gcm"
 const KEY_LENGTH = 32

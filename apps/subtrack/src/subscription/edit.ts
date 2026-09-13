@@ -4,7 +4,7 @@
  */
 
 import { input, confirm, checkbox, select } from "@inquirer/prompts"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import type { Cycle, Status, AddSharedArgs, AddFlags } from "../types.ts"
 import { getSubscriptions, getSubscription, updateSubscription, getAllTags, writePriceHistory } from "../db.ts"

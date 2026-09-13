@@ -56,7 +56,7 @@ The CLI tool (`subtrack/`) uses `gunshi` for command routing and follows a multi
 | Prompts     | `src/prompts.ts`    | Input validation, interactive prompts |
 | Payment     | `src/payment.ts`    | Payment/summary calculations        |
 | FX          | `src/fx.ts`         | Exchange rate fetching & conversion |
-| Dates       | `src/date-utils.ts` | Date helpers (today, formatDate, daysUntil, period ranges) |
+| Dates       | `@subtrack/lib/date` | Date helpers (today, formatDate, daysUntil, period ranges) |
 | Usage       | `src/usage.ts`      | LLM API usage tracking              |
 
 For **detailed implementation guidance** (DB schema, testing patterns, import style, dependency reference), load the `subtrack-rules` skill.

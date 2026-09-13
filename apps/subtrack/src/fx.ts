@@ -1,4 +1,4 @@
-import { safeResponseJson } from "./safe-json.ts"
+import { safeResponseJson } from "@subtrack/lib/json"
 import type { SharedArgs } from "./types.ts"
 
 export type FxRates = {

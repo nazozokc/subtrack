@@ -4,7 +4,7 @@
  */
 
 import { input, confirm, select } from "@inquirer/prompts"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import type { AddFlags, Cycle, Status } from "../types.ts"
 import { getSubscriptions, writeSubscription, getAllTags } from "../db.ts"

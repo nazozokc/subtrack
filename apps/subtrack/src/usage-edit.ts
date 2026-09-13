@@ -3,7 +3,7 @@
  * Flag-based only: each provided flag updates the corresponding field.
  */
 
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import type { UsageAddFlags, AddLlmUsageArgs } from "./types.ts"
 import { usageRepository } from "./application/repositories.ts"

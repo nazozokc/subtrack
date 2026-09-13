@@ -39,8 +39,8 @@ This provides `node`, `pnpm`, `typescript`, `typos`, and `nixfmt`.
 | Language | TypeScript (strict mode, ESM) |
 | CLI framework | `gunshi` |
 | Interactive prompts | `@inquirer/prompts` |
-| Terminal output | Self-contained `src/consola.ts`, `src/color.ts`, `src/table.ts` |
-| Spreadsheets | Self-contained `src/xlsx.ts` (hand-written XLSX) |
+| Terminal output | `@subtrack/lib` (`ansi`, `logger`, `table`) |
+| Spreadsheets | Self-contained `@subtrack/lib/xlsx` (hand-written XLSX) |
 | OS notifications | Native commands via `node:child_process` (`osascript` / `notify-send`) |
 | Database | `node:sqlite` (`DatabaseSync`) |
 | Exchange rates | [open.er-api.com](https://open.er-api.com) |
@@ -67,6 +67,17 @@ Make sure both pass and CI is green.
 
 ```
 subtrack/
+├── lib/                        # Shared library (@subtrack/lib, source package)
+│   └── src/
+│       ├── ansi.ts             # ANSI color helpers (picocolors-compatible)
+│       ├── logger.ts           # consola-compatible logger
+│       ├── table.ts            # cli-table3-compatible table renderer
+│       ├── xlsx.ts             # Hand-written XLSX generator
+│       ├── json.ts             # Safe JSON parsing helper
+│       ├── path.ts             # Safe path resolution helpers
+│       ├── format.ts           # File size formatting, byte helpers
+│       ├── date.ts             # Date formatting & billing cycle helpers
+│       └── crypto.ts           # AES-256-GCM encryption helpers
 ├── apps/
 │   └── subtrack/              # CLI tool (TypeScript/ESM)
 │       ├── src/
@@ -125,11 +136,6 @@ subtrack/
 │       │   ├── backup.ts          # Backup & restore handlers
 │       │   ├── fx.ts              # FX rate API & price conversion
 │       │   ├── pricing.ts         # LiteLLM pricing cache & cost calculation
-│       │   ├── crypto.ts          # AES-256-GCM encryption helpers
-│       │   ├── path-utils.ts      # Safe path resolution helpers
-│       │   ├── date-utils.ts      # Date formatting utilities
-│       │   ├── safe-json.ts       # Safe JSON parsing helper
-│       │   ├── format.ts          # File size formatting, byte helpers
 │       │   ├── price.ts           # Price formatting helpers
 │       │   ├── usage.ts           # LLM API usage list & delete
 │       │   ├── usage-add.ts       # LLM usage add (interactive & flags)

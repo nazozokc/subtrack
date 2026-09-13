@@ -2,7 +2,7 @@
  * List supported currencies and their descriptions.
  */
 
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { sectionTitle } from "./display-constants.ts"
 import { CURRENCY_CHOICES } from "./prompts.ts"
 

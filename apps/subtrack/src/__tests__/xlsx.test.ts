@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest"
 import { inflateRawSync } from "node:zlib"
-import { generateXlsx } from "../xlsx.ts"
+import { generateXlsx } from "@subtrack/lib/xlsx"
 import { exportExcel } from "../export.ts"
 import type { SharedArgs } from "../types.ts"
 

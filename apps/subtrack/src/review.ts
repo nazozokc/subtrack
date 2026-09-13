@@ -1,6 +1,6 @@
 import { select } from "@inquirer/prompts"
-import { consola } from "./consola.ts"
-import pc from "./color.ts"
+import { consola } from "@subtrack/lib/logger"
+import pc from "@subtrack/lib/ansi"
 import { loadConfig } from "./config.ts"
 import { logAudit } from "./audit.ts"
 import { deleteTrial, getSubscriptions, getTrialsExpiringSoon, updateSubscription, writeSubscription } from "./db.ts"

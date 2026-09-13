@@ -1,6 +1,6 @@
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
-import pc from "./color.ts"
+import pc from "@subtrack/lib/ansi"
 import { getPriceHistory, getAllPriceChanges, getSubscription } from "./db.ts"
 import type { PriceHistoryEntry } from "./db.ts"
 import { formatPrice } from "./price.ts"

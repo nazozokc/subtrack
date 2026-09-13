@@ -1,6 +1,6 @@
 import { test, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest"
 import { DatabaseSync } from "node:sqlite"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"

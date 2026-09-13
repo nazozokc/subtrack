@@ -1,7 +1,7 @@
 import { test, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { DatabaseSync } from "node:sqlite"
 
-vi.mock("../consola.ts", () => {
+vi.mock("@subtrack/lib/logger", () => {
   const logMessages: string[] = []
   const infoMessages: string[] = []
   const successMessages: string[] = []
@@ -43,7 +43,7 @@ vi.mock("@inquirer/prompts", () => ({
   search: vi.fn(),
 }))
 
-import { logMessages, infoMessages } from "../consola.ts"
+import { logMessages, infoMessages } from "@subtrack/lib/logger"
 
 let testDb: DatabaseSync
 let originalFetch: typeof globalThis.fetch

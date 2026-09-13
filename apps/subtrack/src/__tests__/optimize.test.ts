@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, beforeEach, afterEach } from "vitest"
 import { DatabaseSync } from "node:sqlite"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 
 let testDb: DatabaseSync
 let optimizeModule: typeof import("../optimize.ts")

@@ -1,5 +1,5 @@
 import { input, select } from "@inquirer/prompts"
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import type { Currency, Cycle, Status } from "./types.ts"
 

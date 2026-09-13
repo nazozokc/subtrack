@@ -1,5 +1,5 @@
-import { consola } from "./consola.ts"
-import pc from "./color.ts"
+import { consola } from "@subtrack/lib/logger"
+import pc from "@subtrack/lib/ansi"
 import type { Currency, SharedArgs } from "./types.ts"
 import { getSubscriptions, getNonCancelledSubscriptions } from "./db.ts"
 import { loadConfig } from "./config.ts"

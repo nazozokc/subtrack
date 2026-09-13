@@ -1,4 +1,4 @@
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { statSync, readFileSync } from "node:fs"
 import { writeSubscription, findSubscriptionByName } from "./db.ts"
@@ -16,7 +16,7 @@ import {
   validateDateString,
 } from "./prompts.ts"
 import os from "node:os"
-import { safePath } from "./path-utils.ts"
+import { safePath } from "@subtrack/lib/path"
 import type { Status, DiscountType } from "./types.ts"
 
 const MAX_CSV_SIZE = 10 * 1024 * 1024 // 10 MB

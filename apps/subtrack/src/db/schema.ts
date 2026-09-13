@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { createAuditTable } from "./audit.ts"
 
 /** Apply schema creation and migrations to a database instance. */

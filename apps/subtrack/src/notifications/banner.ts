@@ -6,7 +6,7 @@
  * - Upcoming payment deadlines within the next 7 days
  */
 
-import pc from "../color.ts"
+import pc from "@subtrack/lib/ansi"
 import { getPendingSuggestionCount } from "../db/suggestions.ts"
 import { calcUpcoming } from "../upcoming.ts"
 

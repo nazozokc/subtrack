@@ -5,11 +5,11 @@
  * and other DB health operations.
  */
 
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { getDb, saveDb, getDbPath } from "./db.ts"
 import { logAudit } from "./audit.ts"
-import { formatBytes, getFileSize } from "./format.ts"
+import { formatBytes, getFileSize } from "@subtrack/lib/format"
 
 export type MaintenanceOptions = {
   vacuum?: boolean

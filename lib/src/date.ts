@@ -1,4 +1,7 @@
-import type { Cycle } from "./types.ts"
+/** Billing cycle vocabulary shared across the subscription domain. */
+export type Cycle =
+  | "weekly" | "bi-weekly" | "monthly"
+  | "quarterly" | "semi-annual" | "yearly"
 
 /**
  * Number of occurrences per year for each billing cycle.

@@ -1,7 +1,7 @@
 // ── Suggest command: manage email-based subscription suggestions ──
 
 import { define } from "gunshi"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import {
   handleSuggestList,

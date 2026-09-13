@@ -1,6 +1,6 @@
 import { test, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from "vitest"
 import { DatabaseSync } from "node:sqlite"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }))
 

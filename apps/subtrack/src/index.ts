@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { cli, define } from "gunshi"
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { createRequire } from "node:module"
 import { saveDb } from "./db.ts"
 import { subCommands } from "./commands/index.ts"

@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 
 // Mock consola to capture output
-vi.mock("../consola.ts", () => {
+vi.mock("@subtrack/lib/logger", () => {
   const logMessages: string[] = []
   const infoMessages: string[] = []
   const successMessages: string[] = []
@@ -75,7 +75,7 @@ vi.mock("@inquirer/prompts", () => ({
 }))
 
 import { input, confirm, checkbox, select, search } from "@inquirer/prompts"
-import { consola, logMessages, infoMessages, successMessages, errorMessages, failMessages, warnMessages } from "../consola.ts"
+import { consola, logMessages, infoMessages, successMessages, errorMessages, failMessages, warnMessages } from "@subtrack/lib/logger"
 
 let testDb: DatabaseSync
 let tmpDir: string

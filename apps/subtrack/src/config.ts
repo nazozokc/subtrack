@@ -1,12 +1,12 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
-import { consola } from "./consola.ts"
-import { safeJsonParse } from "./safe-json.ts"
-import { encryptBuffer, decryptBuffer, hasEncryptionKey } from "./crypto.ts"
+import { consola } from "@subtrack/lib/logger"
+import { safeJsonParse } from "@subtrack/lib/json"
+import { encryptBuffer, decryptBuffer, hasEncryptionKey } from "@subtrack/lib/crypto"
 import { logAudit } from "./audit.ts"
 import { fail } from "./error.ts"
-import { isColorName } from "./color.ts"
+import { isColorName } from "@subtrack/lib/ansi"
 import type { SubtrackConfig } from "./types.ts"
 
 export const CONFIG_KEYS = [

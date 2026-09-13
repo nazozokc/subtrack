@@ -9,10 +9,10 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 - **Database**: `node:sqlite` (`DatabaseSync`, built-in SQLite)
 - **CLI**: `gunshi`
 - **Prompts**: `@inquirer/prompts`
-- **Logging**: `src/consola.ts` (self-contained, `consola`-compatible logger)
-- **Tables**: `src/table.ts` (self-contained, `cli-table3`-compatible renderer)
-- **Colors**: `src/color.ts` (self-contained ANSI helpers, `picocolors`-compatible)
-- **Spreadsheets**: `src/xlsx.ts` (self-contained XLSX generator)
+- **Logging**: `@subtrack/lib/logger` (self-contained, `consola`-compatible logger)
+- **Tables**: `@subtrack/lib/table` (self-contained, `cli-table3`-compatible renderer)
+- **Colors**: `@subtrack/lib/ansi` (self-contained ANSI helpers, `picocolors`-compatible)
+- **Spreadsheets**: `@subtrack/lib/xlsx` (self-contained XLSX generator)
 - **Notifications**: native OS commands via `node:child_process` (`osascript` / `notify-send`)
 - **Build**: `tsdown`
 - **Test**: `vitest`
@@ -52,15 +52,13 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 | `src/prompts.ts` | Input validation, interactive prompts |
 | `src/payment.ts` | Payment/summary calculations |
 | `src/fx.ts` | Exchange rate fetching & conversion |
-| `src/date-utils.ts` | Date helpers (today, formatDate, daysUntil, period ranges) |
 | `src/pre-command.ts` | Pre-command hooks (auto-scan + notification banner) |
-| `src/path-utils.ts` | Path safety validation (resolveSafePath / safeOutputPath) |
 | `src/usage.ts` | LLM API usage tracking |
 | `src/export.ts` | CSV/JSON/MD export |
 | `src/import-csv.ts` | CSV import |
-| `src/crypto.ts` | Backup encryption |
 | `src/pricing.ts` | Pricing/litellm integration |
-| `src/types.ts` | Shared types |
+| `src/types.ts` | Shared types (incl. `Cycle` re-exported from `@subtrack/lib/date`) |
+| `../../lib/src/` | Shared utilities (`@subtrack/lib/ansi|logger|table|xlsx|json|path|format|date|crypto`) |
 
 ## Key Conventions
 

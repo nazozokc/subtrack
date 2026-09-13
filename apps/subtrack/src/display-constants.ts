@@ -6,11 +6,11 @@
 
 import type { Status } from "./types.ts"
 import { loadConfig } from "./config.ts"
-import type { ColorName } from "./color.ts"
-import { isColorName, fgCode, bgCode } from "./color.ts"
+import type { ColorName } from "@subtrack/lib/ansi"
+import { isColorName, fgCode, bgCode } from "@subtrack/lib/ansi"
 
-export type { ColorName } from "./color.ts"
-export { isColorName, fgCode, bgCode } from "./color.ts"
+export type { ColorName } from "@subtrack/lib/ansi"
+export { isColorName, fgCode, bgCode } from "@subtrack/lib/ansi"
 
 export const TABLE_CHARS = {
   top: "─",

@@ -1,6 +1,6 @@
 {
   "name": "subtrack",
-  "version": "9.0.0",
+  "version": "10.0.0",
   "author": "nazozokc",
   "type": "module",
   "license": "MIT",
@@ -64,7 +64,8 @@
     "@inquirer/prompts": "^8.7.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "gunshi": "^0.37.1",
-    "imapflow": "^1.7.6"
+    "imapflow": "^1.7.6",
+    "@subtrack/lib": "workspace:*"
   },
   "devDependencies": {
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.5",

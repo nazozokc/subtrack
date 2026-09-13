@@ -1,10 +1,10 @@
+import type { Cycle } from "@subtrack/lib/date"
+
 export type Currency = string
 
 export type Status = "active" | "paused" | "cancelled" | "archived"
 
-export type Cycle =
-  | "weekly" | "bi-weekly" | "monthly"
-  | "quarterly" | "semi-annual" | "yearly"
+export type { Cycle }
 
 export type DiscountType = "percentage" | "fixed" | null
 

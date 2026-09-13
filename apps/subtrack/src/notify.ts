@@ -1,9 +1,9 @@
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { calcUpcoming } from "./upcoming.ts"
 import { formatPrice } from "./price.ts"
 import { loadConfig } from "./config.ts"
 import type { NotifyChannel } from "./types.ts"
-import { formatDate, formatShortDate } from "./date-utils.ts"
+import { formatDate, formatShortDate } from "@subtrack/lib/date"
 import { spawnSync } from "node:child_process"
 
 export type NotifyOptions = {

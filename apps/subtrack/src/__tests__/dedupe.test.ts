@@ -1,6 +1,6 @@
 import { test, expect, beforeAll, beforeEach, afterEach, afterAll } from "vitest"
 import { DatabaseSync } from "node:sqlite"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 
 const logMessages: string[] = []
 const infoMessages: string[] = []

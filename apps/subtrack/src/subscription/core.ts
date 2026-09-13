@@ -4,7 +4,7 @@
  */
 
 import { checkbox, confirm, select } from "@inquirer/prompts"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import { loadConfig } from "../config.ts"
 import type { Currency, SharedArgs, AddFlags } from "../types.ts"

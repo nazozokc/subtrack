@@ -6,7 +6,7 @@ import {
 import { join, parse } from "node:path"
 import { tmpdir } from "node:os"
 import { gzipSync } from "node:zlib"
-import { decryptBuffer, isEncrypted } from "../crypto.ts"
+import { decryptBuffer, isEncrypted } from "@subtrack/lib/crypto"
 
 // Restore tests do heavy real-file I/O (write → validate → VACUUM INTO →
 // encrypt → replace → reopen). On Windows CI (NTFS + real-time AV scanning)
@@ -179,7 +179,7 @@ test("restoreDb restores from an encrypted backup (.db.enc)", async () => {
 
   const backupBytes = await makeBackupBytes()
   const backupPath = join(mainDir, "backup.db.enc")
-  writeFileSync(backupPath, Buffer.from((await import("../crypto.ts")).encryptBuffer(backupBytes)))
+  writeFileSync(backupPath, Buffer.from((await import("@subtrack/lib/crypto")).encryptBuffer(backupBytes)))
 
   conn.restoreDb(backupPath)
 
@@ -197,7 +197,7 @@ test("restoreDb rejects an encrypted backup with the wrong key", async () => {
   const backupPath = join(mainDir, "backup-wrong-key.db.enc")
   // Encrypt with a passphrase-derived key (different from the .key file)
   process.env.SUBSC_CLI_DB_PASSPHRASE = "wrong-passphrase"
-  writeFileSync(backupPath, Buffer.from((await import("../crypto.ts")).encryptBuffer(backupBytes)))
+  writeFileSync(backupPath, Buffer.from((await import("@subtrack/lib/crypto")).encryptBuffer(backupBytes)))
 
   // Restore with the default key — decryption must fail
   delete process.env.SUBSC_CLI_DB_PASSPHRASE
@@ -221,7 +221,7 @@ test("restoreDb rejects a gzip whose payload decompresses over the cap even when
 
   // Encrypted variant: decrypts fine, but the inner gzip blows past the cap
   const bomb = gzipSync(Buffer.alloc(300 * 1024 * 1024))
-  const encrypted = Buffer.from((await import("../crypto.ts")).encryptBuffer(bomb))
+  const encrypted = Buffer.from((await import("@subtrack/lib/crypto")).encryptBuffer(bomb))
   const backupPath = join(mainDir, "bomb.db.enc")
   writeFileSync(backupPath, encrypted)
 

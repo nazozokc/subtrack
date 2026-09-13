@@ -1,7 +1,7 @@
 import { test, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { DatabaseSync } from "node:sqlite"
 
-vi.mock("../consola.ts", () => {
+vi.mock("@subtrack/lib/logger", () => {
   const logMessages: string[] = []
   const infoMessages: string[] = []
   const successMessages: string[] = []
@@ -44,7 +44,7 @@ vi.mock("@inquirer/prompts", () => ({
 }))
 
 import { input, confirm, checkbox, select } from "@inquirer/prompts"
-import { logMessages, infoMessages, successMessages, errorMessages } from "../consola.ts"
+import { logMessages, infoMessages, successMessages, errorMessages } from "@subtrack/lib/logger"
 
 let testDb: DatabaseSync
 let dbModule: typeof import("../db.ts")

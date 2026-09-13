@@ -7,8 +7,8 @@
  */
 
 import { checkbox, confirm, input, select } from "@inquirer/prompts"
-import { consola } from "./consola.ts"
-import pc from "./color.ts"
+import { consola } from "@subtrack/lib/logger"
+import pc from "@subtrack/lib/ansi"
 import { getAllTags, getSubscriptions, getDbPath } from "./db.ts"
 import { handleList, handleDelete, handleTags, handleClone, handleArchive, handleUnarchive } from "./subscription/core.ts"
 import { handleAdd } from "./subscription/add.ts"

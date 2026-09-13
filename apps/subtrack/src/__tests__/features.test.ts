@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite"
 import { mkdtempSync, writeFileSync, existsSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 
 vi.mock("@inquirer/prompts", () => ({
   input: vi.fn(),

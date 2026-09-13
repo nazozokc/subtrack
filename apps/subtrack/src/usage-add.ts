@@ -1,5 +1,5 @@
 import { input, select, confirm, search } from "@inquirer/prompts"
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import type { UsageAddFlags } from "./types.ts"
 import { usageRepository } from "./application/repositories.ts"
@@ -9,7 +9,7 @@ import {
   validateTokens,
   validateDate,
 } from "./prompts.ts"
-import { today } from "./date-utils.ts"
+import { today } from "@subtrack/lib/date"
 import { formatUsdCost } from "./price.ts"
 import {
   ensurePricingCache,

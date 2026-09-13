@@ -2,12 +2,12 @@
  * Database statistics command.
  */
 
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { sectionTitle } from "./display-constants.ts"
 import { getDb, getDbPath } from "./db.ts"
 import type { Status } from "./types.ts"
 import { execObjs } from "./db/connection.ts"
-import { formatBytes, getFileSize } from "./format.ts"
+import { formatBytes, getFileSize } from "@subtrack/lib/format"
 
 type SubStats = {
   total: number

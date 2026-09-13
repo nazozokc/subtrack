@@ -1,5 +1,5 @@
 import { test, expect, beforeAll, afterAll, beforeEach, afterEach, describe } from "vitest"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { DatabaseSync } from "node:sqlite"
 import { spreadSubscription } from "../display"
 import type { SharedArgs } from "../types.ts"

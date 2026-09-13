@@ -1,6 +1,6 @@
 // ── Config commands ───────────────────────────────────
 import { define } from "gunshi"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { handleConfigList, handleConfigGet, handleConfigSet, handleConfigReset } from "../config.ts"
 
 const configListCmd = define({

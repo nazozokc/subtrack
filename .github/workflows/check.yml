@@ -43,6 +43,10 @@ jobs:
         working-directory: ./apps/subtrack
         run: pnpm lint:types
 
+      - name: Type check (lib)
+        working-directory: ./lib
+        run: pnpm lint:types
+
       - run: pnpm build
 
       - run: pnpm test

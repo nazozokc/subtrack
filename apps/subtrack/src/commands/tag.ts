@@ -1,6 +1,6 @@
 // ── Tag commands ───────────────────────────────────────
 import { define } from "gunshi"
-import { consola } from "../consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import { handleTags } from "../subscription/core.ts"
 import { handleTagList, handleTagRename, handleTagDelete, handleTagPrune, handleTagMerge } from "../tag.ts"

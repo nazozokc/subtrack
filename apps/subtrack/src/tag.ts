@@ -1,4 +1,4 @@
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { getTagsWithCount, renameTag, deleteTag, pruneTags, mergeTag } from "./db.ts"
 import { logAudit } from "./audit.ts"

@@ -1,12 +1,12 @@
 import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { consola } from "./consola.ts"
+import { consola } from "@subtrack/lib/logger"
 import { DatabaseSync } from "node:sqlite"
 import type { SQLInputValue } from "node:sqlite"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
-import { isInDateRange, dateToStartOfDayMs, dateToEndOfDayMs, estimateTokenSplit } from "./date-utils.ts"
+import { isInDateRange, dateToStartOfDayMs, dateToEndOfDayMs, estimateTokenSplit } from "@subtrack/lib/date"
 
 const STATE_DB_PATH = join(homedir(), ".codex", "state_5.sqlite")
 const GOALS_DB_PATH = join(homedir(), ".codex", "goals_1.sqlite")
