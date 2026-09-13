@@ -1,6 +1,6 @@
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { fail } from "./error.ts"
-import pc from "picocolors"
+import pc from "./color.ts"
 import { getSubscriptions } from "./db.ts"
 import type { SharedArgs, Currency } from "./types.ts"
 import { periodFactor, SHORT_MONTH_NAMES } from "./date-utils.ts"

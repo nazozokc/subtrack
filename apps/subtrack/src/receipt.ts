@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { fail } from "./error.ts"
 import { logAudit } from "./audit.ts"
 import { writeSuggestionBatch } from "./db/suggestions.ts"

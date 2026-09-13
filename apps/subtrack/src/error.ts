@@ -1,4 +1,4 @@
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 
 /**
  * Report a fatal CLI error and mark the process to exit non-zero.

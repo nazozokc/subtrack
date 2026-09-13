@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { safeJsonParse } from "./safe-json.ts"
 import { encryptBuffer, decryptBuffer, hasEncryptionKey } from "./crypto.ts"
 import { logAudit } from "./audit.ts"

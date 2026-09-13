@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach, vi } from "vitest"
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"

@@ -5,7 +5,7 @@
  * and stores results in the database.
  */
 
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 import { fail } from "../error.ts"
 import { loadConfig, saveConfig } from "../config.ts"
 import { writeSuggestionBatch } from "../db/suggestions.ts"

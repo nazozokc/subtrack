@@ -1,6 +1,6 @@
 // ── Import/Export commands ─────────────────────────────
 import { define } from "gunshi"
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 import { handleExport } from "../export.ts"
 import { handleImport } from "../import-csv.ts"
 

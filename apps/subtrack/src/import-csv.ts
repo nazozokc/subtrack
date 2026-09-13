@@ -1,4 +1,4 @@
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { fail } from "./error.ts"
 import { statSync, readFileSync } from "node:fs"
 import { writeSubscription, findSubscriptionByName } from "./db.ts"

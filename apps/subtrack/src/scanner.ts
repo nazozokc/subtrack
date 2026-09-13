@@ -1,4 +1,4 @@
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import type { Scanner, ScanResult } from "./scanner-types.ts"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { createOpenCodeScanner } from "./opencode-scanner.ts"

@@ -32,3 +32,37 @@ export function fgCode(name: ColorName | null): string {
 export function bgCode(name: ColorName | null): string {
   return name ? `\x1b[${BG_CODES[name]}m` : ""
 }
+
+// ── picocolors-compatible helpers ─────────────────────────
+// Minimal self-contained subset used across the codebase.
+// Each helper wraps the input in ANSI and always closes what it opened,
+// so nested calls (e.g. bold(yellow(x))) compose correctly.
+
+/** Bold text. */
+export function bold(s: string): string {
+  return `\x1b[1m${s}\x1b[22m`
+}
+
+/** Dim text. */
+export function dim(s: string): string {
+  return `\x1b[2m${s}\x1b[22m`
+}
+
+function wrapFg(name: ColorName) {
+  return (s: string) => `${fgCode(name)}${s}\x1b[39m`
+}
+
+/** Red text. */
+export const red = wrapFg("red")
+/** Green text. */
+export const green = wrapFg("green")
+/** Yellow text. */
+export const yellow = wrapFg("yellow")
+/** Blue text. */
+export const blue = wrapFg("blue")
+/** Cyan text. */
+export const cyan = wrapFg("cyan")
+
+/** picocolors-compatible default export (`import pc from "..."`). */
+const pc = { bold, dim, red, green, yellow, blue, cyan }
+export default pc

@@ -1,5 +1,5 @@
-import { consola } from "consola"
-import pc from "picocolors"
+import { consola } from "./consola.ts"
+import pc from "./color.ts"
 import type { SharedArgs, Currency, Cycle } from "./types.ts"
 import { periodFactor, getPeriodDateRange } from "./date-utils.ts"
 import { getNonCancelledSubscriptions, getLlmUsageTotal, getLlmUsageTotalByProvider, getAllPriceChanges } from "./db.ts"

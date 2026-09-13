@@ -12,9 +12,6 @@ allowBuilds:
 # express (via @modelcontextprotocol/sdk) specifies ^0.6.0 which resolves
 # to the vulnerable 0.6.0
 #
-# Force uuid >= 11.1.1 to fix GHSA-w5hq-g745-h8pq
-# exceljs and node-notifier specify ^8.3.0 / ^8.3.2 which resolve to 8.3.2
-#
 # Force brace-expansion, js-yaml, fast-uri, ip-address, nanoid to patched
 # versions to pass pnpm audit --audit-level=high
 #
@@ -27,7 +24,6 @@ allowBuilds:
 # Force vite and esbuild to patched versions (via vitepress)
 overrides:
   cookie: ">=0.7.0"
-  uuid: ">=11.1.1"
   brace-expansion: ">=5.0.9"
   js-yaml: ">=5.2.2"
   fast-uri: ">=4.1.3"

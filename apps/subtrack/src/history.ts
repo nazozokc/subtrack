@@ -1,6 +1,6 @@
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { fail } from "./error.ts"
-import pc from "picocolors"
+import pc from "./color.ts"
 import { getPriceHistory, getAllPriceChanges, getSubscription } from "./db.ts"
 import type { PriceHistoryEntry } from "./db.ts"
 import { formatPrice } from "./price.ts"

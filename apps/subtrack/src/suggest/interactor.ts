@@ -9,8 +9,8 @@
  */
 
 import { confirm, input, select } from "@inquirer/prompts"
-import { consola } from "consola"
-import pc from "picocolors"
+import { consola } from "../consola.ts"
+import pc from "../color.ts"
 import { getSubscriptions, writeSubscription, markSuggestionAsAdded, dismissSuggestion } from "../db.ts"
 import { formatPrice } from "../price.ts"
 import type { Suggestion } from "./types.ts"

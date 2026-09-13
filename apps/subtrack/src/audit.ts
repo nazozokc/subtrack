@@ -5,9 +5,9 @@
  * the audit trail of all mutating operations.
  */
 
-import { consola } from "consola"
-import pc from "picocolors"
-import CliTable3 from "cli-table3"
+import { consola } from "./consola.ts"
+import pc from "./color.ts"
+import { CliTable3 } from "./table.ts"
 import { getAuditLogs, getAuditLogCount, pruneAuditLogs, addAuditLog } from "./db/audit.ts"
 import type { AuditAction, AddAuditArgs } from "./db/audit.ts"
 import { TABLE_CHARS, getTableStyle, calcColumnWidths, zebraRow } from "./display-constants.ts"

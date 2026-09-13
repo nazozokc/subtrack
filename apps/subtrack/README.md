@@ -646,8 +646,10 @@ pnpm lint:typos     # typos check
 | Language        | TypeScript (strict mode, ESM) |
 | CLI framework   | gunshi                        |
 | Interactive UI  | @inquirer/prompts             |
-| Logging         | consola                       |
-| Database        | sql.js (SQLite via WASM)      |
+| Logging/Tables/Colors | Self-contained modules (src/consola.ts, src/table.ts, src/color.ts) |
+| Spreadsheets    | Self-contained XLSX generator (src/xlsx.ts) |
+| OS notifications | Native commands (osascript / notify-send) |
+| Database        | node:sqlite (built-in)        |
 | Exchange rates  | open.er-api.com               |
 | Build           | tsdown                        |
 | Test            | vitest                        |

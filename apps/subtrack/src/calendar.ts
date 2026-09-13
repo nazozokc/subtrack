@@ -1,5 +1,5 @@
-import { consola } from "consola"
-import pc from "picocolors"
+import { consola } from "./consola.ts"
+import pc from "./color.ts"
 import { getNonCancelledSubscriptions } from "./db.ts"
 import { formatPrice } from "./price.ts"
 import type { SharedArgs, Currency, Status } from "./types.ts"

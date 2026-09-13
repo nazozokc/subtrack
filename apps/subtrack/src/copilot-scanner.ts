@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
 import { safeJsonParse } from "./safe-json.ts"

@@ -1,6 +1,6 @@
 // ── Report/analytics commands ──────────────────────────
 import { define } from "gunshi"
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 import { handleSummary } from "../payment.ts"
 import { handlePayment } from "../payment.ts"
 import { handleUpcoming } from "../upcoming.ts"

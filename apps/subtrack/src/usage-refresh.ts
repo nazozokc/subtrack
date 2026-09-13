@@ -1,4 +1,4 @@
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import type { UsageRefreshFlags } from "./types.ts"
 import { usageRepository } from "./application/repositories.ts"
 import { runAllScanners } from "./scanner.ts"

@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, beforeEach } from "vitest"
 import { existsSync, readFileSync, unlinkSync, mkdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 
 const testDir = path.join(tmpdir(), `subtrack-profile-test-${Date.now()}`)
 
