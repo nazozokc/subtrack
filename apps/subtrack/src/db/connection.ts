@@ -193,9 +193,17 @@ function getSaveDbPath(): string {
   return path.join(getDbDir(), ".subtrack.save.db")
 }
 
+/** Ensure the DB directory exists (needed before writing backing files). */
+function ensureDbDir(): string {
+  const dbdir = getDbDir()
+  mkdirSync(dbdir, { recursive: true, mode: 0o700 })
+  return dbdir
+}
+
 /** Serialize the DB contents to bytes (like sql.js `db.export()`). */
 export function exportDbBytes(): Buffer {
   const db = getDb()
+  ensureDbDir()
   const tmp = getSaveDbPath()
   try { unlinkSync(tmp) } catch { /* ignore */ }
   db.exec(`VACUUM INTO '${sqlQuotePath(tmp)}'`)
@@ -234,8 +242,7 @@ export function execObj<T>(
 export function getDb(): DatabaseSync {
   if (_db) return _db
 
-  const dbdir = getDbDir()
-  mkdirSync(dbdir, { recursive: true, mode: 0o700 })
+  const dbdir = ensureDbDir()
   _dbPath = path.join(dbdir, "subtrack.db")
 
   acquireLock()
@@ -351,6 +358,7 @@ export function restoreDb(backupPath: string): void {
   const buf = isGz ? gunzipLimited(data) : data
 
   // Validate it's a valid SQLite DB with correct schema
+  ensureDbDir()
   const savePath = getSaveDbPath()
   writeFileSync(savePath, buf, { mode: 0o600 })
   const newDb = new DatabaseSync(savePath)
