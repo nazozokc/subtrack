@@ -1,9 +1,9 @@
 import { input } from "@inquirer/prompts"
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { getDb, mapTags } from "./db.ts"
 import { spreadSubscription } from "./display.ts"
 import type { SharedArgs } from "./types.ts"
-import type { SqlValue } from "sql.js"
+import type { SQLInputValue } from "node:sqlite"
 
 export type SearchOptions = {
   names?: boolean
@@ -93,7 +93,7 @@ export function searchSubscriptions(
   const db = getDb()
   const pattern = `%${query}%`
   const conditions: string[] = []
-  const params: SqlValue[] = []
+  const params: SQLInputValue[] = []
 
   if (fields.names) {
     conditions.push("s.name LIKE ?")
@@ -113,37 +113,28 @@ export function searchSubscriptions(
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" OR ")}` : ""
   const sql = `SELECT DISTINCT s.id, s.name, s.price, s.currency, s.cycle, s.status, s.billing_day AS billingDay, s.created_at AS createdAt, s.notes, s.payment_method AS paymentMethod, s.contract_start AS contractStart, s.contract_end AS contractEnd, s.auto_renewal AS autoRenewal, s.vendor_name AS vendorName, s.vendor_url AS vendorUrl, s.plan_tier AS planTier, s.discount_amount AS discountAmount, s.discount_type AS discountType FROM subscriptions s ${whereClause} ORDER BY s.name`
 
-  const results = db.exec(sql, params)
-  if (!results.length) return []
-
-  const { columns, values } = results[0]
-  const subs: SharedArgs[] = values.map((row) => {
-    const obj: Record<string, unknown> = {}
-    for (let i = 0; i < columns.length; i++) {
-      obj[columns[i]] = row[i]
-    }
-    return {
-      id: Number(obj.id),
-      name: String(obj.name),
-      price: Number(obj.price),
-      currency: String(obj.currency),
-      cycle: String(obj.cycle),
-      status: String(obj.status),
-      billingDay: obj.billingDay !== null ? Number(obj.billingDay) : null,
-      createdAt: String(obj.createdAt),
-      notes: obj.notes !== null ? String(obj.notes) : null,
-      paymentMethod: obj.paymentMethod !== null ? String(obj.paymentMethod) : null,
-      contractStart: obj.contractStart !== null ? String(obj.contractStart) : null,
-      contractEnd: obj.contractEnd !== null ? String(obj.contractEnd) : null,
-      autoRenewal: obj.autoRenewal !== null ? Boolean(obj.autoRenewal) : true,
-      vendorName: obj.vendorName !== null ? String(obj.vendorName) : null,
-      vendorUrl: obj.vendorUrl !== null ? String(obj.vendorUrl) : null,
-      planTier: obj.planTier !== null ? String(obj.planTier) : null,
-      discountAmount: obj.discountAmount !== null ? Number(obj.discountAmount) : null,
-      discountType: obj.discountType !== null ? (String(obj.discountType) as "percentage" | "fixed") : null,
-      tags: [],
-    } as unknown as SharedArgs
-  })
+  const rows = db.prepare(sql).all(...params) as unknown as SharedArgs[]
+  const subs: SharedArgs[] = rows.map((obj) => ({
+    id: Number(obj.id),
+    name: String(obj.name),
+    price: Number(obj.price),
+    currency: String(obj.currency),
+    cycle: String(obj.cycle),
+    status: String(obj.status),
+    billingDay: obj.billingDay !== null ? Number(obj.billingDay) : null,
+    createdAt: String(obj.createdAt),
+    notes: obj.notes !== null ? String(obj.notes) : null,
+    paymentMethod: obj.paymentMethod !== null ? String(obj.paymentMethod) : null,
+    contractStart: obj.contractStart !== null ? String(obj.contractStart) : null,
+    contractEnd: obj.contractEnd !== null ? String(obj.contractEnd) : null,
+    autoRenewal: obj.autoRenewal !== null ? Boolean(obj.autoRenewal) : true,
+    vendorName: obj.vendorName !== null ? String(obj.vendorName) : null,
+    vendorUrl: obj.vendorUrl !== null ? String(obj.vendorUrl) : null,
+    planTier: obj.planTier !== null ? String(obj.planTier) : null,
+    discountAmount: obj.discountAmount !== null ? Number(obj.discountAmount) : null,
+    discountType: obj.discountType !== null ? (String(obj.discountType) as "percentage" | "fixed") : null,
+    tags: [],
+  })) as SharedArgs[]
 
   return mapTags(subs)
 }

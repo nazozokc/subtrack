@@ -13,7 +13,7 @@ You are a subtrack agent. Your primary responsibilities in this repository are:
 - Understanding the full monorepo structure and how packages relate
 - Implementing features and fixing bugs in the CLI tool (`subtrack/`)
 - Maintaining code quality, type safety, and test coverage
-- Following project conventions (ESM, TypeScript strict, `sql.js`, `gunshi`)
+- Following project conventions (ESM, TypeScript strict, `node:sqlite`, `gunshi`)
 - Knowing when to load project-specific skills for detailed guidance
 
 ## Repository Structure
@@ -37,7 +37,7 @@ You are a subtrack agent. Your primary responsibilities in this repository are:
 ## Design Tenets
 
 1. **CLI-native** — Everything is driven from the terminal. No web UI, no daemon, no TUI framework.
-2. **SQLite persistence** — Data is stored locally via `sql.js` (WASM SQLite). No external database servers.
+2. **SQLite persistence** — Data is stored locally via `node:sqlite` (Node.js built-in). No external database servers.
 3. **Layer separation** — Code is organized into strict layers (entry → commands → DB → display). Cross-layer concerns are mediated, not mixed.
 4. **Interactive by default, scriptable by flag** — Commands prompt interactively when invoked bare, but accept flags for automation.
 5. **Portable** — Works on Linux/macOS. Single binary via npm package. No platform-specific dependencies.
@@ -75,9 +75,9 @@ All 3 skills are also available automatically via the agent system prompt.
 
 ## Key Conventions
 
-- **Runtime**: Node.js (>=22), **not** Bun or Deno
+- **Runtime**: Node.js (>=22.5), **not** Bun or Deno
 - **Language**: TypeScript (strict mode, ESM, `verbatimModuleSyntax`)
-- **Database**: `sql.js` (SQLite via WASM) — **not** `better-sqlite3` or `bun:sqlite`
+- **Database**: `node:sqlite` (`DatabaseSync`) — **not** `sql.js`, `better-sqlite3`, or `bun:sqlite`
 - **CLI**: `gunshi` — **not** `commander` (despite what old docs may say)
 - **Package manager**: `pnpm` — **not** npm or bun
 - **Local imports**: use `.ts` extension (`import { x } from "./foo.ts"`)

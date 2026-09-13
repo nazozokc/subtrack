@@ -42,7 +42,7 @@ nix fmt               # format nix files (nixfmt-rfc-style)
 
 - **Runtime**: Node.js, **NOT** Bun or Deno
 - **Language**: TypeScript (strict mode, ESM, `verbatimModuleSyntax`)
-- **Database**: `sql.js` (SQLite via WASM), **NOT** `better-sqlite3` or `bun:sqlite`
+- **Database**: `node:sqlite` (`DatabaseSync`), **NOT** `better-sqlite3` or `bun:sqlite`
 - **Node built-ins**: Use `node:` prefix (`node:fs`, `node:path`, `node:os`)
 - **Local imports**: Use `.ts` extension (`import { x } from "./foo.ts"`)
 - **Type imports**: Use `type` prefix (`import type { X } from "./foo.ts"`)

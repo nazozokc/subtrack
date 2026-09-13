@@ -1,6 +1,5 @@
 import { test, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
+import { DatabaseSync } from "node:sqlite"
 import { mkdtempSync, existsSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
@@ -15,7 +14,7 @@ const makeFn = (arr: string[]) => (...args: unknown[]) => {
   arr.push(args.map((a) => String(a)).join(" "))
 }
 
-vi.mock("consola", () => ({
+vi.mock("../consola.ts", () => ({
   default: {
     log: makeFn(logMessages),
     info: makeFn(infoMessages),
@@ -38,14 +37,12 @@ vi.mock("consola", () => ({
   errorMessages,
 }))
 
-let SQL: Awaited<ReturnType<typeof initSqlJs>>
 let cleanEnv: string
 let tmpDir: string
-let getDb: () => Database
-let __setDb: (db: Database) => void
+let getDb: () => DatabaseSync
+let __setDb: (db: DatabaseSync) => void
 
 beforeAll(async () => {
-  SQL = await initSqlJs()
   cleanEnv = process.env.SUBSC_CLI_DB_DIR ?? ""
   tmpDir = mkdtempSync(join(tmpdir(), "subtrack-untested-"))
   process.env.SUBSC_CLI_DB_DIR = tmpDir
@@ -62,8 +59,8 @@ afterAll(() => {
 })
 
 beforeEach(() => {
-  const db = new SQL.Database()
-  db.run(
+  const db = new DatabaseSync(":memory:")
+  db.exec(
     `CREATE TABLE IF NOT EXISTS subscriptions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -85,16 +82,16 @@ beforeEach(() => {
       discount_type TEXT
     )`,
   )
-  db.run(
+  db.exec(
     "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)",
   )
-  db.run(
+  db.exec(
     "CREATE TABLE IF NOT EXISTS subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))",
   )
-  db.run(
+  db.exec(
     "CREATE TABLE IF NOT EXISTS price_history (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription_id INTEGER NOT NULL, old_price INTEGER, new_price INTEGER NOT NULL, old_currency TEXT, new_currency TEXT NOT NULL, changed_at TEXT NOT NULL DEFAULT (datetime('now')))",
   )
-  db.run("CREATE TABLE IF NOT EXISTS trials (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, expires_at TEXT NOT NULL, price INTEGER, currency TEXT, cycle TEXT, notes TEXT, created_at TEXT NOT NULL)")
+  db.exec("CREATE TABLE IF NOT EXISTS trials (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, expires_at TEXT NOT NULL, price INTEGER, currency TEXT, cycle TEXT, notes TEXT, created_at TEXT NOT NULL)")
 
   __setDb(db)
 
@@ -119,12 +116,10 @@ function insertSub(overrides: Record<string, unknown> = {}): number {
     paymentMethod: null,
     ...overrides,
   }
-  db.run(
+  const { lastInsertRowid } = db.prepare(
     "INSERT INTO subscriptions (name, price, currency, cycle, status, billing_day, created_at, notes, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [fields.name, fields.price, fields.currency, fields.cycle, fields.status, fields.billingDay, fields.createdAt, fields.notes, fields.paymentMethod],
-  )
-  const row = db.exec("SELECT last_insert_rowid() AS id")
-  return Number(row[0].values[0][0])
+  ).run(fields.name, fields.price, fields.currency, fields.cycle, fields.status, fields.billingDay, fields.createdAt, fields.notes, fields.paymentMethod)
+  return Number(lastInsertRowid)
 }
 
 // ── Calendar tests ─────────────────────────────────────

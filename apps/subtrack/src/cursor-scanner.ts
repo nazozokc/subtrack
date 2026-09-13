@@ -1,15 +1,12 @@
-import { readFileSync, existsSync } from "node:fs"
+import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { consola } from "consola"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
+import { consola } from "./consola.ts"
+import { DatabaseSync } from "node:sqlite"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
 import { safeJsonParse } from "./safe-json.ts"
 import { isDateInRange, estimateTokenSplit } from "./date-utils.ts"
-
-const _SQL = await initSqlJs()
 
 /**
  * Known paths for Cursor's state.vscdb across platforms.
@@ -87,23 +84,17 @@ export function scanCursor(from?: string, to?: string): ScanResult {
 
   consola.info(`Reading Cursor DB: ${dbPath}`)
 
-  let data: Buffer
-  try {
-    data = readFileSync(dbPath)
-  } catch (err) {
-    consola.warn(`Cannot read Cursor DB: ${String(err)}`)
-    return { source: "cursor", entries: [] }
-  }
-
-  let db: Database | null = null
+  let db: DatabaseSync | null = null
   const entries: AddLlmUsageFromLogArgs[] = []
 
   try {
-    db = new _SQL.Database(data)
+    db = new DatabaseSync(dbPath, { readOnly: true })
 
     // Try both possible table names
-    const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table'")
-    const tableNames = tables.length > 0 ? tables[0].values.map((r) => String(r[0])) : []
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as unknown as {
+      name: string
+    }[]
+    const tableNames = tables.map((r) => String(r.name))
     const knownTables = ["cursorDiskKV", "ItemTable"]
     const tableName = knownTables.find((t) => tableNames.includes(t))
     if (!tableName) {
@@ -114,20 +105,18 @@ export function scanCursor(from?: string, to?: string): ScanResult {
     // tableName is guaranteed to be one of `knownTables` by construction
     // (see the `.find` above), so no further SQL injection guard is needed
 
-    const results = db.exec(`SELECT key, value FROM "${tableName}" WHERE key LIKE 'bubbleId:%'`)
+    const rows = db
+      .prepare(`SELECT key, value FROM "${tableName}" WHERE key LIKE 'bubbleId:%'`)
+      .all() as unknown as { key: string; value: string }[]
 
-    if (results.length === 0) {
+    if (rows.length === 0) {
       consola.info("No usage data found in Cursor DB")
       return { source: "cursor", entries: [] }
     }
 
-    const { columns, values } = results[0]
-    const keyIdx = columns.indexOf("key")
-    const valueIdx = columns.indexOf("value")
-
-    for (const row of values) {
-      const key = String(row[keyIdx] ?? "")
-      const rawValue = String(row[valueIdx] ?? "")
+    for (const row of rows) {
+      const key = String(row.key ?? "")
+      const rawValue = String(row.value ?? "")
 
       const parsed = parseCursorKvValue(key, rawValue)
       if (parsed && isDateInRange(parsed.date, from, to)) {

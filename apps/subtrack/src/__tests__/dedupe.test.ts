@@ -1,19 +1,13 @@
 import { test, expect, beforeAll, beforeEach, afterEach, afterAll } from "vitest"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
-import { consola } from "consola"
+import { DatabaseSync } from "node:sqlite"
+import { consola } from "../consola.ts"
 
 const logMessages: string[] = []
 const infoMessages: string[] = []
 const errorMessages: string[] = []
 const successMessages: string[] = []
 
-let SQL: Awaited<ReturnType<typeof initSqlJs>>
-let testDb: Database
-
-beforeAll(async () => {
-  SQL = await initSqlJs()
-})
+let testDb: DatabaseSync
 
 beforeEach(async () => {
   logMessages.length = 0
@@ -34,8 +28,8 @@ beforeEach(async () => {
     }
   })
 
-  testDb = new SQL.Database()
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+  testDb = new DatabaseSync(":memory:")
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
@@ -55,16 +49,16 @@ beforeEach(async () => {
     discount_amount INTEGER,
     discount_type TEXT
   )`)
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)",
   )
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id), FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE, FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE)",
   )
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS price_history (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription_id INTEGER NOT NULL, old_price INTEGER, new_price INTEGER NOT NULL, old_currency TEXT, new_currency TEXT NOT NULL, changed_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE)",
   )
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL, target_type TEXT, target_id INTEGER, details TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
   )
 
@@ -94,19 +88,17 @@ function insertSub(overrides: Record<string, unknown> = {}): number {
     vendorUrl: null,
     ...overrides,
   }
-  testDb.run(
+  const { lastInsertRowid } = testDb.prepare(
     "INSERT INTO subscriptions (name, price, currency, cycle, status, billing_day, created_at, vendor_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    [fields.name, fields.price, fields.currency, fields.cycle, fields.status, fields.billingDay, fields.createdAt, fields.vendorUrl],
-  )
-  const row = testDb.exec("SELECT last_insert_rowid() AS id")
-  const id = Number(row[0].values[0][0])
+  ).run(fields.name, fields.price, fields.currency, fields.cycle, fields.status, fields.billingDay, fields.createdAt, fields.vendorUrl)
+  const id = Number(lastInsertRowid)
 
   const tags = (overrides.tags as string[] | undefined) ?? []
   for (const t of tags) {
-    testDb.run("INSERT OR IGNORE INTO tags (name) VALUES (?)", [t])
-    const tagRow = testDb.exec("SELECT id FROM tags WHERE name = ?", [t])
-    const tagId = Number(tagRow[0].values[0][0])
-    testDb.run("INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)", [id, tagId])
+    testDb.prepare("INSERT OR IGNORE INTO tags (name) VALUES (?)").run(t)
+    const tagRow = testDb.prepare("SELECT id FROM tags WHERE name = ?").get(t) as { id: number } | undefined
+    const tagId = Number(tagRow?.id ?? 0)
+    testDb.prepare("INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)").run(id, tagId)
   }
   return id
 }

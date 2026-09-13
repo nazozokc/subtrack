@@ -1,12 +1,11 @@
 import { test, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
+import { DatabaseSync } from "node:sqlite"
 import { mkdtempSync, writeFileSync, existsSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 
 // Mock consola to capture output
-vi.mock("consola", () => {
+vi.mock("../consola.ts", () => {
   const logMessages: string[] = []
   const infoMessages: string[] = []
   const successMessages: string[] = []
@@ -76,19 +75,18 @@ vi.mock("@inquirer/prompts", () => ({
 }))
 
 import { input, confirm, checkbox, select, search } from "@inquirer/prompts"
-import { consola, logMessages, infoMessages, successMessages, errorMessages, failMessages, warnMessages } from "consola"
+import { consola, logMessages, infoMessages, successMessages, errorMessages, failMessages, warnMessages } from "../consola.ts"
 
-let testDb: Database
+let testDb: DatabaseSync
 let tmpDir: string
 
 let originalFetch: typeof globalThis.fetch
 let exitSpy: ReturnType<typeof vi.spyOn>
 
 beforeAll(async () => {
-  const SQL = await initSqlJs()
-  testDb = new SQL.Database()
-  testDb.run("PRAGMA foreign_keys = ON")
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+  testDb = new DatabaseSync(":memory:")
+  testDb.exec("PRAGMA foreign_keys = ON")
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
@@ -108,18 +106,18 @@ beforeAll(async () => {
     discount_amount INTEGER,
     discount_type TEXT
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscription_tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscription_tags (
     subscription_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
     PRIMARY KEY (subscription_id, tag_id),
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS llm_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     provider TEXT NOT NULL,
     model TEXT NOT NULL,
@@ -130,8 +128,8 @@ beforeAll(async () => {
     description TEXT,
     generation_id TEXT
   )`)
-  testDb.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
-  testDb.run(`CREATE TABLE IF NOT EXISTS trials (
+  testDb.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
+  testDb.exec(`CREATE TABLE IF NOT EXISTS trials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     expires_at TEXT NOT NULL,
@@ -141,7 +139,7 @@ beforeAll(async () => {
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (date('now'))
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS price_history (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS price_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     subscription_id INTEGER NOT NULL,
     old_price INTEGER,
@@ -166,12 +164,14 @@ beforeAll(async () => {
   }) as () => never)
 })
 
-beforeEach(() => {
-  testDb.run("DELETE FROM price_history")
-  testDb.run("DELETE FROM subscription_tags")
-  testDb.run("DELETE FROM tags")
-  testDb.run("DELETE FROM subscriptions")
-  testDb.run("DELETE FROM llm_usage")
+beforeEach(async () => {
+  const { getDb } = await import("../db.ts")
+  testDb = getDb()
+  testDb.exec("DELETE FROM price_history")
+  testDb.exec("DELETE FROM subscription_tags")
+  testDb.exec("DELETE FROM tags")
+  testDb.exec("DELETE FROM subscriptions")
+  testDb.exec("DELETE FROM llm_usage")
 
   logMessages.length = 0
   infoMessages.length = 0
@@ -187,8 +187,9 @@ beforeEach(() => {
   vi.mocked(search).mockReset().mockResolvedValue("gpt-4o")
 })
 
-afterAll(() => {
-  testDb.close()
+afterAll(async () => {
+  const { getDb } = await import("../db.ts")
+  try { getDb().close() } catch { /* may be closed by restoreDb test */ }
   globalThis.fetch = originalFetch
   exitSpy.mockRestore()
   if (tmpDir && existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
@@ -321,7 +322,7 @@ test("handleTagPrune removes orphaned tags", async () => {
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: ["keep"] })
   const [sub] = db.getSubscriptions()
   db.deleteSubscription(sub.id)
-  testDb.run("INSERT INTO tags (name) VALUES ('orphan1'), ('orphan2')")
+  testDb.exec("INSERT INTO tags (name) VALUES ('orphan1'), ('orphan2')")
 
   const { handleTagPrune } = await import("../commands.ts")
   await handleTagPrune()
@@ -1722,23 +1723,24 @@ test("handleBackup creates compressed backup in specified directory", async () =
 // ── handleRestore ─────────────────────────────────────────
 
 test("handleRestore restores from valid backup file", async () => {
-  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
+  const { mkdtempSync, writeFileSync, existsSync, rmSync, readFileSync } = await import("node:fs")
   const { join } = await import("node:path")
   const { tmpdir } = await import("node:os")
-  const initSqlJs2 = await import("sql.js")
-
-  // Create a backup database with target data
-  const SQL2 = await initSqlJs2.default()
-  const backupDb = new SQL2.Database()
-  backupDb.run("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
-  backupDb.run("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
-  backupDb.run("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
-  backupDb.run("CREATE TABLE llm_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, model TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, cost REAL NOT NULL, date TEXT NOT NULL, description TEXT)")
-  backupDb.run("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('Restored', 999, 'EUR', 'yearly')")
-  const buf = Buffer.from(backupDb.export())
-  backupDb.close()
+  const { DatabaseSync: DatabaseSync2 } = await import("node:sqlite")
 
   const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+
+  // Create a backup database with target data
+  const srcDbPath = join(tmpDir, "src.db")
+  const backupDb = new DatabaseSync2(srcDbPath)
+  backupDb.exec("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
+  backupDb.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
+  backupDb.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
+  backupDb.exec("CREATE TABLE llm_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, model TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, cost REAL NOT NULL, date TEXT NOT NULL, description TEXT)")
+  backupDb.exec("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('Restored', 999, 'EUR', 'yearly')")
+  backupDb.close()
+  const buf = readFileSync(srcDbPath)
+
   const backupPath = join(tmpDir, "test_backup.db")
   writeFileSync(backupPath, buf)
 

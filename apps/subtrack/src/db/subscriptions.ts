@@ -1,4 +1,4 @@
-import type { SqlValue } from "sql.js"
+import type { SQLInputValue } from "node:sqlite"
 import { getDb, execObjs, execObj, saveDb } from "./connection.ts"
 import type { SharedArgs, AddSharedArgs } from "../types.ts"
 
@@ -82,7 +82,7 @@ export const getSubscriptions = (
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
   let limitClause = ""
   let offsetClause = ""
-  const params: SqlValue[] = []
+  const params: SQLInputValue[] = []
 
   if (options?.status) {
     params.push(options.status)
@@ -118,27 +118,26 @@ export const writeSubscription = (data: AddSharedArgs): number => {
   const db = getDb()
   const uniqueTags = Array.from(new Set(data.tags))
 
-  db.run("BEGIN TRANSACTION")
+  db.exec("BEGIN TRANSACTION")
   try {
-    db.run(
+    db.prepare(
       `INSERT INTO subscriptions (
         name, price, currency, cycle, status, billing_day, created_at, notes, payment_method,
         contract_start, contract_end, auto_renewal,
         vendor_name, vendor_url, plan_tier,
         discount_amount, discount_type
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        data.name, data.price, data.currency, data.cycle, data.status ?? "active",
-        data.billingDay ?? null, data.createdAt ?? new Date().toISOString().split("T")[0],
-        data.notes ?? null, data.paymentMethod ?? null,
-        data.contractStart ?? null, data.contractEnd ?? null,
-        data.autoRenewal === false ? 0 : 1,
-        data.vendorName ?? null, data.vendorUrl ?? null, data.planTier ?? null,
-        data.discountAmount ?? null, data.discountType ?? null,
-      ],
+    ).run(
+      data.name, data.price, data.currency, data.cycle, data.status ?? "active",
+      data.billingDay ?? null, data.createdAt ?? new Date().toISOString().split("T")[0],
+      data.notes ?? null, data.paymentMethod ?? null,
+      data.contractStart ?? null, data.contractEnd ?? null,
+      data.autoRenewal === false ? 0 : 1,
+      data.vendorName ?? null, data.vendorUrl ?? null, data.planTier ?? null,
+      data.discountAmount ?? null, data.discountType ?? null,
     )
 
-    const idRow = execObj<Record<string, SqlValue>>(
+    const idRow = execObj<Record<string, number>>(
       db,
       "SELECT last_insert_rowid() AS id",
     )
@@ -146,26 +145,25 @@ export const writeSubscription = (data: AddSharedArgs): number => {
     const subscriptionId = Number(idRow.id)
 
     for (const t of uniqueTags) {
-      db.run("INSERT OR IGNORE INTO tags (name) VALUES (?)", [t])
+      db.prepare("INSERT OR IGNORE INTO tags (name) VALUES (?)").run(t)
       const tagRow = execObj<{ id: number }>(
         db,
         "SELECT id FROM tags WHERE name = ?",
         [t],
       )
       if (tagRow) {
-        db.run(
+        db.prepare(
           "INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)",
-          [subscriptionId, tagRow.id],
-        )
+        ).run(subscriptionId, tagRow.id)
       }
     }
 
-    db.run("COMMIT")
+    db.exec("COMMIT")
     saveDb()
     return subscriptionId
   } catch (error) {
     try {
-      db.run("ROLLBACK")
+      db.exec("ROLLBACK")
     } catch {
       /* rollback failed, nothing to do */
     }
@@ -175,8 +173,8 @@ export const writeSubscription = (data: AddSharedArgs): number => {
 
 export const deleteSubscription = (id: number): boolean => {
   const db = getDb()
-  db.run("DELETE FROM subscriptions WHERE id = ?", [id])
-  const modified = db.getRowsModified() > 0
+  const { changes } = db.prepare("DELETE FROM subscriptions WHERE id = ?").run(id)
+  const modified = Number(changes) > 0
   if (modified) saveDb()
   return modified
 }
@@ -198,10 +196,10 @@ export const updateSubscription = (
 ): boolean => {
   const db = getDb()
 
-  db.run("BEGIN TRANSACTION")
+  db.exec("BEGIN TRANSACTION")
   try {
     const sets: string[] = []
-    const params: SqlValue[] = []
+    const params: SQLInputValue[] = []
 
     if (fields.name !== undefined) { sets.push("name = ?"); params.push(fields.name) }
     if (fields.price !== undefined) { sets.push("price = ?"); params.push(fields.price) }
@@ -222,49 +220,52 @@ export const updateSubscription = (
 
     if (sets.length > 0) {
       params.push(id)
-      db.run(`UPDATE subscriptions SET ${sets.join(", ")} WHERE id = ?`, params)
+      db.prepare(`UPDATE subscriptions SET ${sets.join(", ")} WHERE id = ?`).run(...params)
     }
 
     if (fields.tags !== undefined) {
       const uniqueTags = Array.from(new Set(fields.tags))
-      db.run("DELETE FROM subscription_tags WHERE subscription_id = ?", [id])
+      db.prepare("DELETE FROM subscription_tags WHERE subscription_id = ?").run(id)
       for (const t of uniqueTags) {
-        db.run("INSERT OR IGNORE INTO tags (name) VALUES (?)", [t])
+        db.prepare("INSERT OR IGNORE INTO tags (name) VALUES (?)").run(t)
         const tagRow = execObj<{ id: number }>(
           db,
           "SELECT id FROM tags WHERE name = ?",
           [t],
         )
         if (tagRow) {
-          db.run(
+          db.prepare(
             "INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)",
-            [id, tagRow.id],
-          )
+          ).run(id, tagRow.id)
         }
       }
     }
 
-    db.run("COMMIT")
+    db.exec("COMMIT")
     saveDb()
     return true
   } catch (error) {
-    try { db.run("ROLLBACK") } catch { /* ok */ }
+    try { db.exec("ROLLBACK") } catch { /* ok */ }
     throw error
   }
 }
 
 export const archiveSubscription = (id: number): boolean => {
   const db = getDb()
-  db.run("UPDATE subscriptions SET status = 'archived' WHERE id = ? AND status != 'archived'", [id])
-  const modified = db.getRowsModified() > 0
+  const { changes } = db.prepare(
+    "UPDATE subscriptions SET status = 'archived' WHERE id = ? AND status != 'archived'",
+  ).run(id)
+  const modified = Number(changes) > 0
   if (modified) saveDb()
   return modified
 }
 
 export const unarchiveSubscription = (id: number): boolean => {
   const db = getDb()
-  db.run("UPDATE subscriptions SET status = 'active' WHERE id = ? AND status = 'archived'", [id])
-  const modified = db.getRowsModified() > 0
+  const { changes } = db.prepare(
+    "UPDATE subscriptions SET status = 'active' WHERE id = ? AND status = 'archived'",
+  ).run(id)
+  const modified = Number(changes) > 0
   if (modified) saveDb()
   return modified
 }
@@ -293,24 +294,23 @@ export const mergeSubscriptions = (keepId: number, removeId: number): boolean =>
   const db = getDb()
   if (keepId === removeId) return false
 
-  db.run("BEGIN TRANSACTION")
+  db.exec("BEGIN TRANSACTION")
   try {
-    db.run(
+    db.prepare(
       `INSERT OR IGNORE INTO subscription_tags (subscription_id, tag_id)
        SELECT ?, tag_id FROM subscription_tags WHERE subscription_id = ?`,
-      [keepId, removeId],
-    )
-    db.run("DELETE FROM subscriptions WHERE id = ?", [removeId])
-    const modified = db.getRowsModified() > 0
+    ).run(keepId, removeId)
+    const { changes } = db.prepare("DELETE FROM subscriptions WHERE id = ?").run(removeId)
+    const modified = Number(changes) > 0
     if (!modified) {
-      db.run("ROLLBACK")
+      db.exec("ROLLBACK")
       return false
     }
-    db.run("COMMIT")
+    db.exec("COMMIT")
     saveDb()
     return true
   } catch (error) {
-    try { db.run("ROLLBACK") } catch { /* ok */ }
+    try { db.exec("ROLLBACK") } catch { /* ok */ }
     throw error
   }
 }

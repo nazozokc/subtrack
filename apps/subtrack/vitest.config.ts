@@ -2,7 +2,7 @@ import { defineConfig } from "vitest/config"
 
 export default defineConfig({
   test: {
-    // Scanner tests need time for sql.js WASM initialization at module level
+    // Scanner tests read real editor DBs (file I/O) and restore tests do backups
     testTimeout: 15_000,
     // Force ANSI colors so display helpers can be tested for styling
     env: {

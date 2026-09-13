@@ -1,7 +1,6 @@
 import { test, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
-import { consola } from "consola"
+import { DatabaseSync } from "node:sqlite"
+import { consola } from "../consola.ts"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -14,12 +13,7 @@ const warnMessages: string[] = []
 let originalEnv: string | undefined
 let originalFetch: typeof globalThis.fetch
 
-let SQL: Awaited<ReturnType<typeof initSqlJs>>
-let testDb: Database
-
-beforeAll(async () => {
-  SQL = await initSqlJs()
-})
+let testDb: DatabaseSync
 
 beforeEach(async () => {
   // Isolate config to a temporary directory
@@ -46,8 +40,8 @@ beforeEach(async () => {
   })
 
   // Fresh in-memory DB
-  testDb = new SQL.Database()
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+  testDb = new DatabaseSync(":memory:")
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
@@ -67,10 +61,10 @@ beforeEach(async () => {
     discount_amount INTEGER,
     discount_type TEXT
   )`)
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)",
   )
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))",
   )
   const dbMod = await import("../db.ts")
@@ -118,19 +112,17 @@ function insertSub(overrides: Record<string, unknown> = {}): number {
     createdAt: "2026-01-01",
     ...overrides,
   }
-  db.run(
+  const { lastInsertRowid } = db.prepare(
     "INSERT INTO subscriptions (name, price, currency, cycle, status, billing_day, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [fields.name, fields.price, fields.currency, fields.cycle, fields.status, fields.billingDay, fields.createdAt],
-  )
-  const row = db.exec("SELECT last_insert_rowid() AS id")
-  const id = Number(row[0].values[0][0])
+  ).run(fields.name, fields.price, fields.currency, fields.cycle, fields.status, fields.billingDay, fields.createdAt)
+  const id = Number(lastInsertRowid)
 
   const tags = (overrides.tags as string[] | undefined) ?? []
   for (const t of tags) {
-    db.run("INSERT OR IGNORE INTO tags (name) VALUES (?)", [t])
-    const tagRow = db.exec("SELECT id FROM tags WHERE name = ?", [t])
-    const tagId = Number(tagRow[0].values[0][0])
-    db.run("INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)", [id, tagId])
+    db.prepare("INSERT OR IGNORE INTO tags (name) VALUES (?)").run(t)
+    const tagRow = db.prepare("SELECT id FROM tags WHERE name = ?").get(t) as { id: number } | undefined
+    const tagId = Number(tagRow?.id ?? 0)
+    db.prepare("INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)").run(id, tagId)
   }
   return id
 }

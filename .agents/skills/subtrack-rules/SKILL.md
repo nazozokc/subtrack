@@ -37,10 +37,12 @@ subtrack is a Node.js CLI tool for managing subscription services from the termi
 
 ## Database
 
-- Use `sql.js` (WASM-based SQLite) — **not** `better-sqlite3`, `sqlite3`, or `bun:sqlite`
-- Import: `import initSqlJs from "sql.js"` and `import type { Database, SqlValue, BindParams } from "sql.js"`
+- Use `node:sqlite` (`DatabaseSync`) — **not** `better-sqlite3`, `sqlite3`, or `bun:sqlite`
+- Import: `import { DatabaseSync } from "node:sqlite"` and `import type { DatabaseSync, SQLInputValue } from "node:sqlite"`
+- Requires Node >= 22.5 (`engines` in package.json)
 - Database file location: `$SUBSC_CLI_DB_DIR` env var or `~/.config/subtrack/subtrack.db`
-- State is held in memory (`_db`) and persisted to disk via `saveDb()` on writes
+- State is held in memory (`_db`) and persisted to disk via synchronous `saveDb()` (VACUUM INTO) on writes
+- API mapping vs old sql.js style: `db.prepare(sql).run(...params)` returns `{ changes, lastInsertRowid }`; result-returning `exec` is replaced by `prepare().all()` / `.get()`; `db.export()` is replaced by `exportDbBytes()`
 - Schema has 8 tables: `subscriptions`, `tags`, `subscription_tags`, `llm_usage`, `trials`, `price_history`, `suggestions`, `audit_log`
 - Always use transactions for multi-step writes (`BEGIN TRANSACTION` / `COMMIT` / `ROLLBACK`)
 - Use `PRAGMA foreign_keys = ON` at connection time
@@ -92,7 +94,7 @@ Key packages and their purpose:
 | `consola` | Logging (`consola.info`, `consola.success`, `consola.error`, `consola.warn`, `consola.fail`) |
 | `cli-table3` | Table rendering (customizable chars, styles, column widths) |
 | `picocolors` | Terminal colors |
-| `sql.js` | SQLite via WASM (`new SQL.Database()`, `.run()`, `.exec()`) |
+| `node:sqlite` | Built-in SQLite (`DatabaseSync`, `SQLInputValue`) — no WASM, no native deps |
 | `@types/node` | Node.js type definitions (dev) |
 
 ## Linting

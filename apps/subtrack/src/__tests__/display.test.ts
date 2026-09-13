@@ -1,7 +1,6 @@
 import { test, expect, beforeAll, afterAll, beforeEach, afterEach, describe } from "vitest"
-import { consola } from "consola"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
+import { consola } from "../consola.ts"
+import { DatabaseSync } from "node:sqlite"
 import { spreadSubscription } from "../display"
 import type { SharedArgs } from "../types.ts"
 
@@ -656,12 +655,11 @@ test("showSummary does not show tag section when no tags exist", async () => {
 // ── showPayment with --api ────────────────────────────────
 
 describe("showPayment with --api", () => {
-  let testDb: Database
+  let testDb: DatabaseSync
 
   beforeAll(async () => {
-    const SQL = await initSqlJs()
-    testDb = new SQL.Database()
-    testDb.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+    testDb = new DatabaseSync(":memory:")
+    testDb.exec(`CREATE TABLE IF NOT EXISTS llm_usage (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       provider TEXT NOT NULL,
       model TEXT NOT NULL,
@@ -672,7 +670,7 @@ describe("showPayment with --api", () => {
       description TEXT,
       generation_id TEXT
     )`)
-    testDb.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
+    testDb.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
     const db = await import("../db.ts")
     db.__setDb(testDb)
   })
@@ -682,7 +680,7 @@ describe("showPayment with --api", () => {
   })
 
   beforeEach(() => {
-    testDb!.run("DELETE FROM llm_usage")
+    testDb!.exec("DELETE FROM llm_usage")
   })
 
   test("shows API usage note when no data", async () => {
