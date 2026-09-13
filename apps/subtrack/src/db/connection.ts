@@ -146,7 +146,7 @@ function releaseLock(): void {
 }
 
 /** Close the open DB instance and remove its temp backing file. */
-function closeDb(): void {
+export function closeDb(): void {
   if (_db) {
     try { _db.close() } catch { /* ignore */ }
     _db = null

@@ -22,6 +22,10 @@ beforeAll(() => {
 })
 
 afterAll(() => {
+  // Close the cached DatabaseSync handle first: Windows cannot unlink a
+  // file that is still open (POSIX allows it, which is why this only
+  // fails on Windows).
+  conn.closeDb()
   delete process.env.SUBSC_CLI_DB_DIR
   for (const dir of [mainDir, ...tempDirs]) {
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
