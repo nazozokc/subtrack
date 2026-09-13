@@ -2,7 +2,7 @@
  * Database statistics command.
  */
 
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { sectionTitle } from "./display-constants.ts"
 import { getDb, getDbPath } from "./db.ts"
 import type { Status } from "./types.ts"

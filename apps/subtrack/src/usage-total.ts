@@ -2,8 +2,8 @@
  * Usage total command — aggregated LLM API usage summary.
  */
 
-import { consola } from "consola"
-import pc from "picocolors"
+import { consola } from "./consola.ts"
+import pc from "./color.ts"
 import { sectionTitle, divider } from "./display-constants.ts"
 import {
   getLlmUsageTotal,

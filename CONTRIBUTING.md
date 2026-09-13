@@ -15,7 +15,7 @@
 
 - Read [`AGENTS.md`](./AGENTS.md) at the repository root to understand the project conventions and setup
 - Package manager is `pnpm`, runtime is `Node.js` (do not use `bun` or `deno`)
-- Database is `sql.js` (SQLite via WASM); do not use `better-sqlite3` or `bun:sqlite`
+- Database is `node:sqlite` (Node.js built-in); do not use `better-sqlite3` or `bun:sqlite`
 
 ## CI
 

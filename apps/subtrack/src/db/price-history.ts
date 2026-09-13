@@ -1,4 +1,4 @@
-import type { SqlValue } from "sql.js"
+import type { SQLInputValue } from "node:sqlite"
 import { getDb, execObjs, saveDb } from "./connection.ts"
 
 export type PriceHistoryEntry = {
@@ -46,11 +46,10 @@ export const writePriceHistory = (
   const db = getDb()
   // Only record if price or currency actually changed
   if (oldPrice === newPrice && oldCurrency === newCurrency) return
-  db.run(
+  db.prepare(
     `INSERT INTO price_history (subscription_id, old_price, new_price, old_currency, new_currency)
      VALUES (?, ?, ?, ?, ?)`,
-    [subscriptionId, oldPrice, newPrice, oldCurrency, newCurrency],
-  )
+  ).run(subscriptionId, oldPrice, newPrice, oldCurrency, newCurrency)
   saveDb()
 }
 
@@ -77,7 +76,7 @@ export const getAllPriceChanges = (days?: number): PriceHistoryEntry[] => {
                     ph.old_currency, ph.new_currency, ph.changed_at, s.name
              FROM price_history ph
              JOIN subscriptions s ON s.id = ph.subscription_id`
-  const params: SqlValue[] = []
+  const params: SQLInputValue[] = []
   if (days !== undefined && days > 0) {
     sql += ` WHERE ph.changed_at >= datetime('now', '-' || ? || ' days')`
     params.push(days)

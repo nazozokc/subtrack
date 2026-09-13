@@ -1,6 +1,6 @@
 // ── Backup/Restore commands ────────────────────────────
 import { define } from "gunshi"
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 import { handleBackup, handleRestore } from "../backup.ts"
 
 export const backupCommand = define({

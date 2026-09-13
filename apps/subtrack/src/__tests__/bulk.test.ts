@@ -1,8 +1,7 @@
 import { test, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
+import { DatabaseSync } from "node:sqlite"
 
-vi.mock("consola", () => {
+vi.mock("../consola.ts", () => {
   const logMessages: string[] = []
   const infoMessages: string[] = []
   const successMessages: string[] = []
@@ -45,34 +44,33 @@ vi.mock("@inquirer/prompts", () => ({
 }))
 
 import { input, confirm, select } from "@inquirer/prompts"
-import { infoMessages, successMessages, errorMessages } from "consola"
+import { infoMessages, successMessages, errorMessages } from "../consola.ts"
 import type { BulkFilters, BulkOptions } from "../bulk.ts"
 
-let testDb: Database
+let testDb: DatabaseSync
 let dbModule: typeof import("../db.ts")
 
 function seedSub(name: string, overrides: Partial<{ status: string; tags: string[]; price: number }> = {}) {
   const db = testDb
   const status = overrides.status ?? "active"
-  db.run(
+  const { lastInsertRowid } = db.prepare(
     "INSERT INTO subscriptions (name, price, currency, cycle, status) VALUES (?, ?, ?, ?, ?)",
-    [name, overrides.price ?? 1000, "JPY", "monthly", status],
-  )
-  const subId = (db.exec("SELECT last_insert_rowid() AS id")[0].values[0][0] as number)
+  ).run(name, overrides.price ?? 1000, "JPY", "monthly", status)
+  const subId = Number(lastInsertRowid)
   if (overrides.tags && overrides.tags.length > 0) {
     for (const tag of overrides.tags) {
-      db.run("INSERT OR IGNORE INTO tags (name) VALUES (?)", [tag])
-      const tagId = (db.exec("SELECT id FROM tags WHERE name = ?", [tag])[0].values[0][0] as number)
-      db.run("INSERT OR IGNORE INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)", [subId, tagId])
+      db.prepare("INSERT OR IGNORE INTO tags (name) VALUES (?)").run(tag)
+      const tagRow = db.prepare("SELECT id FROM tags WHERE name = ?").get(tag) as { id: number } | undefined
+      const tagId = Number(tagRow?.id ?? 0)
+      db.prepare("INSERT OR IGNORE INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)").run(subId, tagId)
     }
   }
 }
 
 beforeAll(async () => {
-  const SQL = await initSqlJs()
-  testDb = new SQL.Database()
-  testDb.run("PRAGMA foreign_keys = ON")
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+  testDb = new DatabaseSync(":memory:")
+  testDb.exec("PRAGMA foreign_keys = ON")
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
@@ -92,18 +90,18 @@ beforeAll(async () => {
     discount_amount INTEGER,
     discount_type TEXT
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscription_tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscription_tags (
     subscription_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
     PRIMARY KEY (subscription_id, tag_id),
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS llm_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     provider TEXT NOT NULL,
     model TEXT NOT NULL,
@@ -114,7 +112,7 @@ beforeAll(async () => {
     description TEXT,
     generation_id TEXT
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS trials (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS trials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     expires_at TEXT NOT NULL,
@@ -130,10 +128,10 @@ beforeAll(async () => {
 })
 
 beforeEach(() => {
-  testDb.run("DELETE FROM subscription_tags")
-  testDb.run("DELETE FROM tags")
-  testDb.run("DELETE FROM subscriptions")
-  testDb.run("DELETE FROM trials")
+  testDb.exec("DELETE FROM subscription_tags")
+  testDb.exec("DELETE FROM tags")
+  testDb.exec("DELETE FROM subscriptions")
+  testDb.exec("DELETE FROM trials")
 
   infoMessages.length = 0
   successMessages.length = 0

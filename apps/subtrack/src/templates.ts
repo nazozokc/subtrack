@@ -1,4 +1,4 @@
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { loadConfig, saveConfig } from "./config.ts"
 import { fail } from "./error.ts"
 import { logAudit } from "./audit.ts"

@@ -1,7 +1,6 @@
 import { test, expect, beforeAll, beforeEach, afterEach, afterAll } from "vitest"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
-import { consola } from "consola"
+import { DatabaseSync } from "node:sqlite"
+import { consola } from "../consola.ts"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -12,12 +11,7 @@ const errorMessages: string[] = []
 let originalEnv: string | undefined
 let originalFetch: typeof globalThis.fetch
 
-let SQL: Awaited<ReturnType<typeof initSqlJs>>
-let testDb: Database
-
-beforeAll(async () => {
-  SQL = await initSqlJs()
-})
+let testDb: DatabaseSync
 
 beforeEach(async () => {
   originalEnv = process.env.SUBSC_CLI_DB_DIR
@@ -38,8 +32,8 @@ beforeEach(async () => {
     }
   })
 
-  testDb = new SQL.Database()
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+  testDb = new DatabaseSync(":memory:")
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
@@ -59,16 +53,16 @@ beforeEach(async () => {
     discount_amount INTEGER,
     discount_type TEXT
   )`)
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)",
   )
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))",
   )
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS price_history (id INTEGER PRIMARY KEY AUTOINCREMENT, subscription_id INTEGER NOT NULL, old_price INTEGER, new_price INTEGER NOT NULL, old_currency TEXT, new_currency TEXT NOT NULL, changed_at TEXT NOT NULL DEFAULT (datetime('now')))",
   )
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL, target_type TEXT, target_id INTEGER, details TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
   )
 
@@ -116,12 +110,10 @@ function insertSub(overrides: Record<string, unknown> = {}): number {
     contractEnd: null,
     ...overrides,
   }
-  testDb.run(
+  const { lastInsertRowid } = testDb.prepare(
     "INSERT INTO subscriptions (name, price, currency, cycle, status, billing_day, created_at, contract_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    [fields.name, fields.price, fields.currency, fields.cycle, fields.status, fields.billingDay, fields.createdAt, fields.contractEnd],
-  )
-  const row = testDb.exec("SELECT last_insert_rowid() AS id")
-  return Number(row[0].values[0][0])
+  ).run(fields.name, fields.price, fields.currency, fields.cycle, fields.status, fields.billingDay, fields.createdAt, fields.contractEnd)
+  return Number(lastInsertRowid)
 }
 
 // ── calcYearlyTotals ───────────────────────────────────
@@ -220,10 +212,9 @@ test("calcAddedThisYear filters by createdAt year", async () => {
 
 test("calcCancelledThisYear includes audit log entries", async () => {
   const id = insertSub({ name: "Netflix", status: "cancelled", contractEnd: null })
-  testDb.run(
+  testDb.prepare(
     "INSERT INTO audit_log (action, target_type, target_id, details, created_at) VALUES ('subscription.cancel', 'subscription', ?, 'Netflix', '2026-05-15 10:00:00')",
-    [id],
-  )
+  ).run(id)
 
   const { calcCancelledThisYear } = await import("../report.ts")
   const { getSubscriptions } = await import("../db.ts")
@@ -273,15 +264,13 @@ test("handleReport JSON output", async () => {
 
 test("handleReport JSON includes price changes for the year", async () => {
   const id = insertSub({ name: "Netflix", price: 2000, createdAt: "2025-01-01" })
-  testDb.run(
+  testDb.prepare(
     "INSERT INTO price_history (subscription_id, old_price, new_price, old_currency, new_currency, changed_at) VALUES (?, 1000, 2000, 'JPY', 'JPY', '2026-03-01 12:00:00')",
-    [id],
-  )
+  ).run(id)
   // Entry from another year should be excluded
-  testDb.run(
+  testDb.prepare(
     "INSERT INTO price_history (subscription_id, old_price, new_price, old_currency, new_currency, changed_at) VALUES (?, 500, 1000, 'JPY', 'JPY', '2025-03-01 12:00:00')",
-    [id],
-  )
+  ).run(id)
 
   const writes: string[] = []
   const origWrite = process.stdout.write.bind(process.stdout)

@@ -4,9 +4,9 @@
  * Provides the backing logic for all `subtrack suggest` subcommands.
  */
 
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 import { fail } from "../error.ts"
-import pc from "picocolors"
+import pc from "../color.ts"
 import {
   getSuggestions,
   getSuggestion,

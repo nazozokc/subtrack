@@ -1,6 +1,6 @@
 // ── Bulk operation commands ────────────────────────────
 import { define } from "gunshi"
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 import { handleBulkStatus, handleBulkDelete, handleBulkTagAdd, handleBulkTagRemove } from "../bulk.ts"
 
 const bulkStatusCmd = define({

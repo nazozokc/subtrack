@@ -1,9 +1,8 @@
 import { describe, test, expect, beforeAll, beforeEach, afterEach } from "vitest"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
-import { consola } from "consola"
+import { DatabaseSync } from "node:sqlite"
+import { consola } from "../consola.ts"
 
-let testDb: Database
+let testDb: DatabaseSync
 let timelineModule: typeof import("../timeline.ts")
 let dbModule: typeof import("../db.ts")
 
@@ -15,20 +14,18 @@ function seedSub(
   createdAt?: string,
 ) {
   const db = dbModule.getDb()
-  db.run(
+  db.prepare(
     `INSERT INTO subscriptions (name, price, currency, cycle, status, created_at)
      VALUES (?, ?, 'USD', ?, ?, ?)`,
-    [name, price, cycle, status, createdAt || "2020-01-01"],
-  )
+  ).run(name, price, cycle, status, createdAt || "2020-01-01")
   dbModule.saveDb()
 }
 
 beforeAll(async () => {
-  const SQL = await initSqlJs()
-  testDb = new SQL.Database()
-  testDb.run("PRAGMA foreign_keys = ON")
+  testDb = new DatabaseSync(":memory:")
+  testDb.exec("PRAGMA foreign_keys = ON")
 
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
@@ -48,18 +45,18 @@ beforeAll(async () => {
     discount_amount INTEGER,
     discount_type TEXT
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscription_tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscription_tags (
     subscription_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
     PRIMARY KEY (subscription_id, tag_id),
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS price_history (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS price_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     subscription_id INTEGER NOT NULL,
     old_price INTEGER,
@@ -77,11 +74,11 @@ beforeAll(async () => {
 })
 
 beforeEach(() => {
-  testDb.run("DELETE FROM price_history")
-  testDb.run("DELETE FROM subscription_tags")
-  testDb.run("DELETE FROM tags")
-  testDb.run("DELETE FROM subscriptions")
-  testDb.run("DELETE FROM sqlite_sequence")
+  testDb.exec("DELETE FROM price_history")
+  testDb.exec("DELETE FROM subscription_tags")
+  testDb.exec("DELETE FROM tags")
+  testDb.exec("DELETE FROM subscriptions")
+  testDb.exec("DELETE FROM sqlite_sequence")
 })
 
 describe("handleTimeline", () => {
@@ -125,7 +122,7 @@ describe("handleTimeline", () => {
     consola.info = () => {}
 
     // Clear and add only cancelled
-    testDb.run("DELETE FROM subscriptions")
+    testDb.exec("DELETE FROM subscriptions")
     seedSub("Cancelled Thing", 5000, "monthly", "cancelled")
 
     timelineModule.handleTimeline({ months: 3 })

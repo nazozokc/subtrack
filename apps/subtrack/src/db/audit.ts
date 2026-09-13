@@ -5,7 +5,7 @@
  * for security diagnostics and change history.
  */
 
-import type { Database, SqlValue } from "sql.js"
+import type { DatabaseSync, SQLInputValue } from "node:sqlite"
 import { getDb, execObjs, saveDb } from "./connection.ts"
 
 export type AuditAction =
@@ -62,8 +62,8 @@ export type AddAuditArgs = {
 }
 
 /** Create the audit_log table (called from schema migrations). */
-export function createAuditTable(db: Database): void {
-  db.run(`CREATE TABLE IF NOT EXISTS audit_log (
+export function createAuditTable(db: DatabaseSync): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     action TEXT NOT NULL,
     target_type TEXT,
@@ -71,19 +71,18 @@ export function createAuditTable(db: Database): void {
     details TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`)
-  db.run(`CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)`)
-  db.run(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)`)
-  db.run(`CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id)`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id)`)
 }
 
 /** Insert an audit log entry. */
 export function addAuditLog(args: AddAuditArgs): void {
   const db = getDb()
   try {
-    db.run(
+    db.prepare(
       `INSERT INTO audit_log (action, target_type, target_id, details) VALUES (?, ?, ?, ?)`,
-      [args.action, args.targetType ?? null, args.targetId ?? null, args.details ?? null],
-    )
+    ).run(args.action, args.targetType ?? null, args.targetId ?? null, args.details ?? null)
     saveDb()
   } catch {
     // Silently ignore if table doesn't exist (test environments, first-run edge cases)
@@ -100,7 +99,7 @@ export function getAuditLogs(options: {
   to?: string
 } = {}): AuditEntry[] {
   const conditions: string[] = []
-  const params: SqlValue[] = []
+  const params: SQLInputValue[] = []
 
   if (options.action) {
     conditions.push("action = ?")
@@ -126,14 +125,14 @@ export function getAuditLogs(options: {
   return execObjs<AuditEntry>(
     getDb(),
     `SELECT * FROM audit_log ${where} ORDER BY id DESC LIMIT ? OFFSET ?`,
-    [...params, limit, offset] as SqlValue[],
+    [...params, limit, offset],
   )
 }
 
 /** Get the count of audit log entries (with optional filters). */
 export function getAuditLogCount(options: { action?: string; from?: string; to?: string } = {}): number {
   const conditions: string[] = []
-  const params: SqlValue[] = []
+  const params: SQLInputValue[] = []
 
   if (options.action) {
     conditions.push("action = ?")
@@ -149,13 +148,15 @@ export function getAuditLogCount(options: { action?: string; from?: string; to?:
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
-  const result = getDb().exec(`SELECT COUNT(*) AS count FROM audit_log ${where}`, params)
-  return result.length > 0 ? Number(result[0].values[0][0]) : 0
+  const result = getDb().prepare(`SELECT COUNT(*) AS count FROM audit_log ${where}`).get(...params) as
+    | { count: number }
+    | undefined
+  return result ? Number(result.count) : 0
 }
 
 /** Prune audit log entries older than a given date. */
 export function pruneAuditLogs(before: string): number {
   const db = getDb()
-  db.run("DELETE FROM audit_log WHERE created_at < ?", [before])
-  return db.getRowsModified()
+  const { changes } = db.prepare("DELETE FROM audit_log WHERE created_at < ?").run(before)
+  return Number(changes)
 }

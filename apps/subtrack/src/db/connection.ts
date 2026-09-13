@@ -1,26 +1,24 @@
-import initSqlJs from "sql.js"
-import type { Database, SqlValue, BindParams } from "sql.js"
+import { DatabaseSync } from "node:sqlite"
+import type { SQLInputValue } from "node:sqlite"
 import {
   mkdirSync, existsSync, readFileSync, writeFileSync,
   readdirSync, statSync, openSync, writeSync, closeSync,
-  unlinkSync,
+  unlinkSync, renameSync,
   constants,
 } from "node:fs"
 import { createHash } from "node:crypto"
 import { gzipSync, gunzipSync } from "node:zlib"
 import path from "node:path"
 import { homedir } from "node:os"
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 import { encryptBuffer, decryptBuffer, isEncrypted } from "../crypto.ts"
 import type { BackupFileInfo } from "../types.ts"
 import { runMigrations } from "./schema.ts"
 import { writeDbHash, verifyDbHash, removeDbHash } from "./integrity.ts"
 
-let _db: Database | null = null
+let _db: DatabaseSync | null = null
 let _dbPath = ""
 let _lockFd: number | null = null
-
-const _SQL = await initSqlJs()
 
 /** Max decompressed size for backups (prevents zip-bomb / decompression-bomb DoS). */
 const MAX_DECOMPRESSED_BYTES = 256 * 1024 * 1024 // 256 MB
@@ -147,8 +145,22 @@ function releaseLock(): void {
   }
 }
 
-// Release lock on process exit (SIGINT/SIGTERM handled in index.ts for saveDb)
-process.on("exit", releaseLock)
+/** Close the open DB instance and remove its temp backing file. */
+export function closeDb(): void {
+  if (_db) {
+    try { _db.close() } catch { /* ignore */ }
+    _db = null
+  }
+  try { unlinkSync(getOpenDbPath()) } catch { /* ignore */ }
+}
+
+// Release lock + temp DB files on process exit
+// (SIGINT/SIGTERM handled in index.ts for saveDb)
+process.on("exit", () => {
+  releaseLock()
+  closeDb()
+  try { unlinkSync(getSaveDbPath()) } catch { /* ignore */ }
+})
 
 // ── DB directory ──────────────────────────────────────────
 
@@ -164,9 +176,45 @@ export function getDefaultBackupDir(): string {
   return path.join(getDbDir(), "backups")
 }
 
+// ── Temp backing files (node:sqlite is file-based) ───────
+
+/** Escape a path for embedding in a SQL string literal. */
+function sqlQuotePath(p: string): string {
+  return p.replace(/'/g, "''")
+}
+
+/** Backing file for the open DB instance (exists only while running). */
+function getOpenDbPath(): string {
+  return path.join(getDbDir(), ".subtrack.open.db")
+}
+
+/** Throwaway file used for VACUUM INTO exports. */
+function getSaveDbPath(): string {
+  return path.join(getDbDir(), ".subtrack.save.db")
+}
+
+/** Ensure the DB directory exists (needed before writing backing files). */
+function ensureDbDir(): string {
+  const dbdir = getDbDir()
+  mkdirSync(dbdir, { recursive: true, mode: 0o700 })
+  return dbdir
+}
+
+/** Serialize the DB contents to bytes (like sql.js `db.export()`). */
+export function exportDbBytes(): Buffer {
+  const db = getDb()
+  ensureDbDir()
+  const tmp = getSaveDbPath()
+  try { unlinkSync(tmp) } catch { /* ignore */ }
+  db.exec(`VACUUM INTO '${sqlQuotePath(tmp)}'`)
+  const data = readFileSync(tmp)
+  try { unlinkSync(tmp) } catch { /* ignore */ }
+  return data
+}
+
 export function saveDb(): void {
   if (!_db || !_dbPath) return
-  const data = Buffer.from(_db.export())
+  const data = exportDbBytes()
   const encrypted = encryptBuffer(data)
   writeFileSync(_dbPath, encrypted, { mode: 0o600 })
   writeDbHash(encrypted, _dbPath)
@@ -177,41 +225,29 @@ export function getDbPath(): string {
   return _dbPath
 }
 
-function makeObj(columns: string[], row: SqlValue[]): Record<string, unknown> {
-  const obj: Record<string, unknown> = {}
-  for (let i = 0; i < columns.length; i++) {
-    obj[columns[i]] = row[i]
-  }
-  return obj
-}
-
-export function execObjs<T>(db: Database, sql: string, params?: BindParams): T[] {
-  const results = db.exec(sql, params)
-  if (!results.length) return []
-  const { columns, values } = results[0]
-  return values.map((row) => makeObj(columns, row) as T)
+export function execObjs<T>(db: DatabaseSync, sql: string, params?: SQLInputValue[]): T[] {
+  const rows = db.prepare(sql).all(...(params ?? []))
+  return rows as unknown as T[]
 }
 
 export function execObj<T>(
-  db: Database,
+  db: DatabaseSync,
   sql: string,
-  params?: BindParams,
+  params?: SQLInputValue[],
 ): T | undefined {
-  const results = db.exec(sql, params)
-  if (!results.length || !results[0].values.length) return undefined
-  const { columns, values } = results[0]
-  return makeObj(columns, values[0]) as T
+  const row = db.prepare(sql).get(...(params ?? []))
+  return row as unknown as T | undefined
 }
 
-export function getDb(): Database {
+export function getDb(): DatabaseSync {
   if (_db) return _db
 
-  const dbdir = getDbDir()
-  mkdirSync(dbdir, { recursive: true, mode: 0o700 })
+  const dbdir = ensureDbDir()
   _dbPath = path.join(dbdir, "subtrack.db")
 
   acquireLock()
 
+  const openPath = getOpenDbPath()
   if (existsSync(_dbPath)) {
     const buf = readFileSync(_dbPath)
     // Verify on-disk integrity before decryption
@@ -224,13 +260,14 @@ export function getDb(): Database {
       )
     }
     const data = isEncrypted(buf) ? decryptBuffer(buf) : buf
-    _db = new _SQL.Database(data)
+    writeFileSync(openPath, data, { mode: 0o600 })
+    _db = new DatabaseSync(openPath)
   } else {
-    _db = new _SQL.Database()
+    _db = new DatabaseSync(openPath)
   }
 
-  _db.run("PRAGMA foreign_keys = ON")
-  _db.run("PRAGMA secure_delete = ON")
+  _db.exec("PRAGMA foreign_keys = ON")
+  _db.exec("PRAGMA secure_delete = ON")
   runMigrations(_db)
 
   return _db
@@ -320,17 +357,22 @@ export function restoreDb(backupPath: string): void {
   const isGz = data.length >= 2 && data[0] === 0x1f && data[1] === 0x8b
   const buf = isGz ? gunzipLimited(data) : data
 
-  // Verify it's a valid SQLite DB with correct schema
-  const newDb = new _SQL.Database(buf)
-  const tables = newDb.exec(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name='subscriptions'",
-  )
-  const hasSubscriptions =
-    tables.length > 0 && tables[0].values.length > 0
-  if (!hasSubscriptions) {
-    throw new Error(
-      "Invalid backup file: missing 'subscriptions' table — not a subtrack database",
-    )
+  // Validate it's a valid SQLite DB with correct schema
+  ensureDbDir()
+  const savePath = getSaveDbPath()
+  writeFileSync(savePath, buf, { mode: 0o600 })
+  const newDb = new DatabaseSync(savePath)
+  try {
+    const hasSubscriptions = newDb.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='subscriptions'",
+    ).get() !== undefined
+    if (!hasSubscriptions) {
+      throw new Error(
+        "Invalid backup file: missing 'subscriptions' table — not a subtrack database",
+      )
+    }
+  } finally {
+    newDb.close()
   }
 
   // Flush current in-memory state to disk
@@ -344,15 +386,31 @@ export function restoreDb(backupPath: string): void {
     writeDbHash(encrypted, _dbPath)
   }
 
-  // Replace in-memory instance
-  newDb.run("PRAGMA foreign_keys = ON")
-  newDb.run("PRAGMA secure_delete = ON")
-  _db = newDb
-  runMigrations(newDb)
+  // Close old instance and its backing file
+  const oldOpenPath = getOpenDbPath()
+  if (_db) {
+    try { _db.close() } catch { /* ignore */ }
+    _db = null
+    try { unlinkSync(oldOpenPath) } catch { /* ignore */ }
+  }
+
+  // Move the restored data to the open backing file
+  try {
+    renameSync(savePath, oldOpenPath)
+  } catch {
+    writeFileSync(oldOpenPath, buf, { mode: 0o600 })
+    try { unlinkSync(savePath) } catch { /* ignore */ }
+  }
+
+  // Open the restored database
+  _db = new DatabaseSync(oldOpenPath)
+  _db.exec("PRAGMA foreign_keys = ON")
+  _db.exec("PRAGMA secure_delete = ON")
+  runMigrations(_db)
 }
 
 /** Replace the DB instance for testing (e.g. with in-memory). */
-export function __setDb(db: Database): void {
+export function __setDb(db: DatabaseSync): void {
   _db = db
   _dbPath = ""
   _lockFd = null

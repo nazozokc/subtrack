@@ -1,17 +1,15 @@
 import { test, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
+import { DatabaseSync } from "node:sqlite"
 import type { SharedArgs } from "../types.ts"
 import { today } from "../date-utils.ts"
 
-let testDb: Database
+let testDb: DatabaseSync
 let originalFetch: typeof globalThis.fetch
 
 beforeAll(async () => {
-  const SQL = await initSqlJs()
-  testDb = new SQL.Database()
-  testDb.run("PRAGMA foreign_keys = ON")
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+  testDb = new DatabaseSync(":memory:")
+  testDb.exec("PRAGMA foreign_keys = ON")
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
@@ -31,18 +29,18 @@ beforeAll(async () => {
     discount_amount INTEGER,
     discount_type TEXT
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscription_tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscription_tags (
     subscription_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
     PRIMARY KEY (subscription_id, tag_id),
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS llm_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     provider TEXT NOT NULL,
     model TEXT NOT NULL,
@@ -53,7 +51,7 @@ beforeAll(async () => {
     description TEXT,
     generation_id TEXT
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS price_history (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS price_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     subscription_id INTEGER NOT NULL,
     old_price INTEGER,
@@ -69,11 +67,11 @@ beforeAll(async () => {
 })
 
 beforeEach(() => {
-  testDb.run("DELETE FROM subscription_tags")
-  testDb.run("DELETE FROM tags")
-  testDb.run("DELETE FROM subscriptions")
-  testDb.run("DELETE FROM llm_usage")
-  testDb.run("DELETE FROM price_history")
+  testDb.exec("DELETE FROM subscription_tags")
+  testDb.exec("DELETE FROM tags")
+  testDb.exec("DELETE FROM subscriptions")
+  testDb.exec("DELETE FROM llm_usage")
+  testDb.exec("DELETE FROM price_history")
 
   originalFetch = globalThis.fetch
   globalThis.fetch = async () =>
@@ -351,10 +349,9 @@ test("calcPreviousTotals uses historical price when available", async () => {
 
   const { calcPreviousTotals } = await import("../payment.ts")
   // Price change: old 1000 → new 2000
-  testDb.run(
+  testDb.prepare(
     "INSERT INTO price_history (subscription_id, old_price, new_price, new_currency) VALUES (?, ?, ?, 'JPY')",
-    [id, 1000, 2000],
-  )
+  ).run(id, 1000, 2000)
 
   const subs = d.getSubscriptions()
   const totals = calcPreviousTotals(subs, null, undefined)
@@ -376,10 +373,9 @@ test("calcPreviousTotals excludes cancelled subscriptions", async () => {
   const cancelledId = d.writeSubscription({ name: "B", price: 9999, currency: "JPY", cycle: "monthly", tags: [], status: "cancelled" })
 
   const { calcPreviousTotals } = await import("../payment.ts")
-  testDb.run(
+  testDb.prepare(
     "INSERT INTO price_history (subscription_id, old_price, new_price, new_currency) VALUES (?, ?, ?, 'JPY')",
-    [cancelledId, 500, 9999],
-  )
+  ).run(cancelledId, 500, 9999)
 
   const totals = calcPreviousTotals(d.getSubscriptions(), null, undefined)
   expect(totals).toEqual({ JPY: 1000 })

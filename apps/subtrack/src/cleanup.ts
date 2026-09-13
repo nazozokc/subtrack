@@ -2,7 +2,7 @@
  * One-command database cleanup: integrity check + VACUUM + prune audit + prune tags.
  */
 
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { fail } from "./error.ts"
 import { getDb, saveDb, getDbPath } from "./db.ts"
 import { pruneAuditLogs } from "./db.ts"
@@ -23,10 +23,10 @@ export function handleCleanup(options: CleanupOptions = {}): void {
   const auditDays = options.auditDays ?? 90
 
   // ── Integrity check ─────────────────────────────────
-  const integrityResult = db.exec("PRAGMA integrity_check")
-  const checkResult = integrityResult.length > 0 && integrityResult[0].values.length > 0
-    ? String(integrityResult[0].values[0][0])
-    : "ok"
+  const integrityRow = db.prepare("PRAGMA integrity_check").get() as
+    | { integrity_check: string }
+    | undefined
+  const checkResult = integrityRow?.integrity_check ?? "ok"
   const integrityOk = checkResult === "ok"
 
   if (options.json) {
@@ -42,7 +42,7 @@ export function handleCleanup(options: CleanupOptions = {}): void {
     const beforeSize = getFileSize(getDbPath())
 
     try {
-      db.run("VACUUM")
+      db.exec("VACUUM")
       saveDb()
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

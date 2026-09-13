@@ -1,6 +1,6 @@
 import { confirm } from "@inquirer/prompts"
-import { consola } from "consola"
-import pc from "picocolors"
+import { consola } from "./consola.ts"
+import pc from "./color.ts"
 import { mkdirSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"

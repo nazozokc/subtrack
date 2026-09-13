@@ -1,14 +1,12 @@
 import { test, expect, beforeAll, afterAll, beforeEach } from "vitest"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
+import { DatabaseSync } from "node:sqlite"
 
-let testDb: Database
+let testDb: DatabaseSync
 
 beforeAll(async () => {
-  const SQL = await initSqlJs()
-  testDb = new SQL.Database()
-  testDb.run("PRAGMA foreign_keys = ON")
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+  testDb = new DatabaseSync(":memory:")
+  testDb.exec("PRAGMA foreign_keys = ON")
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
@@ -28,18 +26,18 @@ beforeAll(async () => {
     discount_amount INTEGER,
     discount_type TEXT
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscription_tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscription_tags (
     subscription_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
     PRIMARY KEY (subscription_id, tag_id),
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS llm_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     provider TEXT NOT NULL,
     model TEXT NOT NULL,
@@ -50,8 +48,8 @@ beforeAll(async () => {
     description TEXT,
     generation_id TEXT
   )`)
-  testDb.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
-  testDb.run(`CREATE TABLE IF NOT EXISTS trials (
+  testDb.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
+  testDb.exec(`CREATE TABLE IF NOT EXISTS trials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     expires_at TEXT NOT NULL,
@@ -66,15 +64,18 @@ beforeAll(async () => {
   db.__setDb(testDb)
 })
 
-beforeEach(() => {
-  testDb.run("DELETE FROM subscription_tags")
-  testDb.run("DELETE FROM tags")
-  testDb.run("DELETE FROM subscriptions")
-  testDb.run("DELETE FROM llm_usage")
+beforeEach(async () => {
+  const { getDb } = await import("../db.ts")
+  testDb = getDb()
+  testDb.exec("DELETE FROM subscription_tags")
+  testDb.exec("DELETE FROM tags")
+  testDb.exec("DELETE FROM subscriptions")
+  testDb.exec("DELETE FROM llm_usage")
 })
 
-afterAll(() => {
-  testDb.close()
+afterAll(async () => {
+  const { getDb } = await import("../db.ts")
+  try { getDb().close() } catch { /* may be closed by restoreDb test */ }
 })
 
 test("getSubscriptions returns empty when no data exists", async () => {
@@ -335,21 +336,19 @@ test("deleteSubscription cascades to subscription_tags", async () => {
   expect(subs[0].tags).toHaveLength(2)
 
   const subId = subs[0].id
-  const rows = testDb.exec(
+  const relRow = testDb.prepare(
     "SELECT COUNT(*) as cnt FROM subscription_tags WHERE subscription_id = ?",
-    [subId],
-  )
-  const relCountBefore = Number(rows[0].values[0][0])
+  ).get(subId) as { cnt: number } | undefined
+  const relCountBefore = Number(relRow?.cnt ?? 0)
   expect(relCountBefore).toBe(2)
 
   db.deleteSubscription(subId)
   expect(db.getSubscriptions()).toHaveLength(0)
 
-  const rowsAfter = testDb.exec(
+  const relRowAfter = testDb.prepare(
     "SELECT COUNT(*) as cnt FROM subscription_tags WHERE subscription_id = ?",
-    [subId],
-  )
-  const relCountAfter = Number(rowsAfter[0].values[0][0])
+  ).get(subId) as { cnt: number } | undefined
+  const relCountAfter = Number(relRowAfter?.cnt ?? 0)
   expect(relCountAfter).toBe(0)
 })
 
@@ -848,7 +847,7 @@ test("pruneTags removes orphaned tags", async () => {
   db.deleteSubscription(sub.id)
 
   // Re-create the orphan tags directly
-  testDb.run("INSERT INTO tags (name) VALUES ('orphan1'), ('orphan2')")
+  testDb.exec("INSERT INTO tags (name) VALUES ('orphan1'), ('orphan2')")
 
   // keep + orphan1 + orphan2 = 3 orphaned tags
   const count = db.pruneTags()
@@ -1086,25 +1085,25 @@ test("restoreDb replaces in-memory database", async () => {
   const { mkdtempSync, writeFileSync, existsSync, rmSync, readFileSync } = await import("node:fs")
   const { join } = await import("node:path")
   const { tmpdir } = await import("node:os")
-  const initSqlJs2 = await import("sql.js")
-
-  // Create a backup database with different data
-  const SQL2 = await initSqlJs2.default()
-  const backupDb = new SQL2.Database()
-  backupDb.run("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
-  backupDb.run("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
-  backupDb.run("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
-  backupDb.run("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('RestoredService', 999, 'USD', 'monthly')")
-
-  const buf = Buffer.from(backupDb.export())
-  backupDb.close()
+  const { DatabaseSync: DatabaseSync2 } = await import("node:sqlite")
 
   const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+
+  // Create a backup database with different data
+  const srcDbPath = join(tmpDir, "src.db")
+  const backupDb = new DatabaseSync2(srcDbPath)
+  backupDb.exec("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
+  backupDb.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
+  backupDb.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
+  backupDb.exec("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('RestoredService', 999, 'USD', 'monthly')")
+  backupDb.close()
+  const buf = readFileSync(srcDbPath)
+
   const backupPath = join(tmpDir, "test_backup.db")
   writeFileSync(backupPath, buf)
 
   // Current DB has different data
-  testDb.run("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('OldService', 500, 'JPY', 'monthly')")
+  testDb.exec("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('OldService', 500, 'JPY', 'monthly')")
 
   const db = await import("../db.ts")
 
@@ -1130,16 +1129,14 @@ test("restoreDb throws for invalid schema", async () => {
   const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
   const { join } = await import("node:path")
   const { tmpdir } = await import("node:os")
-  const initSqlJs2 = await import("sql.js")
-
-  // Create a valid SQLite DB but without subscriptions table
-  const SQL2 = await initSqlJs2.default()
-  const badDb = new SQL2.Database()
-  badDb.run("CREATE TABLE random_stuff (id INTEGER PRIMARY KEY)")
+  const { DatabaseSync: DatabaseSync2 } = await import("node:sqlite")
 
   const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+
+  // Create a valid SQLite DB but without subscriptions table
   const badPath = join(tmpDir, "bad_backup.db")
-  writeFileSync(badPath, Buffer.from(badDb.export()))
+  const badDb = new DatabaseSync2(badPath)
+  badDb.exec("CREATE TABLE random_stuff (id INTEGER PRIMARY KEY)")
   badDb.close()
 
   const db = await import("../db.ts")

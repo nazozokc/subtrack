@@ -1,9 +1,10 @@
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { calcUpcoming } from "./upcoming.ts"
 import { formatPrice } from "./price.ts"
 import { loadConfig } from "./config.ts"
 import type { NotifyChannel } from "./types.ts"
 import { formatDate, formatShortDate } from "./date-utils.ts"
+import { spawnSync } from "node:child_process"
 
 export type NotifyOptions = {
   days?: number
@@ -73,7 +74,7 @@ export async function handleNotify(options: NotifyOptions = {}): Promise<void> {
   for (const channel of channels) {
     switch (channel) {
       case "os":
-        await sendOsNotification(entries, days)
+        sendOsNotification(entries, days)
         break
       case "slack":
         await sendSlackNotification(entries, days, config.slackWebhook)
@@ -85,14 +86,19 @@ export async function handleNotify(options: NotifyOptions = {}): Promise<void> {
   }
 }
 
-// ── OS Notification (node-notifier) ─────────────────────
+// ── OS Notification ─────────────────────────────────────
+// Uses the platform's native notification command so no runtime
+// dependency is needed. Missing commands fail silently.
 
-async function sendOsNotification(
+/** Escape a string for embedding in an AppleScript string literal. */
+function asEscape(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+}
+
+function sendOsNotification(
   entries: { sub: { name: string; price: number; currency: string; cycle: string } }[],
   days: number,
-): Promise<void> {
-  const { default: notifier } = await import("node-notifier")
-
+): void {
   const count = entries.length
   let message: string
 
@@ -108,12 +114,22 @@ async function sendOsNotification(
         .join("\n") + `\n... and ${count - 5} more`
   }
 
-  notifier.notify({
-    title: `subtrack: ${count} upcoming bill${count > 1 ? "s" : ""} in ${days} day${days > 1 ? "s" : ""}`,
-    message,
-    sound: true,
-    timeout: 10,
-  })
+  const title = `subtrack: ${count} upcoming bill${count > 1 ? "s" : ""} in ${days} day${days > 1 ? "s" : ""}`
+
+  if (process.platform === "darwin") {
+    spawnSync("osascript", [
+      "-e",
+      `display notification "${asEscape(message)}" with title "${asEscape(title)}" sound name "default"`,
+    ])
+  } else if (process.platform === "win32") {
+    spawnSync("powershell.exe", [
+      "-NoProfile",
+      "-Command",
+      `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${message.replace(/'/g, "''")}', '${title.replace(/'/g, "''")}')`,
+    ])
+  } else {
+    spawnSync("notify-send", [title, message, "-t", "10000"])
+  }
 }
 
 // ── Slack Webhook ───────────────────────────────────────

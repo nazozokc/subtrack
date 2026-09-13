@@ -1,5 +1,5 @@
-import { consola } from "consola"
-import pc from "picocolors"
+import { consola } from "./consola.ts"
+import pc from "./color.ts"
 import { getSubscriptions, getNonCancelledSubscriptions, getSubscription, mergeSubscriptions } from "./db.ts"
 import { logAudit } from "./audit.ts"
 import { fail } from "./error.ts"

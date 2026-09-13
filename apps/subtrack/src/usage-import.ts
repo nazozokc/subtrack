@@ -1,6 +1,6 @@
 import { openSync, fstatSync, readSync, closeSync } from "node:fs"
 import os from "node:os"
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { fail } from "./error.ts"
 import type { UsageImportFlags } from "./types.ts"
 import { usageRepository } from "./application/repositories.ts"

@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach, vi } from "vitest"
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 import { fail } from "../error.ts"
 
 const errorMessages: string[] = []

@@ -1,5 +1,5 @@
 import { test, expect, beforeAll, afterAll, afterEach } from "vitest"
-import initSqlJs from "sql.js"
+import { DatabaseSync } from "node:sqlite"
 import {
   mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync,
 } from "node:fs"
@@ -22,6 +22,10 @@ beforeAll(() => {
 })
 
 afterAll(() => {
+  // Close the cached DatabaseSync handle first: Windows cannot unlink a
+  // file that is still open (POSIX allows it, which is why this only
+  // fails on Windows).
+  conn.closeDb()
   delete process.env.SUBSC_CLI_DB_DIR
   for (const dir of [mainDir, ...tempDirs]) {
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
@@ -87,8 +91,8 @@ test("saveDb writes encrypted database with integrity hash", async () => {
   process.env.SUBSC_CLI_DB_DIR = mainDir
 
   const db = conn.getDb()
-  db.run("CREATE TABLE IF NOT EXISTS t (x INTEGER)")
-  db.run("INSERT INTO t VALUES (42)")
+  db.exec("CREATE TABLE IF NOT EXISTS t (x INTEGER)")
+  db.exec("INSERT INTO t VALUES (42)")
   conn.saveDb()
 
   const dbPath = conn.getDbPath()
@@ -96,11 +100,13 @@ test("saveDb writes encrypted database with integrity hash", async () => {
   expect(isEncrypted(file)).toBe(true)
 
   // Reload the encrypted file and verify contents
-  const SQL = await initSqlJs()
-  const loaded = new SQL.Database(decryptBuffer(file))
-  const res = loaded.exec("SELECT x FROM t")
-  expect(Number(res[0].values[0][0])).toBe(42)
+  const verifyPath = join(mainDir, ".subtrack-verify.db")
+  writeFileSync(verifyPath, decryptBuffer(file))
+  const loaded = new DatabaseSync(verifyPath, { readOnly: true })
+  const row = loaded.prepare("SELECT x FROM t").get() as { x: number } | undefined
+  expect(Number(row?.x)).toBe(42)
   loaded.close()
+  rmSync(verifyPath, { force: true })
 
   // Integrity sidecar exists and verifies
   const { verifyDbHash } = await import("../db/integrity.ts")
@@ -116,14 +122,15 @@ test("saveDb writes encrypted database with integrity hash", async () => {
 // ── restoreDb variants ────────────────────────────────
 
 async function makeBackupBytes(): Promise<Buffer> {
-  const SQL = await initSqlJs()
-  const backup = new SQL.Database()
-  backup.run("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
-  backup.run("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
-  backup.run("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
-  backup.run("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('GzService', 999, 'USD', 'monthly')")
-  const buf = Buffer.from(backup.export())
+  const srcPath = join(mainDir, `.subtrack-src-${Date.now()}.db`)
+  const backup = new DatabaseSync(srcPath)
+  backup.exec("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
+  backup.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
+  backup.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
+  backup.exec("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('GzService', 999, 'USD', 'monthly')")
   backup.close()
+  const buf = readFileSync(srcPath)
+  rmSync(srcPath, { force: true })
   return buf
 }
 
@@ -136,9 +143,11 @@ test("restoreDb restores from a gzipped backup (.db.gz)", async () => {
 
   conn.restoreDb(backupPath)
 
-  const res = conn.getDb().exec("SELECT name FROM subscriptions WHERE name = 'GzService'")
-  expect(res.length).toBeGreaterThan(0)
-  expect(String(res[0].values[0][0])).toBe("GzService")
+  const row = conn.getDb().prepare("SELECT name FROM subscriptions WHERE name = 'GzService'").get() as
+    | { name: string }
+    | undefined
+  expect(row).toBeTruthy()
+  expect(String(row?.name)).toBe("GzService")
 })
 
 test("restoreDb restores from an encrypted backup (.db.enc)", async () => {
@@ -150,9 +159,11 @@ test("restoreDb restores from an encrypted backup (.db.enc)", async () => {
 
   conn.restoreDb(backupPath)
 
-  const res = conn.getDb().exec("SELECT name FROM subscriptions WHERE name = 'GzService'")
-  expect(res.length).toBeGreaterThan(0)
-  expect(String(res[0].values[0][0])).toBe("GzService")
+  const row = conn.getDb().prepare("SELECT name FROM subscriptions WHERE name = 'GzService'").get() as
+    | { name: string }
+    | undefined
+  expect(row).toBeTruthy()
+  expect(String(row?.name)).toBe("GzService")
 })
 
 test("restoreDb rejects an encrypted backup with the wrong key", async () => {

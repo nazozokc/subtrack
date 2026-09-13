@@ -1,8 +1,7 @@
 import { describe, test, expect, beforeAll, beforeEach, afterEach } from "vitest"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
+import { DatabaseSync } from "node:sqlite"
 
-let testDb: Database
+let testDb: DatabaseSync
 let dbModule: typeof import("../db.ts")
 
 function dateStr(d: Date): string {
@@ -10,11 +9,10 @@ function dateStr(d: Date): string {
 }
 
 beforeAll(async () => {
-  const SQL = await initSqlJs()
-  testDb = new SQL.Database()
-  testDb.run("PRAGMA foreign_keys = ON")
+  testDb = new DatabaseSync(":memory:")
+  testDb.exec("PRAGMA foreign_keys = ON")
 
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
@@ -34,18 +32,18 @@ beforeAll(async () => {
     discount_amount INTEGER,
     discount_type TEXT
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscription_tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscription_tags (
     subscription_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
     PRIMARY KEY (subscription_id, tag_id),
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS price_history (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS price_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     subscription_id INTEGER NOT NULL,
     old_price INTEGER,
@@ -61,11 +59,11 @@ beforeAll(async () => {
 })
 
 beforeEach(() => {
-  testDb.run("DELETE FROM price_history")
-  testDb.run("DELETE FROM subscription_tags")
-  testDb.run("DELETE FROM tags")
-  testDb.run("DELETE FROM subscriptions")
-  testDb.run("DELETE FROM sqlite_sequence")
+  testDb.exec("DELETE FROM price_history")
+  testDb.exec("DELETE FROM subscription_tags")
+  testDb.exec("DELETE FROM tags")
+  testDb.exec("DELETE FROM subscriptions")
+  testDb.exec("DELETE FROM sqlite_sequence")
 })
 
 describe("MCP helper functions", () => {
@@ -138,7 +136,7 @@ describe("MCP helper functions", () => {
 
 describe("calcUpcoming", () => {
   test("returns upcoming billings within period", async () => {
-    testDb.run(
+    testDb.exec(
       `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
        VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01'),
               (2, 'Spotify', 980, 'JPY', 'monthly', 'active', 1, '2026-01-10'),
@@ -155,7 +153,7 @@ describe("calcUpcoming", () => {
 
 describe("searchSubscriptions", () => {
   test("searches by name pattern", async () => {
-    testDb.run(
+    testDb.exec(
       `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at, notes)
        VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01', 'Family plan'),
               (2, 'Spotify', 980, 'JPY', 'monthly', 'active', 1, '2026-01-10', NULL)`,
@@ -168,7 +166,7 @@ describe("searchSubscriptions", () => {
   })
 
   test("returns empty array for no match", async () => {
-    testDb.run(
+    testDb.exec(
       `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
        VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01')`,
     )
@@ -249,7 +247,7 @@ describe("MCP handlers", () => {
   })
 
   test("handleEditSubscription validates enums", async () => {
-    testDb.run(
+    testDb.exec(
       `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
        VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01')`,
     )
@@ -262,7 +260,7 @@ describe("MCP handlers", () => {
   })
 
   test("handleGetAnalytics includes statusBreakdown distinct from summary", async () => {
-    testDb.run(
+    testDb.exec(
       `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
        VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01'),
               (2, 'Spotify', 980, 'JPY', 'monthly', 'paused', 1, '2026-01-10'),
@@ -277,7 +275,7 @@ describe("MCP handlers", () => {
   })
 
   test("handleListSubscriptions supports limit and offset", async () => {
-    testDb.run(
+    testDb.exec(
       `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
        VALUES (1, 'A', 100, 'USD', 'monthly', 'active', 1, '2026-01-01'),
               (2, 'B', 200, 'USD', 'monthly', 'active', 1, '2026-01-01'),
@@ -294,13 +292,13 @@ describe("MCP handlers", () => {
   })
 
   test("handleListTags returns tags with counts", async () => {
-    testDb.run(
+    testDb.exec(
       `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
        VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01'),
               (2, 'Spotify', 980, 'JPY', 'monthly', 'active', 1, '2026-01-10')`,
     )
-    testDb.run(`INSERT INTO tags (id, name) VALUES (1, 'video'), (2, 'music'), (3, 'work')`)
-    testDb.run(`INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (1, 1), (2, 2), (1, 3)`)
+    testDb.exec(`INSERT INTO tags (id, name) VALUES (1, 'video'), (2, 'music'), (3, 'work')`)
+    testDb.exec(`INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (1, 1), (2, 2), (1, 3)`)
 
     const { handleListTags } = await import("../mcp/handlers.ts")
     const res = await handleListTags({})
@@ -313,13 +311,13 @@ describe("MCP handlers", () => {
   })
 
   test("handleGetTagSubscriptions filters by tags", async () => {
-    testDb.run(
+    testDb.exec(
       `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
        VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01'),
               (2, 'Spotify', 980, 'JPY', 'monthly', 'active', 1, '2026-01-10')`,
     )
-    testDb.run(`INSERT INTO tags (id, name) VALUES (1, 'video'), (2, 'music')`)
-    testDb.run(`INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (1, 1), (2, 2)`)
+    testDb.exec(`INSERT INTO tags (id, name) VALUES (1, 'video'), (2, 'music')`)
+    testDb.exec(`INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (1, 1), (2, 2)`)
 
     const { handleGetTagSubscriptions } = await import("../mcp/handlers.ts")
     const res = await handleGetTagSubscriptions({ tag: "video" })
@@ -333,7 +331,7 @@ describe("MCP handlers", () => {
 
   test("handleGetUsageTotal aggregates tokens and models", async () => {
     const db = await import("../db.ts")
-    testDb.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+    testDb.exec(`CREATE TABLE IF NOT EXISTS llm_usage (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       provider TEXT NOT NULL,
       model TEXT NOT NULL,
@@ -344,7 +342,7 @@ describe("MCP handlers", () => {
       description TEXT,
       generation_id TEXT
     )`)
-    testDb.run("DELETE FROM llm_usage")
+    testDb.exec("DELETE FROM llm_usage")
     db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 100, output_tokens: 50, cost: 1.0, date: "2026-08-01", description: null })
     db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 200, output_tokens: 100, cost: 2.0, date: "2026-08-02", description: null })
 
@@ -359,7 +357,7 @@ describe("MCP handlers", () => {
 
   test("handleListUsage lists entries with filters", async () => {
     const db = await import("../db.ts")
-    testDb.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+    testDb.exec(`CREATE TABLE IF NOT EXISTS llm_usage (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       provider TEXT NOT NULL,
       model TEXT NOT NULL,
@@ -370,7 +368,7 @@ describe("MCP handlers", () => {
       description TEXT,
       generation_id TEXT
     )`)
-    testDb.run("DELETE FROM llm_usage")
+    testDb.exec("DELETE FROM llm_usage")
     db.addLlmUsage({ provider: "openai", model: "gpt-4o", input_tokens: 100, output_tokens: 50, cost: 1.0, date: "2026-08-01", description: null })
     db.addLlmUsage({ provider: "anthropic", model: "claude-3", input_tokens: 100, output_tokens: 50, cost: 1.0, date: "2026-08-02", description: null })
 
@@ -382,7 +380,7 @@ describe("MCP handlers", () => {
   })
 
   test("handleBulkOperations reports errors instead of swallowing them", async () => {
-    testDb.run(
+    testDb.exec(
       `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
        VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01'),
               (2, 'Spotify', 980, 'JPY', 'monthly', 'active', 1, '2026-01-10')`,

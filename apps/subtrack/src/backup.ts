@@ -1,4 +1,4 @@
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { fail } from "./error.ts"
 import {
   mkdirSync, existsSync, statSync, openSync, writeSync, closeSync, constants,
@@ -19,6 +19,7 @@ import {
   saveDb,
   writeBackupHash,
   verifyBackupHash,
+  exportDbBytes,
 } from "./db.ts"
 import { confirm, select } from "@inquirer/prompts"
 import { formatBytes } from "./format.ts"
@@ -35,7 +36,7 @@ function getTimestamp(): string {
  * Returns true on success, false on failure.
  */
 function writeCompressedBackup(destPath: string, encrypt: boolean): boolean {
-  const sqliteBuf = Buffer.from(getDb().export())
+  const sqliteBuf = exportDbBytes()
   const compressed = gzipSync(sqliteBuf)
   const writeBuf = encrypt ? encryptBuffer(compressed) : compressed
 

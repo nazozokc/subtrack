@@ -88,7 +88,7 @@
     },
     {
       "description": "Group and auto-merge type definition packages",
-      "matchPackageNames": ["@types/node", "@types/sql.js"],
+      "matchPackageNames": ["@types/node"],
       "groupName": "type definitions",
       "automerge": true,
       "labels": ["dependencies", "types"]
@@ -99,12 +99,6 @@
       "groupName": "GitHub Actions",
       "labels": ["dependencies", "ci"],
       "automerge": true
-    },
-    {
-      "description": "sql.js (WASM SQLite) — major updates require review",
-      "matchPackageNames": ["sql.js"],
-      "labels": ["dependencies", "database"],
-      "dependencyDashboardApproval": true
     },
     {
       "description": "gunshi (CLI framework) — major updates require review",

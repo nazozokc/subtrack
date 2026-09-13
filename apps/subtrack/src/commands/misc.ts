@@ -1,6 +1,6 @@
 // ── Misc commands (mcp, audit, maintenance, cleanup, currency, profile) ──
 import { define } from "gunshi"
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 import { fail } from "../error.ts"
 import { handleProfile } from "../profile.ts"
 import { handleAuditList, handleAuditPrune } from "../audit.ts"

@@ -1,5 +1,5 @@
 import { input, select, confirm, search } from "@inquirer/prompts"
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { fail } from "./error.ts"
 import type { UsageAddFlags } from "./types.ts"
 import { usageRepository } from "./application/repositories.ts"

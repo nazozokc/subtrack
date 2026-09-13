@@ -1,10 +1,10 @@
-import type { Database } from "sql.js"
-import { consola } from "consola"
+import type { DatabaseSync } from "node:sqlite"
+import { consola } from "../consola.ts"
 import { createAuditTable } from "./audit.ts"
 
 /** Apply schema creation and migrations to a database instance. */
-export function runMigrations(db: Database): void {
-  db.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+export function runMigrations(db: DatabaseSync): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
@@ -15,18 +15,18 @@ export function runMigrations(db: Database): void {
     created_at TEXT NOT NULL DEFAULT (date('now')),
     notes TEXT
   )`)
-  db.run(`CREATE TABLE IF NOT EXISTS tags (
+  db.exec(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE
   )`)
-  db.run(`CREATE TABLE IF NOT EXISTS subscription_tags (
+  db.exec(`CREATE TABLE IF NOT EXISTS subscription_tags (
     subscription_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
     PRIMARY KEY (subscription_id, tag_id),
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
   )`)
-  db.run(`CREATE TABLE IF NOT EXISTS llm_usage (
+  db.exec(`CREATE TABLE IF NOT EXISTS llm_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     provider TEXT NOT NULL,
     model TEXT NOT NULL,
@@ -37,7 +37,7 @@ export function runMigrations(db: Database): void {
     description TEXT,
     generation_id TEXT
   )`)
-  db.run(`CREATE TABLE IF NOT EXISTS trials (
+  db.exec(`CREATE TABLE IF NOT EXISTS trials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     expires_at TEXT NOT NULL,
@@ -47,7 +47,7 @@ export function runMigrations(db: Database): void {
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (date('now'))
   )`)
-  db.run(`CREATE TABLE IF NOT EXISTS price_history (
+  db.exec(`CREATE TABLE IF NOT EXISTS price_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     subscription_id INTEGER NOT NULL,
     old_price INTEGER,
@@ -58,31 +58,28 @@ export function runMigrations(db: Database): void {
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
   )`)
 
+  const execObjs = (sql: string): Record<string, unknown>[] =>
+    db.prepare(sql).all() as unknown as Record<string, unknown>[]
+
   // Migration: add generation_id column if missing (pre-4.1.0 databases)
-  const llmCols = db.exec("PRAGMA table_info(llm_usage)")
-  const hasGenId = llmCols.length > 0 && llmCols[0].values.some(
-    (row) => String(row[1]) === "generation_id",
-  )
+  const llmCols = execObjs("PRAGMA table_info(llm_usage)")
+  const hasGenId = llmCols.some((row) => String(row.name) === "generation_id")
   if (!hasGenId) {
-    db.run("ALTER TABLE llm_usage ADD COLUMN generation_id TEXT")
-    db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
+    db.exec("ALTER TABLE llm_usage ADD COLUMN generation_id TEXT")
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
   }
 
   // Migration: add notes column if missing (pre-6.x databases)
-  const subCols = db.exec("PRAGMA table_info(subscriptions)")
-  const hasNotes = subCols.length > 0 && subCols[0].values.some(
-    (row) => String(row[1]) === "notes",
-  )
+  const subCols = execObjs("PRAGMA table_info(subscriptions)")
+  const hasNotes = subCols.some((row) => String(row.name) === "notes")
   if (!hasNotes) {
-    db.run("ALTER TABLE subscriptions ADD COLUMN notes TEXT")
+    db.exec("ALTER TABLE subscriptions ADD COLUMN notes TEXT")
   }
 
   // Migration: add payment_method column if missing
-  const hasPaymentMethod = subCols.length > 0 && subCols[0].values.some(
-    (row) => String(row[1]) === "payment_method",
-  )
+  const hasPaymentMethod = subCols.some((row) => String(row.name) === "payment_method")
   if (!hasPaymentMethod) {
-    db.run("ALTER TABLE subscriptions ADD COLUMN payment_method TEXT")
+    db.exec("ALTER TABLE subscriptions ADD COLUMN payment_method TEXT")
   }
 
   // Migration: add extended subscription columns if missing (contract, vendor, discount, auto-renewal)
@@ -97,11 +94,9 @@ export function runMigrations(db: Database): void {
     ["discount_type", "TEXT"],
   ]
   for (const [name, ddl] of extendedCols) {
-    const has = subCols.length > 0 && subCols[0].values.some(
-      (row) => String(row[1]) === name,
-    )
+    const has = subCols.some((row) => String(row.name) === name)
     if (!has) {
-      db.run(`ALTER TABLE subscriptions ADD COLUMN ${name} ${ddl}`)
+      db.exec(`ALTER TABLE subscriptions ADD COLUMN ${name} ${ddl}`)
     }
   }
 
@@ -109,7 +104,7 @@ export function runMigrations(db: Database): void {
   createAuditTable(db)
 
   // Suggestions table for email scan results
-  db.run(`CREATE TABLE IF NOT EXISTS suggestions (
+  db.exec(`CREATE TABLE IF NOT EXISTS suggestions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER,
@@ -132,14 +127,12 @@ export function runMigrations(db: Database): void {
   )`)
 
   // Verify database integrity on startup
-  const integrityResult = db.exec("PRAGMA integrity_check")
-  if (
-    integrityResult.length > 0 &&
-    integrityResult[0].values.length > 0 &&
-    String(integrityResult[0].values[0][0]) !== "ok"
-  ) {
+  const integrity = db.prepare("PRAGMA integrity_check").get() as
+    | { integrity_check: string }
+    | undefined
+  if (integrity && String(integrity.integrity_check) !== "ok") {
     consola.warn(
-      `Database integrity check failed: ${String(integrityResult[0].values[0][0])}\n` +
+      `Database integrity check failed: ${String(integrity.integrity_check)}\n` +
       "  Run 'subtrack backup' immediately and restore from a known-good backup.",
     )
   }

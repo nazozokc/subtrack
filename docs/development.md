@@ -39,8 +39,10 @@ This provides `node`, `pnpm`, `typescript`, `typos`, and `nixfmt`.
 | Language | TypeScript (strict mode, ESM) |
 | CLI framework | `gunshi` |
 | Interactive prompts | `@inquirer/prompts` |
-| Terminal output | `consola`, `picocolors`, `cli-table3` |
-| Database | `sql.js` (SQLite via WASM) |
+| Terminal output | Self-contained `src/consola.ts`, `src/color.ts`, `src/table.ts` |
+| Spreadsheets | Self-contained `src/xlsx.ts` (hand-written XLSX) |
+| OS notifications | Native commands via `node:child_process` (`osascript` / `notify-send`) |
+| Database | `node:sqlite` (`DatabaseSync`) |
 | Exchange rates | [open.er-api.com](https://open.er-api.com) |
 | Build tool | `tsdown` |
 | Test framework | `vitest` |
@@ -89,7 +91,7 @@ subtrack/
 │       │   │   │                       # handleUnarchive, handleTags
 │       │   │   ├── add.ts             # handleAdd
 │       │   │   └── edit.ts            # handleEdit
-│       │   ├── db/                # Database layer (SQLite CRUD via sql.js)
+│       │   ├── db/                # Database layer (SQLite CRUD via node:sqlite)
 │       │   │   ├── connection.ts      # DB connection, save, restore, backup helpers
 │       │   │   ├── schema.ts          # Table creation & migrations
 │       │   │   ├── subscriptions.ts   # Subscription CRUD

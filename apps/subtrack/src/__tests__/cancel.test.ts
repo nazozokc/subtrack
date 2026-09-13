@@ -1,7 +1,6 @@
 import { test, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from "vitest"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
-import { consola } from "consola"
+import { DatabaseSync } from "node:sqlite"
+import { consola } from "../consola.ts"
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }))
 
@@ -15,12 +14,7 @@ const errorMessages: string[] = []
 const successMessages: string[] = []
 const warnMessages: string[] = []
 
-let SQL: Awaited<ReturnType<typeof initSqlJs>>
-let testDb: Database
-
-beforeAll(async () => {
-  SQL = await initSqlJs()
-})
+let testDb: DatabaseSync
 
 beforeEach(async () => {
   logMessages.length = 0
@@ -43,8 +37,8 @@ beforeEach(async () => {
     }
   })
 
-  testDb = new SQL.Database()
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+  testDb = new DatabaseSync(":memory:")
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
@@ -64,13 +58,13 @@ beforeEach(async () => {
     discount_amount INTEGER,
     discount_type TEXT
   )`)
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)",
   )
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))",
   )
-  testDb.run(
+  testDb.exec(
     "CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL, target_type TEXT, target_id INTEGER, details TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
   )
 
@@ -101,22 +95,16 @@ function insertSub(overrides: Record<string, unknown> = {}): number {
     contractEnd: null,
     ...overrides,
   }
-  testDb.run(
+  const { lastInsertRowid } = testDb.prepare(
     "INSERT INTO subscriptions (name, price, currency, cycle, status, billing_day, created_at, notes, contract_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [fields.name, fields.price, fields.currency, fields.cycle, fields.status, fields.billingDay, fields.createdAt, fields.notes, fields.contractEnd],
-  )
-  const row = testDb.exec("SELECT last_insert_rowid() AS id")
-  return Number(row[0].values[0][0])
+  ).run(fields.name, fields.price, fields.currency, fields.cycle, fields.status, fields.billingDay, fields.createdAt, fields.notes, fields.contractEnd)
+  return Number(lastInsertRowid)
 }
 
 function getSub(id: number): Record<string, unknown> {
   const db = testDb
-  const rows = db.exec("SELECT * FROM subscriptions WHERE id = ?", [id])
-  if (!rows.length || !rows[0].values.length) return {}
-  const { columns, values } = rows[0]
-  const obj: Record<string, unknown> = {}
-  for (let i = 0; i < columns.length; i++) obj[columns[i]!] = values[0]![i]
-  return obj
+  const row = db.prepare("SELECT * FROM subscriptions WHERE id = ?").get(id) as Record<string, unknown> | undefined
+  return row ?? {}
 }
 
 // ── handleCancel: --force ──────────────────────────────
@@ -148,9 +136,9 @@ test("cancel --force writes an audit entry", async () => {
   const { handleCancel } = await import("../cancel.ts")
   await handleCancel(id, { force: true })
 
-  const rows = testDb.exec("SELECT action FROM audit_log WHERE target_id = ?", [id])
+  const rows = testDb.prepare("SELECT action FROM audit_log WHERE target_id = ?").all(id) as unknown as { action: string }[]
   expect(rows.length).toBeGreaterThan(0)
-  expect(String(rows[0]!.values[0]![0])).toBe("subscription.cancel")
+  expect(String(rows[0]!.action)).toBe("subscription.cancel")
 })
 
 test("cancel fails for unknown id", async () => {

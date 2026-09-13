@@ -1,21 +1,20 @@
-import type { SqlValue } from "sql.js"
+import type { SQLInputValue } from "node:sqlite"
 import { getDb, execObjs, execObj, saveDb } from "./connection.ts"
 import type { LlmUsageEntry, AddLlmUsageArgs, AddLlmUsageFromLogArgs, GetLlmUsageOptions } from "../types.ts"
 
 export const addLlmUsage = (data: AddLlmUsageArgs): void => {
   const db = getDb()
-  db.run(
+  db.prepare(
     `INSERT INTO llm_usage (provider, model, input_tokens, output_tokens, cost, date, description)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [
-      data.provider,
-      data.model,
-      data.input_tokens,
-      data.output_tokens,
-      data.cost,
-      data.date,
-      data.description,
-    ],
+  ).run(
+    data.provider,
+    data.model,
+    data.input_tokens,
+    data.output_tokens,
+    data.cost,
+    data.date,
+    data.description,
   )
   saveDb()
 }
@@ -34,19 +33,18 @@ export const addLlmUsageFromLog = (data: AddLlmUsageFromLogArgs): boolean => {
     if (existing) return false
   }
 
-  db.run(
+  db.prepare(
     `INSERT INTO llm_usage (provider, model, input_tokens, output_tokens, cost, date, description, generation_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      data.provider,
-      data.model,
-      data.input_tokens,
-      data.output_tokens,
-      data.cost,
-      data.date,
-      data.description,
-      data.generation_id ?? null,
-    ],
+  ).run(
+    data.provider,
+    data.model,
+    data.input_tokens,
+    data.output_tokens,
+    data.cost,
+    data.date,
+    data.description,
+    data.generation_id ?? null,
   )
   saveDb()
   return true
@@ -77,7 +75,7 @@ export const batchAddLlmUsageFromLog = (
   let added = 0
   let skipped = 0
 
-  db.run("BEGIN TRANSACTION")
+  db.exec("BEGIN TRANSACTION")
   try {
     for (const entry of entries) {
       if (existing.has(entry.generation_id)) {
@@ -86,26 +84,25 @@ export const batchAddLlmUsageFromLog = (
       }
       existing.add(entry.generation_id)
 
-      db.run(
+      db.prepare(
         `INSERT INTO llm_usage (provider, model, input_tokens, output_tokens, cost, date, description, generation_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          entry.provider,
-          entry.model,
-          entry.input_tokens,
-          entry.output_tokens,
-          entry.cost,
-          entry.date,
-          entry.description,
-          entry.generation_id,
-        ],
+      ).run(
+        entry.provider,
+        entry.model,
+        entry.input_tokens,
+        entry.output_tokens,
+        entry.cost,
+        entry.date,
+        entry.description,
+        entry.generation_id,
       )
       added++
     }
-    db.run("COMMIT")
+    db.exec("COMMIT")
     saveDb()
   } catch (error) {
-    db.run("ROLLBACK")
+    db.exec("ROLLBACK")
     throw error
   }
 
@@ -116,7 +113,7 @@ export const getLlmUsage = (options?: GetLlmUsageOptions): LlmUsageEntry[] => {
   const db = getDb()
 
   const conditions: string[] = []
-  const params: SqlValue[] = []
+  const params: SQLInputValue[] = []
 
   if (options?.provider) {
     conditions.push("provider = ?")
@@ -151,8 +148,8 @@ export const getLlmUsage = (options?: GetLlmUsageOptions): LlmUsageEntry[] => {
 
 export const deleteLlmUsage = (id: number): boolean => {
   const db = getDb()
-  db.run("DELETE FROM llm_usage WHERE id = ?", [id])
-  const modified = db.getRowsModified() > 0
+  const { changes } = db.prepare("DELETE FROM llm_usage WHERE id = ?").run(id)
+  const modified = Number(changes) > 0
   if (modified) saveDb()
   return modified
 }
@@ -170,18 +167,18 @@ export const updateLlmUsage = (id: number, fields: Partial<AddLlmUsageArgs>): bo
     "description",
   ]
   const sets: string[] = []
-  const params: SqlValue[] = []
+  const params: SQLInputValue[] = []
   for (const key of allowed) {
     if (fields[key] !== undefined) {
       sets.push(`${key} = ?`)
-      params.push(fields[key] as SqlValue)
+      params.push(fields[key] as SQLInputValue)
     }
   }
   if (sets.length === 0) return false
 
   params.push(id)
-  db.run(`UPDATE llm_usage SET ${sets.join(", ")} WHERE id = ?`, params)
-  const modified = db.getRowsModified() > 0
+  const { changes } = db.prepare(`UPDATE llm_usage SET ${sets.join(", ")} WHERE id = ?`).run(...params)
+  const modified = Number(changes) > 0
   if (modified) saveDb()
   return modified
 }

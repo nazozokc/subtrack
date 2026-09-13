@@ -1,7 +1,6 @@
 import { test, expect, beforeEach, afterEach, beforeAll, afterAll } from "vitest"
-import { consola } from "consola"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
+import { consola } from "../consola.ts"
+import { DatabaseSync } from "node:sqlite"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -9,7 +8,7 @@ import { join } from "node:path"
 const logMessages: string[] = []
 const infoMessages: string[] = []
 
-let testDb: Database
+let testDb: DatabaseSync
 let testConfigDir: string
 
 beforeAll(async () => {
@@ -17,10 +16,9 @@ beforeAll(async () => {
   testConfigDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
   process.env.SUBSC_CLI_DB_DIR = testConfigDir
 
-  const SQL = await initSqlJs()
-  testDb = new SQL.Database()
-  testDb.run("PRAGMA foreign_keys = ON")
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscriptions (
+  testDb = new DatabaseSync(":memory:")
+  testDb.exec("PRAGMA foreign_keys = ON")
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     price INTEGER NOT NULL,
@@ -40,11 +38,11 @@ beforeAll(async () => {
     discount_amount INTEGER,
     discount_type TEXT
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE
   )`)
-  testDb.run(`CREATE TABLE IF NOT EXISTS subscription_tags (
+  testDb.exec(`CREATE TABLE IF NOT EXISTS subscription_tags (
     subscription_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
     PRIMARY KEY (subscription_id, tag_id),
@@ -57,9 +55,9 @@ beforeAll(async () => {
 })
 
 beforeEach(() => {
-  testDb.run("DELETE FROM subscription_tags")
-  testDb.run("DELETE FROM tags")
-  testDb.run("DELETE FROM subscriptions")
+  testDb.exec("DELETE FROM subscription_tags")
+  testDb.exec("DELETE FROM tags")
+  testDb.exec("DELETE FROM subscriptions")
 
   logMessages.length = 0
   infoMessages.length = 0

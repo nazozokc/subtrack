@@ -1,5 +1,5 @@
 import { confirm, select } from "@inquirer/prompts"
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { fail } from "./error.ts"
 import { logAudit } from "./audit.ts"
 import { getSubscription, getSubscriptions, updateSubscription, writePriceHistory } from "./db.ts"

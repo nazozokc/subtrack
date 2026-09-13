@@ -5,7 +5,7 @@
  * and other DB health operations.
  */
 
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { fail } from "./error.ts"
 import { getDb, saveDb, getDbPath } from "./db.ts"
 import { logAudit } from "./audit.ts"
@@ -27,10 +27,10 @@ export function handleMaintenance(options: MaintenanceOptions = {}): void {
 
   // ── Integrity check ─────────────────────────────────
   if (doCheck) {
-    const integrityResult = db.exec("PRAGMA integrity_check")
-    const checkResult = integrityResult.length > 0 && integrityResult[0].values.length > 0
-      ? String(integrityResult[0].values[0][0])
-      : "ok"
+    const integrityRow = db.prepare("PRAGMA integrity_check").get() as
+      | { integrity_check: string }
+      | undefined
+    const checkResult = integrityRow?.integrity_check ?? "ok"
 
     if (options.json) {
       results.integrityCheck = checkResult === "ok" ? "passed" : checkResult
@@ -50,7 +50,7 @@ export function handleMaintenance(options: MaintenanceOptions = {}): void {
     const beforeSize = getFileSize(getDbPath())
 
     try {
-      db.run("VACUUM")
+      db.exec("VACUUM")
       saveDb()
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

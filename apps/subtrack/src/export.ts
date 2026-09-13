@@ -1,10 +1,10 @@
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { fail } from "./error.ts"
 import { writeFileSync } from "node:fs"
 import os from "node:os"
 import type { SharedArgs, Currency } from "./types.ts"
 import { formatPrice } from "./price.ts"
-import ExcelJS from "exceljs"
+import { generateXlsx } from "./xlsx.ts"
 import { calculateNextBilling } from "./upcoming.ts"
 import { tagsSubscription, getSubscriptions } from "./db.ts"
 import { fetchFxRates, convertSubsWithRates } from "./fx.ts"
@@ -86,10 +86,7 @@ export function exportMd(subs: SharedArgs[]): string {
   return [header, separator, ...rows].join("\n")
 }
 
-export async function exportExcel(subs: SharedArgs[]): Promise<Buffer> {
-  const workbook = new ExcelJS.Workbook()
-  const sheet = workbook.addWorksheet("Subscriptions")
-
+export function exportExcel(subs: SharedArgs[]): Buffer {
   const headers = [
     "ID",
     "Name",
@@ -112,54 +109,38 @@ export async function exportExcel(subs: SharedArgs[]): Promise<Buffer> {
     "Discount Type",
   ]
 
-  const headerRow = sheet.addRow(headers)
-  headerRow.eachCell((cell) => {
-    cell.font = { bold: true, color: { argb: "FFFFFFFF" } }
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FF4472C4" },
+  const rows = subs.map((s) => [
+    s.id,
+    s.name,
+    s.price,
+    s.currency,
+    s.cycle,
+    s.status,
+    s.billingDay ?? "",
+    s.paymentMethod ?? "",
+    s.tags.join(", "),
+    s.notes ?? "",
+    s.createdAt,
+    s.contractStart ?? "",
+    s.contractEnd ?? "",
+    s.autoRenewal ? "Yes" : "No",
+    s.vendorName ?? "",
+    s.vendorUrl ?? "",
+    s.planTier ?? "",
+    s.discountAmount ?? "",
+    s.discountType ?? "",
+  ])
+
+  const columnWidths = headers.map((header, i) => {
+    let maxLength = header.length
+    for (const row of rows) {
+      const val = String(row[i] ?? "")
+      if (val.length > maxLength) maxLength = val.length
     }
+    return Math.min(Math.max(maxLength + 2, 10), 50)
   })
 
-  for (const s of subs) {
-    const tags = s.tags.join(", ")
-    sheet.addRow([
-      s.id,
-      s.name,
-      s.price,
-      s.currency,
-      s.cycle,
-      s.status,
-      s.billingDay ?? "",
-      s.paymentMethod ?? "",
-      tags,
-      s.notes ?? "",
-      s.createdAt,
-      s.contractStart ?? "",
-      s.contractEnd ?? "",
-      s.autoRenewal ? "Yes" : "No",
-      s.vendorName ?? "",
-      s.vendorUrl ?? "",
-      s.planTier ?? "",
-      s.discountAmount ?? "",
-      s.discountType ?? "",
-    ])
-  }
-
-  sheet.columns.forEach((column) => {
-    let maxLength = 0
-    if (column.eachCell) {
-      column.eachCell({ includeEmpty: true }, (cell) => {
-        const val = cell.value?.toString() ?? ""
-        maxLength = Math.max(maxLength, val.length)
-      })
-    }
-    column.width = Math.min(Math.max(maxLength + 2, 10), 50)
-  })
-
-  const buf = await workbook.xlsx.writeBuffer()
-  return Buffer.from(buf)
+  return generateXlsx({ headers, rows, columnWidths })
 }
 
 function icsEscape(value: string): string {
@@ -282,7 +263,7 @@ export async function handleExport(
   }
 
   if (format === "excel") {
-    const buf = await exportExcel(list)
+    const buf = exportExcel(list)
     if (options.output) {
       const safePath = safeOutputPath(options.output)
       if (!safePath) { fail(`Invalid output path — must be within home directory`); return }

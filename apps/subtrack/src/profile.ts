@@ -1,6 +1,6 @@
-import { consola } from "consola"
+import { consola } from "./consola.ts"
 import { fail } from "./error.ts"
-import pc from "picocolors"
+import pc from "./color.ts"
 import { input, select } from "@inquirer/prompts"
 import { loadConfig, saveConfig } from "./config.ts"
 import type { ProfileFilter, Status } from "./types.ts"

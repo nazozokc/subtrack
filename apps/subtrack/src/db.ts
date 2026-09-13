@@ -2,6 +2,7 @@
 export {
   getDbDir, getDefaultBackupDir, saveDb, getDbPath, getDb, __setDb,
   getBackupFiles, restoreDb, getBackupHashPath, writeBackupHash, verifyBackupHash,
+  exportDbBytes,
 } from "./db/connection.ts"
 export { runMigrations } from "./db/schema.ts"
 export {

@@ -1,15 +1,13 @@
-import { readFileSync, existsSync } from "node:fs"
+import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { consola } from "consola"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
+import { consola } from "./consola.ts"
+import { DatabaseSync } from "node:sqlite"
+import type { SQLInputValue } from "node:sqlite"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
 import { safeJsonParse } from "./safe-json.ts"
 import { dateToStartOfDayMs, dateToEndOfDayMs } from "./date-utils.ts"
-
-const _SQL = await initSqlJs()
 
 const DEFAULT_DB_PATHS = [
   join(homedir(), ".local", "share", "opencode", "opencode.db"),
@@ -89,22 +87,14 @@ export function scanOpenCodeDb(from?: string, to?: string): ScanResult {
 
   consola.info(`Reading OpenCode DB: ${dbPath}`)
 
-  let data: Buffer
-  try {
-    data = readFileSync(dbPath)
-  } catch (err) {
-    consola.warn(`Cannot read OpenCode DB: ${String(err)}`)
-    return { source: "opencode", entries: [] }
-  }
-
-  let db: InstanceType<typeof _SQL.Database> | null = null
+  let db: DatabaseSync | null = null
   const entries: AddLlmUsageFromLogArgs[] = []
 
   try {
-    db = new _SQL.Database(data)
+    db = new DatabaseSync(dbPath, { readOnly: true })
 
     let sql = `SELECT id, data FROM message WHERE json_extract(data, '$.tokens.input') IS NOT NULL`
-    const params: (number | string)[] = []
+    const params: SQLInputValue[] = []
 
     if (from) {
       sql += ` AND json_extract(data, '$.time.created') >= ?`
@@ -115,20 +105,19 @@ export function scanOpenCodeDb(from?: string, to?: string): ScanResult {
       params.push(dateToEndOfDayMs(to))
     }
 
-    const results = db.exec(sql, params)
+    const rows = db.prepare(sql).all(...params) as unknown as {
+      id: string
+      data: string
+    }[]
 
-    if (results.length === 0) {
+    if (rows.length === 0) {
       consola.info("No token usage data found in OpenCode DB")
       return { source: "opencode", entries: [] }
     }
 
-    const { columns, values } = results[0]
-    const idIdx = columns.indexOf("id")
-    const dataIdx = columns.indexOf("data")
-
-    for (const row of values) {
-      const msgId = String(row[idIdx])
-      const rawJson = String(row[dataIdx])
+    for (const row of rows) {
+      const msgId = String(row.id)
+      const rawJson = String(row.data)
 
       const parsed = parseMessage(msgId, rawJson)
       if (parsed) entries.push(parsed)

@@ -1,10 +1,9 @@
 import { test, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest"
-import initSqlJs from "sql.js"
-import type { Database } from "sql.js"
+import { DatabaseSync } from "node:sqlite"
 import { mkdtempSync, writeFileSync, existsSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 
 vi.mock("@inquirer/prompts", () => ({
   input: vi.fn(),
@@ -26,7 +25,7 @@ const infoMessages: string[] = []
 const successMessages: string[] = []
 const errorMessages: string[] = []
 
-let testDb: Database
+let testDb: DatabaseSync
 let dbModule: typeof import("../db.ts")
 let tmpDir: string
 let originalEnv: string | undefined
@@ -70,28 +69,23 @@ function insertSub(overrides: Record<string, unknown> = {}): number {
     autoRenewal: 1,
     ...overrides,
   }
-  db.run(
+  const { lastInsertRowid } = db.prepare(
     `INSERT INTO subscriptions (name, price, currency, cycle, status, billing_day, created_at, notes, payment_method, contract_start, contract_end, auto_renewal)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [fields.name, fields.price, fields.currency, fields.cycle, fields.status, fields.billingDay, fields.createdAt, fields.notes, fields.paymentMethod, fields.contractStart, fields.contractEnd, fields.autoRenewal],
-  )
-  const row = db.exec("SELECT last_insert_rowid() AS id")
-  return Number(row[0].values[0][0])
+  ).run(fields.name, fields.price, fields.currency, fields.cycle, fields.status, fields.billingDay, fields.createdAt, fields.notes, fields.paymentMethod, fields.contractStart, fields.contractEnd, fields.autoRenewal)
+  return Number(lastInsertRowid)
 }
 
 function insertTrial(overrides: Record<string, unknown> = {}): number {
   const db = dbModule.getDb()
   const fields = { name: "Trial Sub", expiresAt: daysFromNow(10), price: 500, currency: "JPY", cycle: "monthly", notes: null, createdAt: "2026-01-01", ...overrides }
-  db.run(
+  const { lastInsertRowid } = db.prepare(
     "INSERT INTO trials (name, expires_at, price, currency, cycle, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [fields.name, fields.expiresAt, fields.price, fields.currency, fields.cycle, fields.notes, fields.createdAt],
-  )
-  const row = db.exec("SELECT last_insert_rowid() AS id")
-  return Number(row[0].values[0][0])
+  ).run(fields.name, fields.expiresAt, fields.price, fields.currency, fields.cycle, fields.notes, fields.createdAt)
+  return Number(lastInsertRowid)
 }
 
 beforeAll(async () => {
-  const SQL = await initSqlJs()
   tmpDir = mkdtempSync(join(tmpdir(), "subtrack-features-"))
   originalEnv = process.env.SUBSC_CLI_DB_DIR
   process.env.SUBSC_CLI_DB_DIR = tmpDir
@@ -106,9 +100,8 @@ afterAll(() => {
 
 beforeEach(async () => {
   // Fresh in-memory DB with the full schema
-  const SQL = await initSqlJs()
-  testDb = new SQL.Database()
-  testDb.run("PRAGMA foreign_keys = ON")
+  testDb = new DatabaseSync(":memory:")
+  testDb.exec("PRAGMA foreign_keys = ON")
   const { runMigrations } = await import("../db/schema.ts")
   runMigrations(testDb)
   dbModule.__setDb(testDb)

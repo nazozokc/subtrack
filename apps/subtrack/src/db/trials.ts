@@ -3,10 +3,9 @@ import type { TrialEntry, AddTrialArgs } from "../types.ts"
 
 export const writeTrial = (data: AddTrialArgs): void => {
   const db = getDb()
-  db.run(
+  db.prepare(
     "INSERT INTO trials (name, expires_at, price, currency, cycle, notes) VALUES (?, ?, ?, ?, ?, ?)",
-    [data.name, data.expiresAt, data.price ?? null, data.currency ?? null, data.cycle ?? null, data.notes ?? null],
-  )
+  ).run(data.name, data.expiresAt, data.price ?? null, data.currency ?? null, data.cycle ?? null, data.notes ?? null)
   saveDb()
 }
 
@@ -29,8 +28,8 @@ export const getTrial = (id: number): TrialEntry | undefined => {
 
 export const deleteTrial = (id: number): boolean => {
   const db = getDb()
-  db.run("DELETE FROM trials WHERE id = ?", [id])
-  const modified = db.getRowsModified() > 0
+  const { changes } = db.prepare("DELETE FROM trials WHERE id = ?").run(id)
+  const modified = Number(changes) > 0
   if (modified) saveDb()
   return modified
 }

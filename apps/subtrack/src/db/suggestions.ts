@@ -5,7 +5,7 @@
  * and tracks their lifecycle: pending → dismissed | added.
  */
 
-import type { SqlValue } from "sql.js"
+import type { SQLInputValue } from "node:sqlite"
 import { getDb, execObjs, execObj, saveDb } from "./connection.ts"
 import type { Suggestion } from "../suggest/types.ts"
 
@@ -27,27 +27,26 @@ export function writeSuggestion(data: {
   confidence?: number
 }): number {
   const db = getDb()
-  db.run(
+  db.prepare(
     `INSERT INTO suggestions (name, price, currency, cycle, vendor_name, vendor_url, plan_tier, payment_method, source, source_detail, email_subject, email_from, email_date, confidence)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      data.name,
-      data.price ?? null,
-      data.currency ?? null,
-      data.cycle ?? null,
-      data.vendorName ?? null,
-      data.vendorUrl ?? null,
-      data.planTier ?? null,
-      data.paymentMethod ?? null,
-      data.source,
-      data.sourceDetail ?? null,
-      data.emailSubject ?? null,
-      data.emailFrom ?? null,
-      data.emailDate ?? null,
-      data.confidence ?? 0.0,
-    ],
+  ).run(
+    data.name,
+    data.price ?? null,
+    data.currency ?? null,
+    data.cycle ?? null,
+    data.vendorName ?? null,
+    data.vendorUrl ?? null,
+    data.planTier ?? null,
+    data.paymentMethod ?? null,
+    data.source,
+    data.sourceDetail ?? null,
+    data.emailSubject ?? null,
+    data.emailFrom ?? null,
+    data.emailDate ?? null,
+    data.confidence ?? 0.0,
   )
-  const idRow = execObj<Record<string, SqlValue>>(db, "SELECT last_insert_rowid() AS id")
+  const idRow = execObj<Record<string, number>>(db, "SELECT last_insert_rowid() AS id")
   const id = Number(idRow?.id ?? 0)
   saveDb()
   return id
@@ -74,7 +73,7 @@ export function writeSuggestionBatch(
 
   for (const item of items) {
     // Dedup: skip if same name+price+source already exists as pending
-    const existing = execObjs<Record<string, SqlValue>>(
+    const existing = execObjs<Record<string, number>>(
       db,
       `SELECT id FROM suggestions
        WHERE LOWER(name) = LOWER(?) AND price IS ? AND source = ? AND status = 'pending'
@@ -95,7 +94,7 @@ export function getSuggestions(status?: "pending" | "dismissed" | "added"): Sugg
   try {
     const db = getDb()
     const conditions: string[] = []
-    const params: SqlValue[] = []
+    const params: SQLInputValue[] = []
 
     if (status) {
       conditions.push("status = ?")
@@ -125,8 +124,10 @@ export function getSuggestions(status?: "pending" | "dismissed" | "added"): Sugg
 export function getPendingSuggestionCount(): number {
   try {
     const db = getDb()
-    const result = db.exec("SELECT COUNT(*) AS count FROM suggestions WHERE status = 'pending'")
-    return result.length > 0 ? Number(result[0].values[0][0]) : 0
+    const result = db.prepare("SELECT COUNT(*) AS count FROM suggestions WHERE status = 'pending'").get() as
+      | { count: number }
+      | undefined
+    return result ? Number(result.count) : 0
   } catch {
     return 0
   }
@@ -155,8 +156,10 @@ export function getSuggestion(id: number): Suggestion | undefined {
 /** Mark a suggestion as dismissed. */
 export function dismissSuggestion(id: number): boolean {
   const db = getDb()
-  db.run("UPDATE suggestions SET status = 'dismissed' WHERE id = ? AND status = 'pending'", [id])
-  const modified = db.getRowsModified() > 0
+  const { changes } = db.prepare(
+    "UPDATE suggestions SET status = 'dismissed' WHERE id = ? AND status = 'pending'",
+  ).run(id)
+  const modified = Number(changes) > 0
   if (modified) saveDb()
   return modified
 }
@@ -164,8 +167,10 @@ export function dismissSuggestion(id: number): boolean {
 /** Mark all pending suggestions as dismissed. */
 export function dismissAllSuggestions(): number {
   const db = getDb()
-  db.run("UPDATE suggestions SET status = 'dismissed' WHERE status = 'pending'")
-  const modified = db.getRowsModified()
+  const { changes } = db.prepare(
+    "UPDATE suggestions SET status = 'dismissed' WHERE status = 'pending'",
+  ).run()
+  const modified = Number(changes)
   if (modified > 0) saveDb()
   return modified
 }
@@ -173,9 +178,8 @@ export function dismissAllSuggestions(): number {
 /** Mark a suggestion as added (linked to a subscription). */
 export function markSuggestionAsAdded(suggestionId: number, subscriptionId: number): void {
   const db = getDb()
-  db.run(
+  db.prepare(
     "UPDATE suggestions SET status = 'added', matched_sub_id = ? WHERE id = ? AND status = 'pending'",
-    [subscriptionId, suggestionId],
-  )
+  ).run(subscriptionId, suggestionId)
   saveDb()
 }

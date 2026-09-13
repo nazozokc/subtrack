@@ -1,6 +1,6 @@
 // ── LLM API Usage commands ───────────────────────────
 import { define } from "gunshi"
-import { consola } from "consola"
+import { consola } from "../consola.ts"
 import { handleUsageAdd } from "../usage-add.ts"
 import { handleUsageList, handleUsageDelete, handleUsageEdit } from "../usage.ts"
 import { handleUsageImport } from "../usage-import.ts"

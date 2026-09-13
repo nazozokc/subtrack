@@ -4,14 +4,16 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 
 ## Tech Stack
 
-- **Runtime**: Node.js (>=22, not Bun or Deno)
+- **Runtime**: Node.js (>=22.5, not Bun or Deno)
 - **Language**: TypeScript (strict mode, ESM, `verbatimModuleSyntax`)
-- **Database**: `sql.js` (SQLite via WASM)
+- **Database**: `node:sqlite` (`DatabaseSync`, built-in SQLite)
 - **CLI**: `gunshi`
 - **Prompts**: `@inquirer/prompts`
-- **Logging**: `consola`
-- **Tables**: `cli-table3`
-- **Colors**: `picocolors`
+- **Logging**: `src/consola.ts` (self-contained, `consola`-compatible logger)
+- **Tables**: `src/table.ts` (self-contained, `cli-table3`-compatible renderer)
+- **Colors**: `src/color.ts` (self-contained ANSI helpers, `picocolors`-compatible)
+- **Spreadsheets**: `src/xlsx.ts` (self-contained XLSX generator)
+- **Notifications**: native OS commands via `node:child_process` (`osascript` / `notify-send`)
 - **Build**: `tsdown`
 - **Test**: `vitest`
 
@@ -67,7 +69,7 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 - **Type imports**: `type` prefix (`import type { X } from "./foo.ts"`)
 - **No semicolons** in imports/exports
 - **Prices**: integers (smallest unit — JPY no decimal, USD cents)
-- **DB**: `sql.js` with `PRAGMA foreign_keys = ON`, use transactions for multi-step writes
+- **DB**: `node:sqlite` — `db.prepare(sql).run(...params)` for writes, `prepare().all()/.get()` for reads, `PRAGMA foreign_keys = ON`, transactions for multi-step writes
 
 ## Environment Variables
 

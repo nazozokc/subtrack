@@ -54,14 +54,14 @@ export const getTagsWithCount = (): { name: string; count: number }[] => {
 export const renameTag = (oldName: string, newName: string): boolean => {
   const db = getDb()
   if (oldName === newName) return true
-  db.run("BEGIN TRANSACTION")
+  db.exec("BEGIN TRANSACTION")
   try {
     const oldRow = execObj<{ id: number }>(
       db,
       "SELECT id FROM tags WHERE name = ?",
       [oldName],
     )
-    if (!oldRow) { db.run("ROLLBACK"); return false }
+    if (!oldRow) { db.exec("ROLLBACK"); return false }
 
     const existingRow = execObj<{ id: number }>(
       db,
@@ -70,28 +70,27 @@ export const renameTag = (oldName: string, newName: string): boolean => {
     )
     if (existingRow) {
       // Merge: point all references to the existing tag, delete old
-      db.run(
+      db.prepare(
         "UPDATE OR IGNORE subscription_tags SET tag_id = ? WHERE tag_id = ?",
-        [existingRow.id, oldRow.id],
-      )
-      db.run("DELETE FROM subscription_tags WHERE tag_id = ?", [oldRow.id])
-      db.run("DELETE FROM tags WHERE id = ?", [oldRow.id])
+      ).run(existingRow.id, oldRow.id)
+      db.prepare("DELETE FROM subscription_tags WHERE tag_id = ?").run(oldRow.id)
+      db.prepare("DELETE FROM tags WHERE id = ?").run(oldRow.id)
     } else {
-      db.run("UPDATE tags SET name = ? WHERE id = ?", [newName, oldRow.id])
+      db.prepare("UPDATE tags SET name = ? WHERE id = ?").run(newName, oldRow.id)
     }
-    db.run("COMMIT")
+    db.exec("COMMIT")
     saveDb()
     return true
   } catch (error) {
-    try { db.run("ROLLBACK") } catch { /* ok */ }
+    try { db.exec("ROLLBACK") } catch { /* ok */ }
     throw error
   }
 }
 
 export const deleteTag = (name: string): boolean => {
   const db = getDb()
-  db.run("DELETE FROM tags WHERE name = ?", [name])
-  const modified = db.getRowsModified() > 0
+  const { changes } = db.prepare("DELETE FROM tags WHERE name = ?").run(name)
+  const modified = Number(changes) > 0
   if (modified) saveDb()
   return modified
 }
@@ -100,49 +99,48 @@ export const mergeTag = (source: string, target: string): boolean => {
   const db = getDb()
   if (source === target) return true
 
-  db.run("BEGIN TRANSACTION")
+  db.exec("BEGIN TRANSACTION")
   try {
     const srcRow = execObj<{ id: number }>(
       db,
       "SELECT id FROM tags WHERE name = ?",
       [source],
     )
-    if (!srcRow) { db.run("ROLLBACK"); return false }
+    if (!srcRow) { db.exec("ROLLBACK"); return false }
 
     // Ensure target tag exists
-    db.run("INSERT OR IGNORE INTO tags (name) VALUES (?)", [target])
+    db.prepare("INSERT OR IGNORE INTO tags (name) VALUES (?)").run(target)
     const tgtRow = execObj<{ id: number }>(
       db,
       "SELECT id FROM tags WHERE name = ?",
       [target],
     )
-    if (!tgtRow) { db.run("ROLLBACK"); return false }
+    if (!tgtRow) { db.exec("ROLLBACK"); return false }
 
     // Repoint all subscription_tags from source to target
-    db.run(
+    db.prepare(
       "UPDATE OR IGNORE subscription_tags SET tag_id = ? WHERE tag_id = ?",
-      [tgtRow.id, srcRow.id],
-    )
+    ).run(tgtRow.id, srcRow.id)
     // Remove duplicate entries that pointed to both tags
-    db.run("DELETE FROM subscription_tags WHERE tag_id = ?", [srcRow.id])
+    db.prepare("DELETE FROM subscription_tags WHERE tag_id = ?").run(srcRow.id)
     // Delete the source tag
-    db.run("DELETE FROM tags WHERE id = ?", [srcRow.id])
+    db.prepare("DELETE FROM tags WHERE id = ?").run(srcRow.id)
 
-    db.run("COMMIT")
+    db.exec("COMMIT")
     saveDb()
     return true
   } catch (error) {
-    try { db.run("ROLLBACK") } catch { /* ok */ }
+    try { db.exec("ROLLBACK") } catch { /* ok */ }
     throw error
   }
 }
 
 export const pruneTags = (): number => {
   const db = getDb()
-  db.run(
+  const { changes } = db.prepare(
     "DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM subscription_tags)",
-  )
-  const count = db.getRowsModified()
+  ).run()
+  const count = Number(changes)
   if (count > 0) saveDb()
   return count
 }
