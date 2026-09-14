@@ -64,7 +64,7 @@
     "@inquirer/prompts": "^8.7.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "gunshi": "^0.37.1",
-    "imapflow": "^1.7.6",
+    "imapflow": "^2.0.2",
     "@subtrack/lib": "workspace:*"
   },
   "devDependencies": {
