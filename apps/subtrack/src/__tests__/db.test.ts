@@ -1,5 +1,13 @@
 import { test, expect, beforeAll, afterAll, beforeEach } from "vitest"
 import { DatabaseSync } from "node:sqlite"
+import { mkdtempSync, rmSync, existsSync } from "node:fs"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
+
+// Give this test file its own DB directory so parallel vitest workers
+// (each running a different test file) never race on the same backing files.
+const dbDir = mkdtempSync(join(tmpdir(), "subtrack-db-"))
+process.env.SUBSC_CLI_DB_DIR = dbDir
 
 let testDb: DatabaseSync
 
@@ -76,6 +84,8 @@ beforeEach(async () => {
 afterAll(async () => {
   const { getDb } = await import("../db.ts")
   try { getDb().close() } catch { /* may be closed by restoreDb test */ }
+  delete process.env.SUBSC_CLI_DB_DIR
+  if (existsSync(dbDir)) rmSync(dbDir, { recursive: true })
 })
 
 test("getSubscriptions returns empty when no data exists", async () => {
