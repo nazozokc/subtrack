@@ -107,7 +107,9 @@ test("displays tags column", async () => {
   ])
 
   const table = logMessages[0]
-  expect(table).toContain("video, entertainment")
+  // On narrow terminals the wide tags column wraps onto two lines
+  expect(table).toContain("video,")
+  expect(table).toContain("entertainment")
 })
 
 test("displays dash when no tags", async () => {

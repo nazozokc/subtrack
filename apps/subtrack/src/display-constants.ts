@@ -8,6 +8,7 @@ import type { Status } from "./types.ts"
 import { loadConfig } from "./config.ts"
 import type { ColorName } from "@subtrack/lib/ansi"
 import { isColorName, fgCode, bgCode } from "@subtrack/lib/ansi"
+import { strlen } from "@subtrack/lib/table"
 
 export type { ColorName } from "@subtrack/lib/ansi"
 export { isColorName, fgCode, bgCode } from "@subtrack/lib/ansi"
@@ -204,7 +205,8 @@ export function calcColumnWidths(rows: string[][], config: ColumnConfig): number
   const weights = config.headers.map((hdr, i) => {
     let max = hdr.length
     for (const row of rows) {
-      const len = row[i].length
+      // strlen is ANSI-aware (strips escape codes, counts CJK as 2)
+      const len = strlen(row[i])
       if (len > max) max = len
     }
     return Math.min(max, config.maxWidths[i])
