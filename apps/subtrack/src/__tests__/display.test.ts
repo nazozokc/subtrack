@@ -131,6 +131,27 @@ test("shows correct JPY total", async () => {
   expect(table).toContain("JPY TOTAL")
 })
 
+test("shows next billing date column", async () => {
+  const { calculateNextBilling } = await import("../upcoming.ts")
+  const { formatShortDate } = await import("@subtrack/lib/date")
+  const sub = makeSub({ name: "Netflix", createdAt: "2026-01-01", billingDay: null })
+  await spreadSubscription([sub])
+
+  const table = logMessages[0]
+  expect(table).toContain("next")
+  const expected = formatShortDate(calculateNextBilling(sub, new Date()))
+  expect(table).toContain(expected)
+})
+
+test("shows dash in next column for cancelled subscriptions", async () => {
+  await spreadSubscription([makeSub({ name: "Old", status: "cancelled" })])
+
+  const table = logMessages[0]
+  expect(table).toContain("next")
+  expect(table).toContain("Old")
+  expect(table).toContain("-")
+})
+
 test("shows correct USD total", async () => {
   await spreadSubscription([
     makeSub({ name: "A", price: 10, currency: "USD" }),
