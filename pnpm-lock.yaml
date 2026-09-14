@@ -33,8 +33,8 @@ importers:
         specifier: workspace:*
         version: link:../../lib
       gunshi:
-        specifier: ^0.37.1
-        version: 0.37.1
+        specifier: ^0.37.2
+        version: 0.37.2
       imapflow:
         specifier: ^1.7.6
         version: 1.7.8
@@ -1770,8 +1770,8 @@ packages:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
     engines: {node: '>= 0.4'}
 
-  gunshi@0.37.1:
-    resolution: {integrity: sha512-C3t35z65PQpAHay/gzEu4J/7SNWXn2NhfC4RfZQPxyOqkPfDTizthxCPoSU48OazoVherCuCpFDKI1qcY425Gw==}
+  gunshi@0.37.2:
+    resolution: {integrity: sha512-pHsYEDSOxaNxSGIYiIYF11Lvc6OiEKw+IkfrLXRWj6bKzqI3noLX8QXOLqGTwPsM8amkpNoZG9tlpg8/4QG7MQ==}
     engines: {node: '>= 22'}
 
   has-flag@4.0.0:
@@ -4223,7 +4223,7 @@ snapshots:
 
   gopd@1.2.0: {}
 
-  gunshi@0.37.1: {}
+  gunshi@0.37.2: {}
 
   has-flag@4.0.0: {}
 
