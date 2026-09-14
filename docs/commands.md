@@ -58,7 +58,7 @@ subtrack provides the following commands. Most support both interactive and non-
 
 ## `list`
 
-Lists all subscriptions in a formatted table. Subscriptions are grouped by currency by default, with a subtotal row per group.
+Lists all subscriptions in a formatted table. Subscriptions are grouped by currency by default, with a subtotal row per group. Each row shows the subscription's `next` billing date (highlighted in red within 3 days, yellow within 7 days); cancelled/archived subscriptions show `-`.
 
 | Option | Description |
 |--------|-------------|
