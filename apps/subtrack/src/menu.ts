@@ -152,7 +152,7 @@ async function pickSubscription(message: string, status?: Status): Promise<numbe
   const subs = getSubscriptions({ includeArchived: true })
     .filter((s) => status === undefined || s.status === status)
   if (subs.length === 0) {
-    consola.info("No subscriptions found")
+    consola.info("No subscriptions found — choose Add from the menu")
     return null
   }
   return select({

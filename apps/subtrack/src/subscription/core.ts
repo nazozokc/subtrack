@@ -98,7 +98,7 @@ export async function handleDelete(ids?: number[]) {
   const all = subscriptionRepository.list()
 
   if (all.length === 0) {
-    consola.info("No subscriptions found")
+    consola.info("No subscriptions found — try `subtrack add`")
     return
   }
 

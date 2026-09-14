@@ -67,7 +67,7 @@ function makeSub(overrides: Partial<SharedArgs> = {}): SharedArgs {
 
 test("shows info message when no subscriptions", async () => {
   await spreadSubscription([])
-  expect(infoMessages).toContain("No subscriptions found")
+  expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
   expect(logMessages).toHaveLength(0)
 })
 
@@ -286,7 +286,7 @@ test("currency falls back when fetch fails", async () => {
 
 test("currency with empty list shows info", async () => {
   await spreadSubscription([], "JPY")
-  expect(infoMessages).toContain("No subscriptions found")
+  expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
 
 // ── exportCsv tests ──────────────────────────────────────
@@ -427,7 +427,7 @@ test("exportMd handles multiple subscriptions", async () => {
 test("showPayment shows info when no subscriptions", async () => {
   const { showPayment } = await import("../payment.ts")
   await showPayment("monthly", undefined, [])
-  expect(infoMessages).toContain("No subscriptions found")
+  expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
 
 test("showPayment shows monthly total for single currency", async () => {
@@ -632,7 +632,7 @@ test("calcSummary identifies most expensive subscription", async () => {
 test("showSummary shows info when no subscriptions", async () => {
   const { showSummary } = await import("../payment.ts")
   showSummary([])
-  expect(infoMessages).toContain("No subscriptions found")
+  expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
 
 test("showSummary displays count and most expensive", async () => {

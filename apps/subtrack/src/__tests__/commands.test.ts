@@ -341,7 +341,7 @@ test("handleExport shows error for unsupported format", async () => {
 test("handleExport shows info when no subscriptions", async () => {
   const { handleExport } = await import("../commands.ts")
   await handleExport("csv", {})
-  expect(infoMessages).toContain("No subscriptions found")
+  expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
 
 test("handleExport outputs JSON for json format", async () => {
@@ -489,7 +489,7 @@ test("handleList passes sort and desc to getSubscriptions", async () => {
 test("handleEdit shows info when no subscriptions", async () => {
   const { handleEdit } = await import("../commands.ts")
   await handleEdit(1, { name: "New Name" })
-  expect(infoMessages).toContain("No subscriptions found")
+  expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
 
 test("handleEdit shows error for non-existent id", async () => {
@@ -759,7 +759,7 @@ test("handleImport rejects rows with invalid status in export format", async () 
 test("handleSummary shows info when no subscriptions", async () => {
   const { handleSummary } = await import("../commands.ts")
   await handleSummary()
-  expect(infoMessages).toContain("No subscriptions found")
+  expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
 
 test("handleSummary displays summary data", async () => {
@@ -956,7 +956,7 @@ test("handleAdd uses flags when provided (non-interactive)", async () => {
 test("handleDelete shows info when no subscriptions", async () => {
   const { handleDelete } = await import("../commands.ts")
   await handleDelete()
-  expect(infoMessages).toContain("No subscriptions found")
+  expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
 
 test("handleDelete deletes selected subscriptions", async () => {

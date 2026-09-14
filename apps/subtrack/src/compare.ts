@@ -133,7 +133,7 @@ export async function showCompare(
 
   const activeSubs = subs
   if (activeSubs.length === 0) {
-    consola.info("No active subscriptions found")
+    consola.info("No active subscriptions found — try `subtrack add` or change status")
     return
   }
 

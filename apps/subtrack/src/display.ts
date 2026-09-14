@@ -179,7 +179,7 @@ export const spreadSubscription = async (
   const list = get ?? getSubscriptions()
 
   if (list.length === 0) {
-    consola.info("No subscriptions found")
+    consola.info("No subscriptions found — try `subtrack add`")
     return
   }
 
