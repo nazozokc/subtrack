@@ -23,7 +23,7 @@ export const showPayment = async (
   const list = subs ?? getNonCancelledSubscriptions()
 
   if (list.length === 0) {
-    consola.info("No subscriptions found")
+    consola.info("No subscriptions found — try `subtrack add`")
     return
   }
 
@@ -268,7 +268,7 @@ export function showSummary(subs?: SharedArgs[]): void {
   const list = subs ?? getNonCancelledSubscriptions()
 
   if (list.length === 0) {
-    consola.info("No subscriptions found")
+    consola.info("No subscriptions found — try `subtrack add`")
     return
   }
 

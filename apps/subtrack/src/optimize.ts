@@ -370,7 +370,7 @@ export async function handleOptimize(options: OptimizeOptions = {}): Promise<voi
   let subs = getSubscriptions()
 
   if (subs.length === 0) {
-    consola.info("No subscriptions found")
+    consola.info("No subscriptions found — try `subtrack add`")
     return
   }
 

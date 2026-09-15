@@ -38,7 +38,7 @@ export async function handleEdit(
 ) {
   const all = getSubscriptions()
   if (all.length === 0) {
-    consola.info("No subscriptions found")
+    consola.info("No subscriptions found — try `subtrack add`")
     return
   }
 

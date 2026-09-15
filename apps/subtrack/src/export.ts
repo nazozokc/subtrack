@@ -248,7 +248,7 @@ export async function handleExport(
   }
 
   if (list.length === 0) {
-    consola.info("No subscriptions found")
+    consola.info("No subscriptions found — try `subtrack add`")
     return
   }
 

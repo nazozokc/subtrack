@@ -9,7 +9,7 @@
 import { checkbox, confirm, input, select } from "@inquirer/prompts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
-import { getAllTags, getSubscriptions, getDbPath } from "./db.ts"
+import { getAllTags, getSubscriptions, getNonCancelledSubscriptions, getDbPath } from "./db.ts"
 import { handleList, handleDelete, handleTags, handleClone, handleArchive, handleUnarchive } from "./subscription/core.ts"
 import { handleAdd } from "./subscription/add.ts"
 import { handleEdit } from "./subscription/edit.ts"
@@ -46,6 +46,9 @@ import { handleProfile } from "./profile.ts"
 import { handleCurrencyList } from "./currency.ts"
 import { handleMcp } from "./commands.ts"
 import { CYCLE_CHOICES } from "./prompts.ts"
+import { calcSummary, calcSubTotal } from "./payment.ts"
+import { resolveBudget } from "./budget.ts"
+import { calcUpcoming } from "./upcoming.ts"
 import { formatPrice } from "./price.ts"
 import { divider } from "./display-constants.ts"
 import type { Cycle, Status } from "./types.ts"
@@ -62,6 +65,50 @@ function showMenuHeader(): void {
       `  ${count} subscription${count === 1 ? "" : "s"} · ${getDbPath()}`,
     ),
   )
+
+  // Financial overview (synchronous only — no FX fetch, keeps menu startup fast)
+  const active = getNonCancelledSubscriptions()
+  if (active.length > 0) {
+    const summary = calcSummary(active)
+    const monthly = Object.entries(summary.monthlyByCurrency)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([ccy, total]) => formatPrice(Math.round(total), ccy))
+    console.log(`  Monthly: ${monthly.join(" + ")}`)
+
+    const upcoming = calcUpcoming(7)
+    if (upcoming.length > 0) {
+      const totals: Record<string, number> = {}
+      for (const entry of upcoming) {
+        totals[entry.sub.currency] = (totals[entry.sub.currency] ?? 0) + entry.amount
+      }
+      const parts = Object.entries(totals)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([ccy, total]) => formatPrice(Math.round(total), ccy))
+      const billLabel = upcoming.length === 1 ? "bill" : "bills"
+      console.log(`  Next 7 days: ${upcoming.length} ${billLabel} (${parts.join(" + ")})`)
+    }
+
+    // Budget overrun warning — only when comparable in a single currency
+    const budget = resolveBudget("monthly")
+    if (budget) {
+      const totals = calcSubTotal(active, null, undefined, "monthly")
+      const keys = Object.keys(totals)
+      if (keys.length === 1 && keys[0] === budget.currency) {
+        const spending = totals[keys[0]]!
+        const remaining = budget.amount - spending
+        if (remaining < 0) {
+          console.log(
+            pc.red(
+              `  ⚠ Over budget: ${formatPrice(Math.round(-remaining), budget.currency)} (budget ${formatPrice(Math.round(budget.amount), budget.currency)}/month)`,
+            ),
+          )
+        }
+      }
+    }
+  } else {
+    console.log(pc.dim("  No subscriptions yet — choose Add to create one"))
+  }
+
   console.log(divider(52))
   console.log("")
 }
@@ -105,7 +152,7 @@ async function pickSubscription(message: string, status?: Status): Promise<numbe
   const subs = getSubscriptions({ includeArchived: true })
     .filter((s) => status === undefined || s.status === status)
   if (subs.length === 0) {
-    consola.info("No subscriptions found")
+    consola.info("No subscriptions found — choose Add from the menu")
     return null
   }
   return select({

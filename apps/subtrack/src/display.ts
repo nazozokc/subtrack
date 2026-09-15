@@ -1,10 +1,12 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { CliTable3 } from "@subtrack/lib/table"
+import { formatShortDate, daysUntil } from "@subtrack/lib/date"
 import type { SharedArgs, Currency, LlmUsageEntry } from "./types.ts"
 import { getSubscriptions } from "./db.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
+import { calculateNextBilling } from "./upcoming.ts"
 
 import { formatPrice, formatUsdCost } from "./price.ts"
 import {
@@ -17,17 +19,34 @@ import {
 } from "./display-constants.ts"
 import type { ColumnConfig } from "./display-constants.ts"
 
+/**
+ * Next billing date cell for the list table.
+ * Cancelled/archived subs have no upcoming bill ("-").
+ * Urgency coloring: today = cyan bold, ≤3 days = red, ≤7 days = yellow, else dim.
+ */
+function nextBillingCell(sub: SharedArgs): string {
+  if (sub.status === "cancelled" || sub.status === "archived") return "-"
+  const next = calculateNextBilling(sub, new Date())
+  const days = daysUntil(next)
+  if (days <= 0) return pc.bold(pc.cyan("today"))
+  const label = formatShortDate(next)
+  if (days <= 3) return pc.red(label)
+  if (days <= 7) return pc.yellow(label)
+  return pc.dim(label)
+}
+
 function buildRow(sub: SharedArgs, price: string, showNotes: boolean, showMethod: boolean, showContract?: boolean, showVendor?: boolean): string[] {
   const row = [
     String(sub.name),
     statusColor(sub.status),
     String(sub.cycle),
+    nextBillingCell(sub),
     sub.tags.length > 0 ? sub.tags.join(", ") : "-",
     price,
   ]
 
-  // Insert columns before price (at index 4, shifting as needed)
-  let insertIdx = 4
+  // Insert columns before price (last column), shifting as needed
+  let insertIdx = row.length - 1
 
   if (showMethod) {
     const method = sub.paymentMethod ?? ""
@@ -61,51 +80,51 @@ function buildRow(sub: SharedArgs, price: string, showNotes: boolean, showMethod
 }
 
 const BASE_COLS: ColumnConfig = {
-  headers: ["name", "status", "cycle", "tags", "price"] as const,
-  minWidths: [10, 8, 6, 8, 8] as const,
-  maxWidths: [40, 12, 20, 60, 20] as const,
+  headers: ["name", "status", "cycle", "next", "tags", "price"] as const,
+  minWidths: [10, 8, 6, 8, 8, 8] as const,
+  maxWidths: [40, 12, 20, 10, 60, 20] as const,
 }
 
 const NOTES_COLS: ColumnConfig = {
-  headers: ["name", "status", "cycle", "tags", "notes", "price"] as const,
-  minWidths: [10, 8, 6, 8, 15, 8] as const,
-  maxWidths: [40, 12, 20, 60, 50, 20] as const,
+  headers: ["name", "status", "cycle", "next", "tags", "notes", "price"] as const,
+  minWidths: [10, 8, 6, 8, 8, 15, 8] as const,
+  maxWidths: [40, 12, 20, 10, 60, 50, 20] as const,
 }
 
 const METHOD_COLS: ColumnConfig = {
-  headers: ["name", "status", "cycle", "tags", "method", "price"] as const,
-  minWidths: [10, 8, 6, 8, 10, 8] as const,
-  maxWidths: [40, 12, 20, 60, 30, 20] as const,
+  headers: ["name", "status", "cycle", "next", "tags", "method", "price"] as const,
+  minWidths: [10, 8, 6, 8, 8, 10, 8] as const,
+  maxWidths: [40, 12, 20, 10, 60, 30, 20] as const,
 }
 
 const ALL_COLS: ColumnConfig = {
-  headers: ["name", "status", "cycle", "tags", "method", "notes", "price"] as const,
-  minWidths: [10, 8, 6, 8, 10, 15, 8] as const,
-  maxWidths: [40, 12, 20, 60, 30, 50, 20] as const,
+  headers: ["name", "status", "cycle", "next", "tags", "method", "notes", "price"] as const,
+  minWidths: [10, 8, 6, 8, 8, 10, 15, 8] as const,
+  maxWidths: [40, 12, 20, 10, 60, 30, 50, 20] as const,
 }
 
 const CONTRACT_COLS: ColumnConfig = {
-  headers: ["name", "status", "cycle", "tags", "contract", "renewal", "price"] as const,
-  minWidths: [10, 8, 6, 8, 18, 6, 8] as const,
-  maxWidths: [40, 12, 20, 60, 30, 10, 20] as const,
+  headers: ["name", "status", "cycle", "next", "tags", "contract", "renewal", "price"] as const,
+  minWidths: [10, 8, 6, 8, 8, 18, 6, 8] as const,
+  maxWidths: [40, 12, 20, 10, 60, 30, 10, 20] as const,
 }
 
 const VENDOR_COLS: ColumnConfig = {
-  headers: ["name", "status", "cycle", "tags", "vendor", "plan", "price"] as const,
-  minWidths: [10, 8, 6, 8, 10, 8, 8] as const,
-  maxWidths: [40, 12, 20, 60, 30, 20, 20] as const,
+  headers: ["name", "status", "cycle", "next", "tags", "vendor", "plan", "price"] as const,
+  minWidths: [10, 8, 6, 8, 8, 10, 8, 8] as const,
+  maxWidths: [40, 12, 20, 10, 60, 30, 20, 20] as const,
 }
 
 const CONTRACT_VENDOR_COLS: ColumnConfig = {
-  headers: ["name", "status", "cycle", "tags", "contract", "renewal", "vendor", "plan", "price"] as const,
-  minWidths: [10, 8, 6, 8, 18, 6, 10, 8, 8] as const,
-  maxWidths: [40, 12, 20, 60, 30, 10, 30, 20, 20] as const,
+  headers: ["name", "status", "cycle", "next", "tags", "contract", "renewal", "vendor", "plan", "price"] as const,
+  minWidths: [10, 8, 6, 8, 8, 18, 6, 10, 8, 8] as const,
+  maxWidths: [40, 12, 20, 10, 60, 30, 10, 30, 20, 20] as const,
 }
 
 const ALL_EXTRA_COLS: ColumnConfig = {
-  headers: ["name", "status", "cycle", "tags", "method", "contract", "renewal", "vendor", "plan", "notes", "price"] as const,
-  minWidths: [8, 8, 6, 8, 10, 18, 6, 10, 8, 15, 8] as const,
-  maxWidths: [30, 12, 20, 50, 30, 30, 10, 30, 20, 50, 20] as const,
+  headers: ["name", "status", "cycle", "next", "tags", "method", "contract", "renewal", "vendor", "plan", "notes", "price"] as const,
+  minWidths: [8, 8, 6, 8, 8, 10, 18, 6, 10, 8, 15, 8] as const,
+  maxWidths: [30, 12, 20, 10, 50, 30, 30, 10, 30, 20, 50, 20] as const,
 }
 
 function renderTable(rows: string[][], config: ColumnConfig): string {
@@ -160,7 +179,7 @@ export const spreadSubscription = async (
   const list = get ?? getSubscriptions()
 
   if (list.length === 0) {
-    consola.info("No subscriptions found")
+    consola.info("No subscriptions found — try `subtrack add`")
     return
   }
 
