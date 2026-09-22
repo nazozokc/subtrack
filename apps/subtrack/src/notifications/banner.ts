@@ -7,6 +7,7 @@
  */
 
 import pc from "@subtrack/lib/ansi"
+import { consola } from "@subtrack/lib/logger"
 import { getPendingSuggestionCount } from "../db/suggestions.ts"
 import { calcUpcoming } from "../upcoming.ts"
 
@@ -30,7 +31,7 @@ export function showNotificationBanner(): void {
   if (parts.length === 0) return
 
   // Compact one-liner
-  console.log(pc.cyan(`ℹ ${parts.join(" · ")}`))
-  console.log(pc.dim(`  subtrack suggest · subtrack upcoming`))
-  console.log("")
+  consola.log(pc.cyan(`ℹ ${parts.join(" · ")}`))
+  consola.log(pc.dim(`  subtrack suggest · subtrack upcoming`))
+  consola.log("")
 }
