@@ -8,7 +8,7 @@
  * - [q]uit — stop reviewing
  */
 
-import { confirm, input, select } from "@inquirer/prompts"
+import { confirm, input, select } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { getSubscriptions, writeSubscription, markSuggestionAsAdded, dismissSuggestion } from "../db.ts"

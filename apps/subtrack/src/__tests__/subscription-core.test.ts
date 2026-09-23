@@ -38,15 +38,14 @@ vi.mock("@subtrack/lib/logger", () => {
   }
 })
 
-// Mock @inquirer/prompts to avoid interactive prompts
-vi.mock("@inquirer/prompts", () => ({
-  input: vi.fn(),
-  confirm: vi.fn(),
-  checkbox: vi.fn(),
-  select: vi.fn(),
-}))
+// Mock prompts.ts to avoid interactive prompts
+vi.mock("../prompts.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../prompts.ts")>()
+  const { createPromptMock } = await import("./prompt-mock.ts")
+  return createPromptMock(actual)
+})
 
-import { checkbox, confirm } from "@inquirer/prompts"
+import { checkbox, confirm } from "../prompts.ts"
 import { logMessages, infoMessages, successMessages, errorMessages, failMessages, warnMessages } from "@subtrack/lib/logger"
 import { runMigrations } from "../db/schema.ts"
 

@@ -1,4 +1,4 @@
-import { checkbox, confirm } from "@inquirer/prompts"
+import { checkbox, confirm } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import type { LlmUsageEntry } from "./types.ts"

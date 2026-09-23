@@ -3,7 +3,7 @@
  * Separated from the more complex add/edit workflows.
  */
 
-import { checkbox, confirm, select } from "@inquirer/prompts"
+import { checkbox, confirm, select } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import { loadConfig } from "../config.ts"

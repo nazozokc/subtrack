@@ -1,4 +1,4 @@
-import { confirm } from "@inquirer/prompts"
+import { confirm } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { mkdirSync, writeFileSync } from "node:fs"

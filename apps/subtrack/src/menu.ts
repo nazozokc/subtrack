@@ -1,12 +1,11 @@
 /**
  * Interactive main menu shown when running `subtrack` without a subcommand.
  * Covers every CLI command — organized into category sub-menus.
- * Built with @inquirer/prompts; handlers are called with empty flags so they
- * run in their interactive mode (consistent with the "interactive by default"
- * tenet).
+ * Handlers are called with empty flags so they run in their interactive mode
+ * (consistent with the "interactive by default" tenet).
  */
 
-import { checkbox, confirm, input, select } from "@inquirer/prompts"
+import { checkbox, confirm, input, select } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { getAllTags, getSubscriptions, getNonCancelledSubscriptions, getDbPath } from "./db.ts"

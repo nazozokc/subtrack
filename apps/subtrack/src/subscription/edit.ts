@@ -3,7 +3,7 @@
  * Handles both non-interactive (flag-based) and interactive (prompt-based) editing.
  */
 
-import { input, confirm, checkbox, select } from "@inquirer/prompts"
+import { input, confirm, checkbox, select } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import type { Cycle, Status, AddSharedArgs, AddFlags } from "../types.ts"

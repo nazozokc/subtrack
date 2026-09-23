@@ -1,7 +1,7 @@
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import pc from "@subtrack/lib/ansi"
-import { input, select } from "@inquirer/prompts"
+import { input, select } from "./prompts.ts"
 import { loadConfig, saveConfig } from "./config.ts"
 import type { ProfileFilter, Status } from "./types.ts"
 
