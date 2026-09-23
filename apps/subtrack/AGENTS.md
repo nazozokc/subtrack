@@ -8,7 +8,7 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 - **Language**: TypeScript (strict mode, ESM, `verbatimModuleSyntax`)
 - **Database**: `node:sqlite` (`DatabaseSync`, built-in SQLite)
 - **CLI**: `gunshi`
-- **Prompts**: `@inquirer/prompts`
+- **Prompts**: self-contained (`src/prompts/`, `node:readline`)
 - **Logging**: `@subtrack/lib/logger` (self-contained, `consola`-compatible logger)
 - **Tables**: `@subtrack/lib/table` (self-contained, `cli-table3`-compatible renderer)
 - **Colors**: `@subtrack/lib/ansi` (self-contained ANSI helpers, `picocolors`-compatible)
@@ -44,7 +44,7 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 | File | Responsibility |
 |---|---|
 | `src/index.ts` | CLI definition (gunshi), command routing |
-| `src/menu.ts` | Interactive main menu (@inquirer select, launched by bare `subtrack`) |
+| `src/menu.ts` | Interactive main menu (launched by bare `subtrack`) |
 | `src/commands/` | gunshi command definitions (`define()` + `.run()`) |
 | `src/subscription/` | Core subscription handlers (list/add/edit/delete/clone/archive/tags) |
 | `src/db.ts`, `src/db/` | SQLite CRUD, schema, persistence |
@@ -52,7 +52,7 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 | `src/prompts.ts` | Input validation, interactive prompts |
 | `src/payment.ts` | Payment/summary calculations |
 | `src/fx.ts` | Exchange rate fetching & conversion |
-| `src/pre-command.ts` | Pre-command hooks (auto-scan + notification banner) |
+| `src/pre-command.ts` | Pre-command hooks (notification banner) |
 | `src/usage.ts` | LLM API usage tracking |
 | `src/export.ts` | CSV/JSON/MD export |
 | `src/import-csv.ts` | CSV import |

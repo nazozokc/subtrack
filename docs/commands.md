@@ -1418,7 +1418,7 @@ Starts a Model Context Protocol (MCP) server over stdio, enabling AI assistants 
 subtrack mcp
 ```
 
-The MCP server exposes 16 tools for subscription management. See the [MCP page](/mcp) for full details, tool reference, and integration examples.
+The MCP server exposes 20 tools for subscription management. See the [MCP page](/mcp) for full details, tool reference, and integration examples.
 
 ## `budget`
 

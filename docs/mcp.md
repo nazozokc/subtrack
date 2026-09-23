@@ -11,7 +11,7 @@ subtrack implements an MCP (Model Context Protocol) server that allows AI assist
 subtrack mcp
 ```
 
-The server runs on stdio (`StdioServerTransport`). It prints JSON-RPC messages over stdout and reads from stdin. This is the standard transport used by all MCP hosts.
+The server runs on stdio. It prints newline-delimited JSON-RPC 2.0 messages over stdout and reads NDJSON (or `Content-Length`-framed) messages from stdin. This is the standard transport used by all MCP hosts.
 
 ## Integration examples
 

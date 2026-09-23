@@ -134,7 +134,7 @@ function formatPricingInfo(entry: ModelPricingEntry): string {
 /**
  * Search model pricing cache by query string.
  * Optionally filtered by provider (`litellm_provider` field).
- * Returns choices suitable for `@inquirer/search` prompt.
+ * Returns choices suitable for the `search` prompt (src/prompts/).
  */
 export function searchPricingModels(
   cache: PricingCache,

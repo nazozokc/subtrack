@@ -92,7 +92,7 @@ Key packages and their purpose:
 | Package | Usage |
 |---|---|---|
 | `gunshi` | CLI argument parsing (`cli()`, `define()`, `.args`, `.run()`) |
-| `@inquirer/prompts` | Interactive prompts (`input`, `confirm`, `checkbox`, `select`) |
+| `src/prompts/` | Self-contained interactive prompts (`input`, `confirm`, `checkbox`, `select`, `search`) on `node:readline` — no inquirer |
 | `consola` | Logging (`consola.info`, `consola.success`, `consola.error`, `consola.warn`, `consola.fail`) |
 | `cli-table3` | Table rendering (customizable chars, styles, column widths) |
 | `picocolors` | Terminal colors |
