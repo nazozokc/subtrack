@@ -17,7 +17,6 @@ import {
 } from "../db.ts"
 import { formatPrice } from "../price.ts"
 import { reviewSuggestions } from "./interactor.ts"
-import { handleSuggestScan } from "./scan.ts"
 import type { SuggestListFlags, SuggestDismissFlags } from "./types.ts"
 
 /** List pending suggestions. */

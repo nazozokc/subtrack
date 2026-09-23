@@ -22,6 +22,10 @@
 - Convert API usage cost from cents to dollars. ([`4f90970`](https://github.com/nazozokc/subtrack/commit/4f90970))
 - Accept export CSV format in import. ([`dbdb5e8`](https://github.com/nazozokc/subtrack/commit/dbdb5e8))
 
+### 🔥 Removed
+
+- `suggest scan` (IMAP email scanning) removed — the `imapflow` dependency is dropped. Existing suggestions remain manageable via `subtrack suggest list/view/add/dismiss`.
+
 ### 📝 Documentation
 
 - Commands, development, and MCP documentation updates. ([`ac2c325`](https://github.com/nazozokc/subtrack/commit/ac2c325))
