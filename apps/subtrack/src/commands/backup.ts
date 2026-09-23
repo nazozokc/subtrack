@@ -1,7 +1,5 @@
 // ── Backup/Restore commands ────────────────────────────
 import { define } from "gunshi"
-import { consola } from "@subtrack/lib/logger"
-import { handleBackup, handleRestore } from "../backup.ts"
 
 export const backupCommand = define({
   name: "backup",
@@ -10,7 +8,10 @@ export const backupCommand = define({
     destination: { type: "positional", description: "Backup destination directory (default: ~/.config/subtrack/backups/)", required: false },
     encrypt: { type: "boolean", short: "e", description: "Encrypt the backup with your database key" },
   },
-  run: (ctx) => { handleBackup(ctx.values.destination, { encrypt: ctx.values.encrypt }) },
+  run: async (ctx) => {
+    const { handleBackup } = await import("../backup.ts")
+    return handleBackup(ctx.values.destination, { encrypt: ctx.values.encrypt })
+  },
 })
 
 export const restoreCommand = define({
@@ -21,5 +22,8 @@ export const restoreCommand = define({
     force: { type: "boolean", short: "f", description: "Skip confirmation" },
     dir: { type: "string", description: "Directory to scan for backup files" },
   },
-  run: (ctx) => handleRestore(ctx.values.file, { force: ctx.values.force, dir: ctx.values.dir }),
+  run: async (ctx) => {
+    const { handleRestore } = await import("../backup.ts")
+    return handleRestore(ctx.values.file, { force: ctx.values.force, dir: ctx.values.dir })
+  },
 })

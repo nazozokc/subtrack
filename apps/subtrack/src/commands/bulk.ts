@@ -1,7 +1,6 @@
 // ── Bulk operation commands ────────────────────────────
 import { define } from "gunshi"
 import { consola } from "@subtrack/lib/logger"
-import { handleBulkStatus, handleBulkDelete, handleBulkTagAdd, handleBulkTagRemove } from "../bulk.ts"
 
 const bulkStatusCmd = define({
   name: "status",
@@ -13,7 +12,10 @@ const bulkStatusCmd = define({
     name: { type: "string", description: "Filter by name pattern" },
     force: { type: "boolean", short: "f", description: "Skip confirmation" },
   },
-  run: (ctx) => handleBulkStatus(ctx.values.set, { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }, { force: ctx.values.force }),
+  run: async (ctx) => {
+    const { handleBulkStatus } = await import("../bulk.ts")
+    return handleBulkStatus(ctx.values.set, { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }, { force: ctx.values.force })
+  },
 })
 
 const bulkDeleteCmd = define({
@@ -25,7 +27,10 @@ const bulkDeleteCmd = define({
     name: { type: "string", description: "Filter by name pattern" },
     force: { type: "boolean", short: "f", description: "Skip confirmation" },
   },
-  run: (ctx) => handleBulkDelete({ tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }, { force: ctx.values.force }),
+  run: async (ctx) => {
+    const { handleBulkDelete } = await import("../bulk.ts")
+    return handleBulkDelete({ tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }, { force: ctx.values.force })
+  },
 })
 
 const bulkTagAddCmd = define({
@@ -38,7 +43,10 @@ const bulkTagAddCmd = define({
     name: { type: "string", description: "Filter by name pattern" },
     force: { type: "boolean", short: "f", description: "Skip confirmation" },
   },
-  run: (ctx) => handleBulkTagAdd(ctx.values.add, { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }, { force: ctx.values.force }),
+  run: async (ctx) => {
+    const { handleBulkTagAdd } = await import("../bulk.ts")
+    return handleBulkTagAdd(ctx.values.add, { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }, { force: ctx.values.force })
+  },
 })
 
 const bulkTagRemoveCmd = define({
@@ -51,7 +59,10 @@ const bulkTagRemoveCmd = define({
     name: { type: "string", description: "Filter by name pattern" },
     force: { type: "boolean", short: "f", description: "Skip confirmation" },
   },
-  run: (ctx) => handleBulkTagRemove(ctx.values.remove, { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }, { force: ctx.values.force }),
+  run: async (ctx) => {
+    const { handleBulkTagRemove } = await import("../bulk.ts")
+    return handleBulkTagRemove(ctx.values.remove, { tag: ctx.values.tag, status: ctx.values.status, name: ctx.values.name }, { force: ctx.values.force })
+  },
 })
 
 const bulkTagCmd = define({
