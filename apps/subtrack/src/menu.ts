@@ -52,6 +52,10 @@ import { calcUpcoming } from "./upcoming.ts"
 import { formatPrice } from "./price.ts"
 import { divider } from "./display-constants.ts"
 import type { Status } from "./types.ts"
+import { createRequire } from "node:module"
+
+// Single source of truth for the version is package.json
+const require = createRequire(import.meta.url)
 
 type MainChoice = "view" | "add" | "manage" | "report" | "data" | "config" | "system" | "quit"
 
