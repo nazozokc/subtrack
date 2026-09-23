@@ -45,3 +45,19 @@ export function truncate(s: string, maxWidth: number): string {
   }
   return out
 }
+
+/** Keep the tail of s (last maxWidth visible columns), CJK-aware. */
+export function takeTail(s: string, maxWidth: number): string {
+  if (maxWidth <= 0 || strlen(s) <= maxWidth) return s
+  const plain = stripAnsi(s)
+  let out = ""
+  let width = 0
+  for (let i = plain.length - 1; i >= 0; i--) {
+    const ch = plain[i]!
+    const w = WIDE_RE.test(ch) ? 2 : 1
+    if (width + w > maxWidth) break
+    out = ch + out
+    width += w
+  }
+  return out
+}

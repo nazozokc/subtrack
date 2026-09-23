@@ -3,7 +3,7 @@
  * final answered line shown once a prompt resolves.
  */
 
-import { green } from "./ansi.ts"
+import { green, truncate } from "./ansi.ts"
 import { safeWrite } from "./core.ts"
 
 /** Tracks the lines it rendered so the next render can redraw in-place. */
@@ -18,9 +18,10 @@ export class Renderer {
     // Raw mode disables output post-processing (\n stays line-feed-only, no
     // carriage return), so every line must reset the column itself. A leading
     // \r on the first line too is harmless.
+    const width = ((this.stdout as { columns?: number }).columns ?? 80) - 2
     const body = text
       .split("\n")
-      .map((line) => `\r${line}`)
+      .map((line) => `\r${truncate(line, width)}`)
       .join("\n")
     safeWrite(this.stdout, body)
     this.count = text.split("\n").length

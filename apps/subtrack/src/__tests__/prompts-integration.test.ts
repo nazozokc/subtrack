@@ -9,6 +9,7 @@ import { Writable, PassThrough } from "node:stream"
 import { describe, it, expect, vi } from "vitest"
 import { input, confirm, select, checkbox } from "../prompts.ts"
 import { Renderer } from "../prompts/renderer.ts"
+import { strlen, takeTail } from "../prompts/ansi.ts"
 
 class Capture extends Writable {
   chunks: string[] = []
@@ -80,6 +81,16 @@ describe("input", () => {
     await tick()
     await expect(p).resolves.toBe("half")
     expect(setRawMode).toHaveBeenLastCalledWith(false)
+  })
+
+  it("shows the value tail with an ellipsis when it overflows the line", async () => {
+    const { stdin, stdout } = makeIO()
+    ;(stdout as { columns?: number }).columns = 40
+    const p = input({ message: "name", stdin, stdout })
+    await tick()
+    await feed(stdin, "a".repeat(45) + "\r")
+    await expect(p).resolves.toBe("a".repeat(45))
+    expect(stdout.toString()).toContain("…")
   })
 
   it("resolves the default on EOF when empty", async () => {
@@ -283,6 +294,28 @@ describe("Renderer", () => {
     stdout.chunks = []
     renderer.clear()
     expect(stdout.toString()).toBe("\r\x1b[0A\x1b[J")
+  })
+
+  it("truncates over-width lines so they never wrap (physical rows == count)", () => {
+    const { stdout } = makeIO()
+    ;(stdout as { columns?: number }).columns = 40
+    const renderer = new Renderer(stdout)
+    renderer.render("x".repeat(100))
+    const out = stdout.toString()
+    expect(out.startsWith("\r")).toBe(true)
+    expect(out.slice(1)).toHaveLength(38) // columns - 2 margin
+  })
+})
+
+describe("ansi width helpers", () => {
+  it("keeps the tail of a too-long string", () => {
+    expect(takeTail("abcdef", 4)).toBe("cdef")
+    expect(takeTail("ab", 10)).toBe("ab")
+  })
+
+  it("is CJK-width aware", () => {
+    expect(takeTail("あいうえお", 4)).toBe("えお")
+    expect(strlen("えお")).toBe(4)
   })
 })
 

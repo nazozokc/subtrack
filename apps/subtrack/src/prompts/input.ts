@@ -3,7 +3,7 @@
  * validate-loop that re-renders errors until validation passes.
  */
 
-import { cyan, red } from "./ansi.ts"
+import { cyan, red, strlen, takeTail } from "./ansi.ts"
 import { ExitPromptError, fallback, resolveStreams } from "./core.ts"
 import type { PromptStreams } from "./core.ts"
 import { withRawMode } from "./keys.ts"
@@ -22,11 +22,20 @@ export async function input(config: InputConfig): Promise<string> {
   }
 
   const renderer = new Renderer(stdout)
+  const columns = ((stdout as { columns?: number }).columns ?? 80) - 2
   let value = config.default ?? ""
   let error: string | null = null
 
   function render() {
-    const line = `\r${cyan("?")} ${config.message} ${value}`
+    // Keep the caret visible while typing: when the value would overflow the
+    // line, show its tail with a leading ellipsis instead of clipping the end.
+    const prefix = `${cyan("?")} ${config.message} `
+    const maxValue = Math.max(1, columns - strlen(prefix))
+    let shown = value
+    if (strlen(value) > maxValue) {
+      shown = `…${takeTail(value, maxValue - 1)}`
+    }
+    const line = `\r${prefix}${shown}`
     const errorLine = error !== null ? `\n${red(`✖ ${error}`)}` : ""
     renderer.render(line + errorLine)
   }
