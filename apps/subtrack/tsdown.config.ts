@@ -8,4 +8,5 @@ export default defineConfig({
     // matched with a glob — a bare package name matches exact ids only.
     alwaysBundle: ["@subtrack/lib/*"],
   },
+  minify: true,
 })
