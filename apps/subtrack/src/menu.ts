@@ -21,7 +21,6 @@ import { handleTimeline } from "./timeline.ts"
 import { handleStats } from "./stats.ts"
 import { handleTrialAdd, handleTrialList, handleTrialExpiring, handleTrialDelete } from "./trial.ts"
 import { handleSuggestList, handleSuggestReview, handleSuggestDismiss } from "./suggest/suggest.ts"
-import { handleSuggestScan } from "./suggest/scan.ts"
 import { handleBulkStatus, handleBulkDelete, handleBulkTagAdd, handleBulkTagRemove } from "./bulk.ts"
 import { handleTagList, handleTagRename, handleTagDelete, handleTagPrune, handleTagMerge } from "./tag.ts"
 import { handlePayment, handleSummary } from "./payment.ts"
@@ -249,7 +248,7 @@ async function runAddMenu(): Promise<void> {
         { name: "Clone", description: "Clone an existing subscription", value: "clone" },
         { name: "Import", description: "Import subscriptions from CSV", value: "import" },
         { name: "Trials", description: "Manage free trials", value: "trial" },
-        { name: "Suggestions", description: "Review suggestions from email scans", value: "suggest" },
+        { name: "Suggestions", description: "Review and manage suggestions", value: "suggest" },
         BACK,
       ],
     })
@@ -307,7 +306,6 @@ async function runSuggestMenu(): Promise<void> {
         { name: "List", description: "List pending suggestions", value: "list" },
         { name: "Review", description: "Review suggestions and add as subscriptions", value: "review" },
         { name: "Dismiss", description: "Dismiss a suggestion by id", value: "dismiss" },
-        { name: "Scan", description: "Scan email sources for new suggestions", value: "scan" },
         BACK,
       ],
     })
@@ -320,7 +318,6 @@ async function runSuggestMenu(): Promise<void> {
         handleSuggestDismiss(id)
         break
       }
-      case "scan": await handleSuggestScan(); break
       case "back": return
     }
   }

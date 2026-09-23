@@ -29,9 +29,6 @@ export const CONFIG_KEYS = [
   "listShowMethod",
 ] as const
 
-/** IMAP-related config keys (not stored directly on SubtrackConfig). */
-export const IMAP_KEYS = ["imapHost", "imapPort", "imapTls", "imapUsername"] as const
-
 export type ConfigKey = (typeof CONFIG_KEYS)[number]
 
 const DEFAULT_CONFIG: SubtrackConfig = {
@@ -94,15 +91,6 @@ export function loadConfig(): SubtrackConfig {
 
 export function resetConfig(): void {
   _config = null
-}
-
-function mergeImapConfig(config: SubtrackConfig, patch: Partial<import("./types.ts").ImapConfig>): import("./types.ts").ImapConfig {
-  return {
-    host: patch.host ?? config.imap?.host ?? "",
-    port: patch.port ?? config.imap?.port ?? 993,
-    tls: patch.tls ?? config.imap?.tls ?? true,
-    username: patch.username ?? config.imap?.username ?? "",
-  }
 }
 
 export function setConfig(key: string, value: string): boolean {
@@ -224,30 +212,6 @@ export function setConfig(key: string, value: string): boolean {
       }
       config.webhookUrl = value
       break
-    case "imapHost":
-      if (!value) { fail("imapHost must not be empty"); return false }
-      config.imap = mergeImapConfig(config, { host: value })
-      break
-    case "imapPort": {
-      const port = Number(value)
-      if (isNaN(port) || port < 1 || port > 65535 || !Number.isInteger(port)) {
-        fail("imapPort must be an integer between 1 and 65535")
-        return false
-      }
-      config.imap = mergeImapConfig(config, { port })
-      break
-    }
-    case "imapTls":
-      if (value !== "true" && value !== "false") {
-        fail("imapTls must be 'true' or 'false'")
-        return false
-      }
-      config.imap = mergeImapConfig(config, { tls: value === "true" })
-      break
-    case "imapUsername":
-      if (!value) { fail("imapUsername must not be empty"); return false }
-      config.imap = mergeImapConfig(config, { username: value })
-      break
     default:
       fail(`Unknown config key: "${key}"`)
       return false
@@ -296,23 +260,10 @@ export function handleConfigList(): void {
   } else {
     consola.log(`budgets: (not set)`)
   }
-  // Show IMAP config
-  if (config.imap) {
-    consola.log(`imapHost: ${config.imap.host}`)
-    consola.log(`imapPort: ${config.imap.port}`)
-    consola.log(`imapTls: ${config.imap.tls}`)
-    consola.log(`imapUsername: ${config.imap.username}`)
-  } else {
-    consola.log(`imapHost: (not set)`)
-    consola.log(`imapPort: 993`)
-    consola.log(`imapTls: true`)
-    consola.log(`imapUsername: (not set)`)
-  }
 }
 
 function isKnownKey(key: string): boolean {
   return (CONFIG_KEYS as readonly string[]).includes(key as ConfigKey) ||
-         (IMAP_KEYS as readonly string[]).includes(key as typeof IMAP_KEYS[number]) ||
          key === "budgets"
 }
 
@@ -390,10 +341,6 @@ function maskSecret(value: string | undefined): string {
 
 function getConfigDisplayValue(key: string, config: SubtrackConfig): string {
   switch (key) {
-    case "imapHost": return config.imap?.host ?? "(not set)"
-    case "imapPort": return String(config.imap?.port ?? 993)
-    case "imapTls": return String(config.imap?.tls ?? true)
-    case "imapUsername": return config.imap?.username ?? "(not set)"
     case "notifyChannels": return config.notifyChannels?.length ? config.notifyChannels.join(",") : "(not set)"
     case "slackWebhook": return maskSecret(config.slackWebhook)
     case "webhookUrl": return maskSecret(config.webhookUrl)
@@ -407,7 +354,7 @@ function getConfigDisplayValue(key: string, config: SubtrackConfig): string {
 export function handleConfigGet(key: string): void {
   const config = loadConfig()
   if (!isKnownKey(key)) {
-    fail(`Unknown config key: "${key}". Valid: ${[...CONFIG_KEYS, ...IMAP_KEYS].join(", ")}`)
+    fail(`Unknown config key: "${key}". Valid: ${CONFIG_KEYS.join(", ")}`)
     return
   }
   consola.log(`${key}: ${getConfigDisplayValue(key, config)}`)
@@ -415,7 +362,7 @@ export function handleConfigGet(key: string): void {
 
 export function handleConfigSet(key: string, value: string): void {
   if (!isKnownKey(key)) {
-    fail(`Unknown config key: "${key}". Valid: ${[...CONFIG_KEYS, ...IMAP_KEYS].join(", ")}`)
+    fail(`Unknown config key: "${key}". Valid: ${CONFIG_KEYS.join(", ")}`)
     return
   }
   setConfig(key, value)

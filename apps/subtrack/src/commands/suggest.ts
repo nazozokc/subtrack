@@ -1,4 +1,4 @@
-// ── Suggest command: manage email-based subscription suggestions ──
+// ── Suggest command: manage subscription suggestions ──
 
 import { define } from "gunshi"
 import { consola } from "@subtrack/lib/logger"
@@ -11,11 +11,10 @@ import {
   handleSuggestDismissAll,
   handleSuggestAdd,
 } from "../suggest/suggest.ts"
-import { handleSuggestScan } from "../suggest/scan.ts"
 
 const suggestListCmd = define({
   name: "list",
-  description: "List pending suggestions from email scans",
+  description: "List pending suggestions",
   args: {
     all: { type: "boolean", description: "Show all suggestions (including dismissed/added)" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
@@ -71,23 +70,14 @@ const suggestDismissCmd = define({
   },
 })
 
-const suggestScanCmd = define({
-  name: "scan",
-  description: "Force re-scan emails for new suggestions (ignores cooldown)",
-  run: async () => {
-    await handleSuggestScan()
-  },
-})
-
 export const suggestCommand = define({
   name: "suggest",
-  description: "Manage subscription suggestions from email scans",
+  description: "Manage subscription suggestions",
   subCommands: {
     list: suggestListCmd,
     view: suggestViewCmd,
     add: suggestAddCmd,
     dismiss: suggestDismissCmd,
-    scan: suggestScanCmd,
   },
   run: async () => {
     // Default: run interactive review
