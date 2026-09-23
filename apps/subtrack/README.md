@@ -16,6 +16,8 @@ A CLI tool to manage your subscription services from the terminal.
 
 **subtrack** lets you add, list, filter, and delete subscriptions with an interactive CLI. Data is stored locally in SQLite.
 
+Read the full documentation at [nazozokc.github.io/subtrack](https://nazozokc.github.io/subtrack/), including the [installation guide](https://nazozokc.github.io/subtrack/installation), [command reference](https://nazozokc.github.io/subtrack/commands), and [configuration guide](https://nazozokc.github.io/subtrack/configuration).
+
 > [!TIP]
 > This tool is a completely standalone CLI tool and is not affiliated with, bundled with, or part of any other software.
 
@@ -65,6 +67,8 @@ pnpm link --global
 ```
 
 ## Usage
+
+Run `subtrack --help` for the complete, version-specific command and option list. The examples below cover the most common workflows.
 
 ```bash
 # List all subscriptions (grouped by currency)
@@ -613,10 +617,11 @@ variable:
 SUBSC_CLI_DB_DIR=/path/to/custom/dir subtrack list
 ```
 
-The database uses four tables: `subscriptions`, `tags`,
-`subscription_tags` (many-to-many relationship), and `llm_usage` (for LLM API
-usage tracking). Deleting a subscription automatically cleans up associated
-tag links via `ON DELETE CASCADE`.
+The database is an encrypted SQLite file. It stores subscriptions, tags,
+LLM usage, trials, price history, suggestions, and an audit log. Deleting a
+subscription automatically cleans up associated tag links via `ON DELETE CASCADE`.
+See the [data and storage guide](https://nazozokc.github.io/subtrack/data) for
+backup, restore, encryption, and schema details.
 
 ## Development
 
