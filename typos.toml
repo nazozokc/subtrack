@@ -4,3 +4,5 @@ extend-exclude = ["pnpm-lock.yaml", "dist/"]
 [default.extend-words]
 # ink-gradient gradient name — false positive for "crystal"
 cristal = "cristal"
+# custom day-based billing cycles ("3d" = every N days) — false positive for "And"
+Nd = "Nd"
