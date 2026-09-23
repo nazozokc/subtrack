@@ -2,7 +2,6 @@
 import { cli, define } from "gunshi"
 import { consola } from "@subtrack/lib/logger"
 import { createRequire } from "node:module"
-import { saveDb } from "./db.ts"
 import { subCommands } from "./commands/index.ts"
 
 // Single source of truth for the version is package.json
@@ -20,11 +19,11 @@ const mainCommand = define({
 
 // Signal handlers for clean shutdown
 let exiting = false
-const handleSignal = (signal: string) => {
+const handleSignal = async (signal: string) => {
   if (exiting) return
   exiting = true
   consola.info(`Received ${signal}, saving data...`)
-  try { saveDb() } catch { /* best-effort */ }
+  try { const { saveDb } = await import("./db.ts"); saveDb() } catch { /* best-effort */ }
   process.exit(0)
 }
 process.on("SIGINT", () => handleSignal("SIGINT"))

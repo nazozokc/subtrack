@@ -1,19 +1,24 @@
 // ── Config commands ───────────────────────────────────
 import { define } from "gunshi"
 import { consola } from "@subtrack/lib/logger"
-import { handleConfigList, handleConfigGet, handleConfigSet, handleConfigReset } from "../config.ts"
 
 const configListCmd = define({
   name: "list",
   description: "List all config values",
-  run: () => handleConfigList(),
+  run: async () => {
+    const { handleConfigList } = await import("../config.ts")
+    return handleConfigList()
+  },
 })
 
 const configGetCmd = define({
   name: "get",
   description: "Get a config value",
   args: { key: { type: "positional", description: "Config key" } },
-  run: (ctx) => handleConfigGet(ctx.values.key),
+  run: async (ctx) => {
+    const { handleConfigGet } = await import("../config.ts")
+    return handleConfigGet(ctx.values.key)
+  },
 })
 
 const configSetCmd = define({
@@ -23,13 +28,19 @@ const configSetCmd = define({
     key: { type: "positional", description: "Config key" },
     value: { type: "positional", description: "Config value" },
   },
-  run: (ctx) => handleConfigSet(ctx.values.key, ctx.values.value),
+  run: async (ctx) => {
+    const { handleConfigSet } = await import("../config.ts")
+    return handleConfigSet(ctx.values.key, ctx.values.value)
+  },
 })
 
 const configResetCmd = define({
   name: "reset",
   description: "Reset config to defaults",
-  run: () => handleConfigReset(),
+  run: async () => {
+    const { handleConfigReset } = await import("../config.ts")
+    return handleConfigReset()
+  },
 })
 
 export const configCommand = define({
