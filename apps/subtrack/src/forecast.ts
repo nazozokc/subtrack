@@ -1,5 +1,6 @@
 import { input, confirm, select, checkbox } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
+import { fail } from "./error.ts"
 import pc from "@subtrack/lib/ansi"
 import { CliTable3 } from "@subtrack/lib/table"
 import type { SharedArgs, Currency, Cycle } from "./types.ts"
@@ -13,6 +14,9 @@ import type { FxRates } from "./fx.ts"
 import {
   CURRENCY_CHOICES,
   promptCycle,
+  isValidCurrency,
+  isValidCycle,
+  validatePrice,
 } from "./prompts.ts"
 
 export type ForecastOptions = {
@@ -38,6 +42,12 @@ type ForecastEntry = {
 export async function handleForecast(
   options: ForecastOptions,
 ): Promise<void> {
+  // Defensive validation for non-interactive callers (flags are validated in the command layer)
+  if (options.months !== undefined && (!Number.isInteger(options.months) || options.months < 1 || options.months > 120)) {
+    fail("months must be an integer between 1 and 120")
+    return
+  }
+
   // Interactive mode when no options given
   const interactive =
     !options.json &&
@@ -93,13 +103,28 @@ export async function handleForecast(
       }
     }
   } else if (options.addName) {
-    // Flag-based add subscription
-    const price = options.addPrice ? Math.round(Number(options.addPrice)) : 0
+    // Flag-based add subscription (validate all hypothetical fields)
+    const priceStr = options.addPrice ?? "0"
+    const priceErr = validatePrice(priceStr)
+    if (priceErr !== true) {
+      fail(`Invalid addPrice: ${priceErr}`)
+      return
+    }
+    const addCurrency = options.addCurrency ?? "USD"
+    if (!isValidCurrency(addCurrency)) {
+      fail(`Invalid addCurrency: "${addCurrency}"`)
+      return
+    }
+    const addCycle = options.addCycle ?? "monthly"
+    if (!isValidCycle(addCycle)) {
+      fail(`Invalid addCycle: "${addCycle}"`)
+      return
+    }
     addEntry = {
       name: options.addName,
-      price,
-      currency: options.addCurrency ?? "USD",
-      cycle: (options.addCycle as Cycle) ?? "monthly",
+      price: Math.round(Number(priceStr)),
+      currency: addCurrency,
+      cycle: addCycle,
     }
   }
 

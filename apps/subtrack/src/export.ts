@@ -211,7 +211,7 @@ export function exportIcs(subs: SharedArgs[]): string {
     const tags = s.tags.length > 0 ? `Tags: ${s.tags.join(", ")}` : ""
     const notes = s.notes ? `Notes: ${s.notes}` : ""
     const descParts = [tags, notes].filter(Boolean)
-    const description = descParts.length > 0 ? descParts.join("\\n") : ""
+    const description = descParts.length > 0 ? descParts.join("\n") : ""
     const summary = `${s.name} - ${formatPrice(s.price, s.currency)}/${s.cycle}`
 
     cal.push("BEGIN:VEVENT")

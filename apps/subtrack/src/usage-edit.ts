@@ -24,6 +24,13 @@ export async function handleUsageEdit(id: number, flags: UsageAddFlags): Promise
   const fields: Partial<AddLlmUsageArgs> = {}
 
   if (flags.provider !== undefined) {
+    // The interactive prompt's custom-provider sentinel must never be persisted
+    if (flags.provider === "__other__") {
+      fail(
+        'Invalid provider "__other__" — provide the custom provider name directly (e.g. --provider my-custom-llm)',
+      )
+      return
+    }
     if (!LLM_PROVIDER_CHOICES.some((c) => c.value === flags.provider)) {
       fail(
         `Invalid provider "${flags.provider}". Use one of: openai, anthropic, google-ai, mistral, groq, together, deepseek, cohere, or a custom name.`,

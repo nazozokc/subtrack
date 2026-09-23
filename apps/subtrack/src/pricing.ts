@@ -102,7 +102,7 @@ export async function ensurePricingCache(): Promise<PricingCache | null> {
       } finally {
         clearTimeout(timer)
       }
-      mkdirSync(getConfigDir(), { recursive: true })
+      mkdirSync(getConfigDir(), { recursive: true, mode: 0o700 })
       writeFileSync(cachePath, JSON.stringify(data), { mode: 0o600 })
       _cache = data
       return data

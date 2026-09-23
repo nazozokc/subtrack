@@ -144,12 +144,17 @@ export function validateVendorName(v: string): string | true {
 export function validateVendorUrl(v: string): string | true {
   if (!v.trim()) return true
   if (v.length > 500) return "URL too long (max 500 chars)"
+  let parsed: URL
   try {
-    new URL(v)
-    return true
+    parsed = new URL(v)
   } catch {
     return "Invalid URL (must start with http:// or https://)"
   }
+  // Reject non-http(s) schemes (javascript:, file:, data:, ...)
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return "Invalid URL (must start with http:// or https://)"
+  }
+  return true
 }
 
 export function validatePlanTier(v: string): string | true {

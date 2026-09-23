@@ -7,7 +7,7 @@
  */
 import { Writable, PassThrough } from "node:stream"
 import { describe, it, expect, vi } from "vitest"
-import { input, confirm, select, checkbox, isValidCycle, validateCycleDays, promptCycle } from "../prompts.ts"
+import { input, confirm, select, checkbox, isValidCycle, validateCycleDays, promptCycle, validateVendorUrl } from "../prompts.ts"
 import { Renderer } from "../prompts/renderer.ts"
 import { strlen, takeTail } from "../prompts/ansi.ts"
 
@@ -365,6 +365,26 @@ describe("promptCycle", () => {
     await tick()
     await feed(stdin, "3\r") // days input
     await expect(p).resolves.toEqual({ value: "3d", prompted: true })
+  })
+})
+
+describe("validateVendorUrl", () => {
+  it("accepts http and https URLs", () => {
+    expect(validateVendorUrl("https://example.com")).toBe(true)
+    expect(validateVendorUrl("http://example.com/path?q=1")).toBe(true)
+    expect(validateVendorUrl("")).toBe(true) // empty = not set
+  })
+
+  it("rejects non-http(s) schemes (terminal/script injection vectors)", () => {
+    expect(validateVendorUrl("javascript:alert(1)")).toContain("http")
+    expect(validateVendorUrl("file:///etc/passwd")).toContain("http")
+    expect(validateVendorUrl("data:text/html,<script>1</script>")).toContain("http")
+    expect(validateVendorUrl("vbscript:msgbox(1)")).toContain("http")
+  })
+
+  it("rejects malformed URLs", () => {
+    expect(validateVendorUrl("not a url")).toContain("http")
+    expect(validateVendorUrl("./relative/path")).toContain("http")
   })
 })
 

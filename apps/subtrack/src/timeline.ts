@@ -187,8 +187,8 @@ function renderCategoryChart(
 export async function handleTimeline(options: TimelineOptions = {}): Promise<void> {
   const months = options.months ?? 12
 
-  if (months < 1) {
-    fail("months must be a positive integer")
+  if (months < 1 || months > 120) {
+    fail("months must be a positive integer (max 120)")
     return
   }
 

@@ -231,6 +231,42 @@ test("handleClone with invalid price calls fail", async () => {
   expect(db.getSubscriptions()).toHaveLength(1)
 })
 
+test("handleClone with negative price calls fail", async () => {
+  const db = await import("../db.ts")
+  const { handleClone } = await import("../subscription/core.ts")
+  db.writeSubscription({ name: "Netflix", price: 100, currency: "USD", cycle: "monthly", tags: [], createdAt: "2026-01-01" })
+  const [orig] = db.getSubscriptions()
+
+  await handleClone(orig.id, { price: "-50" })
+
+  expect(errorMessages.some((m) => m.includes("Invalid price"))).toBe(true)
+  expect(db.getSubscriptions()).toHaveLength(1)
+})
+
+test("handleClone with invalid currency calls fail", async () => {
+  const db = await import("../db.ts")
+  const { handleClone } = await import("../subscription/core.ts")
+  db.writeSubscription({ name: "Netflix", price: 100, currency: "USD", cycle: "monthly", tags: [], createdAt: "2026-01-01" })
+  const [orig] = db.getSubscriptions()
+
+  await handleClone(orig.id, { currency: "javascript" })
+
+  expect(errorMessages.some((m) => m.includes("Invalid currency"))).toBe(true)
+  expect(db.getSubscriptions()).toHaveLength(1)
+})
+
+test("handleClone with invalid cycle calls fail", async () => {
+  const db = await import("../db.ts")
+  const { handleClone } = await import("../subscription/core.ts")
+  db.writeSubscription({ name: "Netflix", price: 100, currency: "USD", cycle: "monthly", tags: [], createdAt: "2026-01-01" })
+  const [orig] = db.getSubscriptions()
+
+  await handleClone(orig.id, { cycle: "biannual" })
+
+  expect(errorMessages.some((m) => m.includes("Invalid cycle"))).toBe(true)
+  expect(db.getSubscriptions()).toHaveLength(1)
+})
+
 // ── handleArchive ────────────────────────────────────────
 
 test("handleArchive archives a subscription", async () => {

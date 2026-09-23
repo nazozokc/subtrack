@@ -3,11 +3,11 @@
  * Separated from the more complex add/edit workflows.
  */
 
-import { checkbox, confirm, select } from "../prompts.ts"
+import { checkbox, confirm, select, isValidCurrency, isValidCycle, validatePrice } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import { loadConfig } from "../config.ts"
-import type { Currency, SharedArgs, AddFlags } from "../types.ts"
+import type { Currency, Cycle, SharedArgs, AddFlags } from "../types.ts"
 import {
   tagsSubscription,
   getLlmUsageTotal,
@@ -154,18 +154,34 @@ export async function handleClone(id: number, flags: Partial<AddFlags> = {}): Pr
   const newName = flags.name ?? `${sub.name} (copy)`
   let price = sub.price
   if (flags.price !== undefined) {
-    const parsed = Number(flags.price)
-    if (!isFinite(parsed) || isNaN(parsed)) {
-      fail(`Invalid price: "${flags.price}"`)
+    const err = validatePrice(flags.price)
+    if (err !== true) {
+      fail(`Invalid price: ${err}`)
       return
     }
-    price = parsed
+    price = Number(flags.price)
+  }
+  let currency = sub.currency
+  if (flags.currency !== undefined) {
+    if (!isValidCurrency(flags.currency)) {
+      fail(`Invalid currency: "${flags.currency}"`)
+      return
+    }
+    currency = flags.currency
+  }
+  let cycle: Cycle = sub.cycle
+  if (flags.cycle !== undefined) {
+    if (!isValidCycle(flags.cycle)) {
+      fail(`Invalid cycle: "${flags.cycle}"`)
+      return
+    }
+    cycle = flags.cycle
   }
   const newData = {
     name: newName,
     price,
-    currency: flags.currency ?? sub.currency,
-    cycle: (flags.cycle as import("../types.ts").Cycle) ?? sub.cycle,
+    currency,
+    cycle,
     tags: flags.tags ? flags.tags.split(",").map((t) => t.trim()).filter(Boolean) : [...sub.tags],
     status: sub.status,
     billingDay: sub.billingDay,
