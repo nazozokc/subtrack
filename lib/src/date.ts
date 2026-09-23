@@ -185,6 +185,49 @@ export function dateWithClampedDay(year: number, month: number, day: number): Da
   return new Date(year, month, clampDay(day, year, month + 1))
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Anchor date of an every-N-days cycle: the billing day of the createdAt
+ * month (day clamped to the month length).
+ */
+function dayCycleAnchor(anchorDate: Date, anchorDay: number): Date {
+  return dateWithClampedDay(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDay)
+}
+
+/**
+ * Next occurrence of an every-N-days cycle at or after `fromDate`
+ * (used by weekly, bi-weekly, and custom "Nd" cycles).
+ */
+export function nextDayCycleDate(anchorDate: Date, anchorDay: number, days: number, fromDate: Date): Date {
+  const anchor = dayCycleAnchor(anchorDate, anchorDay)
+  const periods = Math.max(0, Math.ceil((fromDate.getTime() - anchor.getTime()) / (days * DAY_MS)))
+  return new Date(anchor.getTime() + periods * days * DAY_MS)
+}
+
+/**
+ * Days of `month` (1-12) on which an every-N-days cycle bills.
+ */
+export function dayCycleDaysInMonth(
+  anchorDate: Date,
+  anchorDay: number,
+  days: number,
+  year: number,
+  month: number,
+): number[] {
+  const anchor = dayCycleAnchor(anchorDate, anchorDay)
+  const ms = days * DAY_MS
+  const start = new Date(year, month - 1, 1).getTime()
+  const end = new Date(year, month - 1, daysInMonth(year, month)).getTime()
+  const result: number[] = []
+  for (let k = Math.max(0, Math.floor((start - anchor.getTime()) / ms)); ; k++) {
+    const t = anchor.getTime() + k * ms
+    if (t > end) break
+    if (t >= start) result.push(new Date(t).getDate())
+  }
+  return result
+}
+
 /**
  * Days until a target date (YYYY-MM-DD string or Date), relative to today.
  * Returns 0 for today, negative for past dates.
