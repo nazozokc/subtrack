@@ -61,7 +61,6 @@
     ]
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
     "gunshi": "^0.37.1",
     "@subtrack/lib": "workspace:*"
   },
