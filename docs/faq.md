@@ -18,7 +18,7 @@ Without a backup, the data cannot be recovered — the database is stored locall
 
 ## Can I add support for more currencies?
 
-The `Currency` type now accepts any ISO 4217 3-letter code, so all currencies supported by [open.er-api.com](https://open.er-api.com) work out of the box. The interactive prompt provides a curated list of 36 commonly used currencies. If you need a currency not in the list, use the `--currency` flag directly with any valid code.
+The `Currency` type now accepts any ISO 4217 3-letter code, so all currencies supported by [open.er-api.com](https://open.er-api.com) work out of the box. The interactive prompt provides a curated list of 37 commonly used currencies. If you need a currency not in the list, use the `--currency` flag directly with any valid code.
 
 ## Does subtrack work offline?
 
@@ -197,4 +197,4 @@ Use `subtrack maintenance` to run an integrity check (default) and optionally VA
 
 ## How many currencies does subtrack support?
 
-subtrack supports 36 currencies in the interactive prompt, and any ISO 4217 3-letter code via the `--currency` flag. View the full list with `subtrack currency`.
+subtrack supports 37 currencies in the interactive prompt, and any ISO 4217 3-letter code via the `--currency` flag. View the full list with `subtrack currency`.
