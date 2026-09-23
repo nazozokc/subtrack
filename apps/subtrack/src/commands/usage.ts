@@ -1,11 +1,6 @@
 // ── LLM API Usage commands ───────────────────────────
 import { define } from "gunshi"
 import { consola } from "@subtrack/lib/logger"
-import { handleUsageAdd } from "../usage-add.ts"
-import { handleUsageList, handleUsageDelete, handleUsageEdit } from "../usage.ts"
-import { handleUsageImport } from "../usage-import.ts"
-import { handleUsageRefresh } from "../usage-refresh.ts"
-import { handleUsageTotal } from "../usage-total.ts"
 import type { NamedCycle } from "@subtrack/lib/date"
 import type { UsageRefreshFlags } from "../types.ts"
 
@@ -22,7 +17,10 @@ const usageAddCommand = define({
     description: { type: "string", description: "Optional description" },
     cost: { type: "string", description: "Total cost in USD (e.g. 0.50 for 50 cents; overrides auto-pricing)" },
   },
-  run: (ctx) => handleUsageAdd(ctx.values),
+  run: async (ctx) => {
+    const { handleUsageAdd } = await import("../usage-add.ts")
+    return handleUsageAdd(ctx.values)
+  },
 })
 
 const usageListCommand = define({
@@ -36,7 +34,7 @@ const usageListCommand = define({
     offset: { type: "string", description: "Skip the first N entries (for paging)" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     let limit: number | undefined
     if (ctx.values.limit !== undefined) {
       limit = Number(ctx.values.limit)
@@ -53,7 +51,8 @@ const usageListCommand = define({
         return
       }
     }
-    handleUsageList({ ...ctx.values, limit, offset })
+    const { handleUsageList } = await import("../usage.ts")
+    return handleUsageList({ ...ctx.values, limit, offset })
   },
 })
 
@@ -71,13 +70,14 @@ const usageEditCommand = define({
     description: { type: "string", description: "Optional description" },
     cost: { type: "string", description: "Total cost in USD (e.g. 0.50 for 50 cents)" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const id = Number(ctx.values.id)
     if (isNaN(id)) {
       consola.fail("Invalid id. Provide the usage entry ID (e.g. usage edit 5 --cost 0.50)")
       return
     }
-    handleUsageEdit(id, ctx.values)
+    const { handleUsageEdit } = await import("../usage.ts")
+    return handleUsageEdit(id, ctx.values)
   },
 })
 
@@ -87,9 +87,10 @@ const usageDeleteCommand = define({
   args: {
     id: { type: "positional", array: true, description: "Entry ID(s) to delete (omit for interactive selection)", required: false },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const ids = ctx.positionals.slice(1).map(Number).filter((n) => !isNaN(n))
-    handleUsageDelete(ids.length > 0 ? ids : undefined)
+    const { handleUsageDelete } = await import("../usage.ts")
+    return handleUsageDelete(ids.length > 0 ? ids : undefined)
   },
 })
 
@@ -101,7 +102,10 @@ const usageImportCommand = define({
     file: { type: "positional", description: "JSONL/JSON file to import (use - for stdin)" },
     dryRun: { type: "boolean", description: "Validate without importing" },
   },
-  run: (ctx) => handleUsageImport(ctx.values),
+  run: async (ctx) => {
+    const { handleUsageImport } = await import("../usage-import.ts")
+    return handleUsageImport(ctx.values)
+  },
 })
 
 const usageRefreshCommand = define({
@@ -112,7 +116,10 @@ const usageRefreshCommand = define({
     to: { type: "string", description: "End date (YYYY-MM-DD)" },
     all: { type: "boolean", description: "Scan all historical data (ignore date range)" },
   },
-  run: (ctx) => handleUsageRefresh(ctx.values as UsageRefreshFlags),
+  run: async (ctx) => {
+    const { handleUsageRefresh } = await import("../usage-refresh.ts")
+    return handleUsageRefresh(ctx.values as UsageRefreshFlags)
+  },
 })
 
 const usageTotalCommand = define({
@@ -124,9 +131,10 @@ const usageTotalCommand = define({
     period: { type: "string", description: "Period: monthly, quarterly, yearly (default: monthly)" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+run: async (ctx) => {
     const period = (ctx.values.period || "monthly") as NamedCycle
-    handleUsageTotal({ from: ctx.values.from, to: ctx.values.to, period, json: ctx.values.json })
+    const { handleUsageTotal } = await import("../usage-total.ts")
+    return handleUsageTotal({ from: ctx.values.from, to: ctx.values.to, period, json: ctx.values.json })
   },
 })
 
