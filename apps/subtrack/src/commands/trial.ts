@@ -1,7 +1,6 @@
 // ── Trial commands ─────────────────────────────────────
 import { define } from "gunshi"
 import { consola } from "@subtrack/lib/logger"
-import { handleTrialAdd, handleTrialList, handleTrialExpiring, handleTrialDelete } from "../trial.ts"
 
 const trialAddCmd = define({
   name: "add",
@@ -15,13 +14,19 @@ const trialAddCmd = define({
     cycle: { type: "string", description: "Billing cycle" },
     notes: { type: "string", description: "Notes" },
   },
-  run: (ctx) => handleTrialAdd(ctx.values),
+  run: async (ctx) => {
+    const { handleTrialAdd } = await import("../trial.ts")
+    return handleTrialAdd(ctx.values)
+  },
 })
 
 const trialListCmd = define({
   name: "list",
   description: "List all free trials",
-  run: () => handleTrialList(),
+  run: async () => {
+    const { handleTrialList } = await import("../trial.ts")
+    return handleTrialList()
+  },
 })
 
 const trialExpiringCmd = define({
@@ -30,9 +35,10 @@ const trialExpiringCmd = define({
   args: {
     days: { type: "positional", description: "Number of days (default: 7)", required: false },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const days = ctx.values.days !== undefined ? Number(ctx.values.days) : 7
-    handleTrialExpiring(days)
+    const { handleTrialExpiring } = await import("../trial.ts")
+    return handleTrialExpiring(days)
   },
 })
 
@@ -42,9 +48,10 @@ const trialDeleteCmd = define({
   args: {
     id: { type: "positional", array: true, description: "Trial ID(s) to delete (omit for interactive selection)", required: false },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const ids = ctx.positionals.slice(1).map(Number).filter((n: number) => !isNaN(n))
-    handleTrialDelete(ids.length > 0 ? ids : undefined)
+    const { handleTrialDelete } = await import("../trial.ts")
+    return handleTrialDelete(ids.length > 0 ? ids : undefined)
   },
 })
 

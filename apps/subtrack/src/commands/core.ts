@@ -1,12 +1,6 @@
 // ── Core subscription commands ──────────────────────────
 import { define } from "gunshi"
 import { consola } from "@subtrack/lib/logger"
-import { handleList, handleDelete, handleClone, handleArchive, handleUnarchive } from "../subscription/core.ts"
-import { handleAdd } from "../subscription/add.ts"
-import { handleEdit } from "../subscription/edit.ts"
-import { handleSearch } from "../search.ts"
-import { handleCancel } from "../cancel.ts"
-import { saveDb } from "../db.ts"
 import { fail } from "../error.ts"
 
 export const listCommand = define({
@@ -30,7 +24,8 @@ export const listCommand = define({
     offset: { type: "string", description: "Number of items to skip" },
     "include-archived": { type: "boolean", description: "Include archived subscriptions" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
+    const { handleList } = await import("../subscription/core.ts")
     const limit = ctx.values.limit !== undefined ? Number(ctx.values.limit) : undefined
     if (limit !== undefined && (isNaN(limit) || limit < 1 || !Number.isInteger(limit))) {
       fail("limit must be a positive integer")
@@ -60,7 +55,7 @@ export const listCommand = define({
       fail("min-price cannot be greater than max-price")
       return
     }
-    handleList({
+    return handleList({
       ...ctx.values,
       limit,
       offset,
@@ -94,7 +89,10 @@ export const addCommand = define({
     contractEnd: { type: "string", description: "Contract end date (YYYY-MM-DD)" },
     autoRenewal: { type: "string", description: "Auto renew: true or false (default: true)" },
   },
-  run: (ctx) => handleAdd(ctx.values),
+  run: async (ctx) => {
+    const { handleAdd } = await import("../subscription/add.ts")
+    return handleAdd(ctx.values)
+  },
 })
 
 export const editCommand = define({
@@ -119,7 +117,10 @@ export const editCommand = define({
     contractEnd: { type: "string", description: "Contract end date (YYYY-MM-DD)" },
     autoRenewal: { type: "string", description: "Auto renew: true or false" },
   },
-  run: (ctx) => handleEdit(ctx.values.id ? Number(ctx.values.id) : undefined, ctx.values),
+  run: async (ctx) => {
+    const { handleEdit } = await import("../subscription/edit.ts")
+    return handleEdit(ctx.values.id ? Number(ctx.values.id) : undefined, ctx.values)
+  },
 })
 
 export const deleteCommand = define({
@@ -128,13 +129,14 @@ export const deleteCommand = define({
   args: {
     id: { type: "positional", array: true, description: "Subscription ID(s) to delete (omit for interactive selection)", required: false },
   },
-  run: (ctx) => {
+run: async (ctx) => {
     const ids = ctx.positionals.slice(1).map(Number)
     if (ids.some((n) => !Number.isInteger(n) || n < 1)) {
       fail("Subscription IDs must be positive integers")
       return
     }
-    handleDelete(ids.length > 0 ? ids : undefined)
+    const { handleDelete } = await import("../subscription/core.ts")
+    return handleDelete(ids.length > 0 ? ids : undefined)
   },
 })
 
@@ -153,6 +155,7 @@ export const cancelCommand = define({
       fail("Valid subscription ID is required")
       return
     }
+    const { handleCancel } = await import("../cancel.ts")
     await handleCancel(id, { force: ctx.values.force, json: ctx.values.json })
   },
 })
@@ -168,14 +171,15 @@ export const cloneCommand = define({
     cycle: { type: "string", description: "Override cycle" },
     tags: { type: "string", description: "Override tags (comma-separated)" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const positionals = ctx.positionals as string[]
     const id = ctx.values.id !== undefined ? Number(ctx.values.id) : positionals[1] ? Number(positionals[1]) : undefined
     if (id === undefined || isNaN(id) || !Number.isInteger(id) || id < 1) {
       fail("Valid subscription ID is required")
       return
     }
-    handleClone(id, ctx.values)
+    const { handleClone } = await import("../subscription/core.ts")
+    return handleClone(id, ctx.values)
   },
 })
 
@@ -185,14 +189,15 @@ export const archiveCommand = define({
   args: {
     id: { type: "positional", description: "Subscription ID to archive" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const positionals = ctx.positionals as string[]
     const id = ctx.values.id !== undefined ? Number(ctx.values.id) : positionals[1] ? Number(positionals[1]) : undefined
     if (id === undefined || isNaN(id) || !Number.isInteger(id) || id < 1) {
       fail("Valid subscription ID is required")
       return
     }
-    handleArchive(id)
+    const { handleArchive } = await import("../subscription/core.ts")
+    return handleArchive(id)
   },
 })
 
@@ -202,14 +207,15 @@ export const unarchiveCommand = define({
   args: {
     id: { type: "positional", description: "Subscription ID to unarchive" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const positionals = ctx.positionals as string[]
     const id = ctx.values.id !== undefined ? Number(ctx.values.id) : positionals[1] ? Number(positionals[1]) : undefined
     if (id === undefined || isNaN(id) || !Number.isInteger(id) || id < 1) {
       fail("Valid subscription ID is required")
       return
     }
-    handleUnarchive(id)
+    const { handleUnarchive } = await import("../subscription/core.ts")
+    return handleUnarchive(id)
   },
 })
 
@@ -223,10 +229,11 @@ export const searchCommand = define({
     tags: { type: "boolean", description: "Search in tags only" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const positionals = ctx.positionals as string[]
     const query = ctx.values.query ?? positionals[1]
-    handleSearch(query, {
+    const { handleSearch } = await import("../search.ts")
+    return handleSearch(query, {
       names: ctx.values.names,
       notes: ctx.values.notes,
       tags: ctx.values.tags,

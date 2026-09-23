@@ -2,12 +2,6 @@
 import { define } from "gunshi"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
-import { handleProfile } from "../profile.ts"
-import { handleAuditList, handleAuditPrune } from "../audit.ts"
-import { handleMaintenance } from "../maintenance.ts"
-import { handleCleanup } from "../cleanup.ts"
-import { handleCurrencyList } from "../currency.ts"
-import { handleDedupe, handleDedupeMerge } from "../dedupe.ts"
 // Lazy imports for MCP to avoid loading MCP SDK WASM at module load time
 import type { Status } from "../types.ts"
 
@@ -34,7 +28,7 @@ const profileSaveCmd = define({
     status: { type: "string", description: "Filter by status: active, paused, cancelled" },
     "payment-method": { type: "string", description: "Filter by payment method" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const name = ctx.values.name
     if (!name) { fail("Profile name required"); return }
     const rawTag = ctx.values.tag as string | string[] | undefined
@@ -42,7 +36,8 @@ const profileSaveCmd = define({
     const tags = tagValues.length > 0
       ? tagValues.flatMap((t: string) => t.split(",").map((s: string) => s.trim()).filter(Boolean))
       : undefined
-    handleProfile("save", name, {
+    const { handleProfile } = await import("../profile.ts")
+    return handleProfile("save", name, {
       tags: tags && tags.length > 0 ? tags : undefined,
       status: ctx.values.status as Status | undefined,
       paymentMethod: ctx.values["payment-method"],
@@ -54,27 +49,39 @@ const profileSwitchCmd = define({
   name: "switch",
   description: "Switch to a saved profile",
   args: { name: { type: "positional", description: "Profile name" } },
-  run: (ctx) => { handleProfile("switch", ctx.values.name) },
+  run: async (ctx) => {
+    const { handleProfile } = await import("../profile.ts")
+    return handleProfile("switch", ctx.values.name)
+  },
 })
 
 const profileListCmd = define({
   name: "list",
   description: "List saved profiles",
-  run: () => handleProfile("list"),
+  run: async () => {
+    const { handleProfile } = await import("../profile.ts")
+    return handleProfile("list")
+  },
 })
 
 const profileShowCmd = define({
   name: "show",
   description: "Show profile details",
   args: { name: { type: "positional", description: "Profile name", required: false } },
-  run: (ctx) => { handleProfile("show", ctx.values.name) },
+  run: async (ctx) => {
+    const { handleProfile } = await import("../profile.ts")
+    return handleProfile("show", ctx.values.name)
+  },
 })
 
 const profileDeleteCmd = define({
   name: "delete",
   description: "Delete a profile",
   args: { name: { type: "positional", description: "Profile name" } },
-  run: (ctx) => { handleProfile("delete", ctx.values.name) },
+  run: async (ctx) => {
+    const { handleProfile } = await import("../profile.ts")
+    return handleProfile("delete", ctx.values.name)
+  },
 })
 
 export const profileCommand = define({
@@ -102,13 +109,14 @@ export const auditListCmd = define({
     to: { type: "string", description: "End date (YYYY-MM-DD)" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const limit = ctx.values.limit !== undefined ? Number(ctx.values.limit) : 50
     if (limit !== undefined && (isNaN(limit) || limit < 1 || !Number.isInteger(limit))) {
       fail("limit must be a positive integer")
       return
     }
-    handleAuditList({ action: ctx.values.action, limit, json: ctx.values.json, from: ctx.values.from, to: ctx.values.to })
+    const { handleAuditList } = await import("../audit.ts")
+    return handleAuditList({ action: ctx.values.action, limit, json: ctx.values.json, from: ctx.values.from, to: ctx.values.to })
   },
 })
 
@@ -120,13 +128,14 @@ export const auditPruneCmd = define({
     force: { type: "boolean", short: "f", description: "Skip confirmation" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const days = ctx.values.days !== undefined ? Number(ctx.values.days) : 90
     if (days !== undefined && (isNaN(days) || days < 1 || !Number.isInteger(days))) {
       fail("days must be a positive integer")
       return
     }
-    handleAuditPrune({ days, force: ctx.values.force, json: ctx.values.json })
+    const { handleAuditPrune } = await import("../audit.ts")
+    return handleAuditPrune({ days, force: ctx.values.force, json: ctx.values.json })
   },
 })
 
@@ -150,7 +159,10 @@ export const maintenanceCommand = define({
     check: { type: "boolean", description: "Run integrity check (default)" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => { handleMaintenance({ vacuum: ctx.values.vacuum, check: ctx.values.check, json: ctx.values.json }) },
+  run: async (ctx) => {
+    const { handleMaintenance } = await import("../maintenance.ts")
+    return handleMaintenance({ vacuum: ctx.values.vacuum, check: ctx.values.check, json: ctx.values.json })
+  },
 })
 
 // ── Cleanup ───────────────────────────────────────────
@@ -163,13 +175,14 @@ export const cleanupCommand = define({
     "audit-days": { type: "string", description: "Prune audit entries older than N days (default: 90)" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const auditDays = ctx.values["audit-days"] !== undefined ? Number(ctx.values["audit-days"]) : 90
     if (auditDays !== undefined && (isNaN(auditDays) || auditDays < 1 || !Number.isInteger(auditDays))) {
       fail("audit-days must be a positive integer")
       return
     }
-    handleCleanup({ vacuum: ctx.values.vacuum, auditDays, json: ctx.values.json })
+    const { handleCleanup } = await import("../cleanup.ts")
+    return handleCleanup({ vacuum: ctx.values.vacuum, auditDays, json: ctx.values.json })
   },
 })
 
@@ -179,7 +192,10 @@ export const currencyCommand = define({
   name: "currency",
   description: "List supported currencies",
   args: { json: { type: "boolean", short: "j", description: "Output as JSON" } },
-  run: (ctx) => handleCurrencyList({ json: ctx.values.json }),
+  run: async (ctx) => {
+    const { handleCurrencyList } = await import("../currency.ts")
+    return handleCurrencyList({ json: ctx.values.json })
+  },
 })
 
 // ── Dedupe ────────────────────────────────────────────
@@ -191,7 +207,7 @@ const dedupeMergeCmd = define({
     keep: { type: "positional", description: "Subscription ID to keep" },
     remove: { type: "positional", description: "Subscription ID to remove" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const positionals = ctx.positionals as string[]
     const keep = ctx.values.keep !== undefined ? Number(ctx.values.keep) : positionals[1] ? Number(positionals[1]) : undefined
     const remove = ctx.values.remove !== undefined ? Number(ctx.values.remove) : positionals[2] ? Number(positionals[2]) : undefined
@@ -199,7 +215,8 @@ const dedupeMergeCmd = define({
       fail("Usage: subtrack dedupe merge <keepId> <removeId>")
       return
     }
-    handleDedupeMerge(keep, remove)
+    const { handleDedupeMerge } = await import("../dedupe.ts")
+    return handleDedupeMerge(keep, remove)
   },
 })
 
@@ -213,12 +230,13 @@ export const dedupeCommand = define({
   subCommands: {
     merge: dedupeMergeCmd,
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const threshold = ctx.values.threshold !== undefined ? Number(ctx.values.threshold) : undefined
     if (threshold !== undefined && (isNaN(threshold) || threshold < 0 || threshold > 1)) {
       fail("threshold must be between 0 and 1")
       return
     }
-    handleDedupe({ threshold, json: ctx.values.json })
+    const { handleDedupe } = await import("../dedupe.ts")
+    return handleDedupe({ threshold, json: ctx.values.json })
   },
 })
