@@ -1,6 +1,7 @@
 import { defineConfig } from "tsdown"
 
 export default defineConfig({
+  entry: ["src/launcher.ts", "src/index.ts"],
   // Force-bundle the workspace lib into dist so the published CLI stays
   // self-contained (nothing outside gunshi/node built-ins).
   deps: {

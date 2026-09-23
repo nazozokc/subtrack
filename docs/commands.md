@@ -53,6 +53,10 @@ subtrack provides the following commands. Most support both interactive and non-
 - [`changes`](#changes)
 - [`receipt`](#receipt)
 - [`template`](#template)
+- [`budget`](#budget)
+- [`dedupe`](#dedupe)
+- [`cancel`](#cancel)
+- [`report`](#report)
 
 </details>
 
@@ -1397,7 +1401,7 @@ subtrack stats --json
 
 ## `currency`
 
-Lists all 36 supported currencies with their display names.
+Lists all 37 supported currencies with their display names.
 
 | Option | Description |
 |--------|-------------|
