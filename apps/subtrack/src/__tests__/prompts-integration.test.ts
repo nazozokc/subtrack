@@ -8,6 +8,7 @@
 import { Writable, PassThrough } from "node:stream"
 import { describe, it, expect, vi } from "vitest"
 import { input, confirm, select, checkbox } from "../prompts.ts"
+import { Renderer } from "../prompts/renderer.ts"
 
 class Capture extends Writable {
   chunks: string[] = []
@@ -256,6 +257,32 @@ describe("checkbox", () => {
     await feed(stdin, "\r")
     await expect(p).resolves.toEqual([])
     expect(stdout.toString()).toContain("none")
+  })
+})
+
+describe("Renderer", () => {
+  it("prefixes every line with a carriage return (raw mode has no ONLCR)", () => {
+    const { stdout } = makeIO()
+    new Renderer(stdout).render("line1\nline2\nline3")
+    expect(stdout.toString()).toBe("\rline1\n\rline2\n\rline3")
+  })
+
+  it("moves up count - 1 rows when clearing in-place (no drift on re-render)", () => {
+    const { stdout } = makeIO()
+    const renderer = new Renderer(stdout)
+    renderer.render("line1\nline2\nline3")
+    stdout.chunks = []
+    renderer.clear()
+    expect(stdout.toString()).toBe("\r\x1b[2A\x1b[J")
+  })
+
+  it("does not move at all for a single-line prompt", () => {
+    const { stdout } = makeIO()
+    const renderer = new Renderer(stdout)
+    renderer.render("? name")
+    stdout.chunks = []
+    renderer.clear()
+    expect(stdout.toString()).toBe("\r\x1b[0A\x1b[J")
   })
 })
 
