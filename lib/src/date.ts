@@ -196,13 +196,31 @@ function dayCycleAnchor(anchorDate: Date, anchorDay: number): Date {
 }
 
 /**
+ * Whole local-calendar days between two dates. Rounding absorbs the ±1 hour
+ * shift of daylight-saving transitions (23- and 25-hour days count as 1).
+ */
+function wholeDaysBetween(from: Date, to: Date): number {
+  return Math.round((to.getTime() - from.getTime()) / DAY_MS)
+}
+
+/**
+ * Date `k` billing-periods after the anchor, advanced by calendar days so
+ * daylight-saving transitions (23/25-hour days) never shift the billing day.
+ */
+function addDayPeriods(anchor: Date, days: number, k: number): Date {
+  const result = new Date(anchor)
+  result.setDate(anchor.getDate() + k * days)
+  return result
+}
+
+/**
  * Next occurrence of an every-N-days cycle at or after `fromDate`
  * (used by weekly, bi-weekly, and custom "Nd" cycles).
  */
 export function nextDayCycleDate(anchorDate: Date, anchorDay: number, days: number, fromDate: Date): Date {
   const anchor = dayCycleAnchor(anchorDate, anchorDay)
   const periods = Math.max(0, Math.ceil((fromDate.getTime() - anchor.getTime()) / (days * DAY_MS)))
-  return new Date(anchor.getTime() + periods * days * DAY_MS)
+  return addDayPeriods(anchor, days, periods)
 }
 
 /**
@@ -216,14 +234,13 @@ export function dayCycleDaysInMonth(
   month: number,
 ): number[] {
   const anchor = dayCycleAnchor(anchorDate, anchorDay)
-  const ms = days * DAY_MS
   const start = new Date(year, month - 1, 1).getTime()
   const end = new Date(year, month - 1, daysInMonth(year, month)).getTime()
+  const kStart = Math.max(0, Math.ceil(wholeDaysBetween(anchor, new Date(start)) / days))
+  const kEnd = Math.floor(wholeDaysBetween(anchor, new Date(end)) / days)
   const result: number[] = []
-  for (let k = Math.max(0, Math.floor((start - anchor.getTime()) / ms)); ; k++) {
-    const t = anchor.getTime() + k * ms
-    if (t > end) break
-    if (t >= start) result.push(new Date(t).getDate())
+  for (let k = kStart; k <= kEnd; k++) {
+    result.push(addDayPeriods(anchor, days, k).getDate())
   }
   return result
 }

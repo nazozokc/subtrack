@@ -102,7 +102,8 @@ describe("suggest matcher: hasPriceConflict", () => {
   })
 
   test("returns false when prices differ by exactly 30% or less", () => {
-    expect(hasPriceConflict({ price: 100, currency: "USD" }, makeSub({ price: 130 }))).toBe(false)
+    // diff 30 / existing 100 = 30% — pins the strict `> 0.3` boundary
+    expect(hasPriceConflict({ price: 130, currency: "USD" }, makeSub({ price: 100 }))).toBe(false)
   })
 
   test("returns false when suggestion has no price", () => {

@@ -182,3 +182,19 @@ test("paused subscriptions are included", async () => {
   expect(entries).toHaveLength(1)
   expect(entries[0]!.subs[0]!.name).toBe("Paused")
 })
+// Same DST guard as the upcoming test: month boundaries must be counted in
+// calendar days, otherwise a fixed-ms interval skips/duplicates a billing day.
+test("day-cycle billing days stay correct across a DST fall-back", async () => {
+  if (process.platform === "win32") return
+  const { toDate, dayCycleDaysInMonth } = await import("@subtrack/lib/date")
+  const originalTz = process.env.TZ
+  process.env.TZ = "America/New_York"
+  try {
+    const anchor = toDate("2026-10-26")
+    // Weekly cycle: Oct 26 + 7d steps -> Nov 2 and Nov 9 fall in November.
+    expect(dayCycleDaysInMonth(anchor, 26, 7, 2026, 11)).toEqual([2, 9, 16, 23, 30])
+  } finally {
+    if (originalTz === undefined) delete process.env.TZ
+    else process.env.TZ = originalTz
+  }
+})

@@ -47,7 +47,7 @@ function renderList<T>(
   const { active, checked, multi, pageSize, columns } = opts
   const { start, end } = visibleWindow(active, items.length, pageSize)
 
-  const lines: string[] = [`\r${cyan("?")} ${message}`]
+  const lines: string[] = [`${cyan("?")} ${message}`]
   if (items.length === 0) {
     lines.push(`  ${dim("No matching choices")}`)
     return lines.join("\n")

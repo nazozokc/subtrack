@@ -341,9 +341,9 @@ describe("cycle validation", () => {
   it("validates day input between 1 and 365", () => {
     expect(validateCycleDays("3")).toBe(true)
     expect(validateCycleDays("365")).toBe(true)
-    expect(validateCycleDays("0")).toBeTruthy()
-    expect(validateCycleDays("366")).toBeTruthy()
-    expect(validateCycleDays("abc")).toBeTruthy()
+    expect(validateCycleDays("0")).toEqual(expect.any(String))
+    expect(validateCycleDays("366")).toEqual(expect.any(String))
+    expect(validateCycleDays("abc")).toEqual(expect.any(String))
   })
 })
 

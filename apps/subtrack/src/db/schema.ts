@@ -15,21 +15,27 @@ export function getSchemaVersion(db: DatabaseSync): number {
 
 /** Apply schema creation and migrations to a database instance. */
 export function runMigrations(db: DatabaseSync): void {
-  const version = getSchemaVersion(db)
-
   // v0 → v1: baseline schema. Idempotent, so it also repairs databases
   // created before versioning was introduced (user_version = 0).
-  if (version < 1) {
-    migrateToV1(db)
-  }
+  const version = getSchemaVersion(db)
+  if (version < SCHEMA_VERSION) {
+    db.exec("BEGIN TRANSACTION")
+    try {
+      if (version < 1) {
+        migrateToV1(db)
+      }
 
-  // Future migrations go here:
-  // if (version < 2) migrateToV2(db)
-  // if (version < 3) migrateToV3(db)
+      // Future migrations go here:
+      // if (version < 2) migrateToV2(db)
+      // if (version < 3) migrateToV3(db)
 
-  // Record the latest version so migration steps only run once
-  if (getSchemaVersion(db) < SCHEMA_VERSION) {
-    db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
+      // Record the latest version so migration steps only run once
+      db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
+      db.exec("COMMIT")
+    } catch (error) {
+      db.exec("ROLLBACK")
+      throw error
+    }
   }
 
   // Verify database integrity on startup

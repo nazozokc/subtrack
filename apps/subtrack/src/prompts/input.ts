@@ -35,7 +35,7 @@ export async function input(config: InputConfig): Promise<string> {
     if (strlen(value) > maxValue) {
       shown = `…${takeTail(value, maxValue - 1)}`
     }
-    const line = `\r${prefix}${shown}`
+    const line = `${prefix}${shown}`
     const errorLine = error !== null ? `\n${red(`✖ ${error}`)}` : ""
     renderer.render(line + errorLine)
   }

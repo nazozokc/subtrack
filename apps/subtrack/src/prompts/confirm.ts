@@ -17,7 +17,9 @@ export type ConfirmConfig = PromptStreams & {
 export async function confirm(config: ConfirmConfig): Promise<boolean> {
   const { stdin, stdout, interactive } = resolveStreams(config)
   if (!interactive) {
-    return fallback(config.default !== undefined, config.default ?? true)
+    // No user reply in a script: decline instead of silently answering the
+    // default (a default-true confirm would otherwise write data unprompted).
+    return fallback(config.default !== undefined, false)
   }
 
   const renderer = new Renderer(stdout)
@@ -30,7 +32,7 @@ export async function confirm(config: ConfirmConfig): Promise<boolean> {
         : config.default
           ? dim("(Y/n)")
           : dim("(y/N)")
-    const line = `\r${cyan("?")} ${config.message} ${hint}`
+    const line = `${cyan("?")} ${config.message} ${hint}`
     const errorLine = error !== null ? `\n${red(`✖ ${error}`)}` : ""
     renderer.render(line + errorLine)
   }
@@ -45,7 +47,7 @@ export async function confirm(config: ConfirmConfig): Promise<boolean> {
       }
       if (key.name === "eof") {
         renderer.clear()
-        return fallback(config.default !== undefined, config.default ?? true)
+        return fallback(config.default !== undefined, false)
       }
       if (key.name === "return") {
         if (config.default !== undefined) {

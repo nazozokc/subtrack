@@ -5,7 +5,7 @@ import { CliTable3 } from "@subtrack/lib/table"
 import type { SharedArgs, Currency, Cycle } from "./types.ts"
 import { TABLE_CHARS, getTableStyle, sectionTitle, calcColumnWidths, zebraRow } from "./display-constants.ts"
 import type { ColumnConfig } from "./display-constants.ts"
-import { periodFactor } from "@subtrack/lib/date"
+import { periodFactor, formatCycle } from "@subtrack/lib/date"
 import { getSubscriptions, getNonCancelledSubscriptions } from "./db.ts"
 import { formatPrice } from "./price.ts"
 import { fetchFxRates, convertPrice, tryConvert } from "./fx.ts"
@@ -80,11 +80,11 @@ export async function handleForecast(
     })
     if (addHypothetical) {
       const name = await input({ message: "Subscription name:", validate: (v: string) => (v ? true : "Name required") })
-      const priceStr = await input({ message: "Monthly price:", validate: (v: string) => (Number(v) > 0 ? true : "Enter a positive number") })
       const currency = await select({ message: "Currency:", choices: CURRENCY_CHOICES })
       const cycleRes = await promptCycle(undefined, "Cycle:")
       if (!cycleRes) return
       const cycle = cycleRes.value
+      const priceStr = await input({ message: `Amount per ${formatCycle(cycle)}:`, validate: (v: string) => (Number(v) > 0 ? true : "Enter a positive number") })
       addEntry = {
         name: name.trim(),
         price: Math.round(Number(priceStr)),

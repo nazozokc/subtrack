@@ -183,7 +183,7 @@ Each tool accepts a JSON object with the following parameters:
 
 ## Validation
 
-`add_subscription` and `edit_subscription` validate `currency` (supported ISO 4217 codes), `cycle` (`weekly`, `bi-weekly`, `monthly`, `quarterly`, `semi-annual`, `yearly`), and `status` (`active`, `paused`, `cancelled`, `archived`). Invalid values are rejected with an error. `bulk_operations` validates the target status the same way and reports per-entry errors instead of silently skipping them.
+`add_subscription` and `edit_subscription` validate `currency` (supported ISO 4217 codes), `cycle` (`weekly`, `bi-weekly`, `monthly`, `quarterly`, `semi-annual`, `yearly`, or `Nd` for a custom day count, 1–365), and `status` (`active`, `paused`, `cancelled`, `archived`). Invalid values are rejected with an error. `bulk_operations` validates the target status the same way and reports per-entry errors instead of silently skipping them.
 
 ## Example usage
 

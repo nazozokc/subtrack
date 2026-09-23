@@ -82,6 +82,10 @@ export function parseKeys(buf: string): { keys: Key[]; rest: string } {
       i++
     } else if (code === 0) {
       i++ // ignore null bytes
+    } else if (code < 0x20) {
+      // Other C0 control bytes (Ctrl+A … Ctrl+Z): never insert as text.
+      keys.push({ name: `ctrl-${String.fromCharCode(code + 0x60)}`, ctrl: true })
+      i++
     } else {
       const char = String.fromCodePoint(code)
       keys.push({ name: char, str: char })

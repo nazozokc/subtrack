@@ -38,7 +38,7 @@ export async function search<const T>(config: SearchConfig<T>): Promise<T> {
   const displayName = (item: Choice<T>) => item.name ?? String(item.value)
 
   function render() {
-    const lines: string[] = [`\r${cyan("?")} ${config.message} ${query}`]
+    const lines: string[] = [`${cyan("?")} ${config.message} ${query}`]
     if (loading) {
       lines.push(`  ${dim("Searching…")}`)
     } else if (items.length === 0) {
@@ -90,52 +90,56 @@ export async function search<const T>(config: SearchConfig<T>): Promise<T> {
     }
   }
 
-  const outcome = await withRawMode(stdin, stdout, async ({ readKey }) => {
-    await reload() // initial fetch with empty query
-    for (;;) {
-      const key = await readKey()
-      if (key.name === "ctrl-c" || key.name === "escape") {
-        renderer.clear()
-        throw new ExitPromptError()
+  let outcome: { value: T; name: string } | undefined
+  try {
+    outcome = await withRawMode(stdin, stdout, async ({ readKey }) => {
+      await reload() // initial fetch with empty query
+      for (;;) {
+        const key = await readKey()
+        if (key.name === "ctrl-c" || key.name === "escape") {
+          renderer.clear()
+          throw new ExitPromptError()
+        }
+        if (key.name === "eof") {
+          renderer.clear()
+          return undefined
+        }
+        if (key.name === "up" || key.name === "down") {
+          if (items.length === 0) continue
+          active += key.name === "up" ? -1 : 1
+          if (active < 0) active = items.length - 1
+          else if (active >= items.length) active = 0
+          render()
+          continue
+        }
+        if (key.name === "return") {
+          if (loading || debounceTimer !== null) continue // stale results
+          const item = items[active]
+          if (!item) continue
+          renderer.clear()
+          return { value: item.value, name: stripAnsi(displayName(item)) }
+        }
+        if (key.name === "backspace") {
+          if (query.length === 0) continue
+          query = query.slice(0, -1)
+          active = 0
+          scheduleReload()
+          continue
+        }
+        if (key.str !== undefined && !key.ctrl && key.str.length === 1) {
+          query += key.str
+          active = 0
+          scheduleReload()
+        }
       }
-      if (key.name === "eof") {
-        renderer.clear()
-        return undefined
-      }
-      if (key.name === "up" || key.name === "down") {
-        if (items.length === 0) continue
-        active += key.name === "up" ? -1 : 1
-        if (active < 0) active = items.length - 1
-        else if (active >= items.length) active = 0
-        render()
-        continue
-      }
-      if (key.name === "return") {
-        const item = items[active]
-        if (!item) continue
-        renderer.clear()
-        return { value: item.value, name: stripAnsi(displayName(item)) }
-      }
-      if (key.name === "backspace") {
-        if (query.length === 0) continue
-        query = query.slice(0, -1)
-        active = 0
-        scheduleReload()
-        continue
-      }
-      if (key.str !== undefined && !key.ctrl && key.str.length === 1) {
-        query += key.str
-        active = 0
-        scheduleReload()
-      }
-    }
-  })
-
-  if (outcome === undefined) {
+    })
+  } finally {
+    // Every exit path — resolve, EOF, or Ctrl+C/ESC — cancels pending work so
+    // a stale debounced reload can never render after the prompt has exited.
     invalidate()
-    throw new ExitPromptError()
   }
-  invalidate()
+
+  if (outcome === undefined) throw new ExitPromptError()
   finishPrompt(stdout, config.message, outcome.name)
   return outcome.value
 }
