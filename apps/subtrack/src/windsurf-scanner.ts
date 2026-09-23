@@ -1,12 +1,10 @@
-import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { consola } from "@subtrack/lib/logger"
-import { DatabaseSync } from "node:sqlite"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
 import { safeJsonParse } from "@subtrack/lib/json"
-import { isDateInRange, estimateTokenSplit } from "@subtrack/lib/date"
+import { estimateTokenSplit } from "@subtrack/lib/date"
+import { findExistingPath, scanSqliteKv } from "./scanner-support.ts"
 
 /**
  * Known paths for Windsurf's state.vscdb across platforms.
@@ -20,10 +18,7 @@ function findWindsurfDb(): string | null {
     // Windows (via WSL or Git Bash)
     join(homedir(), "AppData", "Roaming", "Windsurf", "User", "globalStorage", "state.vscdb"),
   ]
-  for (const p of candidates) {
-    if (existsSync(p)) return p
-  }
-  return null
+  return findExistingPath(candidates)
 }
 
 /**
@@ -70,61 +65,9 @@ function parseWindsurfKvValue(key: string, value: string): AddLlmUsageFromLogArg
  */
 export function scanWindsurf(from?: string, to?: string): ScanResult {
   const dbPath = findWindsurfDb()
-  if (!dbPath) {
-    consola.info("Windsurf state DB not found — skip")
-    return { source: "windsurf", entries: [] }
-  }
-
-  consola.info(`Reading Windsurf DB: ${dbPath}`)
-
-  let db: DatabaseSync | null = null
-  const entries: AddLlmUsageFromLogArgs[] = []
-
-  try {
-    db = new DatabaseSync(dbPath, { readOnly: true })
-
-    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as unknown as {
-      name: string
-    }[]
-    const tableNames = tables.map((r) => String(r.name))
-    const knownTables = ["windsurfDiskKV", "ItemTable"]
-    const tableName = knownTables.find((t) => tableNames.includes(t))
-    if (!tableName) {
-      consola.info("No known Windsurf KV table found")
-      return { source: "windsurf", entries: [] }
-    }
-
-    // tableName is guaranteed to be one of `knownTables` by construction
-    // (see the `.find` above), so no further SQL injection guard is needed
-
-    // Fetch key-value pairs matching usage-related patterns
-    const rows = db
-      .prepare(`SELECT key, value FROM "${tableName}" WHERE key LIKE '%token%' OR key LIKE '%usage%' OR key LIKE '%completion%'`)
-      .all() as unknown as { key: string; value: string }[]
-
-    if (rows.length === 0) {
-      consola.info("No data found in Windsurf DB")
-      return { source: "windsurf", entries: [] }
-    }
-
-    for (const row of rows) {
-      const key = String(row.key ?? "")
-      const rawValue = String(row.value ?? "")
-
-      const parsed = parseWindsurfKvValue(key, rawValue)
-      if (parsed && isDateInRange(parsed.date, from, to)) {
-        entries.push(parsed)
-      }
-    }
-  } catch (err) {
-    consola.warn(`Error scanning Windsurf DB: ${String(err)}`)
-    return { source: "windsurf", entries: [] }
-  } finally {
-    if (db) db.close()
-  }
-
-  consola.info(`Found ${entries.length} usage entr${entries.length === 1 ? "y" : "ies"} in Windsurf DB`)
-  return { source: "windsurf", entries }
+  return scanSqliteKv("Windsurf", dbPath, ["windsurfDiskKV", "ItemTable"],
+    (table) => `SELECT key, value FROM "${table}" WHERE key LIKE '%token%' OR key LIKE '%usage%' OR key LIKE '%completion%'`,
+    parseWindsurfKvValue, from, to)
 }
 
 /**
