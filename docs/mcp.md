@@ -110,7 +110,7 @@ Each tool accepts a JSON object with the following parameters:
 - `name` (string, required): Subscription name
 - `price` (number, required): Price in smallest currency unit
 - `currency` (string, required): Currency code (e.g. `USD`, `JPY`)
-- `cycle` (string, required): Billing cycle — `weekly`, `bi-weekly`, `monthly`, `quarterly`, `semi-annual`, `yearly`
+- `cycle` (string, required): Billing cycle — `weekly`, `bi-weekly`, `monthly`, `quarterly`, `semi-annual`, `yearly`, or `Nd` for a custom day count (e.g. `3d`, 1–365)
 - `tags` (string, optional): Comma-separated tags
 - `billingDay` (number, optional): Billing day of month (1–31)
 - `status` (string, optional): `active`, `paused`, `cancelled`

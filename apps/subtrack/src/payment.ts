@@ -1,7 +1,8 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
-import type { SharedArgs, Currency, Cycle } from "./types.ts"
-import { periodFactor, getPeriodDateRange } from "@subtrack/lib/date"
+import type { SharedArgs, Currency } from "./types.ts"
+import { periodFactor, getPeriodDateRange, formatCycle } from "@subtrack/lib/date"
+import type { NamedCycle } from "@subtrack/lib/date"
 import { getNonCancelledSubscriptions, getLlmUsageTotal, getLlmUsageTotalByProvider, getAllPriceChanges } from "./db.ts"
 import { formatPrice, formatUsdCost } from "./price.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
@@ -14,7 +15,7 @@ import { writeJson } from "./presentation/output.ts"
 export type JsonOptions = { json?: boolean }
 
 export const showPayment = async (
-  period: Cycle = "monthly",
+  period: NamedCycle = "monthly",
   currency?: Currency,
   subs?: SharedArgs[],
   includeApi?: boolean,
@@ -162,7 +163,7 @@ export function calcSubTotal(
   subs: SharedArgs[],
   rates: FxRates | null,
   targetCurrency: Currency | undefined,
-  period: Cycle = "monthly",
+  period: NamedCycle = "monthly",
 ): CcyTotals {
   const totals: CcyTotals = {}
   for (const sub of subs) {
@@ -191,7 +192,7 @@ export function calcPreviousTotals(
   activeSubs: SharedArgs[],
   rates: FxRates | null,
   targetCurrency: Currency | undefined,
-  period: Cycle = "monthly",
+  period: NamedCycle = "monthly",
 ): CcyTotals {
   const priceChanges = getAllPriceChanges()
   const priceBefore: Record<number, { price: number; currency: string }> = {}
@@ -279,7 +280,7 @@ export function showSummary(subs?: SharedArgs[]): void {
   if (data.mostExpensive) {
     const me = data.mostExpensive
     consola.log(
-      `Most expensive:       ${pc.bold(me.name)} (${formatPrice(me.price, me.currency)}/${me.cycle})`,
+      `Most expensive:       ${pc.bold(me.name)} (${formatPrice(me.price, me.currency)}/${formatCycle(me.cycle)})`,
     )
   }
 
@@ -310,7 +311,7 @@ export function showSummary(subs?: SharedArgs[]): void {
 // ── Command handlers ─────────────────────────────────────
 
 export async function handlePayment(
-  period: Cycle,
+  period: NamedCycle,
   options: { currency?: string; api?: boolean; method?: boolean } & JsonOptions,
 ) {
   // Show notification banner for non-JSON output

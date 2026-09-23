@@ -44,12 +44,14 @@ import { handleProfile } from "./profile.ts"
 import { handleCurrencyList } from "./currency.ts"
 import { handleMcp } from "./commands.ts"
 import { CYCLE_CHOICES } from "./prompts.ts"
+import { formatCycle } from "@subtrack/lib/date"
+import type { NamedCycle } from "@subtrack/lib/date"
 import { calcSummary, calcSubTotal } from "./payment.ts"
 import { resolveBudget } from "./budget.ts"
 import { calcUpcoming } from "./upcoming.ts"
 import { formatPrice } from "./price.ts"
 import { divider } from "./display-constants.ts"
-import type { Cycle, Status } from "./types.ts"
+import type { Status } from "./types.ts"
 
 type MainChoice = "view" | "add" | "manage" | "report" | "data" | "config" | "system" | "quit"
 
@@ -158,7 +160,7 @@ async function pickSubscription(message: string, status?: Status): Promise<numbe
     pageSize: 10,
     loop: false,
     choices: subs.map((s) => ({
-      name: `#${s.id} ${s.name} — ${formatPrice(s.price, s.currency)}/${s.cycle}${s.status !== "active" ? ` (${s.status})` : ""}`,
+      name: `#${s.id} ${s.name} — ${formatPrice(s.price, s.currency)}/${formatCycle(s.cycle)}${s.status !== "active" ? ` (${s.status})` : ""}`,
       value: s.id,
     })),
   })
@@ -177,8 +179,8 @@ async function pickTag(message: string): Promise<string | null> {
   })
 }
 
-async function pickPeriod(message = "select period"): Promise<Cycle> {
-  return select<Cycle>({ message, choices: CYCLE_CHOICES })
+async function pickPeriod(message = "select period"): Promise<NamedCycle> {
+  return select<NamedCycle>({ message, choices: CYCLE_CHOICES })
 }
 
 // ── View & Search ─────────────────────────────────────

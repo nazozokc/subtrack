@@ -1,8 +1,9 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { CliTable3 } from "@subtrack/lib/table"
-import type { Currency, Cycle, CompareOptions } from "./types.ts"
+import type { Currency, CompareOptions } from "./types.ts"
 import { periodFactor, getPeriodDateRange, getPreviousPeriodDateRange, SHORT_MONTH_NAMES } from "@subtrack/lib/date"
+import type { NamedCycle } from "@subtrack/lib/date"
 import { getNonCancelledSubscriptions, getLlmUsageTotal, getAllPriceChanges } from "./db.ts"
 import { formatPrice } from "./price.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
@@ -23,7 +24,7 @@ type CompareRow = {
   isGrandTotal?: boolean
 }
 
-function periodLabel(period: Cycle): string {
+function periodLabel(period: NamedCycle): string {
   switch (period) {
     case "monthly": return "month"
     case "yearly": return "year"
@@ -106,7 +107,7 @@ function renderCompareTable(
 }
 
 export async function showCompare(
-  period: Cycle = "monthly",
+  period: NamedCycle = "monthly",
   options: { currency?: string; api?: boolean } = {},
 ): Promise<void> {
   const subs = getNonCancelledSubscriptions()
@@ -239,7 +240,7 @@ export async function showCompare(
 // ── Command handler ──────────────────────────────────────
 
 export async function handleCompare(
-  period: Cycle,
+  period: NamedCycle,
   options: CompareOptions = {},
 ): Promise<void> {
   if (options.json) {

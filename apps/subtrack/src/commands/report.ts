@@ -15,7 +15,8 @@ import { handleOptimize } from "../optimize.ts"
 import { handleStats } from "../stats.ts"
 import { handleBudget } from "../budget.ts"
 import { handleReport } from "../report.ts"
-import type { Cycle, NotifyChannel } from "../types.ts"
+import type { NamedCycle } from "@subtrack/lib/date"
+import type { NotifyChannel } from "../types.ts"
 import { fail } from "../error.ts"
 
 export const summaryCommand = define({
@@ -38,7 +39,7 @@ export const paymentCommand = define({
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
   run: (ctx) => {
-    const period = (ctx.values.period || "monthly") as Cycle
+    const period = (ctx.values.period || "monthly") as NamedCycle
     return handlePayment(period, {
       currency: ctx.values.currency,
       api: ctx.values.api,
@@ -93,7 +94,7 @@ export const compareCommand = define({
     api: { type: "boolean", short: "a", description: "Include LLM API usage costs" },
   },
   run: (ctx) => {
-    const period = (ctx.values.period || "monthly") as Cycle
+    const period = (ctx.values.period || "monthly") as NamedCycle
     handleCompare(period, { currency: ctx.values.currency, api: ctx.values.api })
   },
 })

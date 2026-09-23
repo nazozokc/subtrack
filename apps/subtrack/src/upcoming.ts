@@ -5,7 +5,8 @@ import { getSubscriptions, getNonCancelledSubscriptions } from "./db.ts"
 import { formatPrice } from "./price.ts"
 import { fetchFxRates, tryConvert } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
-import { toDate, formatDate, formatShortDate, dateWithClampedDay, daysUntil } from "@subtrack/lib/date"
+import { toDate, formatDate, formatShortDate, dateWithClampedDay, daysUntil, cycleDays } from "@subtrack/lib/date"
+import type { NamedCycle } from "@subtrack/lib/date"
 import { runPreCommandHooks } from "./pre-command.ts"
 
 function getBillingDay(sub: SharedArgs): number {
@@ -27,7 +28,15 @@ function periodDate(anchorDate: Date, periodMonths: number, k: number, day: numb
 }
 
 export function nextDateForCycle(anchorDay: number, anchorDate: Date, cycle: Cycle, fromDate: Date): Date {
-  switch (cycle) {
+  const dayCycle = cycleDays(cycle)
+  if (dayCycle !== null) {
+    // Every N days from the anchor (billing day of the anchor month)
+    const anchor = dateWithClampedDay(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDay)
+    const msPerPeriod = dayCycle * 24 * 60 * 60 * 1000
+    const periodsSince = Math.ceil((fromDate.getTime() - anchor.getTime()) / msPerPeriod)
+    return new Date(anchor.getTime() + Math.max(0, periodsSince) * msPerPeriod)
+  }
+  switch (cycle as NamedCycle) {
     case "monthly": {
       // Calculate next billing date based on anchor day
       const candidate = dateWithClampedDay(fromDate.getFullYear(), fromDate.getMonth(), anchorDay)

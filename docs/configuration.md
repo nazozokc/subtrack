@@ -153,8 +153,10 @@ View the full list with descriptions using:
 subtrack currency
 ```
 
-### Supported billing cycles (6)
+### Supported billing cycles
 
 ```
 weekly  bi-weekly  monthly  quarterly  semi-annual  yearly
 ```
+
+Custom day-based cycles are also supported: use `Nd` (e.g. `3d` for a 3-day trial cycle, 1–365 days) via the `--cycle` flag or the "custom (every N days)" entry in the interactive prompt. Displayed as "every N days".

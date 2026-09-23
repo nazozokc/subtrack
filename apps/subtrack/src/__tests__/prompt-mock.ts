@@ -57,5 +57,22 @@ export function createPromptMock(actual: typeof PromptModule) {
         return { value: await select({ message, choices }), prompted: true }
       },
     ),
+    promptCycle: vi.fn(
+      async (flag: string | undefined, message: string = "cycle") => {
+        if (flag !== undefined) {
+          if (!actual.isValidCycle(flag)) {
+            fail(`Invalid cycle: "${flag}" (use e.g. "monthly" or "3d")`)
+            return null
+          }
+          return { value: flag, prompted: false }
+        }
+        const choice = await select({ message, choices: actual.CYCLE_CHOICES })
+        if (choice === actual.CUSTOM_CYCLE) {
+          const days = await input({ message: "days per cycle (e.g. 3):", validate: actual.validateCycleDays })
+          return { value: `${days}d`, prompted: true }
+        }
+        return { value: choice, prompted: true }
+      },
+    ),
   }
 }

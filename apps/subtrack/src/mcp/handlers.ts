@@ -27,6 +27,7 @@ import {
 } from "../db.ts"
 import { calcSummary, calcSubTotal, calcPreviousTotals } from "../payment.ts"
 import { getPeriodDateRange, getPreviousPeriodDateRange, periodFactor } from "@subtrack/lib/date"
+import type { NamedCycle } from "@subtrack/lib/date"
 import { calcCalendarEntries } from "../calendar.ts"
 import { exportCsv, exportJson, exportMd } from "../export.ts"
 import { fetchFxRates, convertPrice } from "../fx.ts"
@@ -272,7 +273,7 @@ export async function handleGetForecast(args?: Record<string, unknown>): Promise
 }
 
 export async function handleCompare(args?: Record<string, unknown>): Promise<McpResponse> {
-  const period = (args?.period as Cycle | undefined) ?? "monthly"
+  const period = (args?.period as NamedCycle | undefined) ?? "monthly"
   const targetCurrency = args?.currency as Currency | undefined
 
   let rates: FxRates | null = null

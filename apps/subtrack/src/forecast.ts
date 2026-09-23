@@ -12,7 +12,7 @@ import { fetchFxRates, convertPrice, tryConvert } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
 import {
   CURRENCY_CHOICES,
-  CYCLE_CHOICES,
+  promptCycle,
 } from "./prompts.ts"
 
 export type ForecastOptions = {
@@ -82,7 +82,9 @@ export async function handleForecast(
       const name = await input({ message: "Subscription name:", validate: (v: string) => (v ? true : "Name required") })
       const priceStr = await input({ message: "Monthly price:", validate: (v: string) => (Number(v) > 0 ? true : "Enter a positive number") })
       const currency = await select({ message: "Currency:", choices: CURRENCY_CHOICES })
-      const cycle = await select({ message: "Cycle:", choices: CYCLE_CHOICES })
+      const cycleRes = await promptCycle(undefined, "Cycle:")
+      if (!cycleRes) return
+      const cycle = cycleRes.value
       addEntry = {
         name: name.trim(),
         price: Math.round(Number(priceStr)),

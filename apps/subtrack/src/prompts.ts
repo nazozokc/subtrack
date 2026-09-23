@@ -1,6 +1,8 @@
 import { checkbox, confirm, input, search, select } from "./prompts/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
+import { cycleDays } from "@subtrack/lib/date"
+import type { NamedCycle } from "@subtrack/lib/date"
 import type { Currency, Cycle, Status } from "./types.ts"
 
 export { checkbox, confirm, input, search, select }
@@ -53,7 +55,15 @@ export const STATUS_CHOICES: { name: string; value: Status }[] = [
   { name: "archived", value: "archived" },
 ]
 
-export const CYCLE_CHOICES: { name: string; value: Cycle }[] = [
+/** Sentinel value returned by the cycle prompt when a custom day count is chosen. */
+export const CUSTOM_CYCLE = "custom"
+
+export const CUSTOM_CYCLE_CHOICE = {
+  name: "custom (every N days)",
+  value: CUSTOM_CYCLE,
+} as const
+
+export const CYCLE_CHOICES: { name: string; value: NamedCycle }[] = [
   { name: "weekly", value: "weekly" },
   { name: "bi-weekly", value: "bi-weekly" },
   { name: "monthly", value: "monthly" },
@@ -71,7 +81,16 @@ export function isValidCurrency(v: string): v is Currency {
 }
 
 export function isValidCycle(v: string): v is Cycle {
-  return CYCLE_CHOICES.some((c) => c.value === v)
+  if (CYCLE_CHOICES.some((c) => c.value === v)) return true
+  return cycleDays(v as Cycle) !== null
+}
+
+export function validateCycleDays(v: string): string | true {
+  if (!v.trim()) return "Days per cycle cannot be empty"
+  const n = Number(v)
+  if (!Number.isInteger(n) || n < 1 || n > 365)
+    return "Enter a number between 1 and 365"
+  return true
 }
 
 export function isValidStatus(v: string): v is Status {
@@ -215,6 +234,33 @@ export async function promptSelect<T extends string>(
     return { value: flag, prompted: false }
   }
   return { value: await select({ message, choices }), prompted: true }
+}
+
+/**
+ * Prompt for a billing cycle: pick a named preset, or choose the custom
+ * entry and type a day count (e.g. 3 → cycle "3d" for a 3-day trial cycle).
+ * Flag values follow the same rule and accept "Nd" directly.
+ */
+export async function promptCycle(
+  flag: string | undefined,
+  message = "cycle",
+  io?: { stdin?: NodeJS.ReadStream; stdout?: NodeJS.WriteStream },
+): Promise<{ value: Cycle; prompted: boolean } | null> {
+  if (flag !== undefined) {
+    if (!isValidCycle(flag)) {
+      fail(`Invalid cycle "${flag}". Valid: ${validChoices(CYCLE_CHOICES)}, or "Nd" (days)`)
+      return null
+    }
+    return { value: flag, prompted: false }
+  }
+  const choice = await select<Cycle | typeof CUSTOM_CYCLE>({
+    message,
+    choices: [...CYCLE_CHOICES, CUSTOM_CYCLE_CHOICE],
+    ...io,
+  })
+  if (choice !== CUSTOM_CYCLE) return { value: choice, prompted: true }
+  const days = await input({ message: "days per cycle (e.g. 3):", validate: validateCycleDays, ...io })
+  return { value: `${Number(days.trim())}d`, prompted: true }
 }
 
 // ── LLM API usage prompts ─────────────────────────────────

@@ -15,12 +15,12 @@ import {
 import type { ColumnConfig } from "./display-constants.ts"
 import {
   CURRENCY_CHOICES,
-  CYCLE_CHOICES,
   validateTrialName,
   validateExpiresAt,
   validateNotes,
   promptString,
   promptSelect,
+  promptCycle,
 } from "./prompts.ts"
 import { daysUntil } from "@subtrack/lib/date"
 
@@ -80,12 +80,7 @@ async function resolveTrialAddOptions(flags: TrialAddFlags): Promise<AddTrialArg
   const currency = price !== null ? (currencyRes?.value ?? "USD") : null
 
   // cycle (optional)
-  const cycleRes = await promptSelect(
-    flags.cycle,
-    "cycle",
-    CYCLE_CHOICES,
-    (v: string): v is string => CYCLE_CHOICES.some((c) => c.value === v),
-  )
+  const cycleRes = await promptCycle(flags.cycle)
   const cycle = price !== null ? (cycleRes?.value ?? "monthly") : null
 
   // notes (optional)

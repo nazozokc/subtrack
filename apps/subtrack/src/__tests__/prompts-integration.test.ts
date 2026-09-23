@@ -7,7 +7,7 @@
  */
 import { Writable, PassThrough } from "node:stream"
 import { describe, it, expect, vi } from "vitest"
-import { input, confirm, select, checkbox } from "../prompts.ts"
+import { input, confirm, select, checkbox, isValidCycle, validateCycleDays, promptCycle } from "../prompts.ts"
 import { Renderer } from "../prompts/renderer.ts"
 import { strlen, takeTail } from "../prompts/ansi.ts"
 
@@ -316,6 +316,55 @@ describe("ansi width helpers", () => {
   it("is CJK-width aware", () => {
     expect(takeTail("あいうえお", 4)).toBe("えお")
     expect(strlen("えお")).toBe(4)
+  })
+})
+
+describe("cycle validation", () => {
+  it("accepts named cycles and valid custom day cycles", () => {
+    expect(isValidCycle("monthly")).toBe(true)
+    expect(isValidCycle("yearly")).toBe(true)
+    expect(isValidCycle("weekly")).toBe(true)
+    expect(isValidCycle("1d")).toBe(true)
+    expect(isValidCycle("3d")).toBe(true)
+    expect(isValidCycle("365d")).toBe(true)
+  })
+
+  it("rejects invalid day cycles", () => {
+    expect(isValidCycle("0d")).toBe(false)
+    expect(isValidCycle("366d")).toBe(false)
+    expect(isValidCycle("d")).toBe(false)
+    expect(isValidCycle("3")).toBe(false)
+    expect(isValidCycle("3D")).toBe(false)
+    expect(isValidCycle("3 days")).toBe(false)
+  })
+
+  it("validates day input between 1 and 365", () => {
+    expect(validateCycleDays("3")).toBe(true)
+    expect(validateCycleDays("365")).toBe(true)
+    expect(validateCycleDays("0")).toBeTruthy()
+    expect(validateCycleDays("366")).toBeTruthy()
+    expect(validateCycleDays("abc")).toBeTruthy()
+  })
+})
+
+describe("promptCycle", () => {
+  it("accepts a valid flag without prompting", async () => {
+    await expect(promptCycle("3d")).resolves.toEqual({ value: "3d", prompted: false })
+    await expect(promptCycle("monthly")).resolves.toEqual({ value: "monthly", prompted: false })
+  })
+
+  it("rejects an invalid flag", async () => {
+    await expect(promptCycle("0d")).resolves.toBeNull()
+  })
+
+  it("supports the custom entry and collects days interactively", async () => {
+    const { stdin, stdout } = makeIO()
+    const p = promptCycle(undefined, "Cycle:", { stdin, stdout })
+    await tick()
+    await feed(stdin, "\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\r") // pick "custom (every N days)"
+    await tick()
+    await feed(stdin, "3\r") // days input
+    await expect(p).resolves.toEqual({ value: "3d", prompted: true })
   })
 })
 

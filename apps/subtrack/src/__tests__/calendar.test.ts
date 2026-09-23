@@ -132,6 +132,18 @@ test("weekly subscription appears on each billing day in the month", async () =>
   expect(feb.map((e) => e.day)).toEqual([2, 9, 16, 23])
 })
 
+test("custom day cycle (3d) appears every 3 days from anchor month", async () => {
+  const db = await import("../db.ts")
+  // createdAt Jan 5 -> anchor Jan 5, then Jan 8, 11, 14, ... every 3 days
+  db.writeSubscription({ name: "Trial", price: 100, currency: "JPY", cycle: "3d", tags: [], status: "active", billingDay: null, createdAt: "2026-01-05" })
+
+  const { calcCalendarEntries } = await import("../calendar.ts")
+  const jan = calcCalendarEntries(1, 2026)
+  expect(jan.map((e) => e.day)).toEqual([5, 8, 11, 14, 17, 20, 23, 26, 29])
+  const feb = calcCalendarEntries(2, 2026)
+  expect(feb.map((e) => e.day)).toEqual([1, 4, 7, 10, 13, 16, 19, 22, 25, 28])
+})
+
 test("calendar falls back to createdAt day when billingDay is unset", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "NoDay", price: 1000, currency: "JPY", cycle: "monthly", tags: [], status: "active", billingDay: null, createdAt: "2026-01-17" })

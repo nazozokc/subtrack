@@ -121,7 +121,7 @@ Adds a new subscription. Without flags, prompts for all fields interactively. Pr
 | `--name <name>` | Subscription name (max 100 characters) |
 | `--price <price>` | Payment amount — integer, non-negative, max 99,999,999 |
 | `--currency <C>` | Currency code (ISO 4217). Accepts any 3-letter code; interactive mode provides a curated list |
-| `--cycle <cycle>` | Billing cycle. One of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly |
+| `--cycle <cycle>` | Billing cycle. One of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly, or `Nd` for a custom day count (e.g. `3d`, 1–365) |
 | `--tags <tags>` | Comma-separated tags (max 10 tags, each max 50 characters) |
 | `--status <status>` | Subscription status: `active`, `paused`, `cancelled` (default: `active`) |
 | `--billingDay <n>` | Billing day of month (1–31). If not set, defaults to the creation date |
@@ -551,7 +551,7 @@ AWS,monthly,cloud;hosting,50,USD
 - Tags are separated by `;` (semicolon) in the CSV
 - Price is an integer (smallest currency unit)
 - Currency is an ISO 4217 code
-- Cycle must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly
+- Cycle must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly, or `Nd` for a custom day count (e.g. `3d`, 1–365)
 
 ### Examples
 

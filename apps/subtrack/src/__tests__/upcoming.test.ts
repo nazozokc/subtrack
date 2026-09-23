@@ -195,3 +195,12 @@ test("bi-weekly billing follows 14-day steps from anchor", async () => {
   // Jan 5 + 2*14 = Feb 2
   expect(calculateNextBilling(sub, new Date(2026, 1, 1))).toEqual(new Date(2026, 1, 2))
 })
+
+test("custom day cycle (3d) bills every 3 days from anchor", async () => {
+  const { calculateNextBilling } = await import("../upcoming.ts")
+  const sub = { ...baseSub, cycle: "3d", billingDay: null, createdAt: "2026-01-05" }
+  // Jan 5 anchor; from Feb 1 -> ceil(27/3)=9 periods -> Jan 5 + 27d = Feb 1
+  expect(calculateNextBilling(sub, new Date(2026, 1, 1))).toEqual(new Date(2026, 1, 1))
+  // from Feb 2 -> 10 periods -> Feb 4
+  expect(calculateNextBilling(sub, new Date(2026, 1, 2))).toEqual(new Date(2026, 1, 4))
+})

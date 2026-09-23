@@ -12,10 +12,8 @@ import { formatPrice } from "../price.ts"
 import { logAudit } from "../audit.ts"
 import {
   CURRENCY_CHOICES,
-  CYCLE_CHOICES,
   STATUS_CHOICES,
   isValidCurrency,
-  isValidCycle,
   isValidStatus,
   validateName,
   validatePrice,
@@ -32,6 +30,7 @@ import {
   validateAutoRenewal,
   promptString,
   promptSelect,
+  promptCycle,
 } from "../prompts.ts"
 
 // ── Add workflow ────────────────────────────────────────
@@ -77,12 +76,7 @@ export async function resolveAddOptions(flags: AddFlags): Promise<{
   )
   if (!currencyRes) return null
 
-  const cycleRes = await promptSelect(
-    flags.cycle,
-    "cycle",
-    CYCLE_CHOICES,
-    isValidCycle,
-  )
+  const cycleRes = await promptCycle(flags.cycle)
   if (!cycleRes) return null
 
   // tags: special case — hint from existing tags, no flag-fallback validation needed

@@ -956,6 +956,38 @@ test("handleAdd uses flags when provided (non-interactive)", async () => {
   expect(subs[0].tags).toEqual(["flag-test"])
 })
 
+test("handleAdd accepts a custom day cycle flag (3d)", async () => {
+  const { handleAdd } = await import("../commands.ts")
+  await handleAdd({
+    name: "TrialService",
+    price: "490",
+    currency: "JPY",
+    cycle: "3d",
+    tags: "trial",
+  })
+  expect(successMessages.some((m) => m.includes("TrialService"))).toBe(true)
+
+  const db = await import("../db.ts")
+  const subs = db.getSubscriptions()
+  expect(subs).toHaveLength(1)
+  expect(subs[0].name).toBe("TrialService")
+  expect(subs[0].cycle).toBe("3d")
+})
+
+test("handleAdd rejects an invalid day cycle flag", async () => {
+  const { handleAdd } = await import("../commands.ts")
+  await handleAdd({
+    name: "BadCycle",
+    price: "490",
+    currency: "JPY",
+    cycle: "0d",
+  })
+  expect(errorMessages.some((m) => /Invalid cycle/.test(m))).toBe(true)
+
+  const db = await import("../db.ts")
+  expect(db.getSubscriptions()).toHaveLength(0)
+})
+
 // ── handleDelete ──────────────────────────────────────────
 
 test("handleDelete shows info when no subscriptions", async () => {
