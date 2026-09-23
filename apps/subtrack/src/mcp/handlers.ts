@@ -33,6 +33,7 @@ import { fetchFxRates, convertPrice } from "../fx.ts"
 import { searchSubscriptions } from "../search.ts"
 import { calcUpcoming } from "../upcoming.ts"
 import { isValidCycle, isValidStatus, isValidCurrency } from "../prompts.ts"
+import { rateLimiter, validateToolCall } from "./security.ts"
 
 export async function handleListSubscriptions(args?: Record<string, unknown>): Promise<McpResponse> {
   const subs = getSubscriptions({
@@ -496,4 +497,36 @@ export const HANDLER_MAP: Record<string, (args?: Record<string, unknown>) => Pro
   get_tag_subscriptions: handleGetTagSubscriptions,
   get_usage_total: handleGetUsageTotal,
   list_usage: handleListUsage,
+}
+
+/**
+ * Guarded tool dispatch: rate limit → size/schema validation → handler
+ * lookup → execution, mapping every rejection to a well-formed McpResponse.
+ */
+export async function callTool(name: string, args?: Record<string, unknown>): Promise<McpResponse> {
+  if (!rateLimiter.tryConsume()) {
+    return {
+      content: [{ type: "text", text: "Rate limit exceeded. Please slow down." }],
+      isError: true,
+    }
+  }
+  const validationError = validateToolCall(name, args)
+  if (validationError) {
+    return { content: [{ type: "text", text: validationError }], isError: true }
+  }
+  const handler = HANDLER_MAP[name]
+  if (!handler) {
+    return {
+      content: [{ type: "text", text: `Unknown tool: ${name}` }],
+      isError: true,
+    }
+  }
+  try {
+    return await handler(args)
+  } catch (error) {
+    return {
+      content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
+      isError: true,
+    }
+  }
 }

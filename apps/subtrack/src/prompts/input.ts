@@ -3,17 +3,11 @@
  * validate-loop that re-renders errors until validation passes.
  */
 
-import {
-  ExitPromptError,
-  Renderer,
-  cyan,
-  red,
-  fallback,
-  finishPrompt,
-  resolveStreams,
-  withRawMode,
-} from "./core.ts"
+import { cyan, red } from "./ansi.ts"
+import { ExitPromptError, fallback, resolveStreams } from "./core.ts"
 import type { PromptStreams } from "./core.ts"
+import { withRawMode } from "./keys.ts"
+import { Renderer, finishPrompt } from "./renderer.ts"
 
 export type InputConfig = PromptStreams & {
   message: string

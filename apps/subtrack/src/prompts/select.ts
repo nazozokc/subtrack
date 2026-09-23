@@ -4,24 +4,17 @@
  * (checkbox), pageSize scrolling, and loop/wrap control.
  */
 
+import { CHECKED, POINTER, UNCHECKED, cyan, dim, stripAnsi, truncate } from "./ansi.ts"
 import {
-  CHECKED,
-  ExitPromptError,
-  POINTER,
-  UNCHECKED,
-  Renderer,
-  cyan,
-  dim,
-  finishPrompt,
-  resolveStreams,
-  stripAnsi,
-  truncate,
-  withRawMode,
-} from "./core.ts"
+  filterItems,
+  normalizeChoices,
+  visibleWindow,
+} from "./choices.ts"
+import type { Choices, ListItem } from "./choices.ts"
+import { ExitPromptError, resolveStreams } from "./core.ts"
 import type { Choice, PromptStreams } from "./core.ts"
-
-/** A choice may be a plain value (used as both name and value) or a full `{name, value}` object. */
-export type Choices<T> = ReadonlyArray<Choice<T> | T>
+import { withRawMode } from "./keys.ts"
+import { Renderer, finishPrompt } from "./renderer.ts"
 
 export type SelectConfig<T> = PromptStreams & {
   message: string
@@ -40,35 +33,6 @@ export type CheckboxConfig<T> = PromptStreams & {
 
 const DEFAULT_PAGE_SIZE = 7
 
-type ListItem<T> = { choice: Choice<T>; index: number }
-
-function normalizeChoices<T>(choices: Choices<T>): Choice<T>[] {
-  return choices.map((item) => {
-    if (typeof item === "object" && item !== null && "value" in item) {
-      return {
-        value: item.value,
-        name: item.name ?? String(item.value),
-        description: (item as Choice<T>).description,
-      } as Choice<T>
-    }
-    return { value: item as T, name: String(item) }
-  })
-}
-
-function filterItems<T>(choices: Choice<T>[], query: string): ListItem<T>[] {
-  const q = query.trim().toLowerCase()
-  if (!q) return choices.map((choice, index) => ({ choice, index }))
-  return choices
-    .map((choice, index) => ({ choice, index }))
-    .filter(({ choice }) => {
-      const name = (choice.name ?? "").toLowerCase()
-      const description = choice.description
-        ? stripAnsi(choice.description).toLowerCase()
-        : ""
-      return name.includes(q) || description.includes(q)
-    })
-}
-
 function renderList<T>(
   message: string,
   items: ListItem<T>[],
@@ -81,18 +45,14 @@ function renderList<T>(
   },
 ): string {
   const { active, checked, multi, pageSize, columns } = opts
-  const visible = Math.min(pageSize, items.length)
-  const start =
-    items.length <= visible
-      ? 0
-      : Math.min(Math.max(active - visible + 1, 0), items.length - visible)
+  const { start, end } = visibleWindow(active, items.length, pageSize)
 
   const lines: string[] = [`\r${cyan("?")} ${message}`]
   if (items.length === 0) {
     lines.push(`  ${dim("No matching choices")}`)
     return lines.join("\n")
   }
-  for (let i = start; i < start + visible && i < items.length; i++) {
+  for (let i = start; i < end && i < items.length; i++) {
     const item = items[i]!
     const pointer = i === active ? cyan(POINTER) : " "
     const row = multi

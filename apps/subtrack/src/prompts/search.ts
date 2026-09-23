@@ -3,19 +3,13 @@
  * loading indicator, arrow-key navigation, and enter to select.
  */
 
-import {
-  ExitPromptError,
-  POINTER,
-  Renderer,
-  cyan,
-  dim,
-  finishPrompt,
-  resolveStreams,
-  stripAnsi,
-  truncate,
-  withRawMode,
-} from "./core.ts"
-import type { Choice, PromptStreams } from "./core.ts"
+import { POINTER, cyan, dim, stripAnsi, truncate } from "./ansi.ts"
+import { visibleWindow } from "./choices.ts"
+import type { Choice } from "./core.ts"
+import { ExitPromptError, resolveStreams } from "./core.ts"
+import type { PromptStreams } from "./core.ts"
+import { withRawMode } from "./keys.ts"
+import { Renderer, finishPrompt } from "./renderer.ts"
 
 export type SearchConfig<T> = PromptStreams & {
   message: string
@@ -50,12 +44,8 @@ export async function search<const T>(config: SearchConfig<T>): Promise<T> {
     } else if (items.length === 0) {
       lines.push(`  ${dim("No matching results")}`)
     } else {
-      const visible = Math.min(pageSize, items.length)
-      const start =
-        items.length <= visible
-          ? 0
-          : Math.min(Math.max(active - visible + 1, 0), items.length - visible)
-      for (let i = start; i < start + visible; i++) {
+      const { start, end } = visibleWindow(active, items.length, pageSize)
+      for (let i = start; i < end && i < items.length; i++) {
         const item = items[i]!
         const pointer = i === active ? cyan(POINTER) : " "
         const description = item.description ? ` ${dim(item.description)}` : ""

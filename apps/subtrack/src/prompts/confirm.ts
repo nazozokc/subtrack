@@ -3,18 +3,11 @@
  * configured default.
  */
 
-import {
-  ExitPromptError,
-  Renderer,
-  cyan,
-  dim,
-  red,
-  fallback,
-  finishPrompt,
-  resolveStreams,
-  withRawMode,
-} from "./core.ts"
+import { cyan, dim, red } from "./ansi.ts"
+import { ExitPromptError, fallback, resolveStreams } from "./core.ts"
 import type { PromptStreams } from "./core.ts"
+import { withRawMode } from "./keys.ts"
+import { Renderer, finishPrompt } from "./renderer.ts"
 
 export type ConfirmConfig = PromptStreams & {
   message: string

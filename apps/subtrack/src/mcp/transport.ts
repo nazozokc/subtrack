@@ -2,30 +2,23 @@
  * Minimal MCP stdio server implementing JSON-RPC 2.0 over a newline-delimited
  * (NDJSON) or Content-Length-framed byte stream. Only Node built-ins are used.
  *
+ * Responsibility: byte-level framing and JSON-RPC envelope handling (routing,
+ * error codes, idle/notification suppression). Tool business logic lives in
+ * handlers.ts / security.ts.
+ *
  * Framing is detected per message: an incoming line shaped like a
  * `Content-Length:` header switches to header-framed reading for that message.
  */
 
 import type { Readable, Writable } from "node:stream"
 
+import { callTool } from "./handlers.ts"
 import {
-  rateLimiter,
-  validateArgs,
-  INPUT_VALIDATIONS,
-  MAX_REQUEST_SIZE,
-} from "./security.ts"
+  JSONRPC_ERROR,
+  buildInitializeResult,
+} from "./protocol.ts"
+import { MAX_REQUEST_SIZE } from "./security.ts"
 import { TOOLS } from "./tools.ts"
-import { HANDLER_MAP } from "./handlers.ts"
-import type { McpResponse } from "./types.ts"
-
-const SERVER_NAME = "subtrack-mcp"
-const SERVER_VERSION = "1.0.0"
-const DEFAULT_PROTOCOL_VERSION = "2024-11-05"
-
-const PARSE_ERROR = -32700
-const INVALID_REQUEST = -32600
-const METHOD_NOT_FOUND = -32601
-const INVALID_PARAMS = -32602
 
 const CONTENT_LENGTH_RE = /^Content-Length:\s*(\d+)\s*$/im
 const HEADER_LINE_RE = /^Content-Length:\s*(\d+)$/i
@@ -62,7 +55,9 @@ export function startTransport(stdin: Readable, stdout: Writable): Promise<void>
     }
 
     function sendOversizeError(): void {
-      sendMessage(sendError(null, PARSE_ERROR, `Request too large (max ${MAX_REQUEST_SIZE} bytes)`))
+      sendMessage(
+        sendError(null, JSONRPC_ERROR.PARSE, `Request too large (max ${MAX_REQUEST_SIZE} bytes)`),
+      )
     }
 
     function handleRawMessage(text: string): void {
@@ -74,95 +69,32 @@ export function startTransport(stdin: Readable, stdout: Writable): Promise<void>
       try {
         msg = JSON.parse(text)
       } catch {
-        sendMessage(sendError(null, PARSE_ERROR, "Parse error"))
+        sendMessage(sendError(null, JSONRPC_ERROR.PARSE, "Parse error"))
         return
       }
       handleMessage(msg)
     }
 
-    function buildInitializeResult(m: Record<string, unknown>): Record<string, unknown> {
-      const params = m.params as Record<string, unknown> | undefined
-      const protocolVersion =
-        typeof params === "object" &&
-        params !== null &&
-        typeof params.protocolVersion === "string"
-          ? params.protocolVersion
-          : DEFAULT_PROTOCOL_VERSION
-      return {
-        protocolVersion,
-        capabilities: { tools: {} },
-        serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
+    function handleToolCall(id: string | number, msg: Record<string, unknown>): void {
+      const params = msg.params as Record<string, unknown> | undefined
+      const name = params?.name
+      if (typeof name !== "string") {
+        sendMessage(
+          sendError(id, JSONRPC_ERROR.INVALID_PARAMS, "tools/call requires a string params.name"),
+        )
+        return
       }
-    }
-
-    async function handleToolCall(id: string | number, m: Record<string, unknown>): Promise<void> {
-      let response: McpResponse
-      try {
-        const params = m.params as Record<string, unknown> | undefined
-        const name = params?.name
-        if (typeof name !== "string") {
-          sendMessage(sendError(id, INVALID_PARAMS, "tools/call requires a string params.name"))
-          return
-        }
-
-        if (!rateLimiter.tryConsume()) {
-          response = {
-            content: [{ type: "text", text: "Rate limit exceeded. Please slow down." }],
-            isError: true,
-          }
-        } else {
-          const rawArgs = params?.arguments
-          const args: Record<string, unknown> | undefined =
-            typeof rawArgs === "object" && rawArgs !== null
-              ? (rawArgs as Record<string, unknown>)
-              : undefined
-
-          const rawSize = JSON.stringify(params).length
-          if (rawSize > MAX_REQUEST_SIZE) {
-            response = {
-              content: [
-                { type: "text", text: `Request too large (${rawSize} bytes, max ${MAX_REQUEST_SIZE})` },
-              ],
-              isError: true,
-            }
-          } else {
-            let validationError: string | null = null
-            if (args) {
-              const schema = INPUT_VALIDATIONS[name]
-              if (schema) {
-                validationError = validateArgs(args, schema)
-              }
-            }
-            if (validationError) {
-              response = {
-                content: [{ type: "text", text: `Validation error: ${validationError}` }],
-                isError: true,
-              }
-            } else {
-              const handler = HANDLER_MAP[name]
-              if (!handler) {
-                response = {
-                  content: [{ type: "text", text: `Unknown tool: ${name}` }],
-                  isError: true,
-                }
-              } else {
-                response = await handler(args)
-              }
-            }
-          }
-        }
-      } catch (error) {
-        response = {
-          content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
-          isError: true,
-        }
-      }
-      sendResult(id, response)
+      const rawArgs = params?.arguments
+      const args: Record<string, unknown> | undefined =
+        typeof rawArgs === "object" && rawArgs !== null
+          ? (rawArgs as Record<string, unknown>)
+          : undefined
+      void callTool(name, args).then((response) => sendResult(id, response))
     }
 
     function handleMessage(msg: unknown): void {
       if (typeof msg !== "object" || msg === null) {
-        sendMessage(sendError(null, INVALID_REQUEST, "Invalid Request"))
+        sendMessage(sendError(null, JSONRPC_ERROR.INVALID_REQUEST, "Invalid Request"))
         return
       }
       const m = msg as Record<string, unknown>
@@ -172,22 +104,24 @@ export function startTransport(stdin: Readable, stdout: Writable): Promise<void>
         return
       }
       if (typeof m.method !== "string") {
-        sendMessage(sendError(null, INVALID_REQUEST, "Invalid Request"))
+        sendMessage(sendError(null, JSONRPC_ERROR.INVALID_REQUEST, "Invalid Request"))
         return
       }
       if (typeof rawId !== "number" && typeof rawId !== "string") {
-        sendMessage(sendError(null, INVALID_REQUEST, "Invalid Request"))
+        sendMessage(sendError(null, JSONRPC_ERROR.INVALID_REQUEST, "Invalid Request"))
         return
       }
       const id = rawId
       if (!initialized && m.method !== "initialize") {
-        sendMessage(sendError(id, INVALID_REQUEST, "Invalid Request: initialize required"))
+        sendMessage(
+          sendError(id, JSONRPC_ERROR.INVALID_REQUEST, "Invalid Request: initialize required"),
+        )
         return
       }
       switch (m.method) {
         case "initialize":
           initialized = true
-          sendResult(id, buildInitializeResult(m))
+          sendResult(id, buildInitializeResult(m.params))
           break
         case "ping":
           sendResult(id, {})
@@ -196,10 +130,12 @@ export function startTransport(stdin: Readable, stdout: Writable): Promise<void>
           sendResult(id, { tools: TOOLS })
           break
         case "tools/call":
-          void handleToolCall(id, m)
+          handleToolCall(id, m)
           break
         default:
-          sendMessage(sendError(id, METHOD_NOT_FOUND, `Method not found: ${m.method}`))
+          sendMessage(
+            sendError(id, JSONRPC_ERROR.METHOD_NOT_FOUND, `Method not found: ${m.method}`),
+          )
       }
     }
 
@@ -260,7 +196,13 @@ export function startTransport(stdin: Readable, stdout: Writable): Promise<void>
             const match = CONTENT_LENGTH_RE.exec(headerText)
             headerText = ""
             if (!match) {
-              sendMessage(sendError(null, INVALID_REQUEST, "Invalid Request: missing Content-Length header"))
+              sendMessage(
+                sendError(
+                  null,
+                  JSONRPC_ERROR.INVALID_REQUEST,
+                  "Invalid Request: missing Content-Length header",
+                ),
+              )
               mode = "line"
               continue
             }
