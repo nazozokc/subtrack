@@ -287,13 +287,13 @@ describe("Renderer", () => {
     expect(stdout.toString()).toBe("\r\x1b[2A\x1b[J")
   })
 
-  it("does not move at all for a single-line prompt", () => {
+  it("erases a single-line prompt in place (x1b[0A moves up on real terminals)", () => {
     const { stdout } = makeIO()
     const renderer = new Renderer(stdout)
     renderer.render("? name")
     stdout.chunks = []
     renderer.clear()
-    expect(stdout.toString()).toBe("\r\x1b[0A\x1b[J")
+    expect(stdout.toString()).toBe("\r\x1b[K")
   })
 
   it("truncates over-width lines so they never wrap (physical rows == count)", () => {

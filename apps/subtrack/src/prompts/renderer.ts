@@ -32,7 +32,15 @@ export class Renderer {
     // After write() the cursor rests on the last rendered line, so returning
     // to the block start needs count - 1 rows up (count would overshoot by
     // one and walk the whole menu up the screen on every re-render).
-    safeWrite(this.stdout, `\r\x1b[${this.count - 1}A\x1b[J`)
+    // Single-line frames: the cursor is already on the only rendered line, so
+    // erase it in place — `\x1b[0A` would move the cursor up one row on real
+    // terminals (0 is treated as 1), drifting the prompt off-screen one line
+    // per keystroke.
+    if (this.count === 1) {
+      safeWrite(this.stdout, `\r\x1b[K`)
+    } else {
+      safeWrite(this.stdout, `\r\x1b[${this.count - 1}A\x1b[J`)
+    }
     this.count = 0
   }
 }
