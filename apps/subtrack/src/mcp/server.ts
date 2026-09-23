@@ -1,84 +1,42 @@
 /**
- * MCP server setup: creates the MCP server, registers request handlers
- * for ListTools and CallTool, and exports startMcpServer.
+ * MCP server setup: wires the minimal stdio transport to the tool registry
+ * and keeps stdout free of non-protocol output while the server is running.
  */
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js"
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js"
+import { consola } from "@subtrack/lib/logger"
+import type { LogFunction, LogType } from "@subtrack/lib/logger"
 
-import { rateLimiter, validateArgs, INPUT_VALIDATIONS, MAX_REQUEST_SIZE } from "./security.ts"
-import { TOOLS } from "./tools.ts"
-import { HANDLER_MAP } from "./handlers.ts"
+import { startTransport } from "./transport.ts"
 
-const server = new Server(
-  { name: "subtrack-mcp", version: "1.0.0" },
-  { capabilities: { tools: {} } },
-)
+const LOG_TYPES: readonly LogType[] = ["log", "info", "success", "warn", "error", "fail"]
 
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return { tools: TOOLS }
-})
+function writeToStderr(...args: unknown[]): void {
+  process.stderr.write(args.length === 0 ? "\n" : `${args.join(" ")}\n`)
+}
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params
-
-  // Rate limiting
-  if (!rateLimiter.tryConsume()) {
-    return {
-      content: [{ type: "text", text: "Rate limit exceeded. Please slow down." }],
-      isError: true,
-    }
+/**
+ * The logger writes via console.log (stdout). During MCP mode every byte on
+ * stdout must be a JSON-RPC frame, so redirect all logger levels to stderr and
+ * restore the originals afterwards.
+ */
+function redirectLoggerToStderr(): () => void {
+  const originals = new Map<LogType, LogFunction>()
+  for (const type of LOG_TYPES) {
+    originals.set(type, consola[type])
+    consola[type] = writeToStderr
   }
-
-  // Request size check
-  const rawSize = JSON.stringify(request.params).length
-  if (rawSize > MAX_REQUEST_SIZE) {
-    return {
-      content: [{ type: "text", text: `Request too large (${rawSize} bytes, max ${MAX_REQUEST_SIZE})` }],
-      isError: true,
-    }
+  return () => {
+    for (const type of LOG_TYPES) consola[type] = originals.get(type) as LogFunction
   }
-
-  // Input validation per tool
-  if (args) {
-    const schema = INPUT_VALIDATIONS[name]
-    if (schema) {
-      const err = validateArgs(args as Record<string, unknown>, schema)
-      if (err) {
-        return {
-          content: [{ type: "text", text: `Validation error: ${err}` }],
-          isError: true,
-        }
-      }
-    }
-  }
-
-  // Route to handler
-  const handler = HANDLER_MAP[name]
-  if (!handler) {
-    return {
-      content: [{ type: "text", text: `Unknown tool: ${name}` }],
-      isError: true,
-    }
-  }
-
-  try {
-    return await handler(args as Record<string, unknown> | undefined)
-  } catch (error) {
-    return {
-      content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
-      isError: true,
-    }
-  }
-})
+}
 
 export async function startMcpServer(): Promise<void> {
-  const transport = new StdioServerTransport()
-  await server.connect(transport)
+  const restoreLogger = redirectLoggerToStderr()
+  try {
+    await startTransport(process.stdin, process.stdout)
+  } finally {
+    restoreLogger()
+  }
 }
 
 export function formatDateISO(d: Date): string {
