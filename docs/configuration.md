@@ -136,9 +136,9 @@ subtrack does not use configuration files (`.subtrackrc`, `subtrack.json`, etc.)
 
 ## Currency & cycle choices
 
-### Supported currencies (36)
+### Supported currencies (37)
 
-The interactive prompt provides a curated list of 36 currencies. The `--currency` flag accepts any valid ISO 4217 3-letter code supported by [open.er-api.com](https://open.er-api.com).
+The interactive prompt provides a curated list of 37 currencies. The `--currency` flag accepts any valid ISO 4217 3-letter code supported by [open.er-api.com](https://open.er-api.com).
 
 ```
 AED  ARS  AUD  BRL  CAD  CHF  CLP  CNY  COP  CZK

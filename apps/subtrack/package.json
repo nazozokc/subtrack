@@ -6,7 +6,7 @@
   "license": "MIT",
   "packageManager": "pnpm@11.5.1",
   "bin": {
-    "subtrack": "./dist/index.mjs"
+    "subtrack": "./dist/launcher.mjs"
   },
   "publishConfig": {
     "access": "public",

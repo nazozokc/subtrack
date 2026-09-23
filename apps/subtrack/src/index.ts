@@ -2,11 +2,24 @@
 import { cli, define } from "gunshi"
 import { consola } from "@subtrack/lib/logger"
 import { createRequire } from "node:module"
-import { subCommands } from "./commands/index.ts"
+import { markStartup, reportStartup } from "./startup-profile.ts"
+
+markStartup("runtime initialized")
 
 // Single source of truth for the version is package.json
 const require = createRequire(import.meta.url)
 const pkg = require("../package.json") as { version: string }
+const args = process.argv.slice(2)
+
+// Version output does not need command definitions or gunshi parsing.
+// Keep this fast path limited to the standalone form so all other parsing
+// behavior remains owned by gunshi.
+if (args.length === 1 && (args[0] === "--version" || args[0] === "-v")) {
+  process.stdout.write(`${pkg.version}\n`)
+  process.exit(0)
+}
+
+const { subCommands } = await import("./commands/index.ts")
 
 const mainCommand = define({
   name: "subtrack",
@@ -33,14 +46,16 @@ process.on("SIGTERM", () => handleSignal("SIGTERM"))
 process.umask(0o077)
 
 try {
-  await cli(process.argv.slice(2), mainCommand, {
+  markStartup("cli start")
+  await cli(args, mainCommand, {
     name: "subtrack",
     version: pkg.version,
     subCommands,
     // MCP speaks JSON-RPC on stdout — suppress gunshi's header/usage banner
     // so the protocol stream stays pure.
-    usageSilent: process.argv.slice(2)[0] === "mcp",
+    usageSilent: args[0] === "mcp",
   })
+  reportStartup("cli complete")
 } catch (error) {
   if (error instanceof Error && error.name === "ExitPromptError") {
     process.exit(0)
