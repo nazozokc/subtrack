@@ -1,4 +1,4 @@
-import { input } from "@inquirer/prompts"
+import { input } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { getDb, mapTags } from "./db.ts"
 import { spreadSubscription } from "./display.ts"

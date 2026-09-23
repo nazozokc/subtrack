@@ -3,7 +3,7 @@
  * Separated from core.ts because of its complex interactive prompt logic.
  */
 
-import { input, confirm, select } from "@inquirer/prompts"
+import { input, confirm, select } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import type { AddFlags, Cycle, Status } from "../types.ts"

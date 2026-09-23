@@ -1,4 +1,4 @@
-import { input, confirm, checkbox, select } from "@inquirer/prompts"
+import { input, confirm, checkbox, select } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import pc from "@subtrack/lib/ansi"

@@ -70,16 +70,14 @@ vi.mock("../scanner.ts", () => ({
   getRegisteredScanners: vi.fn().mockReturnValue([]),
 }))
 
-// Mock @inquirer/prompts to avoid interactive prompts
-vi.mock("@inquirer/prompts", () => ({
-  input: vi.fn(),
-  confirm: vi.fn(),
-  checkbox: vi.fn(),
-  select: vi.fn(),
-  search: vi.fn(),
-}))
+// Mock prompts.ts to avoid interactive prompts
+vi.mock("../prompts.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../prompts.ts")>()
+  const { createPromptMock } = await import("./prompt-mock.ts")
+  return createPromptMock(actual)
+})
 
-import { input, confirm, checkbox, select, search } from "@inquirer/prompts"
+import { input, confirm, checkbox, select, search } from "../prompts.ts"
 import { consola, logMessages, infoMessages, successMessages, errorMessages, failMessages, warnMessages } from "@subtrack/lib/logger"
 
 let testDb: DatabaseSync

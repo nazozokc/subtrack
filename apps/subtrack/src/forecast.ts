@@ -1,4 +1,4 @@
-import { input, confirm, select, checkbox } from "@inquirer/prompts"
+import { input, confirm, select, checkbox } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { CliTable3 } from "@subtrack/lib/table"

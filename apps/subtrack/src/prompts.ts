@@ -1,7 +1,10 @@
-import { input, select } from "@inquirer/prompts"
+import { checkbox, confirm, input, search, select } from "./prompts/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import type { Currency, Cycle, Status } from "./types.ts"
+
+export { checkbox, confirm, input, search, select }
+export type { Choice, PromptStreams } from "./prompts/index.ts"
 
 export const CURRENCY_CHOICES: { name: string; value: Currency }[] = [
   { name: "AED (UAE Dirham)", value: "AED" },
