@@ -4,9 +4,11 @@ import { consola } from "@subtrack/lib/logger"
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }))
 
-vi.mock("@inquirer/prompts", () => ({
-  confirm: confirmMock,
-}))
+vi.mock("../prompts.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../prompts.ts")>()
+  const { createPromptMock } = await import("./prompt-mock.ts")
+  return { ...createPromptMock(actual), confirm: confirmMock }
+})
 
 const logMessages: string[] = []
 const infoMessages: string[] = []

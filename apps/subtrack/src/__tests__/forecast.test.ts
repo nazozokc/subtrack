@@ -35,13 +35,11 @@ vi.mock("@subtrack/lib/logger", () => {
   }
 })
 
-vi.mock("@inquirer/prompts", () => ({
-  input: vi.fn(),
-  confirm: vi.fn(),
-  checkbox: vi.fn(),
-  select: vi.fn(),
-  search: vi.fn(),
-}))
+vi.mock("../prompts.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../prompts.ts")>()
+  const { createPromptMock } = await import("./prompt-mock.ts")
+  return createPromptMock(actual)
+})
 
 import { logMessages, infoMessages } from "@subtrack/lib/logger"
 

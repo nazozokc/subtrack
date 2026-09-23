@@ -21,7 +21,7 @@ import {
   verifyBackupHash,
   exportDbBytes,
 } from "./db.ts"
-import { confirm, select } from "@inquirer/prompts"
+import { confirm, select } from "./prompts.ts"
 import { formatBytes } from "@subtrack/lib/format"
 import { pad2 } from "@subtrack/lib/date"
 

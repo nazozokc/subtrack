@@ -1,4 +1,4 @@
-import { select } from "@inquirer/prompts"
+import { select } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { loadConfig } from "./config.ts"

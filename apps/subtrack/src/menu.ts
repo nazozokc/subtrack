@@ -1,12 +1,11 @@
 /**
  * Interactive main menu shown when running `subtrack` without a subcommand.
  * Covers every CLI command — organized into category sub-menus.
- * Built with @inquirer/prompts; handlers are called with empty flags so they
- * run in their interactive mode (consistent with the "interactive by default"
- * tenet).
+ * Handlers are called with empty flags so they run in their interactive mode
+ * (consistent with the "interactive by default" tenet).
  */
 
-import { checkbox, confirm, input, select } from "@inquirer/prompts"
+import { checkbox, confirm, input, select } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { getAllTags, getSubscriptions, getNonCancelledSubscriptions, getDbPath } from "./db.ts"
@@ -21,7 +20,6 @@ import { handleTimeline } from "./timeline.ts"
 import { handleStats } from "./stats.ts"
 import { handleTrialAdd, handleTrialList, handleTrialExpiring, handleTrialDelete } from "./trial.ts"
 import { handleSuggestList, handleSuggestReview, handleSuggestDismiss } from "./suggest/suggest.ts"
-import { handleSuggestScan } from "./suggest/scan.ts"
 import { handleBulkStatus, handleBulkDelete, handleBulkTagAdd, handleBulkTagRemove } from "./bulk.ts"
 import { handleTagList, handleTagRename, handleTagDelete, handleTagPrune, handleTagMerge } from "./tag.ts"
 import { handlePayment, handleSummary } from "./payment.ts"
@@ -46,12 +44,18 @@ import { handleProfile } from "./profile.ts"
 import { handleCurrencyList } from "./currency.ts"
 import { handleMcp } from "./commands.ts"
 import { CYCLE_CHOICES } from "./prompts.ts"
+import { formatCycle } from "@subtrack/lib/date"
+import type { NamedCycle } from "@subtrack/lib/date"
 import { calcSummary, calcSubTotal } from "./payment.ts"
 import { resolveBudget } from "./budget.ts"
 import { calcUpcoming } from "./upcoming.ts"
 import { formatPrice } from "./price.ts"
 import { divider } from "./display-constants.ts"
-import type { Cycle, Status } from "./types.ts"
+import type { Status } from "./types.ts"
+import { createRequire } from "node:module"
+
+// Single source of truth for the version is package.json
+const require = createRequire(import.meta.url)
 
 type MainChoice = "view" | "add" | "manage" | "report" | "data" | "config" | "system" | "quit"
 
@@ -160,7 +164,7 @@ async function pickSubscription(message: string, status?: Status): Promise<numbe
     pageSize: 10,
     loop: false,
     choices: subs.map((s) => ({
-      name: `#${s.id} ${s.name} — ${formatPrice(s.price, s.currency)}/${s.cycle}${s.status !== "active" ? ` (${s.status})` : ""}`,
+      name: `#${s.id} ${s.name} — ${formatPrice(s.price, s.currency)}/${formatCycle(s.cycle)}${s.status !== "active" ? ` (${s.status})` : ""}`,
       value: s.id,
     })),
   })
@@ -179,8 +183,8 @@ async function pickTag(message: string): Promise<string | null> {
   })
 }
 
-async function pickPeriod(message = "select period"): Promise<Cycle> {
-  return select<Cycle>({ message, choices: CYCLE_CHOICES })
+async function pickPeriod(message = "select period"): Promise<NamedCycle> {
+  return select<NamedCycle>({ message, choices: CYCLE_CHOICES })
 }
 
 // ── View & Search ─────────────────────────────────────
@@ -249,7 +253,7 @@ async function runAddMenu(): Promise<void> {
         { name: "Clone", description: "Clone an existing subscription", value: "clone" },
         { name: "Import", description: "Import subscriptions from CSV", value: "import" },
         { name: "Trials", description: "Manage free trials", value: "trial" },
-        { name: "Suggestions", description: "Review suggestions from email scans", value: "suggest" },
+        { name: "Suggestions", description: "Review and manage suggestions", value: "suggest" },
         BACK,
       ],
     })
@@ -307,7 +311,6 @@ async function runSuggestMenu(): Promise<void> {
         { name: "List", description: "List pending suggestions", value: "list" },
         { name: "Review", description: "Review suggestions and add as subscriptions", value: "review" },
         { name: "Dismiss", description: "Dismiss a suggestion by id", value: "dismiss" },
-        { name: "Scan", description: "Scan email sources for new suggestions", value: "scan" },
         BACK,
       ],
     })
@@ -320,7 +323,6 @@ async function runSuggestMenu(): Promise<void> {
         handleSuggestDismiss(id)
         break
       }
-      case "scan": await handleSuggestScan(); break
       case "back": return
     }
   }

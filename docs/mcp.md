@@ -11,7 +11,7 @@ subtrack implements an MCP (Model Context Protocol) server that allows AI assist
 subtrack mcp
 ```
 
-The server runs on stdio (`StdioServerTransport`). It prints JSON-RPC messages over stdout and reads from stdin. This is the standard transport used by all MCP hosts.
+The server runs on stdio. It prints newline-delimited JSON-RPC 2.0 messages over stdout and reads NDJSON (or `Content-Length`-framed) messages from stdin. This is the standard transport used by all MCP hosts.
 
 ## Integration examples
 
@@ -110,7 +110,7 @@ Each tool accepts a JSON object with the following parameters:
 - `name` (string, required): Subscription name
 - `price` (number, required): Price in smallest currency unit
 - `currency` (string, required): Currency code (e.g. `USD`, `JPY`)
-- `cycle` (string, required): Billing cycle — `weekly`, `bi-weekly`, `monthly`, `quarterly`, `semi-annual`, `yearly`
+- `cycle` (string, required): Billing cycle — `weekly`, `bi-weekly`, `monthly`, `quarterly`, `semi-annual`, `yearly`, or `Nd` for a custom day count (e.g. `3d`, 1–365)
 - `tags` (string, optional): Comma-separated tags
 - `billingDay` (number, optional): Billing day of month (1–31)
 - `status` (string, optional): `active`, `paused`, `cancelled`
@@ -183,7 +183,7 @@ Each tool accepts a JSON object with the following parameters:
 
 ## Validation
 
-`add_subscription` and `edit_subscription` validate `currency` (supported ISO 4217 codes), `cycle` (`weekly`, `bi-weekly`, `monthly`, `quarterly`, `semi-annual`, `yearly`), and `status` (`active`, `paused`, `cancelled`, `archived`). Invalid values are rejected with an error. `bulk_operations` validates the target status the same way and reports per-entry errors instead of silently skipping them.
+`add_subscription` and `edit_subscription` validate `currency` (supported ISO 4217 codes), `cycle` (`weekly`, `bi-weekly`, `monthly`, `quarterly`, `semi-annual`, `yearly`, or `Nd` for a custom day count, 1–365), and `status` (`active`, `paused`, `cancelled`, `archived`). Invalid values are rejected with an error. `bulk_operations` validates the target status the same way and reports per-entry errors instead of silently skipping them.
 
 ## Example usage
 

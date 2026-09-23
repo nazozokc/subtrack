@@ -44,6 +44,7 @@ subtrack is a Node.js CLI tool for managing subscription services from the termi
 - State is held in memory (`_db`) and persisted to disk via synchronous `saveDb()` (VACUUM INTO) on writes
 - API mapping vs old sql.js style: `db.prepare(sql).run(...params)` returns `{ changes, lastInsertRowid }`; result-returning `exec` is replaced by `prepare().all()` / `.get()`; `db.export()` is replaced by `exportDbBytes()`
 - Schema has 8 tables: `subscriptions`, `tags`, `subscription_tags`, `llm_usage`, `trials`, `price_history`, `suggestions`, `audit_log`
+- Schema migrations are versioned via `PRAGMA user_version` (`SCHEMA_VERSION` in `db/schema.ts`). When adding tables/columns, add a new `migrateToV{N}` step and bump `SCHEMA_VERSION` — never edit an existing migration
 - Always use transactions for multi-step writes (`BEGIN TRANSACTION` / `COMMIT` / `ROLLBACK`)
 - Use `PRAGMA foreign_keys = ON` at connection time
 
@@ -91,7 +92,7 @@ Key packages and their purpose:
 | Package | Usage |
 |---|---|---|
 | `gunshi` | CLI argument parsing (`cli()`, `define()`, `.args`, `.run()`) |
-| `@inquirer/prompts` | Interactive prompts (`input`, `confirm`, `checkbox`, `select`) |
+| `src/prompts/` | Self-contained interactive prompts (`input`, `confirm`, `checkbox`, `select`, `search`) on `node:readline` — no inquirer |
 | `consola` | Logging (`consola.info`, `consola.success`, `consola.error`, `consola.warn`, `consola.fail`) |
 | `cli-table3` | Table rendering (customizable chars, styles, column widths) |
 | `picocolors` | Terminal colors |

@@ -6,7 +6,8 @@ import { handleUsageList, handleUsageDelete, handleUsageEdit } from "../usage.ts
 import { handleUsageImport } from "../usage-import.ts"
 import { handleUsageRefresh } from "../usage-refresh.ts"
 import { handleUsageTotal } from "../usage-total.ts"
-import type { Cycle, UsageRefreshFlags } from "../types.ts"
+import type { NamedCycle } from "@subtrack/lib/date"
+import type { UsageRefreshFlags } from "../types.ts"
 
 const usageAddCommand = define({
   name: "add",
@@ -124,7 +125,7 @@ const usageTotalCommand = define({
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
   run: (ctx) => {
-    const period = (ctx.values.period || "monthly") as Cycle
+    const period = (ctx.values.period || "monthly") as NamedCycle
     handleUsageTotal({ from: ctx.values.from, to: ctx.values.to, period, json: ctx.values.json })
   },
 })

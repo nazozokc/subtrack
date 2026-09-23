@@ -5,7 +5,7 @@ import { formatPrice } from "./price.ts"
 import type { SharedArgs, Currency, Status } from "./types.ts"
 import { fetchFxRates, tryConvert } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
-import { toDate, clampDay, daysInMonth } from "@subtrack/lib/date"
+import { toDate, clampDay, daysInMonth, cycleDays, dayCycleDaysInMonth, isDayCycle } from "@subtrack/lib/date"
 import { statusColor } from "./display-constants.ts"
 
 /** Options for the calendar command */
@@ -34,6 +34,7 @@ export type CalendarEntry = {
  * - yearly: only the anchor month
  * - quarterly/semi-annual: every 3/6 months from the anchor month
  * - weekly/bi-weekly: every 7/14 days from the anchor date
+ * - custom day cycles ("Nd"): every N days from the anchor date
  * The billing day falls back to the created_at day when unset.
  */
 export function billingDaysInMonth(sub: SharedArgs, year: number, month: number): number[] {
@@ -42,6 +43,11 @@ export function billingDaysInMonth(sub: SharedArgs, year: number, month: number)
   const day = sub.billingDay ?? anchorDate.getDate()
   const clampedDay = clampDay(day, year, month)
 
+  // Every-N-days cycles (custom "Nd", weekly, bi-weekly) share one formula
+  if (isDayCycle(sub.cycle) || sub.cycle === "weekly" || sub.cycle === "bi-weekly") {
+    const days = cycleDays(sub.cycle) ?? (sub.cycle === "weekly" ? 7 : 14)
+    return dayCycleDaysInMonth(anchorDate, day, days, year, month)
+  }
   switch (sub.cycle) {
     case "monthly":
       return [clampedDay]
@@ -54,26 +60,6 @@ export function billingDaysInMonth(sub: SharedArgs, year: number, month: number)
     case "semi-annual": {
       const diff = ((month - 1 - anchorMonth) % 12 + 12) % 12
       return diff % 6 === 0 ? [clampedDay] : []
-    }
-    case "weekly":
-    case "bi-weekly": {
-      const periodDays = sub.cycle === "weekly" ? 7 : 14
-      const msPerPeriod = periodDays * 24 * 60 * 60 * 1000
-      const anchor = new Date(
-        anchorDate.getFullYear(),
-        anchorMonth,
-        Math.min(day, daysInMonth(anchorDate.getFullYear(), anchorMonth + 1)),
-      )
-      const start = new Date(year, month - 1, 1).getTime()
-      const end = new Date(year, month - 1, daysInMonth(year, month)).getTime()
-      const days: number[] = []
-      const kStart = Math.max(0, Math.floor((start - anchor.getTime()) / msPerPeriod))
-      for (let k = kStart; ; k++) {
-        const t = anchor.getTime() + k * msPerPeriod
-        if (t > end) break
-        if (t >= start) days.push(new Date(t).getDate())
-      }
-      return days
     }
   }
 }

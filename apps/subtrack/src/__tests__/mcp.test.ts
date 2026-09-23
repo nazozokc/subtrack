@@ -1,5 +1,13 @@
-import { describe, test, expect, beforeAll, beforeEach, afterEach } from "vitest"
+import { describe, test, expect, beforeAll, beforeEach, afterEach, vi } from "vitest"
 import { DatabaseSync } from "node:sqlite"
+
+vi.mock("../fx.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../fx.ts")>()
+  return {
+    ...actual,
+    fetchFxRates: vi.fn(),
+  }
+})
 
 let testDb: DatabaseSync
 let dbModule: typeof import("../db.ts")
@@ -55,6 +63,7 @@ beforeAll(async () => {
   )`)
 
   dbModule = await import("../db.ts")
+  dbModule.runMigrations(testDb)
   dbModule.__setDb(testDb)
 })
 
@@ -63,6 +72,7 @@ beforeEach(() => {
   testDb.exec("DELETE FROM subscription_tags")
   testDb.exec("DELETE FROM tags")
   testDb.exec("DELETE FROM subscriptions")
+  testDb.exec("DELETE FROM trials")
   testDb.exec("DELETE FROM sqlite_sequence")
 })
 
@@ -389,5 +399,339 @@ describe("MCP handlers", () => {
     const res = await handleBulkOperations({ action: "status", status: "invalid-status" })
     expect(res.isError).toBe(true)
     expect(JSON.stringify(res)).toMatch(/Invalid status/)
+  })
+
+  test("handleGetSubscription requires id", async () => {
+    const { handleGetSubscription } = await import("../mcp/handlers.ts")
+    const res = await handleGetSubscription({})
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toBe("id is required")
+  })
+
+  test("handleGetSubscription returns sub for existing id", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01')`,
+    )
+    const { handleGetSubscription } = await import("../mcp/handlers.ts")
+    const res = await handleGetSubscription({ id: 1 })
+    const data = JSON.parse(res.content[0].text)
+    expect(data.name).toBe("Netflix")
+    expect(data.price).toBe(1990)
+    expect(data.currency).toBe("JPY")
+  })
+
+  test("handleGetSubscription returns null for missing id", async () => {
+    const { handleGetSubscription } = await import("../mcp/handlers.ts")
+    const res = await handleGetSubscription({ id: 999 })
+    const data = JSON.parse(res.content[0].text)
+    expect(data).toBeNull()
+  })
+
+  test("handleSearchSubscriptions requires query", async () => {
+    const { handleSearchSubscriptions } = await import("../mcp/handlers.ts")
+    const res = await handleSearchSubscriptions({})
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toBe("query is required")
+  })
+
+  test("handleSearchSubscriptions finds by name", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01'),
+              (2, 'Spotify', 980, 'JPY', 'monthly', 'active', 1, '2026-01-10')`,
+    )
+    const { handleSearchSubscriptions } = await import("../mcp/handlers.ts")
+    const res = await handleSearchSubscriptions({ query: "net" })
+    const data = JSON.parse(res.content[0].text)
+    expect(data).toHaveLength(1)
+    expect(data[0].name).toBe("Netflix")
+  })
+
+  test("handleSearchSubscriptions returns empty on no hit", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01')`,
+    )
+    const { handleSearchSubscriptions } = await import("../mcp/handlers.ts")
+    const res = await handleSearchSubscriptions({ query: "zzzz" })
+    const data = JSON.parse(res.content[0].text)
+    expect(data).toEqual([])
+  })
+
+  test("handleDeleteSubscription requires id", async () => {
+    const { handleDeleteSubscription } = await import("../mcp/handlers.ts")
+    const res = await handleDeleteSubscription({})
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toBe("id is required")
+  })
+
+  test("handleDeleteSubscription deletes an existing sub", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01')`,
+    )
+    const { handleDeleteSubscription } = await import("../mcp/handlers.ts")
+    const res = await handleDeleteSubscription({ id: 1 })
+    const data = JSON.parse(res.content[0].text)
+    expect(data.success).toBe(true)
+    const db = await import("../db.ts")
+    expect(db.getSubscription(1)).toBeUndefined()
+  })
+
+  test("handleDeleteSubscription reports false for missing id", async () => {
+    const { handleDeleteSubscription } = await import("../mcp/handlers.ts")
+    const res = await handleDeleteSubscription({ id: 999 })
+    const data = JSON.parse(res.content[0].text)
+    expect(data.success).toBe(false)
+  })
+
+  test("handleGetSummary returns zero totals on empty db", async () => {
+    const { handleGetSummary } = await import("../mcp/handlers.ts")
+    const res = await handleGetSummary()
+    const data = JSON.parse(res.content[0].text)
+    expect(data.totalCount).toBe(0)
+    expect(data.monthlyByCurrency).toEqual({})
+  })
+
+  test("handleGetSummary aggregates non-cancelled totals by currency", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01'),
+              (2, 'Spotify', 980, 'JPY', 'monthly', 'active', 1, '2026-01-10'),
+              (3, 'GitHub', 1000, 'USD', 'monthly', 'cancelled', 5, '2026-03-01'),
+              (4, 'Dropbox', 12000, 'JPY', 'yearly', 'active', 1, '2026-01-01'),
+              (5, 'Adobe', 1000, 'USD', 'monthly', 'active', 10, '2026-01-01')`,
+    )
+    const { handleGetSummary } = await import("../mcp/handlers.ts")
+    const res = await handleGetSummary()
+    const data = JSON.parse(res.content[0].text)
+    expect(data.totalCount).toBe(4) // cancelled excluded
+    expect(data.monthlyByCurrency.JPY).toBe(1990 + 980 + 1000) // Dropbox 12000/yr = 1000/mo
+    expect(data.monthlyByCurrency.USD).toBe(1000)
+  })
+
+  test("handleGetUpcoming returns billings within period", async () => {
+    const today = new Date().getDate()
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', ${today}, '2026-01-01'),
+              (2, 'Spotify', 980, 'JPY', 'monthly', 'cancelled', 1, '2026-01-10')`,
+    )
+    const { handleGetUpcoming } = await import("../mcp/handlers.ts")
+    const res = await handleGetUpcoming({ days: 30 })
+    const data = JSON.parse(res.content[0].text)
+    const names = data.map((e: { sub: { name: string } }) => e.sub.name)
+    expect(names).toContain("Netflix")
+    expect(names).not.toContain("Spotify")
+  })
+
+  test("handleGetUpcoming returns empty array on empty db", async () => {
+    const { handleGetUpcoming } = await import("../mcp/handlers.ts")
+    const res = await handleGetUpcoming({ days: 30 })
+    const data = JSON.parse(res.content[0].text)
+    expect(data).toEqual([])
+  })
+
+  test("handleGetCalendar returns entries for a given month", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01'),
+              (2, 'Spotify', 980, 'JPY', 'monthly', 'cancelled', 1, '2026-01-10')`,
+    )
+    const { handleGetCalendar } = await import("../mcp/handlers.ts")
+    const res = await handleGetCalendar({ month: 3, year: 2026 })
+    const data = JSON.parse(res.content[0].text)
+    expect(data).toHaveLength(1)
+    expect(data[0].day).toBe(15)
+    expect(data[0].subs[0].name).toBe("Netflix")
+  })
+
+  test("handleExportData exports csv, json and md", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01')`,
+    )
+    const { handleExportData } = await import("../mcp/handlers.ts")
+
+    const csv = await handleExportData({ format: "csv" })
+    expect(csv.isError).toBeUndefined()
+    expect(csv.content[0].text).toContain("Netflix")
+    expect(csv.content[0].text).toContain("1990")
+
+    const json = await handleExportData({ format: "json" })
+    const parsed = JSON.parse(json.content[0].text)
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].name).toBe("Netflix")
+
+    const md = await handleExportData({ format: "md" })
+    expect(md.isError).toBeUndefined()
+    expect(md.content[0].text).toContain("| Netflix |")
+  })
+
+  test("handleExportData rejects unsupported format", async () => {
+    const { handleExportData } = await import("../mcp/handlers.ts")
+    const res = await handleExportData({ format: "xml" })
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toMatch(/Unsupported format/)
+  })
+
+  test("handleGetHistory returns price history for a specific sub", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01')`,
+    )
+    testDb.exec(
+      `INSERT INTO price_history (subscription_id, old_price, new_price, old_currency, new_currency, changed_at)
+       VALUES (1, 1500, 1990, 'JPY', 'JPY', '2026-02-01 10:00:00')`,
+    )
+    const { handleGetHistory } = await import("../mcp/handlers.ts")
+    const res = await handleGetHistory({ id: 1 })
+    const data = JSON.parse(res.content[0].text)
+    expect(data).toHaveLength(1)
+    expect(data[0].subscriptionName).toBe("Netflix")
+    expect(data[0].oldPrice).toBe(1500)
+    expect(data[0].newPrice).toBe(1990)
+  })
+
+  test("handleGetHistory returns all changes without id", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01'),
+              (2, 'Spotify', 980, 'JPY', 'monthly', 'active', 1, '2026-01-10')`,
+    )
+    testDb.exec(
+      `INSERT INTO price_history (subscription_id, old_price, new_price, old_currency, new_currency, changed_at)
+       VALUES (1, 1500, 1990, 'JPY', 'JPY', '2026-02-01 10:00:00'),
+              (2, 800, 980, 'JPY', 'JPY', '2026-03-01 10:00:00')`,
+    )
+    const { handleGetHistory } = await import("../mcp/handlers.ts")
+    const res = await handleGetHistory({})
+    const data = JSON.parse(res.content[0].text)
+    expect(data).toHaveLength(2)
+    expect(data.map((e: { subscriptionId: number }) => e.subscriptionId).sort()).toEqual([1, 2])
+  })
+
+  test("handleGetForecast returns forecast for the requested months", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01'),
+              (2, 'Spotify', 980, 'JPY', 'monthly', 'cancelled', 1, '2026-01-10')`,
+    )
+    const { handleGetForecast } = await import("../mcp/handlers.ts")
+    const res = await handleGetForecast({ months: 3 })
+    const data = JSON.parse(res.content[0].text)
+    expect(data.months).toBe(3)
+    expect(data.totalSubscriptions).toBe(1)
+    expect(data.entries[0].name).toBe("Netflix")
+    expect(data.monthlyTotal).toBe(1990)
+    expect(data.yearlyTotal).toBe(1990 * 12)
+  })
+
+  test("handleGetForecast excludes subs via cancel param", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01'),
+              (2, 'Spotify', 980, 'JPY', 'monthly', 'active', 1, '2026-01-10')`,
+    )
+    const { handleGetForecast } = await import("../mcp/handlers.ts")
+    const res = await handleGetForecast({ cancel: "Spotify" })
+    const data = JSON.parse(res.content[0].text)
+    expect(data.totalSubscriptions).toBe(1)
+    expect(data.entries[0].name).toBe("Netflix")
+  })
+
+  test("handleGetForecast converts to currency using fx rates", async () => {
+    const { fetchFxRates } = await import("../fx.ts")
+    vi.mocked(fetchFxRates).mockResolvedValue({ base: "USD", rates: { USD: 1, JPY: 150 } })
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'GitHub', 1000, 'USD', 'monthly', 'active', 5, '2026-01-01')`,
+    )
+    const { handleGetForecast } = await import("../mcp/handlers.ts")
+    const res = await handleGetForecast({ currency: "JPY" })
+    const data = JSON.parse(res.content[0].text)
+    expect(data.currency).toBe("JPY")
+    expect(data.entries[0].monthlyConverted).toBe(150000)
+    expect(data.monthlyTotal).toBe(150000)
+  })
+
+  test("handleCompare computes current vs previous period totals", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01')`,
+    )
+    testDb.exec(
+      `INSERT INTO price_history (subscription_id, old_price, new_price, old_currency, new_currency, changed_at)
+       VALUES (1, 1500, 1990, 'JPY', 'JPY', '2026-02-01 10:00:00')`,
+    )
+    const { handleCompare } = await import("../mcp/handlers.ts")
+    const res = await handleCompare({ period: "monthly" })
+    const data = JSON.parse(res.content[0].text)
+    expect(data.period).toBe("monthly")
+    const row = data.rows[0]
+    expect(row.currency).toBe("JPY")
+    expect(row.current).toBe(1990)
+    expect(row.previous).toBe(1500)
+    expect(data.grandTotal.change).toBe(490)
+    expect(data.grandTotal.changePercent).toBe(32.67)
+  })
+
+  test("handleCompare honors a non-default period", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01')`,
+    )
+    testDb.exec(
+      `INSERT INTO price_history (subscription_id, old_price, new_price, old_currency, new_currency, changed_at)
+       VALUES (1, 1500, 1990, 'JPY', 'JPY', '2026-02-01 10:00:00')`,
+    )
+    const { handleCompare } = await import("../mcp/handlers.ts")
+    const res = await handleCompare({ period: "yearly" })
+    const data = JSON.parse(res.content[0].text)
+    expect(data.period).toBe("yearly")
+    expect(data.rows[0].current).toBe(1990 * 12)
+    expect(data.rows[0].previous).toBe(1500 * 12)
+  })
+
+  test("handleGetTrials returns all trials", async () => {
+    testDb.exec(
+      `INSERT INTO trials (name, expires_at, price, currency, cycle, notes)
+       VALUES ('Figma', '2099-12-31', 0, 'USD', 'monthly', NULL),
+              ('Linear', '2099-11-30', 800, 'USD', 'monthly', NULL)`,
+    )
+    const { handleGetTrials } = await import("../mcp/handlers.ts")
+    const res = await handleGetTrials({})
+    const data = JSON.parse(res.content[0].text)
+    expect(data).toHaveLength(2)
+    expect(data.map((t: { name: string }) => t.name)).toEqual(["Linear", "Figma"])
+  })
+
+  test("handleGetTrials with expiring_soon filters to near-term trials", async () => {
+    testDb.exec(
+      `INSERT INTO trials (name, expires_at, price, currency, cycle, notes)
+       VALUES ('Future', '2099-12-31', 0, 'USD', 'monthly', NULL)`,
+    )
+    const { handleGetTrials } = await import("../mcp/handlers.ts")
+    const res = await handleGetTrials({ expiring_soon: 30 })
+    const data = JSON.parse(res.content[0].text)
+    expect(data).toEqual([])
+  })
+
+  test("handleGetTagSubscriptions filters by multiple tags (AND)", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (id, name, price, currency, cycle, status, billing_day, created_at)
+       VALUES (1, 'Netflix', 1990, 'JPY', 'monthly', 'active', 15, '2026-01-01'),
+              (2, 'Spotify', 980, 'JPY', 'monthly', 'active', 1, '2026-01-10'),
+              (3, 'GitHub', 1000, 'USD', 'monthly', 'active', 5, '2026-01-01')`,
+    )
+    testDb.exec(`INSERT INTO tags (id, name) VALUES (1, 'video'), (2, 'music'), (3, 'dev')`)
+    testDb.exec(`INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (1, 1), (2, 2), (3, 3), (1, 3)`)
+
+    const { handleGetTagSubscriptions } = await import("../mcp/handlers.ts")
+    const res = await handleGetTagSubscriptions({ tag: "video,dev" })
+    const data = JSON.parse(res.content[0].text)
+    expect(data).toHaveLength(1)
+    expect(data[0].name).toBe("Netflix")
   })
 })

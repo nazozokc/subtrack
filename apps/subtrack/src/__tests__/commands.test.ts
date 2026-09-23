@@ -70,16 +70,14 @@ vi.mock("../scanner.ts", () => ({
   getRegisteredScanners: vi.fn().mockReturnValue([]),
 }))
 
-// Mock @inquirer/prompts to avoid interactive prompts
-vi.mock("@inquirer/prompts", () => ({
-  input: vi.fn(),
-  confirm: vi.fn(),
-  checkbox: vi.fn(),
-  select: vi.fn(),
-  search: vi.fn(),
-}))
+// Mock prompts.ts to avoid interactive prompts
+vi.mock("../prompts.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../prompts.ts")>()
+  const { createPromptMock } = await import("./prompt-mock.ts")
+  return createPromptMock(actual)
+})
 
-import { input, confirm, checkbox, select, search } from "@inquirer/prompts"
+import { input, confirm, checkbox, select, search } from "../prompts.ts"
 import { consola, logMessages, infoMessages, successMessages, errorMessages, failMessages, warnMessages } from "@subtrack/lib/logger"
 
 let testDb: DatabaseSync
@@ -956,6 +954,38 @@ test("handleAdd uses flags when provided (non-interactive)", async () => {
   expect(subs[0].currency).toBe("USD")
   expect(subs[0].cycle).toBe("yearly")
   expect(subs[0].tags).toEqual(["flag-test"])
+})
+
+test("handleAdd accepts a custom day cycle flag (3d)", async () => {
+  const { handleAdd } = await import("../commands.ts")
+  await handleAdd({
+    name: "TrialService",
+    price: "490",
+    currency: "JPY",
+    cycle: "3d",
+    tags: "trial",
+  })
+  expect(successMessages.some((m) => m.includes("TrialService"))).toBe(true)
+
+  const db = await import("../db.ts")
+  const subs = db.getSubscriptions()
+  expect(subs).toHaveLength(1)
+  expect(subs[0].name).toBe("TrialService")
+  expect(subs[0].cycle).toBe("3d")
+})
+
+test("handleAdd rejects an invalid day cycle flag", async () => {
+  const { handleAdd } = await import("../commands.ts")
+  await handleAdd({
+    name: "BadCycle",
+    price: "490",
+    currency: "JPY",
+    cycle: "0d",
+  })
+  expect(errorMessages.some((m) => /Invalid cycle/.test(m))).toBe(true)
+
+  const db = await import("../db.ts")
+  expect(db.getSubscriptions()).toHaveLength(0)
 })
 
 // ── handleDelete ──────────────────────────────────────────

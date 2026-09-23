@@ -38,7 +38,7 @@ This provides `node`, `pnpm`, `typescript`, `typos`, and `nixfmt`.
 | Runtime | Node.js |
 | Language | TypeScript (strict mode, ESM) |
 | CLI framework | `gunshi` |
-| Interactive prompts | `@inquirer/prompts` |
+| Interactive prompts | Self-contained (`src/prompts/`, `node:readline`) |
 | Terminal output | `@subtrack/lib` (`ansi`, `logger`, `table`) |
 | Spreadsheets | Self-contained `@subtrack/lib/xlsx` (hand-written XLSX) |
 | OS notifications | Native commands via `node:child_process` (`osascript` / `notify-send`) |
@@ -82,7 +82,7 @@ subtrack/
 │   └── subtrack/              # CLI tool (TypeScript/ESM)
 │       ├── src/
 │       │   ├── index.ts            # Entry point, CLI bootstrap (gunshi)
-│       │   ├── menu.ts             # Interactive main menu (@inquirer select)
+│       │   ├── menu.ts             # Interactive main menu (launched by bare `subtrack`)
 │       │   ├── commands/           # Command definitions (gunshi `define`)
 │       │   │   ├── index.ts            # Barrel, subCommands map
 │       │   │   ├── core.ts             # list, add, edit, delete, clone, archive, unarchive, search

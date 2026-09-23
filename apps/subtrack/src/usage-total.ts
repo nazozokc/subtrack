@@ -12,13 +12,13 @@ import {
   getLlmUsageTotalByModel,
 } from "./db.ts"
 import { getPeriodDateRange } from "@subtrack/lib/date"
-import type { Cycle } from "./types.ts"
+import type { NamedCycle } from "@subtrack/lib/date"
 import { formatUsdCost } from "./price.ts"
 
 export type UsageTotalOptions = {
   from?: string
   to?: string
-  period?: Cycle
+  period?: NamedCycle
   json?: boolean
 }
 

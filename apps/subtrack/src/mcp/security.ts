@@ -59,6 +59,27 @@ export function validateArgs(
   return null
 }
 
+/**
+ * Pre-invocation guard for `tools/call`: rejects oversized argument payloads
+ * and inputs that violate the per-tool schema. Returns an error message, or
+ * null when the call may proceed.
+ */
+export function validateToolCall(
+  name: string,
+  args: Record<string, unknown> | undefined,
+): string | null {
+  const rawSize = JSON.stringify(args ?? {}).length
+  if (rawSize > MAX_REQUEST_SIZE) {
+    return `Request too large (${rawSize} bytes, max ${MAX_REQUEST_SIZE})`
+  }
+  const schema = INPUT_VALIDATIONS[name]
+  if (args && schema) {
+    const err = validateArgs(args, schema)
+    if (err) return `Validation error: ${err}`
+  }
+  return null
+}
+
 /** Input validation schemas per tool. */
 export const INPUT_VALIDATIONS: Record<string, Record<string, { type: string; maxLength?: number }>> = {
   add_subscription: {

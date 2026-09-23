@@ -1,4 +1,4 @@
-import { input, select, confirm, search } from "@inquirer/prompts"
+import { input, select, confirm, search } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import type { UsageAddFlags } from "./types.ts"

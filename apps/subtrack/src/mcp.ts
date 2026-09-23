@@ -5,7 +5,5 @@
  * that import from "./mcp.ts".
  */
 
-export {
-  startMcpServer,
-  formatDateISO,
-} from "./mcp/index.ts"
+export { formatDate as formatDateISO } from "@subtrack/lib/date"
+export { startMcpServer } from "./mcp/index.ts"

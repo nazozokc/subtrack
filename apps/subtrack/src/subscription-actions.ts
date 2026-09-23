@@ -1,4 +1,4 @@
-import { confirm, select } from "@inquirer/prompts"
+import { confirm, select } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { logAudit } from "./audit.ts"

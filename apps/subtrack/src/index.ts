@@ -38,6 +38,9 @@ try {
     name: "subtrack",
     version: pkg.version,
     subCommands,
+    // MCP speaks JSON-RPC on stdout — suppress gunshi's header/usage banner
+    // so the protocol stream stays pure.
+    usageSilent: process.argv.slice(2)[0] === "mcp",
   })
 } catch (error) {
   if (error instanceof Error && error.name === "ExitPromptError") {

@@ -129,7 +129,11 @@ export const deleteCommand = define({
     id: { type: "positional", array: true, description: "Subscription ID(s) to delete (omit for interactive selection)", required: false },
   },
   run: (ctx) => {
-    const ids = ctx.positionals.slice(1).map(Number).filter((n) => !isNaN(n))
+    const ids = ctx.positionals.slice(1).map(Number)
+    if (ids.some((n) => !Number.isInteger(n) || n < 1)) {
+      fail("Subscription IDs must be positive integers")
+      return
+    }
     handleDelete(ids.length > 0 ? ids : undefined)
   },
 })

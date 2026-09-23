@@ -195,3 +195,30 @@ test("bi-weekly billing follows 14-day steps from anchor", async () => {
   // Jan 5 + 2*14 = Feb 2
   expect(calculateNextBilling(sub, new Date(2026, 1, 1))).toEqual(new Date(2026, 1, 2))
 })
+
+test("custom day cycle (3d) bills every 3 days from anchor", async () => {
+  const { calculateNextBilling } = await import("../upcoming.ts")
+  const sub = { ...baseSub, cycle: "3d", billingDay: null, createdAt: "2026-01-05" }
+  // Jan 5 anchor; from Feb 1 -> ceil(27/3)=9 periods -> Jan 5 + 27d = Feb 1
+  expect(calculateNextBilling(sub, new Date(2026, 1, 1))).toEqual(new Date(2026, 1, 1))
+  // from Feb 2 -> 10 periods -> Feb 4
+  expect(calculateNextBilling(sub, new Date(2026, 1, 2))).toEqual(new Date(2026, 1, 4))
+})
+
+// Day-cycle math must advance by calendar days, not fixed 24-hour intervals:
+// a 23/25-hour day across a daylight-saving fall-back would otherwise shift
+// the billing day by one. Only run where TZ env is honored (not Windows).
+test("next billing lands on the right calendar day across a DST fall-back", async () => {
+  if (process.platform === "win32") return
+  const { toDate, formatDate, nextDayCycleDate } = await import("@subtrack/lib/date")
+  const originalTz = process.env.TZ
+  process.env.TZ = "America/New_York"
+  try {
+    const anchor = toDate("2026-10-26") // 7d cycle anchored Oct 26 (DST ends Nov 1)
+    const next = nextDayCycleDate(anchor, 26, 7, toDate("2026-10-31"))
+    expect(formatDate(next)).toBe("2026-11-02")
+  } finally {
+    if (originalTz === undefined) delete process.env.TZ
+    else process.env.TZ = originalTz
+  }
+})

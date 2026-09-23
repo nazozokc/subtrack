@@ -107,12 +107,6 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Auto-merge @inquirer/prompts minor/patch updates",
-      "matchPackageNames": ["@inquirer/prompts"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "automerge": true
-    },
-    {
       "description": "Silence engine requirement bumps",
       "matchDepTypes": ["engines"],
       "enabled": false

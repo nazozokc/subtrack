@@ -1,0 +1,83 @@
+/**
+ * Self-contained `input` prompt: typed text with optional default and a
+ * validate-loop that re-renders errors until validation passes.
+ */
+
+import { cyan, red, strlen, takeTail } from "./ansi.ts"
+import { ExitPromptError, fallback, resolveStreams } from "./core.ts"
+import type { PromptStreams } from "./core.ts"
+import { withRawMode } from "./keys.ts"
+import { Renderer, finishPrompt } from "./renderer.ts"
+
+export type InputConfig = PromptStreams & {
+  message: string
+  default?: string
+  validate?: (value: string) => string | true
+}
+
+export async function input(config: InputConfig): Promise<string> {
+  const { stdin, stdout, interactive } = resolveStreams(config)
+  if (!interactive) {
+    return fallback(config.default !== undefined, config.default ?? "")
+  }
+
+  const renderer = new Renderer(stdout)
+  const columns = ((stdout as { columns?: number }).columns ?? 80) - 2
+  let value = config.default ?? ""
+  let error: string | null = null
+
+  function render() {
+    // Keep the caret visible while typing: when the value would overflow the
+    // line, show its tail with a leading ellipsis instead of clipping the end.
+    const prefix = `${cyan("?")} ${config.message} `
+    const maxValue = Math.max(1, columns - strlen(prefix))
+    let shown = value
+    if (strlen(value) > maxValue) {
+      shown = `…${takeTail(value, maxValue - 1)}`
+    }
+    const line = `${prefix}${shown}`
+    const errorLine = error !== null ? `\n${red(`✖ ${error}`)}` : ""
+    renderer.render(line + errorLine)
+  }
+
+  return withRawMode(stdin, stdout, async ({ readKey }) => {
+    for (;;) {
+      render()
+      const key = await readKey()
+      if (key.name === "ctrl-c" || key.name === "escape") {
+        renderer.clear()
+        throw new ExitPromptError()
+      }
+      if (key.name === "eof") {
+        renderer.clear()
+        if (value !== "") {
+          finishPrompt(stdout, config.message, value)
+          return value
+        }
+        return fallback(config.default !== undefined, config.default ?? "")
+      }
+      if (key.name === "return") {
+        const validation = config.validate ? config.validate(value) : true
+        if (validation !== true) {
+          error = validation
+          continue
+        }
+        renderer.clear()
+        finishPrompt(stdout, config.message, value)
+        return value
+      }
+      if (key.name === "backspace") {
+        value = value.slice(0, -1)
+        error = null
+        continue
+      }
+      if (key.name === "right" || key.name === "left" || key.name === "up" || key.name === "down") {
+        continue
+      }
+      if (key.str !== undefined && !key.ctrl && key.str.length === 1) {
+        value += key.str
+        error = null
+      }
+    }
+  })
+}

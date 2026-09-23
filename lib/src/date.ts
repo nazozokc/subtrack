@@ -1,12 +1,19 @@
-/** Billing cycle vocabulary shared across the subscription domain. */
-export type Cycle =
+/** Named billing cycle presets shared across the subscription domain. */
+export type NamedCycle =
   | "weekly" | "bi-weekly" | "monthly"
   | "quarterly" | "semi-annual" | "yearly"
 
 /**
- * Number of occurrences per year for each billing cycle.
+ * Billing cycle: a named preset, or a custom day-based cycle like "3d"
+ * (billed every N days — useful for trial-length subscriptions).
  */
-export const OCCURRENCES_PER_YEAR: Record<Cycle, number> = {
+export type Cycle = NamedCycle | `${number}d`
+
+/**
+ * Number of occurrences per year for each named billing cycle.
+ * Day-based cycles ("Nd") are computed dynamically: 365 / N.
+ */
+export const OCCURRENCES_PER_YEAR: Record<NamedCycle, number> = {
   weekly: 52,
   "bi-weekly": 26,
   monthly: 12,
@@ -16,12 +23,43 @@ export const OCCURRENCES_PER_YEAR: Record<Cycle, number> = {
 }
 
 /**
+ * Days of a day-based cycle ("3d" → 3), or null for named cycles.
+ * Only valid for 1–365 days; anything else is not a usable cycle.
+ */
+export function cycleDays(cycle: Cycle): number | null {
+  const m = /^(\d+)d$/.exec(cycle)
+  if (!m) return null
+  const n = Number(m[1])
+  return Number.isInteger(n) && n >= 1 && n <= 365 ? n : null
+}
+
+/** True when the cycle is a custom day-based one like "3d". */
+export function isDayCycle(cycle: Cycle): cycle is `${number}d` {
+  return cycleDays(cycle) !== null
+}
+
+/** Number of billing events per year. Day-based cycles assume 365 days. */
+export function occurrencesPerYear(cycle: Cycle): number {
+  const days = cycleDays(cycle)
+  if (days !== null) return 365 / days
+  return OCCURRENCES_PER_YEAR[cycle as NamedCycle]
+}
+
+/**
+ * Human-readable cycle label: "every 3 days", or the preset name ("monthly").
+ */
+export function formatCycle(cycle: Cycle): string {
+  const days = cycleDays(cycle)
+  return days !== null ? `every ${days} day${days === 1 ? "" : "s"}` : cycle
+}
+
+/**
  * Returns the multiplier to convert a price from one cycle to another.
  * e.g. periodFactor("yearly", "monthly") => 1/12
  *      periodFactor("monthly", "yearly") => 12
  */
 export function periodFactor(from: Cycle, to: Cycle = "monthly"): number {
-  return OCCURRENCES_PER_YEAR[from] / OCCURRENCES_PER_YEAR[to]
+  return occurrencesPerYear(from) / occurrencesPerYear(to)
 }
 
 /**
@@ -147,6 +185,66 @@ export function dateWithClampedDay(year: number, month: number, day: number): Da
   return new Date(year, month, clampDay(day, year, month + 1))
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Anchor date of an every-N-days cycle: the billing day of the createdAt
+ * month (day clamped to the month length).
+ */
+function dayCycleAnchor(anchorDate: Date, anchorDay: number): Date {
+  return dateWithClampedDay(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDay)
+}
+
+/**
+ * Whole local-calendar days between two dates. Rounding absorbs the ±1 hour
+ * shift of daylight-saving transitions (23- and 25-hour days count as 1).
+ */
+function wholeDaysBetween(from: Date, to: Date): number {
+  return Math.round((to.getTime() - from.getTime()) / DAY_MS)
+}
+
+/**
+ * Date `k` billing-periods after the anchor, advanced by calendar days so
+ * daylight-saving transitions (23/25-hour days) never shift the billing day.
+ */
+function addDayPeriods(anchor: Date, days: number, k: number): Date {
+  const result = new Date(anchor)
+  result.setDate(anchor.getDate() + k * days)
+  return result
+}
+
+/**
+ * Next occurrence of an every-N-days cycle at or after `fromDate`
+ * (used by weekly, bi-weekly, and custom "Nd" cycles).
+ */
+export function nextDayCycleDate(anchorDate: Date, anchorDay: number, days: number, fromDate: Date): Date {
+  const anchor = dayCycleAnchor(anchorDate, anchorDay)
+  const periods = Math.max(0, Math.ceil((fromDate.getTime() - anchor.getTime()) / (days * DAY_MS)))
+  return addDayPeriods(anchor, days, periods)
+}
+
+/**
+ * Days of `month` (1-12) on which an every-N-days cycle bills.
+ */
+export function dayCycleDaysInMonth(
+  anchorDate: Date,
+  anchorDay: number,
+  days: number,
+  year: number,
+  month: number,
+): number[] {
+  const anchor = dayCycleAnchor(anchorDate, anchorDay)
+  const start = new Date(year, month - 1, 1).getTime()
+  const end = new Date(year, month - 1, daysInMonth(year, month)).getTime()
+  const kStart = Math.max(0, Math.ceil(wholeDaysBetween(anchor, new Date(start)) / days))
+  const kEnd = Math.floor(wholeDaysBetween(anchor, new Date(end)) / days)
+  const result: number[] = []
+  for (let k = kStart; k <= kEnd; k++) {
+    result.push(addDayPeriods(anchor, days, k).getDate())
+  }
+  return result
+}
+
 /**
  * Days until a target date (YYYY-MM-DD string or Date), relative to today.
  * Returns 0 for today, negative for past dates.
@@ -164,7 +262,7 @@ export function daysUntil(target: string | Date): number {
  * The range covers the current calendar period (month / quarter / year etc.)
  * up to today.
  */
-export function getPeriodDateRange(period: Cycle): { from: string; to: string } {
+export function getPeriodDateRange(period: NamedCycle): { from: string; to: string } {
   const now = new Date()
   const y = now.getFullYear()
   const m = now.getMonth() // 0‑based
@@ -210,7 +308,7 @@ export function getPeriodDateRange(period: Cycle): { from: string; to: string } 
  * the current period.  The returned range covers a complete period
  * (e.g. full month, full year) for accurate side-by-side comparison.
  */
-export function getPreviousPeriodDateRange(period: Cycle): { from: string; to: string } {
+export function getPreviousPeriodDateRange(period: NamedCycle): { from: string; to: string } {
   const now = new Date()
   const y = now.getFullYear()
   const m = now.getMonth() // 0‑based

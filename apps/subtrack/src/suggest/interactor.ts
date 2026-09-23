@@ -8,13 +8,21 @@
  * - [q]uit — stop reviewing
  */
 
-import { confirm, input, select } from "@inquirer/prompts"
+import { confirm, input, select } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { getSubscriptions, writeSubscription, markSuggestionAsAdded, dismissSuggestion } from "../db.ts"
 import { formatPrice } from "../price.ts"
 import type { Suggestion } from "./types.ts"
 import { findMatches, hasPriceConflict } from "./matcher.ts"
+
+/**
+ * Strip control characters (incl. ESC) from email-derived strings before
+ * printing, preventing terminal escape-sequence injection via the terminal.
+ */
+function displaySafe(value: string): string {
+  return value.replace(/[\x00-\x1F\x7F]/g, "")
+}
 
 /**
  * Review all pending suggestions interactively.
@@ -35,6 +43,10 @@ export async function reviewSuggestions(suggestions: Suggestion[]): Promise<void
  * Review a single suggestion. Returns false if user wants to quit.
  */
 async function reviewOne(suggestion: Suggestion): Promise<boolean> {
+  // Sanitize email-derived strings before printing to the terminal
+  const safeName = displaySafe(suggestion.name)
+  const safeSource = suggestion.sourceDetail ? displaySafe(suggestion.sourceDetail) : null
+
   // Display suggestion info
   const priceStr = suggestion.price !== null && suggestion.currency
     ? formatPrice(suggestion.price, suggestion.currency)
@@ -43,10 +55,10 @@ async function reviewOne(suggestion: Suggestion): Promise<boolean> {
 
   consola.log("")
   consola.log(pc.bold(pc.cyan(`── Suggestion #${suggestion.id} ──`)))
-  consola.log(`  ${pc.bold("Name:")}     ${suggestion.name}`)
+  consola.log(`  ${pc.bold("Name:")}     ${safeName}`)
   consola.log(`  ${pc.bold("Price:")}    ${priceStr}/${cycleStr}`)
-  if (suggestion.sourceDetail) {
-    consola.log(`  ${pc.bold("Source:")}   ${suggestion.sourceDetail}`)
+  if (safeSource) {
+    consola.log(`  ${pc.bold("Source:")}   ${safeSource}`)
   }
   consola.log(`  ${pc.dim(`Confidence: ${Math.round(suggestion.confidence * 100)}%`)}`)
   consola.log("")
@@ -54,7 +66,7 @@ async function reviewOne(suggestion: Suggestion): Promise<boolean> {
   // Check for matches
   const { matches, exactMatch } = findMatches(suggestion)
   if (exactMatch) {
-    consola.warn(`⚠ Already exists: "${matches[0].name}" (${formatPrice(matches[0].price, matches[0].currency)}/${matches[0].cycle})`)
+    consola.warn(`⚠ Already exists: "${displaySafe(matches[0].name)}" (${formatPrice(matches[0].price, matches[0].currency)}/${matches[0].cycle})`)
     const action = await select({
       message: "What to do?",
       choices: [
@@ -72,14 +84,14 @@ async function reviewOne(suggestion: Suggestion): Promise<boolean> {
     consola.info(`Similar existing subscriptions:`)
     for (const m of matches) {
       const conflict = hasPriceConflict(suggestion, m) ? pc.red(" (price differs)") : ""
-      consola.log(`  · ${m.name} — ${formatPrice(m.price, m.currency)}/${m.cycle}${conflict}`)
+      consola.log(`  · ${displaySafe(m.name)} — ${formatPrice(m.price, m.currency)}/${m.cycle}${conflict}`)
     }
     consola.log("")
   }
 
   // Ask what to do
   const action = await select({
-    message: `Add "${suggestion.name}" as a subscription?`,
+    message: `Add "${safeName}" as a subscription?`,
     choices: [
       { name: `${pc.green("Add")}       — add with extracted values`, value: "add" },
       { name: `${pc.yellow("Edit")}      — review and edit before adding`, value: "edit" },
@@ -126,7 +138,7 @@ async function reviewOne(suggestion: Suggestion): Promise<boolean> {
       })
 
       markSuggestionAsAdded(suggestion.id, result)
-      consola.success(`Added: "${suggestion.name}" (${priceStr}/${cycle})`)
+      consola.success(`Added: "${safeName}" (${priceStr}/${cycle})`)
       return true
     }
 
@@ -135,7 +147,7 @@ async function reviewOne(suggestion: Suggestion): Promise<boolean> {
       const edited = await editSuggestion(suggestion)
       if (edited) {
         markSuggestionAsAdded(suggestion.id, edited.id)
-        consola.success(`Added: "${edited.name}"`)
+        consola.success(`Added: "${displaySafe(edited.name)}"`)
       }
       return true
     }

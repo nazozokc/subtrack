@@ -2,8 +2,56 @@ import type { DatabaseSync } from "node:sqlite"
 import { consola } from "@subtrack/lib/logger"
 import { createAuditTable } from "./audit.ts"
 
+/** Current schema version. Bump when adding a new migration below. */
+export const SCHEMA_VERSION = 1
+
+/** Read the current PRAGMA user_version of a database. */
+export function getSchemaVersion(db: DatabaseSync): number {
+  const row = db.prepare("PRAGMA user_version").get() as
+    | { user_version: number }
+    | undefined
+  return row ? Number(row.user_version) : 0
+}
+
 /** Apply schema creation and migrations to a database instance. */
 export function runMigrations(db: DatabaseSync): void {
+  // v0 → v1: baseline schema. Idempotent, so it also repairs databases
+  // created before versioning was introduced (user_version = 0).
+  const version = getSchemaVersion(db)
+  if (version < SCHEMA_VERSION) {
+    db.exec("BEGIN TRANSACTION")
+    try {
+      if (version < 1) {
+        migrateToV1(db)
+      }
+
+      // Future migrations go here:
+      // if (version < 2) migrateToV2(db)
+      // if (version < 3) migrateToV3(db)
+
+      // Record the latest version so migration steps only run once
+      db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
+      db.exec("COMMIT")
+    } catch (error) {
+      db.exec("ROLLBACK")
+      throw error
+    }
+  }
+
+  // Verify database integrity on startup
+  const integrity = db.prepare("PRAGMA integrity_check").get() as
+    | { integrity_check: string }
+    | undefined
+  if (integrity && String(integrity.integrity_check) !== "ok") {
+    consola.warn(
+      `Database integrity check failed: ${String(integrity.integrity_check)}\n` +
+      "  Run 'subtrack backup' immediately and restore from a known-good backup.",
+    )
+  }
+}
+
+/** v1 baseline: tables, columns, and indexes. */
+function migrateToV1(db: DatabaseSync): void {
   db.exec(`CREATE TABLE IF NOT EXISTS subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -125,15 +173,4 @@ export function runMigrations(db: DatabaseSync): void {
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (matched_sub_id) REFERENCES subscriptions(id) ON DELETE SET NULL
   )`)
-
-  // Verify database integrity on startup
-  const integrity = db.prepare("PRAGMA integrity_check").get() as
-    | { integrity_check: string }
-    | undefined
-  if (integrity && String(integrity.integrity_check) !== "ok") {
-    consola.warn(
-      `Database integrity check failed: ${String(integrity.integrity_check)}\n` +
-      "  Run 'subtrack backup' immediately and restore from a known-good backup.",
-    )
-  }
 }

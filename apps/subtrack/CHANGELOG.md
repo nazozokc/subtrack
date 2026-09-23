@@ -1,6 +1,6 @@
 # Changelog
 
-## 9.0.0 (unreleased)
+## 10.0.0 (unreleased)
 
 ### ✨ Features
 
@@ -21,6 +21,10 @@
 - Add `--force` flag to bulk tag commands. ([`64751e4`](https://github.com/nazozokc/subtrack/commit/64751e4))
 - Convert API usage cost from cents to dollars. ([`4f90970`](https://github.com/nazozokc/subtrack/commit/4f90970))
 - Accept export CSV format in import. ([`dbdb5e8`](https://github.com/nazozokc/subtrack/commit/dbdb5e8))
+
+### 🔥 Removed
+
+- `suggest scan` (IMAP email scanning) removed — the `imapflow` dependency is dropped. Existing suggestions remain manageable via `subtrack suggest list/view/add/dismiss`.
 
 ### 📝 Documentation
 

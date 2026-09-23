@@ -5,7 +5,7 @@ import { getSubscriptions, getNonCancelledSubscriptions } from "./db.ts"
 import { formatPrice } from "./price.ts"
 import { fetchFxRates, tryConvert } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
-import { toDate, formatDate, formatShortDate, dateWithClampedDay, daysUntil } from "@subtrack/lib/date"
+import { toDate, formatDate, formatShortDate, dateWithClampedDay, daysUntil, cycleDays, nextDayCycleDate, isDayCycle } from "@subtrack/lib/date"
 import { runPreCommandHooks } from "./pre-command.ts"
 
 function getBillingDay(sub: SharedArgs): number {
@@ -27,6 +27,11 @@ function periodDate(anchorDate: Date, periodMonths: number, k: number, day: numb
 }
 
 export function nextDateForCycle(anchorDay: number, anchorDate: Date, cycle: Cycle, fromDate: Date): Date {
+  // Every-N-days cycles (custom "Nd", weekly, bi-weekly) share one formula
+  if (isDayCycle(cycle) || cycle === "weekly" || cycle === "bi-weekly") {
+    const days = cycleDays(cycle) ?? (cycle === "weekly" ? 7 : 14)
+    return nextDayCycleDate(anchorDate, anchorDay, days, fromDate)
+  }
   switch (cycle) {
     case "monthly": {
       // Calculate next billing date based on anchor day
@@ -39,15 +44,6 @@ export function nextDateForCycle(anchorDay: number, anchorDate: Date, cycle: Cyc
       const candidate = dateWithClampedDay(fromDate.getFullYear(), anchorDate.getMonth(), anchorDay)
       if (candidate >= fromDate) return candidate
       return dateWithClampedDay(fromDate.getFullYear() + 1, anchorDate.getMonth(), anchorDay)
-    }
-    case "weekly":
-    case "bi-weekly": {
-      // Every 7/14 days from the anchor (billing day of the anchor month)
-      const periodDays = cycle === "weekly" ? 7 : 14
-      const anchor = dateWithClampedDay(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDay)
-      const msPerPeriod = periodDays * 24 * 60 * 60 * 1000
-      const periodsSince = Math.ceil((fromDate.getTime() - anchor.getTime()) / msPerPeriod)
-      return new Date(anchor.getTime() + Math.max(0, periodsSince) * msPerPeriod)
     }
     case "quarterly":
     case "semi-annual": {

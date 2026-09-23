@@ -546,6 +546,47 @@ test("periodFactor handles all cycle-to-cycle combinations without throwing", as
   }
 })
 
+test("cycleDays parses custom day cycles", async () => {
+  const { cycleDays } = await import("@subtrack/lib/date")
+  expect(cycleDays("3d")).toBe(3)
+  expect(cycleDays("1d")).toBe(1)
+  expect(cycleDays("365d")).toBe(365)
+  expect(cycleDays("monthly")).toBeNull()
+  expect(cycleDays("0d")).toBeNull()
+  expect(cycleDays("366d")).toBeNull()
+  expect(cycleDays("d")).toBeNull()
+  expect(cycleDays("3D")).toBeNull()
+  expect(cycleDays("3")).toBeNull()
+})
+
+test("isDayCycle narrows custom day cycles", async () => {
+  const { isDayCycle } = await import("@subtrack/lib/date")
+  expect(isDayCycle("3d")).toBe(true)
+  expect(isDayCycle("monthly")).toBe(false)
+})
+
+test("occurrencesPerYear counts custom day cycles", async () => {
+  const { occurrencesPerYear } = await import("@subtrack/lib/date")
+  expect(occurrencesPerYear("3d")).toBe(365 / 3)
+  expect(occurrencesPerYear("1d")).toBe(365)
+  expect(occurrencesPerYear("monthly")).toBe(12)
+  expect(occurrencesPerYear("yearly")).toBe(1)
+})
+
+test("formatCycle renders custom day cycles", async () => {
+  const { formatCycle } = await import("@subtrack/lib/date")
+  expect(formatCycle("3d")).toBe("every 3 days")
+  expect(formatCycle("1d")).toBe("every 1 day")
+  expect(formatCycle("monthly")).toBe("monthly")
+})
+
+test("periodFactor converts custom day cycles", async () => {
+  const { periodFactor } = await import("@subtrack/lib/date")
+  expect(periodFactor("3d", "monthly")).toBe(365 / 3 / 12)
+  expect(periodFactor("3d", "yearly")).toBe(365 / 3)
+  expect(periodFactor("monthly", "3d")).toBe(12 / (365 / 3))
+})
+
 test("getSubscriptions returns correct data types", async () => {
   const db = await import("../db.ts")
 

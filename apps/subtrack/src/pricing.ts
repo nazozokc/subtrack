@@ -102,7 +102,7 @@ export async function ensurePricingCache(): Promise<PricingCache | null> {
       } finally {
         clearTimeout(timer)
       }
-      mkdirSync(getConfigDir(), { recursive: true })
+      mkdirSync(getConfigDir(), { recursive: true, mode: 0o700 })
       writeFileSync(cachePath, JSON.stringify(data), { mode: 0o600 })
       _cache = data
       return data
@@ -134,7 +134,7 @@ function formatPricingInfo(entry: ModelPricingEntry): string {
 /**
  * Search model pricing cache by query string.
  * Optionally filtered by provider (`litellm_provider` field).
- * Returns choices suitable for `@inquirer/search` prompt.
+ * Returns choices suitable for the `search` prompt (src/prompts/).
  */
 export function searchPricingModels(
   cache: PricingCache,

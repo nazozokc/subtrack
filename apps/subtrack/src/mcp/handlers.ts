@@ -27,12 +27,14 @@ import {
 } from "../db.ts"
 import { calcSummary, calcSubTotal, calcPreviousTotals } from "../payment.ts"
 import { getPeriodDateRange, getPreviousPeriodDateRange, periodFactor } from "@subtrack/lib/date"
+import type { NamedCycle } from "@subtrack/lib/date"
 import { calcCalendarEntries } from "../calendar.ts"
 import { exportCsv, exportJson, exportMd } from "../export.ts"
 import { fetchFxRates, convertPrice } from "../fx.ts"
 import { searchSubscriptions } from "../search.ts"
 import { calcUpcoming } from "../upcoming.ts"
 import { isValidCycle, isValidStatus, isValidCurrency } from "../prompts.ts"
+import { rateLimiter, validateToolCall } from "./security.ts"
 
 export async function handleListSubscriptions(args?: Record<string, unknown>): Promise<McpResponse> {
   const subs = getSubscriptions({
@@ -271,7 +273,7 @@ export async function handleGetForecast(args?: Record<string, unknown>): Promise
 }
 
 export async function handleCompare(args?: Record<string, unknown>): Promise<McpResponse> {
-  const period = (args?.period as Cycle | undefined) ?? "monthly"
+  const period = (args?.period as NamedCycle | undefined) ?? "monthly"
   const targetCurrency = args?.currency as Currency | undefined
 
   let rates: FxRates | null = null
@@ -496,4 +498,36 @@ export const HANDLER_MAP: Record<string, (args?: Record<string, unknown>) => Pro
   get_tag_subscriptions: handleGetTagSubscriptions,
   get_usage_total: handleGetUsageTotal,
   list_usage: handleListUsage,
+}
+
+/**
+ * Guarded tool dispatch: rate limit → size/schema validation → handler
+ * lookup → execution, mapping every rejection to a well-formed McpResponse.
+ */
+export async function callTool(name: string, args?: Record<string, unknown>): Promise<McpResponse> {
+  if (!rateLimiter.tryConsume()) {
+    return {
+      content: [{ type: "text", text: "Rate limit exceeded. Please slow down." }],
+      isError: true,
+    }
+  }
+  const validationError = validateToolCall(name, args)
+  if (validationError) {
+    return { content: [{ type: "text", text: validationError }], isError: true }
+  }
+  const handler = HANDLER_MAP[name]
+  if (!handler) {
+    return {
+      content: [{ type: "text", text: `Unknown tool: ${name}` }],
+      isError: true,
+    }
+  }
+  try {
+    return await handler(args)
+  } catch (error) {
+    return {
+      content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
+      isError: true,
+    }
+  }
 }

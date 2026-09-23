@@ -23,6 +23,9 @@ let _lockFd: number | null = null
 /** Max decompressed size for backups (prevents zip-bomb / decompression-bomb DoS). */
 const MAX_DECOMPRESSED_BYTES = 256 * 1024 * 1024 // 256 MB
 
+/** Core schema tables required for a valid subtrack database file. */
+const REQUIRED_TABLES = ["subscriptions", "tags", "subscription_tags"]
+
 /** Gunzip with a strict output cap; throws a clear error when exceeded. */
 function gunzipLimited(data: Buffer): Buffer {
   try {
@@ -364,12 +367,27 @@ export function restoreDb(backupPath: string): void {
   writeFileSync(savePath, buf, { mode: 0o600 })
   const newDb = new DatabaseSync(savePath)
   try {
-    const hasSubscriptions = newDb.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='subscriptions'",
-    ).get() !== undefined
-    if (!hasSubscriptions) {
+    // Quick integrity check — catches corruption before it replaces the live DB
+    const integrity = newDb.prepare("PRAGMA integrity_check").get() as Record<string, string> | undefined
+    const integrityOk = integrity !== undefined && Object.values(integrity)[0] === "ok"
+    if (!integrityOk) {
       throw new Error(
-        "Invalid backup file: missing 'subscriptions' table — not a subtrack database",
+        `Invalid backup file: integrity check failed (${integrity ? Object.values(integrity)[0] : "unreadable"})`,
+      )
+    }
+    // Validate the required schema tables exist (not a subtrack database otherwise)
+    const tables = newDb.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table'",
+    ).all() as { name: string }[]
+    const tableSet = new Set(tables.map((t) => t.name))
+    const missing = REQUIRED_TABLES.filter((t) => !tableSet.has(t))
+    if (missing.length > 0) {
+      const primary = missing.includes("subscriptions")
+        ? "missing 'subscriptions' table"
+        : `missing table(s)`
+      const rest = missing.filter((t) => t !== "subscriptions")
+      throw new Error(
+        `Invalid backup file: ${primary}${rest.length > 0 ? ` (also missing: ${rest.join(", ")})` : ""} — not a subtrack database`,
       )
     }
   } finally {

@@ -5,7 +5,7 @@ import type { AuditEntry } from "./db.ts"
 import { getSubscriptions, getAllPriceChanges, getAuditLogs } from "./db.ts"
 import { loadConfig } from "./config.ts"
 import { formatPrice } from "./price.ts"
-import { periodFactor, OCCURRENCES_PER_YEAR } from "@subtrack/lib/date"
+import { periodFactor, occurrencesPerYear } from "@subtrack/lib/date"
 import { fetchFxRates, convertPrice, convertSubsWithRates } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
 import { renderBarChart } from "./timeline.ts"
@@ -62,7 +62,7 @@ export function calcYearlyTotals(subs: SharedArgs[], year: number): MonthTotal[]
 
 /** Yearly cost of a single subscription (price × occurrences per year). */
 export function yearlyCost(sub: SharedArgs): number {
-  return sub.price * OCCURRENCES_PER_YEAR[sub.cycle]
+  return sub.price * occurrencesPerYear(sub.cycle)
 }
 
 /** Top N subscriptions by yearly cost. */

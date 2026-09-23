@@ -3,7 +3,7 @@
  * Handles both non-interactive (flag-based) and interactive (prompt-based) editing.
  */
 
-import { input, confirm, checkbox, select } from "@inquirer/prompts"
+import { input, confirm, checkbox, select } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import type { Cycle, Status, AddSharedArgs, AddFlags } from "../types.ts"
@@ -12,7 +12,6 @@ import { formatPrice } from "../price.ts"
 import { logAudit } from "../audit.ts"
 import {
   CURRENCY_CHOICES,
-  CYCLE_CHOICES,
   STATUS_CHOICES,
   isValidCurrency,
   isValidCycle,
@@ -30,6 +29,7 @@ import {
   validateDiscountValue,
   validateDiscountType,
   validateAutoRenewal,
+  promptCycle,
 } from "../prompts.ts"
 
 export async function handleEdit(
@@ -263,11 +263,9 @@ export async function handleEdit(
     newData.currency = currency
   }
   if (fields.includes("cycle")) {
-    const cycle = await select({
-      message: "New cycle:",
-      choices: CYCLE_CHOICES,
-    })
-    newData.cycle = cycle
+    const cycleRes = await promptCycle(undefined, "New cycle:")
+    if (!cycleRes) return
+    newData.cycle = cycleRes.value
   }
   if (fields.includes("status")) {
     const status = await select({

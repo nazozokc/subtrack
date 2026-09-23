@@ -1,18 +1,22 @@
-import { input, confirm, select, checkbox } from "@inquirer/prompts"
+import { input, confirm, select, checkbox } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
+import { fail } from "./error.ts"
 import pc from "@subtrack/lib/ansi"
 import { CliTable3 } from "@subtrack/lib/table"
 import type { SharedArgs, Currency, Cycle } from "./types.ts"
 import { TABLE_CHARS, getTableStyle, sectionTitle, calcColumnWidths, zebraRow } from "./display-constants.ts"
 import type { ColumnConfig } from "./display-constants.ts"
-import { periodFactor } from "@subtrack/lib/date"
+import { periodFactor, formatCycle } from "@subtrack/lib/date"
 import { getSubscriptions, getNonCancelledSubscriptions } from "./db.ts"
 import { formatPrice } from "./price.ts"
 import { fetchFxRates, convertPrice, tryConvert } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
 import {
   CURRENCY_CHOICES,
-  CYCLE_CHOICES,
+  promptCycle,
+  isValidCurrency,
+  isValidCycle,
+  validatePrice,
 } from "./prompts.ts"
 
 export type ForecastOptions = {
@@ -38,6 +42,12 @@ type ForecastEntry = {
 export async function handleForecast(
   options: ForecastOptions,
 ): Promise<void> {
+  // Defensive validation for non-interactive callers (flags are validated in the command layer)
+  if (options.months !== undefined && (!Number.isInteger(options.months) || options.months < 1 || options.months > 120)) {
+    fail("months must be an integer between 1 and 120")
+    return
+  }
+
   // Interactive mode when no options given
   const interactive =
     !options.json &&
@@ -80,9 +90,11 @@ export async function handleForecast(
     })
     if (addHypothetical) {
       const name = await input({ message: "Subscription name:", validate: (v: string) => (v ? true : "Name required") })
-      const priceStr = await input({ message: "Monthly price:", validate: (v: string) => (Number(v) > 0 ? true : "Enter a positive number") })
       const currency = await select({ message: "Currency:", choices: CURRENCY_CHOICES })
-      const cycle = await select({ message: "Cycle:", choices: CYCLE_CHOICES })
+      const cycleRes = await promptCycle(undefined, "Cycle:")
+      if (!cycleRes) return
+      const cycle = cycleRes.value
+      const priceStr = await input({ message: `Amount per ${formatCycle(cycle)}:`, validate: (v: string) => (Number(v) > 0 ? true : "Enter a positive number") })
       addEntry = {
         name: name.trim(),
         price: Math.round(Number(priceStr)),
@@ -91,13 +103,28 @@ export async function handleForecast(
       }
     }
   } else if (options.addName) {
-    // Flag-based add subscription
-    const price = options.addPrice ? Math.round(Number(options.addPrice)) : 0
+    // Flag-based add subscription (validate all hypothetical fields)
+    const priceStr = options.addPrice ?? "0"
+    const priceErr = validatePrice(priceStr)
+    if (priceErr !== true) {
+      fail(`Invalid addPrice: ${priceErr}`)
+      return
+    }
+    const addCurrency = options.addCurrency ?? "USD"
+    if (!isValidCurrency(addCurrency)) {
+      fail(`Invalid addCurrency: "${addCurrency}"`)
+      return
+    }
+    const addCycle = options.addCycle ?? "monthly"
+    if (!isValidCycle(addCycle)) {
+      fail(`Invalid addCycle: "${addCycle}"`)
+      return
+    }
     addEntry = {
       name: options.addName,
-      price,
-      currency: options.addCurrency ?? "USD",
-      cycle: (options.addCycle as Cycle) ?? "monthly",
+      price: Math.round(Number(priceStr)),
+      currency: addCurrency,
+      cycle: addCycle,
     }
   }
 

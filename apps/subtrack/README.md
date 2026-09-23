@@ -645,7 +645,7 @@ pnpm lint:typos     # typos check
 | Runtime         | Node.js                       |
 | Language        | TypeScript (strict mode, ESM) |
 | CLI framework   | gunshi                        |
-| Interactive UI  | @inquirer/prompts             |
+| Interactive UI  | Self-contained prompts (src/prompts/, node:readline) |
 | Logging/Tables/Colors | Self-contained modules (src/consola.ts, src/table.ts, src/color.ts) |
 | Spreadsheets    | Self-contained XLSX generator (src/xlsx.ts) |
 | OS notifications | Native commands (osascript / notify-send) |

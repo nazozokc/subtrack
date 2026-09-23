@@ -1,7 +1,7 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { CliTable3 } from "@subtrack/lib/table"
-import { formatShortDate, daysUntil } from "@subtrack/lib/date"
+import { formatShortDate, daysUntil, formatCycle } from "@subtrack/lib/date"
 import type { SharedArgs, Currency, LlmUsageEntry } from "./types.ts"
 import { getSubscriptions } from "./db.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
@@ -39,7 +39,7 @@ function buildRow(sub: SharedArgs, price: string, showNotes: boolean, showMethod
   const row = [
     String(sub.name),
     statusColor(sub.status),
-    String(sub.cycle),
+    formatCycle(sub.cycle),
     nextBillingCell(sub),
     sub.tags.length > 0 ? sub.tags.join(", ") : "-",
     price,

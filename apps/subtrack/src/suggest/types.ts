@@ -27,7 +27,7 @@ export type Suggestion = {
   createdAt: string
 }
 
-/** Raw email fetched from IMAP or read from a file. */
+/** Raw email input read from a local file. */
 export type RawEmail = {
   id: string
   from: string | null
@@ -50,8 +50,6 @@ export type SuggestionCandidate = {
   sourceDetail?: string | null
   confidence: number
 }
-
-export type { ImapConfig } from "../types.ts"
 
 /** Options for the suggest command. */
 export type SuggestListFlags = {

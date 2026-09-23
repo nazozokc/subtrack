@@ -5,6 +5,7 @@ import os from "node:os"
 import type { SharedArgs, Currency } from "./types.ts"
 import { formatPrice } from "./price.ts"
 import { generateXlsx } from "@subtrack/lib/xlsx"
+import { isDayCycle } from "@subtrack/lib/date"
 import { calculateNextBilling } from "./upcoming.ts"
 import { tagsSubscription, getSubscriptions } from "./db.ts"
 import { fetchFxRates, convertSubsWithRates } from "./fx.ts"
@@ -171,6 +172,9 @@ function icsFormatDate(d: Date): string {
 }
 
 function cycleToRrule(cycle: SharedArgs["cycle"]): string {
+  if (isDayCycle(cycle)) {
+    return `FREQ=DAILY;INTERVAL=${Number(cycle.slice(0, -1))}`
+  }
   switch (cycle) {
     case "weekly":
       return "FREQ=WEEKLY"
@@ -207,7 +211,7 @@ export function exportIcs(subs: SharedArgs[]): string {
     const tags = s.tags.length > 0 ? `Tags: ${s.tags.join(", ")}` : ""
     const notes = s.notes ? `Notes: ${s.notes}` : ""
     const descParts = [tags, notes].filter(Boolean)
-    const description = descParts.length > 0 ? descParts.join("\\n") : ""
+    const description = descParts.length > 0 ? descParts.join("\n") : ""
     const summary = `${s.name} - ${formatPrice(s.price, s.currency)}/${s.cycle}`
 
     cal.push("BEGIN:VEVENT")

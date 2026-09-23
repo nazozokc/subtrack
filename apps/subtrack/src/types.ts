@@ -220,13 +220,6 @@ export type BudgetEntry = {
 
 export type NotifyChannel = "os" | "slack" | "webhook"
 
-export type ImapConfig = {
-  host: string
-  port: number
-  tls: boolean
-  username: string
-}
-
 export type SubtrackConfig = {
   defaultCurrency: string
   monthlyBudget: number
@@ -234,8 +227,6 @@ export type SubtrackConfig = {
   notifyDays: number
   /** ISO datetime of last successful suggestion scan. */
   suggestLastScan?: string
-  /** IMAP connection settings for email scanning. */
-  imap?: ImapConfig
   /** Saved filter profiles */
   profiles?: Record<string, ProfileFilter>
   /** Currently active profile name */

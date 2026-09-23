@@ -1,4 +1,4 @@
-import { confirm } from "@inquirer/prompts"
+import { confirm } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { mkdirSync, writeFileSync } from "node:fs"
@@ -24,7 +24,11 @@ export type CancelOptions = {
 
 /** Sanitize a subscription name for use in a file name. */
 function safeFileName(name: string): string {
-  return name.replace(/[^\p{L}\p{N}._-]+/gu, "_").slice(0, 60) || "subscription"
+  const sanitized = name
+    .replace(/[^\p{L}\p{N}._-]+/gu, "_")
+    .replace(/^\.+/, "") // never produce hidden (dotfile) names
+    .slice(0, 60)
+  return sanitized || "subscription"
 }
 
 export async function handleCancel(id: number, options: CancelOptions = {}): Promise<void> {
