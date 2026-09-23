@@ -2,8 +2,6 @@
 import { define } from "gunshi"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
-import { handleTags } from "../subscription/core.ts"
-import { handleTagList, handleTagRename, handleTagDelete, handleTagPrune, handleTagMerge } from "../tag.ts"
 
 export const tagsCommand = define({
   name: "tags",
@@ -11,20 +9,24 @@ export const tagsCommand = define({
   args: {
     names: { type: "positional", array: true, description: "Tag names", required: false },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const tagNames = (ctx.values.names as string[] | undefined) ?? []
     if (tagNames.length === 0) {
       fail("Please specify at least one tag")
       return
     }
-    handleTags(tagNames)
+    const { handleTags } = await import("../subscription/core.ts")
+    return handleTags(tagNames)
   },
 })
 
 const tagListCmd = define({
   name: "list",
   description: "List all tags with usage count",
-  run: () => handleTagList(),
+  run: async () => {
+    const { handleTagList } = await import("../tag.ts")
+    return handleTagList()
+  },
 })
 
 const tagRenameCmd = define({
@@ -34,7 +36,10 @@ const tagRenameCmd = define({
     old: { type: "positional", description: "Current tag name" },
     new: { type: "positional", description: "New tag name" },
   },
-  run: (ctx) => handleTagRename(ctx.values.old, ctx.values["new"]),
+  run: async (ctx) => {
+    const { handleTagRename } = await import("../tag.ts")
+    return handleTagRename(ctx.values.old, ctx.values["new"])
+  },
 })
 
 const tagDeleteCmd = define({
@@ -43,13 +48,19 @@ const tagDeleteCmd = define({
   args: {
     name: { type: "positional", description: "Tag name to delete" },
   },
-  run: (ctx) => handleTagDelete(ctx.values.name),
+  run: async (ctx) => {
+    const { handleTagDelete } = await import("../tag.ts")
+    return handleTagDelete(ctx.values.name)
+  },
 })
 
 const tagPruneCmd = define({
   name: "prune",
   description: "Remove orphaned tags",
-  run: () => handleTagPrune(),
+  run: async () => {
+    const { handleTagPrune } = await import("../tag.ts")
+    return handleTagPrune()
+  },
 })
 
 const tagMergeCmd = define({
@@ -59,7 +70,10 @@ const tagMergeCmd = define({
     source: { type: "positional", description: "Source tag name to merge from" },
     target: { type: "positional", description: "Target tag name to merge into" },
   },
-  run: (ctx) => handleTagMerge(ctx.values.source, ctx.values.target),
+  run: async (ctx) => {
+    const { handleTagMerge } = await import("../tag.ts")
+    return handleTagMerge(ctx.values.source, ctx.values.target)
+  },
 })
 
 export const tagCommand = define({

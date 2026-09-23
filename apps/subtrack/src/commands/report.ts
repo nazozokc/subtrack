@@ -1,23 +1,8 @@
 // ── Report/analytics commands ──────────────────────────
 import { define } from "gunshi"
-import { consola } from "@subtrack/lib/logger"
-import { handleSummary } from "../payment.ts"
-import { handlePayment } from "../payment.ts"
-import { handleUpcoming } from "../upcoming.ts"
-import { handleAnalytics } from "../analytics.ts"
-import { handleCompare } from "../compare.ts"
-import { handleCalendar } from "../calendar.ts"
-import { handleForecast } from "../forecast.ts"
-import { handleHistory } from "../history.ts"
-import { handleNotify } from "../notify.ts"
-import { handleTimeline } from "../timeline.ts"
-import { handleOptimize } from "../optimize.ts"
-import { handleStats } from "../stats.ts"
-import { handleBudget } from "../budget.ts"
-import { handleReport } from "../report.ts"
+import { fail } from "../error.ts"
 import type { NamedCycle } from "@subtrack/lib/date"
 import type { NotifyChannel } from "../types.ts"
-import { fail } from "../error.ts"
 
 export const summaryCommand = define({
   name: "summary",
@@ -25,7 +10,10 @@ export const summaryCommand = define({
   args: {
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => handleSummary({ json: ctx.values.json }),
+  run: async (ctx) => {
+    const { handleSummary } = await import("../payment.ts")
+    return handleSummary({ json: ctx.values.json })
+  },
 })
 
 export const paymentCommand = define({
@@ -38,8 +26,9 @@ export const paymentCommand = define({
     method: { type: "boolean", short: "m", description: "Group by payment method" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+run: async (ctx) => {
     const period = (ctx.values.period || "monthly") as NamedCycle
+    const { handlePayment } = await import("../payment.ts")
     return handlePayment(period, {
       currency: ctx.values.currency,
       api: ctx.values.api,
@@ -57,13 +46,14 @@ export const upcomingCommand = define({
     currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const days = ctx.values.days !== undefined ? Number(ctx.values.days) : undefined
     if (days !== undefined && (isNaN(days) || days < 0 || !Number.isInteger(days))) {
       fail("days must be a non-negative integer")
       return
     }
-    handleUpcoming(days, { json: ctx.values.json, currency: ctx.values.currency })
+    const { handleUpcoming } = await import("../upcoming.ts")
+    return handleUpcoming(days, { json: ctx.values.json, currency: ctx.values.currency })
   },
 })
 
@@ -75,13 +65,14 @@ export const analyticsCommand = define({
     period: { type: "string", description: "Period: monthly, yearly (default: monthly)" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const period = ctx.values.period as "monthly" | "yearly" | undefined
     if (period !== undefined && period !== "monthly" && period !== "yearly") {
       fail("period must be one of: monthly, yearly")
       return
     }
-    handleAnalytics({ currency: ctx.values.currency, period, json: ctx.values.json })
+    const { handleAnalytics } = await import("../analytics.ts")
+    return handleAnalytics({ currency: ctx.values.currency, period, json: ctx.values.json })
   },
 })
 
@@ -93,9 +84,10 @@ export const compareCommand = define({
     currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
     api: { type: "boolean", short: "a", description: "Include LLM API usage costs" },
   },
-  run: (ctx) => {
+run: async (ctx) => {
     const period = (ctx.values.period || "monthly") as NamedCycle
-    handleCompare(period, { currency: ctx.values.currency, api: ctx.values.api })
+    const { handleCompare } = await import("../compare.ts")
+    return handleCompare(period, { currency: ctx.values.currency, api: ctx.values.api })
   },
 })
 
@@ -108,7 +100,7 @@ export const calendarCommand = define({
     currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const rawMonth = ctx.values.month !== undefined ? Number(ctx.values.month) : undefined
     if (rawMonth !== undefined && (isNaN(rawMonth) || rawMonth < 1 || rawMonth > 12 || !Number.isInteger(rawMonth))) {
       fail("month must be an integer between 1 and 12")
@@ -119,7 +111,8 @@ export const calendarCommand = define({
       fail("year must be a positive integer")
       return
     }
-    handleCalendar({ month: rawMonth, year: rawYear, json: ctx.values.json, currency: ctx.values.currency })
+    const { handleCalendar } = await import("../calendar.ts")
+    return handleCalendar({ month: rawMonth, year: rawYear, json: ctx.values.json, currency: ctx.values.currency })
   },
 })
 
@@ -136,12 +129,13 @@ export const forecastCommand = define({
     currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const rawMonths = ctx.values.months !== undefined ? Number(ctx.values.months) : undefined
     if (rawMonths !== undefined && (isNaN(rawMonths) || rawMonths < 1 || !Number.isInteger(rawMonths))) {
       fail("months must be a positive integer")
       return
     }
+    const { handleForecast } = await import("../forecast.ts")
     return handleForecast({
       months: rawMonths,
       cancel: ctx.values.cancel?.split(",").map((s: string) => s.trim()).filter(Boolean),
@@ -164,7 +158,7 @@ export const historyCommand = define({
     days: { type: "string", description: "Filter to recent N days (used with --all)" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const positionals = ctx.positionals as string[]
     const id = ctx.values.id !== undefined ? Number(ctx.values.id) : positionals[1] ? Number(positionals[1]) : undefined
     if (id !== undefined && (isNaN(id) || !Number.isInteger(id) || id < 1)) {
@@ -176,7 +170,8 @@ export const historyCommand = define({
       fail("days must be a positive integer")
       return
     }
-    handleHistory(id, { all: ctx.values.all, json: ctx.values.json, days })
+    const { handleHistory } = await import("../history.ts")
+    return handleHistory(id, { all: ctx.values.all, json: ctx.values.json, days })
   },
 })
 
@@ -199,6 +194,7 @@ export const notifyCommand = define({
       fail("channel must be one of: os, slack, webhook")
       return
     }
+    const { handleNotify } = await import("../notify.ts")
     await handleNotify({ days, channel: ctx.values.channel as NotifyChannel | undefined, dryRun: ctx.values["dry-run"], json: ctx.values.json })
   },
 })
@@ -211,13 +207,14 @@ export const timelineCommand = define({
     categories: { type: "boolean", short: "c", description: "Show breakdown by category (first tag)" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const months = ctx.values.months !== undefined ? Number(ctx.values.months) : undefined
     if (months !== undefined && (isNaN(months) || months < 1 || !Number.isInteger(months))) {
       fail("months must be a positive integer")
       return
     }
-    handleTimeline({ months, categories: ctx.values.categories, json: ctx.values.json })
+    const { handleTimeline } = await import("../timeline.ts")
+    return handleTimeline({ months, categories: ctx.values.categories, json: ctx.values.json })
   },
 })
 
@@ -231,7 +228,7 @@ export const optimizeCommand = define({
     "discount-rate": { type: "string", description: "Assumed yearly discount rate for annual plans in % (default: 15)" },
     exclude: { type: "string", description: "Comma-separated subscription names to exclude from analysis" },
   },
-  run: (ctx) => {
+  run: async (ctx) => {
     const minSavings = ctx.values["min-savings"] !== undefined ? Number(ctx.values["min-savings"]) : undefined
     if (minSavings !== undefined && (isNaN(minSavings) || minSavings < 0)) {
       fail("min-savings must be a non-negative number")
@@ -242,7 +239,8 @@ export const optimizeCommand = define({
       fail("discount-rate must be a number between 0 and 100")
       return
     }
-    handleOptimize({
+    const { handleOptimize } = await import("../optimize.ts")
+    return handleOptimize({
       json: ctx.values.json,
       minSavings,
       currency: ctx.values.currency,
@@ -258,7 +256,10 @@ export const statsCommand = define({
   args: {
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-  run: (ctx) => handleStats({ json: ctx.values.json }),
+  run: async (ctx) => {
+    const { handleStats } = await import("../stats.ts")
+    return handleStats({ json: ctx.values.json })
+  },
 })
 
 export const budgetCommand = define({
@@ -277,6 +278,7 @@ export const budgetCommand = define({
       fail("period must be one of: monthly, yearly")
       return
     }
+    const { handleBudget } = await import("../budget.ts")
     await handleBudget({
       check: ctx.values.check,
       period,
@@ -301,6 +303,7 @@ export const reportCommand = define({
       fail("year must be a valid year (e.g. 2025)")
       return
     }
+    const { handleReport } = await import("../report.ts")
     await handleReport({ year: rawYear, currency: ctx.values.currency, json: ctx.values.json })
   },
 })
