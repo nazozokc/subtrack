@@ -4,7 +4,7 @@
  * (checkbox), pageSize scrolling, and loop/wrap control.
  */
 
-import { CHECKED, POINTER, UNCHECKED, cyan, dim, stripAnsi, truncate } from "./ansi.ts"
+import { CHECKED, POINTER, UNCHECKED, bold, cyan, dim, stripAnsi, truncate } from "./ansi.ts"
 import {
   filterItems,
   normalizeChoices,
@@ -55,10 +55,18 @@ function renderList<T>(
   for (let i = start; i < end && i < items.length; i++) {
     const item = items[i]!
     const pointer = i === active ? cyan(POINTER) : " "
+    const checkedItem = checked.has(item.index)
     const row = multi
-      ? `${pointer} ${checked.has(item.index) ? cyan(CHECKED) : dim(UNCHECKED)} ${item.choice.name}`
-      : `${pointer} ${item.choice.name}${item.choice.description ? ` ${dim(item.choice.description)}` : ""}`
+      ? `${pointer} ${checkedItem ? cyan(CHECKED) : dim(UNCHECKED)} ${
+          checkedItem ? cyan(bold(item.choice.name ?? "")) : i === active ? bold(item.choice.name ?? "") : item.choice.name
+        }`
+      : `${pointer} ${i === active ? cyan(bold(item.choice.name ?? "")) : item.choice.name}${
+          item.choice.description ? ` ${dim(item.choice.description)}` : ""
+        }`
     lines.push(truncate(row, columns))
+  }
+  if (multi && checked.size > 0) {
+    lines.push(dim(`  ${checked.size} selected`))
   }
   return lines.join("\n")
 }
@@ -229,6 +237,10 @@ export async function checkbox<const T>(config: CheckboxConfig<T>): Promise<T[]>
     true,
   )
   if (eof) throw new ExitPromptError()
-  finishPrompt(stdout, config.message, names.length > 0 ? names.join(", ") : "none")
+  finishPrompt(
+    stdout,
+    config.message,
+    names.length > 0 ? names.map((n) => `${CHECKED} ${n}`).join(", ") : "none",
+  )
   return selected
 }

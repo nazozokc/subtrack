@@ -3,7 +3,7 @@
  * loading indicator, arrow-key navigation, and enter to select.
  */
 
-import { POINTER, cyan, dim, stripAnsi, truncate } from "./ansi.ts"
+import { POINTER, bold, cyan, dim, stripAnsi, truncate } from "./ansi.ts"
 import { visibleWindow } from "./choices.ts"
 import type { Choice } from "./core.ts"
 import { ExitPromptError, resolveStreams } from "./core.ts"
@@ -48,8 +48,9 @@ export async function search<const T>(config: SearchConfig<T>): Promise<T> {
       for (let i = start; i < end && i < items.length; i++) {
         const item = items[i]!
         const pointer = i === active ? cyan(POINTER) : " "
+        const name = i === active ? cyan(bold(displayName(item))) : displayName(item)
         const description = item.description ? ` ${dim(item.description)}` : ""
-        lines.push(truncate(`${pointer} ${displayName(item)}${description}`, columns))
+        lines.push(truncate(`${pointer} ${name}${description}`, columns))
       }
     }
     renderer.render(lines.join("\n"))

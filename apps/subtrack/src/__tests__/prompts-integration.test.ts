@@ -7,7 +7,7 @@
  */
 import { Writable, PassThrough } from "node:stream"
 import { describe, it, expect, vi } from "vitest"
-import { input, confirm, select } from "../prompts.ts"
+import { input, confirm, select, checkbox } from "../prompts.ts"
 
 class Capture extends Writable {
   chunks: string[] = []
@@ -119,6 +119,9 @@ describe("confirm", () => {
     await feed(stdin, "y\r")
     await expect(p).resolves.toBe(true)
     expect(setRawMode).toHaveBeenLastCalledWith(false)
+    const final = stdout.toString()
+    expect(final).toContain("✔")
+    expect(final).toContain("\x1b[32myes")
   })
 
   it("resolves false on n", async () => {
@@ -205,6 +208,54 @@ describe("select", () => {
     stdin.end()
     await tick()
     await expect(p).rejects.toMatchObject({ name: "ExitPromptError" })
+  })
+
+  it("highlights the active row and confirms the pick with ✔", async () => {
+    const { stdin, stdout } = makeIO()
+    const p = select({ message: "pick", choices, stdin, stdout })
+    await tick()
+    const first = stdout.toString()
+    expect(first).toContain("❯")
+    // the active row's name is rendered bold-cyan
+    expect(first).toContain("\x1b[36m\x1b[1mAlpha")
+    await feed(stdin, "\x1b[B\r")
+    await expect(p).resolves.toBe("b")
+    const final = stdout.toString()
+    expect(final).toContain("✔")
+    expect(final).toContain("\x1b[32mBeta")
+  })
+})
+
+describe("checkbox", () => {
+  const choices = [
+    { name: "Alpha", value: "a" },
+    { name: "Beta", value: "b" },
+    { name: "Gamma", value: "c" },
+  ]
+
+  it("toggles with space, shows a live count, and confirms with glyphs", async () => {
+    const { stdin, stdout } = makeIO()
+    const p = checkbox({ message: "pick", choices, stdin, stdout })
+    await tick()
+    await feed(stdin, " \x1b[B \r") // check Alpha, move down, check Beta, enter
+    await expect(p).resolves.toEqual(["a", "b"])
+    const out = stdout.toString()
+    // checked rows render the name bold-cyan
+    expect(out).toContain("\x1b[36m\x1b[1mAlpha")
+    // live counter footer
+    expect(out).toContain("2 selected")
+    // final line: ✔ + green ◉-prefixed names
+    expect(out).toContain("✔")
+    expect(out).toContain("◉ Alpha, ◉ Beta")
+  })
+
+  it("shows none when nothing is selected", async () => {
+    const { stdin, stdout } = makeIO()
+    const p = checkbox({ message: "pick", choices, stdin, stdout })
+    await tick()
+    await feed(stdin, "\r")
+    await expect(p).resolves.toEqual([])
+    expect(stdout.toString()).toContain("none")
   })
 })
 

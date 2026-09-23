@@ -3,7 +3,7 @@
  * final answered line shown once a prompt resolves.
  */
 
-import { cyan, green } from "./ansi.ts"
+import { green } from "./ansi.ts"
 import { safeWrite } from "./core.ts"
 
 /** Tracks the lines it rendered so the next render can redraw in-place. */
@@ -26,11 +26,11 @@ export class Renderer {
   }
 }
 
-/** Print the final answered line once a prompt resolves. */
+/** Print the final answered line once a prompt resolves (✔ marks completion). */
 export function finishPrompt(
   stdout: NodeJS.WriteStream,
   message: string,
   result: string,
 ): void {
-  safeWrite(stdout, `\r${cyan("?")} ${message} ${green(result)}\n`)
+  safeWrite(stdout, `\r${green("✔")} ${message} ${green(result)}\n`)
 }
