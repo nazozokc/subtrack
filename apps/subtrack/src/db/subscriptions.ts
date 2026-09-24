@@ -93,18 +93,25 @@ export const getSubscriptions = (
   if (options?.maxPrice !== undefined) {
     params.push(options.maxPrice)
   }
-  if (options?.limit) {
+  if (options?.limit !== undefined) {
     limitClause = " LIMIT ?"
     params.push(options.limit)
   }
-  if (options?.offset) {
+  if (options?.offset !== undefined) {
     offsetClause = " OFFSET ?"
     params.push(options.offset)
   }
 
+  // SQLite requires LIMIT before OFFSET — emit LIMIT -1 (unlimited) when only an offset is given
+  const pagination = limitClause
+    ? `${limitClause}${offsetClause}`
+    : offsetClause
+      ? ` LIMIT -1${offsetClause}`
+      : ""
+
   const subs = execObjs<SharedArgs>(
     db,
-    `SELECT ${SUB_COLUMNS} FROM subscriptions ${where} ORDER BY ${field} ${order}${limitClause}${offsetClause}`,
+    `SELECT ${SUB_COLUMNS} FROM subscriptions ${where} ORDER BY ${field} ${order}${pagination}`,
     params.length > 0 ? params : undefined,
   )
   return mapTags(subs)
