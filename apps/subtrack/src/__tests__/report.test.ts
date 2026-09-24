@@ -4,6 +4,7 @@ import { consola } from "@subtrack/lib/logger"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { reportCommand } from "../commands/report.ts"
 
 const logMessages: string[] = []
 const errorMessages: string[] = []
@@ -313,4 +314,72 @@ test("handleReport validates year", async () => {
   expect(errorMessages.some((m) => m.includes("year"))).toBe(true)
   expect(process.exitCode).toBe(1)
   process.exitCode = 0
+})
+
+// ── reportCommand (commands/report.ts) ───────────────────
+
+test("reportCommand rejects an invalid year flag", async () => {
+  const ctx = {
+    values: { year: "42" },
+    positionals: [],
+    rest: [],
+    name: "report",
+    commandName: "report",
+    commandPath: "report",
+  } as Parameters<typeof reportCommand.run>[0]
+  await reportCommand.run(ctx)
+  expect(errorMessages.some((m) => m.includes("year"))).toBe(true)
+  expect(process.exitCode ?? 0).toBe(1)
+  process.exitCode = 0
+})
+
+test("reportCommand delegates to handleReport", async () => {
+  insertSub({ name: "Netflix", price: 1000, createdAt: "2026-01-01" })
+  const ctx = {
+    values: { year: "2026", json: true },
+    positionals: [],
+    rest: [],
+    name: "report",
+    commandName: "report",
+    commandPath: "report",
+  } as Parameters<typeof reportCommand.run>[0]
+
+  const writes: string[] = []
+  const origWrite = process.stdout.write.bind(process.stdout)
+  process.stdout.write = ((chunk: string) => {
+    writes.push(String(chunk))
+    return true
+  }) as typeof process.stdout.write
+  try {
+    await reportCommand.run(ctx)
+  } finally {
+    process.stdout.write = origWrite
+  }
+  const parsed = JSON.parse(writes.join(""))
+  expect(parsed.total).toBe(12000)
+  expect(parsed.top[0].name).toBe("Netflix")
+})
+
+// ── FX failure fallback ──────────────────────────────────
+
+test("handleReport warns and keeps original currencies when FX fails", async () => {
+  globalThis.fetch = async () => {
+    throw new Error("Network error")
+  }
+  insertSub({ name: "Netflix", price: 1000, createdAt: "2026-01-01" })
+
+  const writes: string[] = []
+  const origWrite = process.stdout.write.bind(process.stdout)
+  process.stdout.write = ((chunk: string) => {
+    writes.push(String(chunk))
+    return true
+  }) as typeof process.stdout.write
+
+  const { handleReport } = await import("../report.ts")
+  await handleReport({ year: 2026, currency: "USD", json: true })
+
+  process.stdout.write = origWrite
+  const parsed = JSON.parse(writes.join(""))
+  expect(parsed.currency).toBe("JPY")
+  expect(parsed.total).toBe(12000)
 })
