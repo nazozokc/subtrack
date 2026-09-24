@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { cli } from "./cli/index.ts"
 import { define } from "./cli/types.ts"
+import { tokenize } from "./cli/parser.ts"
+import type { Command } from "./cli/types.ts"
 import { consola } from "@subtrack/lib/logger"
 import { createRequire } from "node:module"
 import { markStartup, reportStartup } from "./startup-profile.ts"
@@ -20,7 +22,28 @@ if (args.length === 1 && (args[0] === "--version" || args[0] === "-v")) {
   process.exit(0)
 }
 
-const { subCommands } = await import("./commands/index.ts")
+// Dispatch on the first positional token and load only the matched command's
+// definition instead of evaluating all 50+. The loader map and the full
+// barrel are loaded only when needed: a token dispatches via the map, while
+// top-level --help (no token) goes straight to the barrel. Bare invocation
+// (no token, no --help) requires neither and just runs the menu.
+const firstToken = tokenize(args)
+  .filter((t) => t.kind === "positional")
+  .map((t) => t.value)[0]
+const needsAllCommands = firstToken === undefined && (args.includes("--help") || args.includes("-h"))
+
+let subCommands: Record<string, Command<any>> = {}
+if (firstToken !== undefined) {
+  const { commandLoaders } = await import("./commands/lazy.ts")
+  if (firstToken in commandLoaders) {
+    const def = await commandLoaders[firstToken]()
+    subCommands = { [firstToken]: def }
+  } else {
+    ({ subCommands } = await import("./commands/index.ts"))
+  }
+} else if (needsAllCommands) {
+  ({ subCommands } = await import("./commands/index.ts"))
+}
 
 const mainCommand = define({
   name: "subtrack",

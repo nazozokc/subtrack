@@ -1031,7 +1031,7 @@ test("handleAdd rejects an invalid day cycle flag", async () => {
 // ── handleDelete ──────────────────────────────────────────
 
 test("handleDelete shows info when no subscriptions", async () => {
-  const { handleDelete } = await import("../subscription/core.ts")
+  const { handleDelete } = await import("../subscription/delete.ts")
   await handleDelete()
   expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
@@ -1046,7 +1046,7 @@ test("handleDelete deletes selected subscriptions", async () => {
   vi.mocked(checkbox).mockResolvedValue([s1])
   vi.mocked(confirm).mockResolvedValue(true)
 
-  const { handleDelete } = await import("../subscription/core.ts")
+  const { handleDelete } = await import("../subscription/delete.ts")
   await handleDelete()
 
   const remaining = db.getSubscriptions()
@@ -1061,7 +1061,7 @@ test("handleDelete deletes by ID (non-interactive)", async () => {
   db.writeSubscription({ name: "S2", price: 200, currency: "USD", cycle: "monthly", tags: [] })
   const [s1] = db.getSubscriptions()
 
-  const { handleDelete } = await import("../subscription/core.ts")
+  const { handleDelete } = await import("../subscription/delete.ts")
   await handleDelete([s1.id])
 
   const remaining = db.getSubscriptions()
@@ -1074,7 +1074,7 @@ test("handleDelete with non-existent ID shows error", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: [] })
 
-  const { handleDelete } = await import("../subscription/core.ts")
+  const { handleDelete } = await import("../subscription/delete.ts")
   await handleDelete([999])
 
   expect(errorMessages.some((m) => m.includes("not found"))).toBe(true)
@@ -1087,7 +1087,7 @@ test("handleDelete cancels when no selection", async () => {
 
   vi.mocked(checkbox).mockResolvedValue([])
 
-  const { handleDelete } = await import("../subscription/core.ts")
+  const { handleDelete } = await import("../subscription/delete.ts")
   await handleDelete()
 
   expect(infoMessages.some((m) => m.includes("Cancelled"))).toBe(true)
@@ -1102,7 +1102,7 @@ test("handleDelete cancels when confirm is declined", async () => {
   vi.mocked(checkbox).mockResolvedValue([s1])
   vi.mocked(confirm).mockResolvedValue(false)
 
-  const { handleDelete } = await import("../subscription/core.ts")
+  const { handleDelete } = await import("../subscription/delete.ts")
   await handleDelete()
 
   expect(infoMessages.some((m) => m.includes("Cancelled"))).toBe(true)

@@ -96,7 +96,7 @@ afterAll(async () => {
 
 test("handleDelete deletes explicit ids", async () => {
   const db = await import("../db.ts")
-  const { handleDelete } = await import("../subscription/core.ts")
+  const { handleDelete } = await import("../subscription/delete.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: [], createdAt: "2026-01-01" })
   db.writeSubscription({ name: "S2", price: 200, currency: "USD", cycle: "monthly", tags: [], createdAt: "2026-01-01" })
   const [s1] = db.getSubscriptions()
@@ -111,7 +111,7 @@ test("handleDelete deletes explicit ids", async () => {
 
 test("handleDelete with non-existent id calls fail and deletes nothing", async () => {
   const db = await import("../db.ts")
-  const { handleDelete } = await import("../subscription/core.ts")
+  const { handleDelete } = await import("../subscription/delete.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: [], createdAt: "2026-01-01" })
 
   await handleDelete([999])
@@ -123,7 +123,7 @@ test("handleDelete with non-existent id calls fail and deletes nothing", async (
 
 test("handleDelete deletes multiple ids in order", async () => {
   const db = await import("../db.ts")
-  const { handleDelete } = await import("../subscription/core.ts")
+  const { handleDelete } = await import("../subscription/delete.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: [], createdAt: "2026-01-01" })
   db.writeSubscription({ name: "S2", price: 200, currency: "USD", cycle: "monthly", tags: [], createdAt: "2026-01-01" })
   db.writeSubscription({ name: "S3", price: 300, currency: "USD", cycle: "monthly", tags: [], createdAt: "2026-01-01" })
@@ -140,7 +140,7 @@ test("handleDelete deletes multiple ids in order", async () => {
 
 test("handleDelete interactive passes all subs to checkbox and deletes selection", async () => {
   const db = await import("../db.ts")
-  const { handleDelete } = await import("../subscription/core.ts")
+  const { handleDelete } = await import("../subscription/delete.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: [], createdAt: "2026-01-01" })
   db.writeSubscription({ name: "S2", price: 200, currency: "USD", cycle: "monthly", tags: [], createdAt: "2026-01-01" })
   db.writeSubscription({ name: "S3", price: 300, currency: "USD", cycle: "monthly", tags: [], createdAt: "2026-01-01" })

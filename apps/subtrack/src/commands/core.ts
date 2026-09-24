@@ -134,7 +134,7 @@ run: async (ctx) => {
       fail("Subscription IDs must be positive integers")
       return
     }
-    const { handleDelete } = await import("../subscription/core.ts")
+    const { handleDelete } = await import("../subscription/delete.ts")
     return handleDelete(ids.length > 0 ? ids : undefined)
   },
 })
