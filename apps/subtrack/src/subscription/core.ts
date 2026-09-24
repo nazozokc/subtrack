@@ -17,7 +17,7 @@ import { subscriptionRepository } from "../application/repositories.ts"
 import { formatPrice } from "../price.ts"
 import { spreadSubscription, showApiUsage } from "../display.ts"
 import { fetchConvertedSubs } from "../fx.ts"
-import { logAudit } from "../audit.ts"
+import { logAudit } from "../audit-log.ts"
 import { runPreCommandHooks } from "../pre-command.ts"
 
 export async function handleList(options: {

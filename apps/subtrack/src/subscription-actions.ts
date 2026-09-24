@@ -1,7 +1,7 @@
 import { confirm, select } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
-import { logAudit } from "./audit.ts"
+import { logAudit } from "./audit-log.ts"
 import { getSubscription, getSubscriptions, updateSubscription, writePriceHistory } from "./db.ts"
 import type { AddSharedArgs, SharedArgs, Status } from "./types.ts"
 

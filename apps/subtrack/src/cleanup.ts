@@ -7,7 +7,7 @@ import { fail } from "./error.ts"
 import { getDb, saveDb, getDbPath } from "./db.ts"
 import { pruneAuditLogs } from "./db.ts"
 import { pruneTags } from "./db.ts"
-import { logAudit } from "./audit.ts"
+import { logAudit } from "./audit-log.ts"
 import { formatBytes, getFileSize } from "@subtrack/lib/format"
 
 export type CleanupOptions = {

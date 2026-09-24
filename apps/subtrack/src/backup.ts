@@ -5,7 +5,7 @@ import {
 } from "node:fs"
 import { gzipSync } from "node:zlib"
 import { encryptBuffer, decryptBuffer, isEncrypted, hasEncryptionKey } from "@subtrack/lib/crypto"
-import { logAudit } from "./audit.ts"
+import { logAudit } from "./audit-log.ts"
 import path from "node:path"
 import os from "node:os"
 import type { BackupFileInfo } from "./types.ts"

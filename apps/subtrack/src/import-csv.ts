@@ -2,7 +2,7 @@ import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { statSync, readFileSync } from "node:fs"
 import { writeSubscription, findSubscriptionByName } from "./db.ts"
-import { logAudit } from "./audit.ts"
+import { logAudit } from "./audit-log.ts"
 import {
   validateName,
   validatePrice,

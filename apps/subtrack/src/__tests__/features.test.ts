@@ -349,7 +349,7 @@ test("handleChanges shows price changes", async () => {
 
 test("handleChanges shows audit entries", async () => {
   const id = insertSub({ name: "Netflix" })
-  const { logAudit } = await import("../audit.ts")
+  const { logAudit } = await import("../audit-log.ts")
   logAudit("subscription.pause", { targetType: "subscription", targetId: id, details: "paused in review" })
   const out = await captureStdout(() => handleChanges({ json: true }))
   const parsed = JSON.parse(out) as Array<{ type: string; details: string }>
@@ -359,7 +359,7 @@ test("handleChanges shows audit entries", async () => {
 test("handleChanges id filter finds entries beyond the 50 most recent audit rows", async () => {
   const subA = insertSub({ name: "Sub A" })
   const subB = insertSub({ name: "Sub B" })
-  const { logAudit } = await import("../audit.ts")
+  const { logAudit } = await import("../audit-log.ts")
   logAudit("subscription.pause", { targetType: "subscription", targetId: subA, details: "old-entry" })
   for (let i = 0; i < 60; i++) {
     logAudit("subscription.renew", { targetType: "subscription", targetId: subB, details: `b-${i}` })

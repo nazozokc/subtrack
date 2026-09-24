@@ -8,7 +8,7 @@
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { getDb, saveDb, getDbPath } from "./db.ts"
-import { logAudit } from "./audit.ts"
+import { logAudit } from "./audit-log.ts"
 import { formatBytes, getFileSize } from "@subtrack/lib/format"
 
 export type MaintenanceOptions = {
