@@ -243,7 +243,7 @@ test("parseCsvLine handles empty fields", async () => {
 // ── handleTagList ────────────────────────────────────────
 
 test("handleTagList shows info when no tags exist", async () => {
-  const { handleTagList } = await import("../commands.ts")
+  const { handleTagList } = await import("../tag.ts")
   handleTagList()
   expect(infoMessages).toContain("No tags found")
 })
@@ -254,7 +254,7 @@ test("handleTagList displays tags with counts", async () => {
   db.writeSubscription({ name: "S2", price: 200, currency: "JPY", cycle: "monthly", tags: ["video"] })
   db.writeSubscription({ name: "S3", price: 300, currency: "JPY", cycle: "monthly", tags: ["storage"] })
 
-  const { handleTagList } = await import("../commands.ts")
+  const { handleTagList } = await import("../tag.ts")
   handleTagList()
   const combined = logMessages.join("\n")
   expect(combined).toContain("video")
@@ -266,13 +266,13 @@ test("handleTagList displays tags with counts", async () => {
 // ── handleTagRename ──────────────────────────────────────
 
 test("handleTagRename shows error when names are empty", async () => {
-  const { handleTagRename } = await import("../commands.ts")
+  const { handleTagRename } = await import("../tag.ts")
   await handleTagRename("", "")
   expect(errorMessages.length).toBeGreaterThan(0)
 })
 
 test("handleTagRename shows error for non-existent tag", async () => {
-  const { handleTagRename } = await import("../commands.ts")
+  const { handleTagRename } = await import("../tag.ts")
   await handleTagRename("nonexistent", "new")
   expect(errorMessages.some((m) => m.includes("not found"))).toBe(true)
 })
@@ -281,7 +281,7 @@ test("handleTagRename renames a tag successfully", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: ["old"] })
 
-  const { handleTagRename } = await import("../commands.ts")
+  const { handleTagRename } = await import("../tag.ts")
   await handleTagRename("old", "new")
   expect(successMessages.some((m) => m.includes("old") && m.includes("new"))).toBe(true)
 
@@ -293,13 +293,13 @@ test("handleTagRename renames a tag successfully", async () => {
 // ── handleTagDelete ──────────────────────────────────────
 
 test("handleTagDelete shows error when name is empty", async () => {
-  const { handleTagDelete } = await import("../commands.ts")
+  const { handleTagDelete } = await import("../tag.ts")
   await handleTagDelete("")
   expect(errorMessages.length).toBeGreaterThan(0)
 })
 
 test("handleTagDelete shows error for non-existent tag", async () => {
-  const { handleTagDelete } = await import("../commands.ts")
+  const { handleTagDelete } = await import("../tag.ts")
   await handleTagDelete("nonexistent")
   expect(errorMessages.some((m) => m.includes("not found"))).toBe(true)
 })
@@ -308,7 +308,7 @@ test("handleTagDelete deletes a tag successfully", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: ["delete-me"] })
 
-  const { handleTagDelete } = await import("../commands.ts")
+  const { handleTagDelete } = await import("../tag.ts")
   await handleTagDelete("delete-me")
   expect(successMessages.some((m) => m.includes("delete-me"))).toBe(true)
   expect(db.getTagsWithCount()).toHaveLength(0)
@@ -317,7 +317,7 @@ test("handleTagDelete deletes a tag successfully", async () => {
 // ── handleTagPrune ───────────────────────────────────────
 
 test("handleTagPrune shows info when no orphaned tags", async () => {
-  const { handleTagPrune } = await import("../commands.ts")
+  const { handleTagPrune } = await import("../tag.ts")
   await handleTagPrune()
   expect(infoMessages.some((m) => m.includes("No orphaned"))).toBe(true)
 })
@@ -329,7 +329,7 @@ test("handleTagPrune removes orphaned tags", async () => {
   db.deleteSubscription(sub.id)
   testDb.exec("INSERT INTO tags (name) VALUES ('orphan1'), ('orphan2')")
 
-  const { handleTagPrune } = await import("../commands.ts")
+  const { handleTagPrune } = await import("../tag.ts")
   await handleTagPrune()
   expect(successMessages.some((m) => m.includes("3 orphaned"))).toBe(true)
 })
@@ -337,14 +337,14 @@ test("handleTagPrune removes orphaned tags", async () => {
 // ── handleExport ─────────────────────────────────────────
 
 test("handleExport shows error for unsupported format", async () => {
-  const { handleExport } = await import("../commands.ts")
+  const { handleExport } = await import("../export.ts")
   await handleExport("pdf", {})
   expect(errorMessages.length).toBeGreaterThan(0)
   expect(errorMessages[0].toLowerCase()).toContain("unsupported")
 })
 
 test("handleExport shows info when no subscriptions", async () => {
-  const { handleExport } = await import("../commands.ts")
+  const { handleExport } = await import("../export.ts")
   await handleExport("csv", {})
   expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
@@ -353,7 +353,7 @@ test("handleExport outputs JSON for json format", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "Netflix", price: 1500, currency: "JPY", cycle: "monthly", tags: ["video"] })
 
-  const { handleExport } = await import("../commands.ts")
+  const { handleExport } = await import("../export.ts")
   await handleExport("json", {})
   const combined = logMessages.join("\n")
   const parsed = JSON.parse(combined)
@@ -365,7 +365,7 @@ test("handleExport outputs Markdown for md format", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "Netflix", price: 1500, currency: "JPY", cycle: "monthly", tags: [] })
 
-  const { handleExport } = await import("../commands.ts")
+  const { handleExport } = await import("../export.ts")
   await handleExport("md", {})
   const combined = logMessages.join("\n")
   expect(combined).toContain("Netflix")
@@ -378,7 +378,7 @@ test("handleExport filters by tags", async () => {
   db.writeSubscription({ name: "A", price: 100, currency: "USD", cycle: "monthly", tags: ["video"] })
   db.writeSubscription({ name: "B", price: 200, currency: "USD", cycle: "monthly", tags: ["audio"] })
 
-  const { handleExport } = await import("../commands.ts")
+  const { handleExport } = await import("../export.ts")
   await handleExport("csv", { tags: "video" })
   const combined = logMessages.join("\n")
   expect(combined).toContain("A")
@@ -389,7 +389,7 @@ test("handleExport with currency converts prices", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "JP", price: 1600, currency: "JPY", cycle: "monthly", tags: [] })
 
-  const { handleExport } = await import("../commands.ts")
+  const { handleExport } = await import("../export.ts")
   await handleExport("csv", { currency: "USD" })
   const combined = logMessages.join("\n")
   expect(combined).toContain("10")
@@ -401,7 +401,7 @@ test("handleExport with currency falls back when fetch fails", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "JP", price: 1000, currency: "JPY", cycle: "monthly", tags: [] })
 
-  const { handleExport } = await import("../commands.ts")
+  const { handleExport } = await import("../export.ts")
   await handleExport("csv", { currency: "USD" })
   expect(warnMessages.length).toBeGreaterThan(0)
   expect(warnMessages[0]).toContain("Failed to fetch exchange rates")
@@ -421,7 +421,7 @@ test("handleExport escapes CSV injection vectors in name", async () => {
   db.writeSubscription({ name: "\tTab", price: 450, currency: "USD", cycle: "monthly", tags: [] })
   db.writeSubscription({ name: "Normal", price: 500, currency: "USD", cycle: "monthly", tags: [] })
 
-  const { handleExport } = await import("../commands.ts")
+  const { handleExport } = await import("../export.ts")
   await handleExport("csv", {})
   const combined = logMessages.join("\n")
 
@@ -452,7 +452,7 @@ test("handleExport with --output flag writes to file", async () => {
   const tmpDir = createTempDir()
   const outPath = join(tmpDir, "export.csv")
 
-  const { handleExport } = await import("../commands.ts")
+  const { handleExport } = await import("../export.ts")
   await handleExport("csv", { output: outPath })
 
   const { existsSync, readFileSync } = await import("node:fs")
@@ -469,7 +469,7 @@ test("handleList delegates to spreadSubscription", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "Netflix", price: 1500, currency: "JPY", cycle: "monthly", tags: [] })
 
-  const { handleList } = await import("../commands.ts")
+  const { handleList } = await import("../subscription/core.ts")
   await handleList({})
   const combined = logMessages.join("\n")
   expect(combined).toContain("Netflix")
@@ -481,7 +481,7 @@ test("handleList passes sort and desc to getSubscriptions", async () => {
   db.writeSubscription({ name: "B", price: 200, currency: "USD", cycle: "monthly", tags: [] })
   db.writeSubscription({ name: "A", price: 100, currency: "USD", cycle: "monthly", tags: [] })
 
-  const { handleList } = await import("../commands.ts")
+  const { handleList } = await import("../subscription/core.ts")
   await handleList({ sort: "name", desc: false })
   const combined = logMessages.join("\n")
   const aIdx = combined.indexOf("A")
@@ -492,7 +492,7 @@ test("handleList passes sort and desc to getSubscriptions", async () => {
 // ── handleEdit (non-interactive, with flags) ────────────
 
 test("handleEdit shows info when no subscriptions", async () => {
-  const { handleEdit } = await import("../commands.ts")
+  const { handleEdit } = await import("../subscription/edit.ts")
   await handleEdit(1, { name: "New Name" })
   expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
@@ -501,7 +501,7 @@ test("handleEdit shows error for non-existent id", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: [] })
 
-  const { handleEdit } = await import("../commands.ts")
+  const { handleEdit } = await import("../subscription/edit.ts")
   await handleEdit(999, { name: "New Name" })
   expect(errorMessages.some((m) => m.includes("not found"))).toBe(true)
 })
@@ -511,7 +511,7 @@ test("handleEdit updates name with --name flag", async () => {
   db.writeSubscription({ name: "OldName", price: 1000, currency: "JPY", cycle: "monthly", tags: [] })
   const [sub] = db.getSubscriptions()
 
-  const { handleEdit } = await import("../commands.ts")
+  const { handleEdit } = await import("../subscription/edit.ts")
   await handleEdit(sub.id, { name: "NewName" })
   expect(successMessages.some((m) => m.includes("NewName"))).toBe(true)
 
@@ -524,7 +524,7 @@ test("handleEdit updates price with --price flag", async () => {
   db.writeSubscription({ name: "S1", price: 500, currency: "JPY", cycle: "monthly", tags: [] })
   const [sub] = db.getSubscriptions()
 
-  const { handleEdit } = await import("../commands.ts")
+  const { handleEdit } = await import("../subscription/edit.ts")
   await handleEdit(sub.id, { price: "999" })
   expect(successMessages.length).toBeGreaterThan(0)
 
@@ -537,7 +537,7 @@ test("handleEdit updates tags with --tags flag", async () => {
   db.writeSubscription({ name: "S1", price: 500, currency: "JPY", cycle: "monthly", tags: ["old"] })
   const [sub] = db.getSubscriptions()
 
-  const { handleEdit } = await import("../commands.ts")
+  const { handleEdit } = await import("../subscription/edit.ts")
   await handleEdit(sub.id, { tags: "new1, new2" })
   expect(successMessages.length).toBeGreaterThan(0)
 
@@ -550,7 +550,7 @@ test("handleEdit updates status with --status flag", async () => {
   db.writeSubscription({ name: "Test", price: 1000, currency: "USD", cycle: "monthly", tags: [] })
   const [sub] = db.getSubscriptions()
 
-  const { handleEdit } = await import("../commands.ts")
+  const { handleEdit } = await import("../subscription/edit.ts")
   await handleEdit(sub.id, { status: "paused" })
 
   const updated = db.getSubscription(sub.id)
@@ -562,7 +562,7 @@ test("handleEdit updates billingDay with --billingDay flag", async () => {
   db.writeSubscription({ name: "Test", price: 1000, currency: "USD", cycle: "monthly", tags: [] })
   const [sub] = db.getSubscriptions()
 
-  const { handleEdit } = await import("../commands.ts")
+  const { handleEdit } = await import("../subscription/edit.ts")
   await handleEdit(sub.id, { billingDay: "15" })
 
   const updated = db.getSubscription(sub.id)
@@ -575,7 +575,7 @@ test("handleEdit clears billingDay with empty --billingDay flag", async () => {
   const [sub] = db.getSubscriptions()
   expect(sub.billingDay).toBe(20)
 
-  const { handleEdit } = await import("../commands.ts")
+  const { handleEdit } = await import("../subscription/edit.ts")
   await handleEdit(sub.id, { billingDay: "" })
 
   const updated = db.getSubscription(sub.id)
@@ -594,7 +594,7 @@ test("handleEdit interactive: select picks the subscription", async () => {
   vi.mocked(input).mockResolvedValue("Renamed")
   vi.mocked(confirm).mockResolvedValue(true)
 
-  const { handleEdit } = await import("../commands.ts")
+  const { handleEdit } = await import("../subscription/edit.ts")
   await handleEdit()
   expect(successMessages.some((m) => m.includes("Renamed"))).toBe(true)
 
@@ -610,7 +610,7 @@ test("handleEdit interactive: cancels when no fields selected", async () => {
   vi.mocked(select).mockResolvedValue(sub)
   vi.mocked(checkbox).mockResolvedValue([])
 
-  const { handleEdit } = await import("../commands.ts")
+  const { handleEdit } = await import("../subscription/edit.ts")
   await handleEdit()
   expect(infoMessages.some((m) => m.includes("Cancelled"))).toBe(true)
 })
@@ -625,7 +625,7 @@ test("handleEdit interactive: cancels when confirm is declined", async () => {
   vi.mocked(input).mockResolvedValue("Renamed")
   vi.mocked(confirm).mockResolvedValue(false)
 
-  const { handleEdit } = await import("../commands.ts")
+  const { handleEdit } = await import("../subscription/edit.ts")
   await handleEdit()
   expect(infoMessages.some((m) => m.includes("Cancelled"))).toBe(true)
   const updated = db.getSubscription(sub.id)
@@ -762,7 +762,7 @@ test("handleImport rejects rows with invalid status in export format", async () 
 // ── handleSummary ────────────────────────────────────────
 
 test("handleSummary shows info when no subscriptions", async () => {
-  const { handleSummary } = await import("../commands.ts")
+  const { handleSummary } = await import("../payment.ts")
   await handleSummary()
   expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
@@ -771,7 +771,7 @@ test("handleSummary displays summary data", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "Netflix", price: 1500, currency: "JPY", cycle: "monthly", tags: ["video"] })
 
-  const { handleSummary } = await import("../commands.ts")
+  const { handleSummary } = await import("../payment.ts")
   await handleSummary()
   const combined = logMessages.join("\n")
   expect(combined).toContain("Total subscriptions:")
@@ -786,7 +786,7 @@ test("handleTags delegates to spreadSubscription with tag filter", async () => {
   db.writeSubscription({ name: "A", price: 100, currency: "USD", cycle: "monthly", tags: ["video"] })
   db.writeSubscription({ name: "B", price: 200, currency: "USD", cycle: "monthly", tags: ["audio"] })
 
-  const { handleTags } = await import("../commands.ts")
+  const { handleTags } = await import("../subscription/core.ts")
   await handleTags(["video"])
   const combined = logMessages.join("\n")
   expect(combined).toContain("A")
@@ -799,7 +799,7 @@ test("handlePayment shows monthly total", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "Netflix", price: 1500, currency: "JPY", cycle: "monthly", tags: [] })
 
-  const { handlePayment } = await import("../commands.ts")
+  const { handlePayment } = await import("../payment.ts")
   await handlePayment("monthly", {})
   const combined = logMessages.join("\n")
   expect(combined).toContain("¥1,500")
@@ -810,7 +810,7 @@ test("handlePayment with --currency converts to target", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "Netflix", price: 1000, currency: "JPY", cycle: "monthly", tags: [] })
 
-  const { handlePayment } = await import("../commands.ts")
+  const { handlePayment } = await import("../payment.ts")
   await handlePayment("monthly", { currency: "JPY" })
   const combined = logMessages.join("\n")
   expect(combined).toContain("¥1,000")
@@ -820,7 +820,7 @@ test("handlePayment with --currency converts to target", async () => {
 // ── handleCompare ──────────────────────────────────────────
 
 test("handleCompare shows info when no active subscriptions", async () => {
-  const { handleCompare } = await import("../commands.ts")
+  const { handleCompare } = await import("../compare.ts")
   await handleCompare("monthly", {})
   expect(infoMessages.some((m) => m.includes("No active subscriptions"))).toBe(true)
 })
@@ -829,7 +829,7 @@ test("handleCompare shows comparison for active subscriptions", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "Netflix", price: 1500, currency: "JPY", cycle: "monthly", tags: [] })
 
-  const { handleCompare } = await import("../commands.ts")
+  const { handleCompare } = await import("../compare.ts")
   await handleCompare("monthly", {})
   const combined = logMessages.join("\n")
   expect(combined).toContain("JPY")
@@ -850,7 +850,7 @@ test("handleCompare with --api includes API usage", async () => {
     description: null,
   })
 
-  const { handleCompare } = await import("../commands.ts")
+  const { handleCompare } = await import("../compare.ts")
   await handleCompare("monthly", { api: true })
   const combined = logMessages.join("\n")
   expect(combined).toContain("API Usage")
@@ -866,7 +866,7 @@ test("handleCompare with --currency converts prices", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "Netflix", price: 1600, currency: "JPY", cycle: "monthly", tags: [] })
 
-  const { handleCompare } = await import("../commands.ts")
+  const { handleCompare } = await import("../compare.ts")
   await handleCompare("monthly", { currency: "USD" })
   const combined = logMessages.join("\n")
   expect(combined).toContain("USD")
@@ -897,7 +897,7 @@ test("handleAdd shows info when cancelled at confirm", async () => {
     .mockResolvedValueOnce(true)             // autoRenewal
     .mockResolvedValueOnce(false)            // decline save
 
-  const { handleAdd } = await import("../commands.ts")
+  const { handleAdd } = await import("../subscription/add.ts")
   await handleAdd({})
   expect(infoMessages.some((m) => m.includes("Cancelled"))).toBe(true)
 })
@@ -924,7 +924,7 @@ test("handleAdd creates subscription with prompted fields", async () => {
     .mockResolvedValueOnce(true)             // autoRenewal
     .mockResolvedValueOnce(true)             // save
 
-  const { handleAdd } = await import("../commands.ts")
+  const { handleAdd } = await import("../subscription/add.ts")
   await handleAdd({})
   expect(successMessages.some((m) => m.includes("Spotify"))).toBe(true)
 
@@ -936,7 +936,7 @@ test("handleAdd creates subscription with prompted fields", async () => {
 })
 
 test("handleAdd uses flags when provided (non-interactive)", async () => {
-  const { handleAdd } = await import("../commands.ts")
+  const { handleAdd } = await import("../subscription/add.ts")
   await handleAdd({
     name: "FlagService",
     price: "500",
@@ -957,7 +957,7 @@ test("handleAdd uses flags when provided (non-interactive)", async () => {
 })
 
 test("handleAdd accepts a custom day cycle flag (3d)", async () => {
-  const { handleAdd } = await import("../commands.ts")
+  const { handleAdd } = await import("../subscription/add.ts")
   await handleAdd({
     name: "TrialService",
     price: "490",
@@ -975,7 +975,7 @@ test("handleAdd accepts a custom day cycle flag (3d)", async () => {
 })
 
 test("handleAdd rejects an invalid day cycle flag", async () => {
-  const { handleAdd } = await import("../commands.ts")
+  const { handleAdd } = await import("../subscription/add.ts")
   await handleAdd({
     name: "BadCycle",
     price: "490",
@@ -991,7 +991,7 @@ test("handleAdd rejects an invalid day cycle flag", async () => {
 // ── handleDelete ──────────────────────────────────────────
 
 test("handleDelete shows info when no subscriptions", async () => {
-  const { handleDelete } = await import("../commands.ts")
+  const { handleDelete } = await import("../subscription/core.ts")
   await handleDelete()
   expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
@@ -1006,7 +1006,7 @@ test("handleDelete deletes selected subscriptions", async () => {
   vi.mocked(checkbox).mockResolvedValue([s1])
   vi.mocked(confirm).mockResolvedValue(true)
 
-  const { handleDelete } = await import("../commands.ts")
+  const { handleDelete } = await import("../subscription/core.ts")
   await handleDelete()
 
   const remaining = db.getSubscriptions()
@@ -1021,7 +1021,7 @@ test("handleDelete deletes by ID (non-interactive)", async () => {
   db.writeSubscription({ name: "S2", price: 200, currency: "USD", cycle: "monthly", tags: [] })
   const [s1] = db.getSubscriptions()
 
-  const { handleDelete } = await import("../commands.ts")
+  const { handleDelete } = await import("../subscription/core.ts")
   await handleDelete([s1.id])
 
   const remaining = db.getSubscriptions()
@@ -1034,7 +1034,7 @@ test("handleDelete with non-existent ID shows error", async () => {
   const db = await import("../db.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: [] })
 
-  const { handleDelete } = await import("../commands.ts")
+  const { handleDelete } = await import("../subscription/core.ts")
   await handleDelete([999])
 
   expect(errorMessages.some((m) => m.includes("not found"))).toBe(true)
@@ -1047,7 +1047,7 @@ test("handleDelete cancels when no selection", async () => {
 
   vi.mocked(checkbox).mockResolvedValue([])
 
-  const { handleDelete } = await import("../commands.ts")
+  const { handleDelete } = await import("../subscription/core.ts")
   await handleDelete()
 
   expect(infoMessages.some((m) => m.includes("Cancelled"))).toBe(true)
@@ -1062,7 +1062,7 @@ test("handleDelete cancels when confirm is declined", async () => {
   vi.mocked(checkbox).mockResolvedValue([s1])
   vi.mocked(confirm).mockResolvedValue(false)
 
-  const { handleDelete } = await import("../commands.ts")
+  const { handleDelete } = await import("../subscription/core.ts")
   await handleDelete()
 
   expect(infoMessages.some((m) => m.includes("Cancelled"))).toBe(true)
@@ -1745,7 +1745,7 @@ test("handleBackup creates compressed backup in specified directory", async () =
   const db = await import("../db.ts")
   db.writeSubscription({ name: "S1", price: 100, currency: "USD", cycle: "monthly", tags: [] })
 
-  const { handleBackup } = await import("../commands.ts")
+  const { handleBackup } = await import("../backup.ts")
   await handleBackup(tmpDir)
 
   // Verify .db.gz file was created
@@ -1787,7 +1787,7 @@ test("handleRestore restores from valid backup file", async () => {
 
   vi.mocked(confirm).mockResolvedValue(true)
 
-  const { handleRestore } = await import("../commands.ts")
+  const { handleRestore } = await import("../backup.ts")
   await handleRestore(backupPath, { force: true })
 
   // Verify restored data
@@ -1801,7 +1801,7 @@ test("handleRestore restores from valid backup file", async () => {
 })
 
 test("handleRestore with non-existent file shows error", async () => {
-  const { handleRestore } = await import("../commands.ts")
+  const { handleRestore } = await import("../backup.ts")
   await handleRestore("/nonexistent/file.db.gz")
   expect(errorMessages.some((m) => m.includes("Invalid backup file"))).toBe(true)
 })
@@ -1813,7 +1813,7 @@ test("handleRestore interactive: shows info when no backups found", async () => 
 
   const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-empty"))
 
-  const { handleRestore } = await import("../commands.ts")
+  const { handleRestore } = await import("../backup.ts")
   await handleRestore(undefined, { dir: tmpDir })
 
   expect(infoMessages.some((m) => m.includes("No backup files"))).toBe(true)

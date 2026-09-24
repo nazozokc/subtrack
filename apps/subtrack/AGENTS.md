@@ -45,7 +45,7 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 |---|---|
 | `src/index.ts` | CLI entry point, routing |
 | `src/cli/` | Self-contained CLI framework (`define`, parser, router, help, `cli()`) |
-| `src/menu.ts` | Interactive main menu (launched by bare `subtrack`) |
+| `src/menu/` | Interactive main menu (launched by bare `subtrack`) — entry in `index.ts`, category sub-menus in `views.ts` / `edits.ts` / `manage.ts` / `data.ts` / `config.ts` |
 | `src/commands/` | Command definitions (`define()` from `src/cli/types.ts` + `.run()`) |
 | `src/subscription/` | Core subscription handlers (list/add/edit/delete/clone/archive/tags) |
 | `src/db.ts`, `src/db/` | SQLite CRUD, schema, persistence |

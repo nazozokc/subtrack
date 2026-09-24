@@ -26,7 +26,7 @@ const mainCommand = define({
   name: "subtrack",
   description: "Manage subscription services from your terminal",
   run: async () => {
-    const { handleMenu } = await import("./menu.ts")
+    const { handleMenu } = await import("./menu/index.ts")
     return handleMenu()
   },
 })
