@@ -1,5 +1,5 @@
 import { test, expect, describe, afterAll } from "vitest"
-import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync, existsSync, rmSync } from "node:fs"
+import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync, existsSync, rmSync, realpathSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { resolveSafePath, resolveSafeOutputPath } from "@subtrack/lib/path"
@@ -18,18 +18,23 @@ describe("resolveSafeOutputPath", () => {
     rmSync(base, { recursive: true, force: true })
   })
 
+  // The helpers resolve symlinks, so expected results use realpath.
+  // (On macOS, /var/folders is a symlink to /private/var/folders.)
+  const baseReal = realpathSync(base)
+  const nestedReal = realpathSync(nested)
+
   test("accepts a new file directly inside the base directory", () => {
     const target = join(base, "new-file.db.gz")
-    expect(resolveSafeOutputPath([base], target)).toBe(target)
+    expect(resolveSafeOutputPath([base], target)).toBe(join(baseReal, "new-file.db.gz"))
   })
 
   test("accepts a new file inside an existing nested directory", () => {
     const target = join(nested, "new-file.json")
-    expect(resolveSafeOutputPath([base], target)).toBe(target)
+    expect(resolveSafeOutputPath([base], target)).toBe(join(nestedReal, "new-file.json"))
   })
 
   test("accepts the base directory itself", () => {
-    expect(resolveSafeOutputPath([base], base)).toBe(base)
+    expect(resolveSafeOutputPath([base], base)).toBe(baseReal)
   })
 
   test("rejects a path that escapes the base directory", () => {
@@ -47,7 +52,7 @@ describe("resolveSafePath", () => {
   })
 
   test("accepts an existing file directly inside the base directory", () => {
-    expect(resolveSafePath([base], file)).toBe(file)
+    expect(resolveSafePath([base], file)).toBe(realpathSync(file))
   })
 
   test("rejects a non-existent file", () => {
