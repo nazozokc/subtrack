@@ -387,21 +387,34 @@ test("handleChanges reports when nothing changed", async () => {
 // ── review ─────────────────────────────────────────────
 
 test("handleReview json lists subscriptions with contracts ending soon", async () => {
-  insertSub({ name: "Netflix", contractEnd: daysFromNow(30) })
-  insertSub({ name: "Safe", contractEnd: daysFromNow(400) })
-  const out = await captureStdout(() => handleReview({ json: true }))
-  const parsed = JSON.parse(out) as Array<{ name: string; kind: string; reason: string }>
-  const item = parsed.find((e) => e.name === "Netflix")
-  expect(item).toBeDefined()
-  expect(item?.kind).toBe("subscription")
-  expect(item?.reason).toContain("contract ends")
-  expect(parsed.some((e) => e.name === "Safe")).toBe(false)
+  // Freeze time so billingDay 1 is outside the 7-day bill window regardless of run date
+  vi.useFakeTimers()
+  try {
+    vi.setSystemTime(new Date(2026, 6, 3))
+    insertSub({ name: "Netflix", contractEnd: daysFromNow(30) })
+    insertSub({ name: "Safe", contractEnd: daysFromNow(400) })
+    const out = await captureStdout(() => handleReview({ json: true }))
+    const parsed = JSON.parse(out) as Array<{ name: string; kind: string; reason: string }>
+    const item = parsed.find((e) => e.name === "Netflix")
+    expect(item).toBeDefined()
+    expect(item?.kind).toBe("subscription")
+    expect(item?.reason).toContain("contract ends")
+    expect(parsed.some((e) => e.name === "Safe")).toBe(false)
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test("handleReview json is empty when nothing needs review", async () => {
-  insertSub({ name: "Safe", billingDay: null })
-  const out = await captureStdout(() => handleReview({ json: true }))
-  expect(JSON.parse(out)).toHaveLength(0)
+  vi.useFakeTimers()
+  try {
+    vi.setSystemTime(new Date(2026, 6, 3))
+    insertSub({ name: "Safe", billingDay: null })
+    const out = await captureStdout(() => handleReview({ json: true }))
+    expect(JSON.parse(out)).toHaveLength(0)
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test("handleReview archive action archives the subscription", async () => {
@@ -443,9 +456,15 @@ test("handleReview add action converts a trial into a subscription", async () =>
 })
 
 test("handleReview reports when nothing needs review", async () => {
-  insertSub({ name: "Safe", billingDay: null })
-  await handleReview()
-  expect(infoMessages.some((m) => m.includes("Nothing needs review"))).toBe(true)
+  vi.useFakeTimers()
+  try {
+    vi.setSystemTime(new Date(2026, 6, 3))
+    insertSub({ name: "Safe", billingDay: null })
+    await handleReview()
+    expect(infoMessages.some((m) => m.includes("Nothing needs review"))).toBe(true)
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 // ── yearly ─────────────────────────────────────────────
