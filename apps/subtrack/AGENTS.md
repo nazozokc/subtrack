@@ -7,7 +7,7 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 - **Runtime**: Node.js (>=22.5, not Bun or Deno)
 - **Language**: TypeScript (strict mode, ESM, `verbatimModuleSyntax`)
 - **Database**: `node:sqlite` (`DatabaseSync`, built-in SQLite)
-- **CLI**: `gunshi`
+- **CLI**: self-contained (`src/cli/` — `define`, tokenizer/parser, router, help renderer)
 - **Prompts**: self-contained (`src/prompts/`, `node:readline`)
 - **Logging**: `@subtrack/lib/logger` (self-contained, `consola`-compatible logger)
 - **Tables**: `@subtrack/lib/table` (self-contained, `cli-table3`-compatible renderer)
@@ -43,9 +43,10 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 
 | File | Responsibility |
 |---|---|
-| `src/index.ts` | CLI definition (gunshi), command routing |
-| `src/menu.ts` | Interactive main menu (launched by bare `subtrack`) |
-| `src/commands/` | gunshi command definitions (`define()` + `.run()`) |
+| `src/index.ts` | CLI entry point, routing |
+| `src/cli/` | Self-contained CLI framework (`define`, parser, router, help, `cli()`) |
+| `src/menu/` | Interactive main menu (launched by bare `subtrack`) — entry in `index.ts`, category sub-menus in `views.ts` / `edits.ts` / `manage.ts` / `data.ts` / `config.ts` |
+| `src/commands/` | Command definitions (`define()` from `src/cli/types.ts` + `.run()`) |
 | `src/subscription/` | Core subscription handlers (list/add/edit/delete/clone/archive/tags) |
 | `src/db.ts`, `src/db/` | SQLite CRUD, schema, persistence |
 | `src/display.ts` | Table rendering, formatting |

@@ -310,7 +310,6 @@ export class CliTable3 {
     const allRows: CellValue[][] = this.head.length
       ? [this.head as CellValue[], ...this.rows]
       : this.rows
-    const hasHead = this.head.length > 0
 
     // Assign x (column) coordinates; colSpan cells consume extra columns.
     const cells: CellInfo[][] = allRows.map((row, y) => {
@@ -386,7 +385,7 @@ export class CliTable3 {
     for (let y = 0; y < cells.length; y++) {
       out.push(this.drawBorder(cells, widths, y, "top"))
       for (let lineNum = 0; lineNum < heights[y]!; lineNum++) {
-        out.push(this.drawLine(cells, widths, cellLines, heights, y, lineNum))
+        out.push(this.drawLine(cells, widths, cellLines, y, lineNum))
       }
     }
     out.push(this.drawBorder(cells, widths, cells.length - 1, "bottom"))
@@ -434,7 +433,6 @@ export class CliTable3 {
     cells: CellInfo[][],
     widths: number[],
     cellLines: Map<CellInfo, string[]>,
-    heights: number[],
     y: number,
     lineNum: number,
   ): string {

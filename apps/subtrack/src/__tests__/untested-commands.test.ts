@@ -125,7 +125,7 @@ function insertSub(overrides: Record<string, unknown> = {}): number {
 // ── Calendar tests ─────────────────────────────────────
 
 test("handleCalendar shows info when no subscriptions", async () => {
-  const { handleCalendar } = await import("../commands.ts")
+  const { handleCalendar } = await import("../calendar.ts")
   handleCalendar({ month: 6, year: 2026 })
   expect(infoMessages.some((m) => m.includes("No billing"))).toBe(true)
 })
@@ -137,7 +137,7 @@ test("handleCalendar JSON output", { timeout: 5000 }, async () => {
   const origWrite = process.stdout.write.bind(process.stdout)
   process.stdout.write = ((chunk: string) => { writes.push(String(chunk)); return true }) as typeof process.stdout.write
 
-  const { handleCalendar } = await import("../commands.ts")
+  const { handleCalendar } = await import("../calendar.ts")
   handleCalendar({ month: 6, year: 2026, json: true })
 
   process.stdout.write = origWrite
@@ -150,7 +150,7 @@ test("handleCalendar JSON output", { timeout: 5000 }, async () => {
 test("handleCalendar table output does not error", async () => {
   insertSub({ name: "Spotify", price: 980, billingDay: 10, createdAt: "2026-06-01" })
 
-  const { handleCalendar } = await import("../commands.ts")
+  const { handleCalendar } = await import("../calendar.ts")
   handleCalendar({ month: 6, year: 2026 })
   expect(errorMessages.length).toBe(0)
 })

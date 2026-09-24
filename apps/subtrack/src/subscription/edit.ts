@@ -9,7 +9,7 @@ import { fail } from "../error.ts"
 import type { Cycle, Status, AddSharedArgs, AddFlags } from "../types.ts"
 import { getSubscriptions, getSubscription, updateSubscription, getAllTags, writePriceHistory } from "../db.ts"
 import { formatPrice } from "../price.ts"
-import { logAudit } from "../audit.ts"
+import { logAudit } from "../audit-log.ts"
 import {
   CURRENCY_CHOICES,
   STATUS_CHOICES,

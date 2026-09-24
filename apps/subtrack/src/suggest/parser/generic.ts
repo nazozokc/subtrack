@@ -21,12 +21,6 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   "R$": "BRL",
 }
 
-// Abbreviated month names for date parsing
-const MONTHS_SHORT = [
-  "jan", "feb", "mar", "apr", "may", "jun",
-  "jul", "aug", "sep", "oct", "nov", "dec",
-]
-
 /**
  * Extract a name from email subject/sender or body.
  */
@@ -97,50 +91,6 @@ function extractPrice(text: string): { amount: number; currency: string } | null
 
   return null
 }
-
-/**
- * Extract a date from text. Returns YYYY-MM-DD string or null.
- */
-function extractDate(text: string): string | null {
-  // Try various date patterns
-  const patterns = [
-    // YYYY/MM/DD
-    { re: /(\d{4})\/(\d{1,2})\/(\d{1,2})/ },
-    // YYYY-MM-DD
-    { re: /(\d{4})-(\d{1,2})-(\d{1,2})/ },
-    // MM/DD/YYYY or DD/MM/YYYY
-    { re: /(\d{1,2})\/(\d{1,2})\/(\d{4})/ },
-    // "July 20, 2026" or "20 July 2026"
-    { re: new RegExp(`(${MONTHS_SHORT.join("|")})[a-z]*\\s+(\\d{1,2}),?\\s+(\\d{4})`, "i") },
-  ]
-
-  for (const { re } of patterns) {
-    const match = text.match(re)
-    if (match) {
-      if (match[0].includes("/") && match[0].length === 10) {
-        // YYYY/MM/DD or MM/DD/YYYY
-        if (match[1].length === 4) {
-          return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`
-        }
-        return `${match[3]}-${match[1].padStart(2, "0")}-${match[2].padStart(2, "0")}`
-      }
-      if (match[0].includes("-")) {
-        return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`
-      }
-      // Month name format
-      if (isNaN(Number(match[1]))) {
-        const monthIdx = MONTHS_SHORT.indexOf(match[1].toLowerCase().slice(0, 3))
-        if (monthIdx !== -1) {
-          return `${match[3]}-${String(monthIdx + 1).padStart(2, "0")}-${match[2].padStart(2, "0")}`
-        }
-      }
-    }
-  }
-
-  // Fallback: use email date
-  return null
-}
-
 /**
  * Estimated cycle from amount context clues.
  */
@@ -153,7 +103,7 @@ function guessCycle(text: string): string | null {
 }
 
 /**
- * Generic fallback parser. Tries to extract name + price + date from any email.
+ * Generic fallback parser. Tries to extract name + price from any email.
  * Always returns a result if a price is found.
  */
 export function parseGenericEmail(email: RawEmail): SuggestionCandidate | null {
@@ -165,7 +115,6 @@ export function parseGenericEmail(email: RawEmail): SuggestionCandidate | null {
   if (!price) return null
 
   const name = extractName(email)
-  const date = extractDate(text)
   const cycle = guessCycle(text)
 
   return {

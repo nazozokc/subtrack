@@ -1,5 +1,5 @@
 // ── LLM API Usage commands ───────────────────────────
-import { define } from "gunshi"
+import { define } from "../cli/types.ts"
 import { consola } from "@subtrack/lib/logger"
 import type { NamedCycle } from "@subtrack/lib/date"
 import type { UsageRefreshFlags } from "../types.ts"

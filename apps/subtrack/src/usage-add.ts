@@ -3,7 +3,7 @@ import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import type { UsageAddFlags } from "./types.ts"
 import { usageRepository } from "./application/repositories.ts"
-import { logAudit } from "./audit.ts"
+import { logAudit } from "./audit-log.ts"
 import {
   LLM_PROVIDER_CHOICES,
   validateTokens,

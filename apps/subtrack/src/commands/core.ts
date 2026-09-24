@@ -1,6 +1,5 @@
 // ── Core subscription commands ──────────────────────────
-import { define } from "gunshi"
-import { consola } from "@subtrack/lib/logger"
+import { define } from "../cli/types.ts"
 import { fail } from "../error.ts"
 
 export const listCommand = define({
@@ -135,7 +134,7 @@ run: async (ctx) => {
       fail("Subscription IDs must be positive integers")
       return
     }
-    const { handleDelete } = await import("../subscription/core.ts")
+    const { handleDelete } = await import("../subscription/delete.ts")
     return handleDelete(ids.length > 0 ? ids : undefined)
   },
 })

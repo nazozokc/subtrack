@@ -94,3 +94,59 @@ export function tryConvert(
     return null
   }
 }
+
+/**
+ * Convert each subscription's price to the target currency, keeping
+ * subscriptions whose rate is missing in their original currency.
+ * Returns the converted list plus a flag indicating any missing rate.
+ */
+export function tryConvertSubs(
+  subs: SharedArgs[],
+  targetCurrency: string,
+  rates: FxRates,
+): { list: SharedArgs[]; hasMissing: boolean } {
+  let hasMissing = false
+  const list = subs.map((s) => {
+    const amount = tryConvert(s.price, s.currency, targetCurrency, rates.rates)
+    if (amount === null) {
+      hasMissing = true
+      return s
+    }
+    return { ...s, price: Math.round(amount), currency: targetCurrency }
+  })
+  return { list, hasMissing }
+}
+
+/**
+ * Fetch rates and convert a subscription list to the target currency.
+ * Returns null when the rate fetch itself fails (callers then fall back
+ * to the original-currency display).
+ */
+export async function fetchConvertedSubs(
+  subs: SharedArgs[],
+  targetCurrency: string,
+): Promise<{ list: SharedArgs[]; hasMissing: boolean } | null> {
+  let rates: FxRates
+  try {
+    rates = await fetchFxRates()
+  } catch {
+    return null
+  }
+  return tryConvertSubs(subs, targetCurrency, rates)
+}
+
+/**
+ * Convert a list of amounts to the target currency, keeping the original
+ * amount (null) for entries with a missing rate. Callers sum the non-null
+ * values and report `hasMissing`.
+ */
+export function convertAmounts(
+  amounts: readonly { amount: number; currency: string }[],
+  targetCurrency: string,
+  rates: FxRates,
+): { converted: (number | null)[]; hasMissing: boolean } {
+  const converted = amounts.map(({ amount, currency }) =>
+    tryConvert(amount, currency, targetCurrency, rates.rates),
+  )
+  return { converted, hasMissing: converted.some((v) => v === null) }
+}

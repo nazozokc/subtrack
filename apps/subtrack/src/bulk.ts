@@ -3,7 +3,7 @@ import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import type { SharedArgs, Status } from "./types.ts"
 import { getSubscriptions, updateSubscription, deleteSubscription } from "./db.ts"
-import { logAudit } from "./audit.ts"
+import { logAudit } from "./audit-log.ts"
 import {
   STATUS_CHOICES,
   isValidStatus,

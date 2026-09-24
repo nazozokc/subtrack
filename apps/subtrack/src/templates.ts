@@ -1,7 +1,7 @@
 import { consola } from "@subtrack/lib/logger"
 import { loadConfig, saveConfig } from "./config.ts"
 import { fail } from "./error.ts"
-import { logAudit } from "./audit.ts"
+import { logAudit } from "./audit-log.ts"
 import { writeSubscription } from "./db.ts"
 import { isValidCurrency, isValidCycle } from "./prompts.ts"
 import type { AddSharedArgs, SubscriptionTemplate } from "./types.ts"

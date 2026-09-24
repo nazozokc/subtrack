@@ -200,13 +200,13 @@ test("displays multiple subscriptions", async () => {
   expect(table).toContain("USD TOTAL")
 })
 
-// --- --currency filter tests ---
+// --- --currency display tests (list is pre-converted by the caller) ---
 
-test("currency JPY converts USD prices and shows single total", async () => {
-  await spreadSubscription(
+test("currency displays converted prices and single total", () => {
+  spreadSubscription(
     [
       makeSub({ name: "Local", price: 1000, currency: "JPY" }),
-      makeSub({ name: "Foreign", price: 10, currency: "USD" }),
+      makeSub({ name: "Foreign", price: 1600, currency: "JPY" }),
     ],
     "JPY",
   )
@@ -214,7 +214,7 @@ test("currency JPY converts USD prices and shows single total", async () => {
   const table = logMessages[0]
   // JPY 1000 stays 1000
   expect(table).toContain("¥1,000")
-  // USD 10 × 160 = 1600
+  // USD 10 × 160 = 1600, converted by the caller
   expect(table).toContain("¥1,600")
   // Single JPY TOTAL
   expect(table).toContain("JPY TOTAL")
@@ -223,28 +223,25 @@ test("currency JPY converts USD prices and shows single total", async () => {
   expect(table).not.toContain("USD TOTAL")
 })
 
-test("currency USD converts JPY prices and shows single total", async () => {
-  await spreadSubscription(
+test("currency USD displays converted prices and single total", () => {
+  spreadSubscription(
     [
       makeSub({ name: "Local", price: 10, currency: "USD" }),
-      makeSub({ name: "Foreign", price: 1600, currency: "JPY" }),
+      makeSub({ name: "Foreign", price: 10, currency: "USD" }),
     ],
     "USD",
   )
 
   const table = logMessages[0]
-  // USD 10 stays 10
-  expect(table).toContain("$10")
-  // JPY 1600 → 1600 / 160 = 10
+  // USD 10 stays 10; JPY 1600 → 10 USD
   expect(table).toContain("$10")
   // Single USD TOTAL
   expect(table).toContain("USD TOTAL")
-  // No JPY TOTAL
   expect(table).not.toContain("JPY TOTAL")
 })
 
-test("currency JPY with all JPY items shows correctly", async () => {
-  await spreadSubscription(
+test("currency with all JPY items displays correctly", () => {
+  spreadSubscription(
     [
       makeSub({ name: "A", price: 500, currency: "JPY" }),
       makeSub({ name: "B", price: 1500, currency: "JPY" }),
@@ -259,33 +256,26 @@ test("currency JPY with all JPY items shows correctly", async () => {
   expect(table).not.toContain("USD TOTAL")
 })
 
-test("currency falls back when fetch fails", async () => {
-  globalThis.fetch = async () => {
-    throw new Error("Network error")
-  }
-
-  await spreadSubscription(
+test("currency renders entries with a missing rate as ? (original)", () => {
+  spreadSubscription(
     [
-      makeSub({ name: "JP", price: 1000, currency: "JPY" }),
-      makeSub({ name: "US", price: 15, currency: "USD" }),
+      makeSub({ name: "Converted", price: 1000, currency: "JPY" }),
+      // Kept in its original currency — no rate was available
+      makeSub({ name: "Missing", price: 10, currency: "USD" }),
     ],
     "JPY",
   )
 
-  // Should log warn message
-  expect(warnMessages.length).toBeGreaterThan(0)
-  expect(warnMessages[0]).toContain("Failed to fetch exchange rates")
-
-  // Should fall back to grouped-by-currency display
-  const table = logMessages.filter(Boolean).join("\n")
+  const table = logMessages[0]
   expect(table).toContain("¥1,000")
-  expect(table).toContain("$15")
+  expect(table).toContain("? ($10)")
   expect(table).toContain("JPY TOTAL")
-  expect(table).toContain("USD TOTAL")
+  // Only converted entries contribute to the total
+  expect(table).not.toContain("¥1,610")
 })
 
-test("currency with empty list shows info", async () => {
-  await spreadSubscription([], "JPY")
+test("currency with empty list shows info", () => {
+  spreadSubscription([], "JPY")
   expect(infoMessages).toContain("No subscriptions found — try `subtrack add`")
 })
 

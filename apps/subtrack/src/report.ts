@@ -1,7 +1,6 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import type { Currency, SharedArgs } from "./types.ts"
-import type { AuditEntry } from "./db.ts"
 import { getSubscriptions, getAllPriceChanges, getAuditLogs } from "./db.ts"
 import { loadConfig } from "./config.ts"
 import { formatPrice } from "./price.ts"

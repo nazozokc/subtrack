@@ -1,7 +1,7 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import type { Currency, SharedArgs } from "./types.ts"
-import { getSubscriptions, getNonCancelledSubscriptions } from "./db.ts"
+import { getNonCancelledSubscriptions } from "./db.ts"
 import { loadConfig } from "./config.ts"
 import { formatPrice } from "./price.ts"
 import { calcSubTotal } from "./payment.ts"

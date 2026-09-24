@@ -3,9 +3,6 @@ import pc from "@subtrack/lib/ansi"
 import { CliTable3 } from "@subtrack/lib/table"
 import { formatShortDate, daysUntil, formatCycle } from "@subtrack/lib/date"
 import type { SharedArgs, Currency, LlmUsageEntry } from "./types.ts"
-import { getSubscriptions } from "./db.ts"
-import { fetchFxRates, convertPrice } from "./fx.ts"
-import type { FxRates } from "./fx.ts"
 import { calculateNextBilling } from "./upcoming.ts"
 
 import { formatPrice, formatUsdCost } from "./price.ts"
@@ -129,7 +126,7 @@ const ALL_EXTRA_COLS: ColumnConfig = {
 
 function renderTable(rows: string[][], config: ColumnConfig): string {
   const widths = calcColumnWidths(rows, config)
-  const colAligns = config.headers.map((h, i) =>
+  const colAligns = config.headers.map((_, i) =>
     i === config.headers.length - 1 ? "right" : "left",
   ) as ("left" | "right")[]
 
@@ -168,17 +165,25 @@ function renderTable(rows: string[][], config: ColumnConfig): string {
   return table.toString()
 }
 
-export const spreadSubscription = async (
-  get?: SharedArgs[],
+/**
+ * Render a subscription table.
+ *
+ * Display-only: this function never fetches or converts currency. When
+ * `currency` is provided the caller must pass a list already converted to
+ * that currency; entries that kept their original currency had a missing
+ * exchange rate and are rendered as "? (original)".
+ */
+export const spreadSubscription = (
+  list: SharedArgs[],
   currency?: Currency,
   showNotes?: boolean,
   showMethod?: boolean,
   showContract?: boolean,
   showVendor?: boolean,
-): Promise<void> => {
-  const list = get ?? getSubscriptions()
+): void => {
+  const subs = list
 
-  if (list.length === 0) {
+  if (subs.length === 0) {
     consola.info("No subscriptions found — try `subtrack add`")
     return
   }
@@ -202,68 +207,41 @@ export const spreadSubscription = async (
   const rows: string[][] = []
 
   if (currency) {
-    // --currency specified: fetch rates and convert all to the target currency
-    let rates: FxRates | null = null
-    try {
-      consola.info("Fetching the latest exchange rates...")
-      rates = await fetchFxRates()
-      consola.success("Exchange rates updated")
-    } catch {
-      consola.warn("Failed to fetch exchange rates; showing in original currencies")
-    }
-
-    if (rates) {
-      let total = 0
-      let hasMissingRate = false
-
-      for (const sub of list) {
-        try {
-          const converted = convertPrice(
-            sub.price,
-            sub.currency,
-            currency,
-            rates.rates,
-          )
-          total += converted
-          rows.push(buildRow(sub, formatPrice(Math.round(converted), currency), showNotes ?? false, showMethod ?? false, showContract, showVendor))
-        } catch {
-          hasMissingRate = true
-          rows.push(
-            buildRow(sub, `? (${formatPrice(sub.price, sub.currency)})`, showNotes ?? false, showMethod ?? false, showContract, showVendor),
-          )
-        }
-      }
-
-      const totalRow = new Array<string>(config.headers.length).fill("")
-      totalRow[config.headers.length - 2] = `${currency} TOTAL`
-      totalRow[config.headers.length - 1] = formatPrice(Math.round(total), currency)
-      rows.push(totalRow)
-
-      if (hasMissingRate) {
-        consola.warn(
-          "Some prices could not be converted (missing rate). They are shown in original currency.",
+    // List is already converted to `currency`. Entries still in another
+    // currency had no available rate — show them as "? (original price)".
+    let total = 0
+    for (const sub of subs) {
+      if (sub.currency === currency) {
+        total += sub.price
+        rows.push(buildRow(sub, formatPrice(sub.price, currency), showNotes ?? false, showMethod ?? false, showContract, showVendor))
+      } else {
+        rows.push(
+          buildRow(sub, `? (${formatPrice(sub.price, sub.currency)})`, showNotes ?? false, showMethod ?? false, showContract, showVendor),
         )
       }
-
-      consola.log(renderTable(rows, config))
-      return
     }
-    // fallback: continue to the no-currency path below
+
+    const totalRow = new Array<string>(config.headers.length).fill("")
+    totalRow[config.headers.length - 2] = `${currency} TOTAL`
+    totalRow[config.headers.length - 1] = formatPrice(Math.round(total), currency)
+    rows.push(totalRow)
+    consola.log(renderTable(rows, config))
+    return
   }
 
   // Display subscriptions grouped by currency
   const groups: Record<string, SharedArgs[]> = {}
-  for (const sub of list) {
+  for (const sub of subs) {
     ;(groups[sub.currency] ??= []).push(sub)
   }
 
   const groupEntries = Object.entries(groups)
   for (let i = 0; i < groupEntries.length; i++) {
-    const [currencyCode, subs] = groupEntries[i]
+    const [currencyCode, currencySubs] = groupEntries[i]
     const groupRows: string[][] = []
 
     let total = 0
-    for (const sub of subs) {
+    for (const sub of currencySubs) {
       groupRows.push(buildRow(sub, formatPrice(sub.price, sub.currency), showNotes ?? false, showMethod ?? false, showContract, showVendor))
       total += sub.price
     }

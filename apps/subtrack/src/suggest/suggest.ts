@@ -104,7 +104,7 @@ export function handleSuggestDismiss(id: number): void {
 }
 
 /** Dismiss all pending suggestions. */
-export function handleSuggestDismissAll(flags: SuggestDismissFlags = {}): void {
+export function handleSuggestDismissAll(_flags: SuggestDismissFlags = {}): void {
   const count = getSuggestions("pending").length
   if (count === 0) {
     consola.info("No pending suggestions to dismiss.")

@@ -1,6 +1,6 @@
 // ── Suggest command: manage subscription suggestions ──
 
-import { define } from "gunshi"
+import { define } from "../cli/types.ts"
 import { fail } from "../error.ts"
 
 const suggestListCmd = define({

@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from "node:fs"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
-import { logAudit } from "./audit.ts"
+import { logAudit } from "./audit-log.ts"
 import { writeSuggestionBatch } from "./db/suggestions.ts"
 import { parseEmail } from "./suggest/parser/index.ts"
 import { parseCsvLine } from "./import-csv.ts"

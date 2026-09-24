@@ -12,7 +12,6 @@
 
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs"
 import { createHash } from "node:crypto"
-import { consola } from "@subtrack/lib/logger"
 
 function getDbHashPath(dbFilePath: string): string {
   return `${dbFilePath}.sha256`

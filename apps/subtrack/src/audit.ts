@@ -8,8 +8,7 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { CliTable3 } from "@subtrack/lib/table"
-import { getAuditLogs, getAuditLogCount, pruneAuditLogs, addAuditLog } from "./db/audit.ts"
-import type { AuditAction, AddAuditArgs } from "./db/audit.ts"
+import { getAuditLogs, getAuditLogCount, pruneAuditLogs } from "./db/audit.ts"
 import { TABLE_CHARS, getTableStyle, calcColumnWidths, zebraRow } from "./display-constants.ts"
 import type { ColumnConfig } from "./display-constants.ts"
 import { SHORT_MONTH_NAMES, pad2 } from "@subtrack/lib/date"
@@ -158,12 +157,5 @@ export function handleAuditPrune(options: {
   consola.success(`Pruned ${deleted} audit log entr${deleted !== 1 ? "ies" : "y"}`)
 }
 
-// ── Integration helper ──────────────────────────────────
-
-/**
- * Convenience function to log an audit entry from command handlers.
- * Re-exported for easy use across the codebase.
- */
-export function logAudit(action: AuditAction, args: Omit<AddAuditArgs, "action"> = {}): void {
-  addAuditLog({ action, ...args })
-}
+// Note: the write-side helper `logAudit` lives in `./audit-log.ts` — it is
+// intentionally not re-exported here to keep this module display-only.

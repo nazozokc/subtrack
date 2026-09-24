@@ -125,7 +125,7 @@ export function getActiveFilter(): ProfileFilter | null {
 /** Apply a profile filter to a subscription query. Returns filter params. */
 export function buildFilterParams(
   profile: ProfileFilter,
-  existingTags?: string[],
+  _existingTags?: string[],
 ): { tags?: string[]; status?: Status; paymentMethod?: string } {
   return {
     tags: profile.tags?.length ? profile.tags : undefined,

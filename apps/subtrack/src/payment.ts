@@ -5,7 +5,7 @@ import { periodFactor, getPeriodDateRange, formatCycle } from "@subtrack/lib/dat
 import type { NamedCycle } from "@subtrack/lib/date"
 import { getNonCancelledSubscriptions, getLlmUsageTotal, getLlmUsageTotalByProvider, getAllPriceChanges } from "./db.ts"
 import { formatPrice, formatUsdCost } from "./price.ts"
-import { fetchFxRates, convertPrice } from "./fx.ts"
+import { fetchFxRates, convertAmounts, tryConvert } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
 import { runPreCommandHooks } from "./pre-command.ts"
 import { calculateTotals } from "./domain/billing.ts"
@@ -57,41 +57,25 @@ export const showPayment = async (
     }
 
     if (rates) {
-      let subTotal = 0
-      let hasMissingRate = false
-      for (const entry of entries) {
-        try {
-          subTotal += convertPrice(
-            entry.convertedPrice,
-            entry.currency,
-            currency,
-            rates.rates,
-          )
-        } catch {
-          hasMissingRate = true
-        }
-      }
-
-      if (hasMissingRate) {
+      const { converted, hasMissing } = convertAmounts(
+        entries.map(({ convertedPrice, currency }) => ({ amount: convertedPrice, currency })),
+        currency,
+        rates,
+      )
+      if (hasMissing) {
         consola.warn("Some prices could not be converted (missing rate)")
       }
+      const subTotal = converted.reduce<number>((sum, v) => sum + (v ?? 0), 0)
 
       if (includeApi && apiTotal > 0) {
         // Convert API cost (USD cents) to target currency
-        let apiConverted = 0
-        try {
-          apiConverted = convertPrice(
-            apiTotal / 100,
-            "USD",
-            currency,
-            rates.rates,
-          )
-        } catch {
+        const apiConverted = tryConvert(apiTotal / 100, "USD", currency, rates.rates)
+        if (apiConverted === null) {
           consola.warn("Could not convert API cost to target currency")
         }
-        const grandTotal = subTotal + apiConverted
+        const grandTotal = subTotal + (apiConverted ?? 0)
         consola.log(
-          `${formatPrice(Math.round(subTotal), currency)}/${fmtPeriod}  ${pc.dim(`+ API ${formatPrice(Math.round(apiConverted), currency)} = ${pc.bold(pc.yellow(formatPrice(Math.round(grandTotal), currency)))}/${fmtPeriod}`)}`,
+          `${formatPrice(Math.round(subTotal), currency)}/${fmtPeriod}  ${pc.dim(`+ API ${formatPrice(Math.round(apiConverted ?? 0), currency)} = ${pc.bold(pc.yellow(formatPrice(Math.round(grandTotal), currency)))}/${fmtPeriod}`)}`,
         )
       } else {
         consola.log(`${formatPrice(Math.round(subTotal), currency)}/${fmtPeriod}`)
@@ -170,10 +154,10 @@ export function calcSubTotal(
     if (sub.status === "cancelled") continue
     const normalized = sub.price * periodFactor(sub.cycle, period)
     if (targetCurrency && rates) {
-      try {
-        const converted = convertPrice(normalized, sub.currency, targetCurrency, rates.rates)
+      const converted = tryConvert(normalized, sub.currency, targetCurrency, rates.rates)
+      if (converted !== null) {
         totals[targetCurrency] = (totals[targetCurrency] ?? 0) + converted
-      } catch {
+      } else {
         totals[sub.currency] = (totals[sub.currency] ?? 0) + normalized
       }
     } else {
@@ -215,10 +199,10 @@ export function calcPreviousTotals(
     const monthly = price * periodFactor(sub.cycle, period)
 
     if (targetCurrency && rates) {
-      try {
-        const converted = convertPrice(monthly, currency, targetCurrency, rates.rates)
+      const converted = tryConvert(monthly, currency, targetCurrency, rates.rates)
+      if (converted !== null) {
         totals[targetCurrency] = (totals[targetCurrency] ?? 0) + converted
-      } catch {
+      } else {
         totals[currency] = (totals[currency] ?? 0) + monthly
       }
     } else {
@@ -343,15 +327,23 @@ export async function handlePayment(
     let finalCurrency: string | undefined
     let rates: FxRates | null = null
     let subTotal = 0
+    // Per-entry conversion results, reused by the byMethod breakdown below
+    let convertedAmounts: (number | null)[] | null = null
 
     if (targetCurrency) {
       try { rates = await fetchFxRates() } catch { consola.warn("Failed to fetch exchange rates; showing in original currencies") }
       if (rates) {
-        for (const entry of entries) {
-          try { subTotal += convertPrice(entry.convertedPrice, entry.currency, targetCurrency, rates.rates) }
-          catch { consola.warn(`Missing exchange rate for ${entry.currency} → ${targetCurrency}`) }
-        }
+        const result = convertAmounts(
+          entries.map(({ convertedPrice, currency }) => ({ amount: convertedPrice, currency })),
+          targetCurrency,
+          rates,
+        )
+        convertedAmounts = result.converted
+        subTotal = result.converted.reduce<number>((sum, v) => sum + (v ?? 0), 0)
         finalCurrency = targetCurrency
+        if (result.hasMissing) {
+          consola.warn("Some prices could not be converted (missing rate); excluded from totals")
+        }
       }
     }
 
@@ -363,16 +355,22 @@ export async function handlePayment(
 
     const byMethod: Record<string, { total: number; currencies: string[]; byCurrency: Record<string, number> }> = {}
     if (options.method) {
-      for (const entry of entries) {
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i]!
         const method = entry.paymentMethod || "unspecified"
         if (!byMethod[method]) byMethod[method] = { total: 0, currencies: [], byCurrency: {} }
         // Sum in the same currency space as the total: converted when a target
         // currency is available, otherwise per original currency.
         const currency = finalCurrency ?? entry.currency
         let amount = entry.convertedPrice
-        if (finalCurrency && rates) {
-          try { amount = convertPrice(entry.convertedPrice, entry.currency, finalCurrency, rates.rates) }
-          catch { /* keep original amount */ }
+        if (finalCurrency && rates && convertedAmounts) {
+          const converted = convertedAmounts[i]
+          if (converted === null || converted === undefined) {
+            // Missing rate — same policy as the total: excluded, never mixed
+            // into the totals as an unconverted amount.
+            continue
+          }
+          amount = converted
         }
         byMethod[method].total += amount
         if (!byMethod[method].currencies.includes(currency)) { byMethod[method].currencies.push(currency) }

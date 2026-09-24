@@ -1,5 +1,5 @@
 // ── Import/Export commands ─────────────────────────────
-import { define } from "gunshi"
+import { define } from "../cli/types.ts"
 
 export const exportCommand = define({
   name: "export",

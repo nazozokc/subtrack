@@ -3,13 +3,13 @@
  * Separated from core.ts because of its complex interactive prompt logic.
  */
 
-import { input, confirm, select } from "../prompts.ts"
+import { input, confirm } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import type { AddFlags, Cycle, Status } from "../types.ts"
-import { getSubscriptions, writeSubscription, getAllTags } from "../db.ts"
+import { writeSubscription, getAllTags } from "../db.ts"
 import { formatPrice } from "../price.ts"
-import { logAudit } from "../audit.ts"
+import { logAudit } from "../audit-log.ts"
 import {
   CURRENCY_CHOICES,
   STATUS_CHOICES,

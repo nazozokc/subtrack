@@ -11,7 +11,7 @@
 import { confirm, input, select } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
-import { getSubscriptions, writeSubscription, markSuggestionAsAdded, dismissSuggestion } from "../db.ts"
+import { writeSubscription, markSuggestionAsAdded, dismissSuggestion } from "../db.ts"
 import { formatPrice } from "../price.ts"
 import type { Suggestion } from "./types.ts"
 import { findMatches, hasPriceConflict } from "./matcher.ts"

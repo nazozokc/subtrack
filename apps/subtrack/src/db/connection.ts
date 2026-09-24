@@ -7,7 +7,7 @@ import {
   constants,
 } from "node:fs"
 import { createHash } from "node:crypto"
-import { gzipSync, gunzipSync } from "node:zlib"
+import { gunzipSync } from "node:zlib"
 import path from "node:path"
 import { homedir } from "node:os"
 import { consola } from "@subtrack/lib/logger"
