@@ -29,6 +29,7 @@ subtrack is a Node.js CLI tool for managing subscription services from the termi
 ## Testing
 
 - Framework: `vitest` (`pnpm test` or `vitest run`)
+- Coverage: `pnpm test:coverage` (`vitest run --coverage`, v8 provider)
 - Test files live under `src/__tests__/` as `*.test.ts` (not co-located)
 - Use `pnpm test:watch` for watch mode
 - Use `__setDb()` from `db.ts` to inject an in-memory SQLite database for tests
@@ -50,17 +51,19 @@ subtrack is a Node.js CLI tool for managing subscription services from the termi
 
 ## Architecture
 
-The source code (`subtrack/src/`) follows a 4-layer separation:
+The source code (`subtrack/src/`) follows a layered separation:
 
 | Layer | File | Responsibility |
 |---|---|---|
-| Entry | `index.ts` | CLI definition (gunshi), command routing |
-| Commands | `commands/` | gunshi command definitions (`define()` + `.run()`) |
-| Handlers | `subscription/`, `menu.ts`, `search.ts`, `payment.ts`, … | Command handlers, workflow logic, user interaction |
-| Database | `db.ts`, `db/` | SQLite CRUD, schema, persistence, `__setDb()` for testing |
-| Display | `display.ts` | Table rendering with `@subtrack/lib/table`, FX rate conversion |
-| Prompts | `prompts.ts` | Input validation, interactive prompts, shared choices |
-| FX | `fx.ts` | Exchange rate fetching & conversion (`fetchFxRates`, `convertPrice`, `convertSubsWithRates`, `tryConvert`) |
+| Entry | `src/index.ts` | CLI bootstrap, routing (bare `subtrack` opens the interactive menu) |
+| CLI | `src/cli/` | Self-contained CLI framework (`define`, tokenizer/parser, router, help renderer, `cli()`) |
+| Commands | `src/commands/` | Command definitions (`define()` from `src/cli/types.ts` + `.run()`) |
+| Handlers | `src/subscription/`, `src/menu/`, `src/payment.ts`, … | Command handlers, workflow logic, user interaction |
+| Audit write | `src/audit-log.ts` | `logAudit` write-side helper (deliberately separate from `audit.ts` to keep the table renderer out of the shared config chunk) |
+| Database | `src/db.ts`, `src/db/` | SQLite CRUD, schema, persistence, `__setDb()` for testing |
+| Display | `src/display.ts` | Table rendering, formatting (table renderer via `@subtrack/lib/table`) |
+| Prompts | `src/prompts.ts` | Input validation, interactive prompts, shared choices |
+| FX | `src/fx.ts` | Exchange rate fetching & conversion (`fetchFxRates`, `convertPrice`, `convertSubsWithRates`, `tryConvert`) |
 | Dates | `@subtrack/lib/date` | Date helpers (`today`, `formatDate`, `daysUntil`, period ranges, `Cycle`) |
 | Path safety | `@subtrack/lib/path` | `resolveSafePath` / `resolveSafeOutputPath` (+ `safePath` / `safeOutputPath` shortcuts) |
 | Shared utils | `lib/src/` | `@subtrack/lib/ansi|logger|table|xlsx|json|path|format|date|crypto` (source package, bundled by tsdown) |
@@ -78,6 +81,7 @@ Keep concerns separated. Don't put DB queries in display logic or prompt logic i
 ## Code Style
 
 - TypeScript strict mode enabled (see `tsconfig.json`)
+- `noUnusedLocals` / `noUnusedParameters`: enabled — unused imports/params are compile errors
 - Test files (`*.test.ts`) excluded from `tsconfig.json` — type-checked separately by vitest
 - ESM modules (`"type": "module"` in package.json)
 - No semicolons in imports/exports
@@ -87,15 +91,15 @@ Keep concerns separated. Don't put DB queries in display logic or prompt logic i
 
 ## Dependencies
 
-Key packages and their purpose:
+subtrack has **zero runtime dependencies** — everything is self-contained:
 
-| Package | Usage |
-|---|---|---|
-| `gunshi` | CLI argument parsing (`cli()`, `define()`, `.args`, `.run()`) |
+| Module | Usage |
+|---|---|
+| `src/cli/` | Self-contained CLI framework (`define`, tokenizer/parser, router, help renderer) — replaced gunshi |
 | `src/prompts/` | Self-contained interactive prompts (`input`, `confirm`, `checkbox`, `select`, `search`) on `node:readline` — no inquirer |
-| `consola` | Logging (`consola.info`, `consola.success`, `consola.error`, `consola.warn`, `consola.fail`) |
-| `cli-table3` | Table rendering (customizable chars, styles, column widths) |
-| `picocolors` | Terminal colors |
+| `@subtrack/lib/logger` | Self-contained `consola`-compatible logger (`consola.info/success/error/warn/fail`) |
+| `@subtrack/lib/table` | Self-contained `cli-table3`-compatible table renderer (customizable chars, styles, column widths) |
+| `@subtrack/lib/ansi` | Self-contained `picocolors`-compatible terminal colors |
 | `node:sqlite` | Built-in SQLite (`DatabaseSync`, `SQLInputValue`) — no WASM, no native deps |
 | `@types/node` | Node.js type definitions (dev) |
 
