@@ -13,7 +13,7 @@ You are a subtrack agent. Your primary responsibilities in this repository are:
 - Understanding the full monorepo structure and how packages relate
 - Implementing features and fixing bugs in the CLI tool (`subtrack/`)
 - Maintaining code quality, type safety, and test coverage
-- Following project conventions (ESM, TypeScript strict, `node:sqlite`, `gunshi`)
+- Following project conventions (ESM, TypeScript strict, `node:sqlite`, self-contained `src/cli/`)
 - Knowing when to load project-specific skills for detailed guidance
 
 ## Repository Structure
@@ -44,12 +44,13 @@ You are a subtrack agent. Your primary responsibilities in this repository are:
 
 ## Architecture Overview
 
-The CLI tool (`subtrack/`) uses `gunshi` for command routing and follows a multi-layer architecture:
+The CLI tool (`subtrack/`) uses a self-contained CLI framework (`src/cli/`) for command routing and follows a multi-layer architecture:
 
 | Layer       | File                | Responsibility                      |
 | ----------- | ------------------- | ----------------------------------- |
-| Entry       | `src/index.ts`      | Command definitions (gunshi), routing |
-| Commands    | `src/commands/`     | gunshi command definitions (`define()` + `.run()`) |
+| Entry       | `src/index.ts`      | CLI bootstrap, routing              |
+| CLI         | `src/cli/`          | Self-contained framework (`define`, parser, router, help, `cli()`) |
+| Commands    | `src/commands/`     | Command definitions (`define()` from `src/cli/types.ts` + `.run()`) |
 | Handlers    | `src/subscription/`, `src/*.ts` | Command handlers, workflow logic    |
 | Database    | `src/db.ts`, `src/db/` | SQLite CRUD, schema, persistence    |
 | Display     | `src/display.ts`    | Table rendering, formatting         |
@@ -78,7 +79,7 @@ All 3 skills are also available automatically via the agent system prompt.
 - **Runtime**: Node.js (>=22.5), **not** Bun or Deno
 - **Language**: TypeScript (strict mode, ESM, `verbatimModuleSyntax`)
 - **Database**: `node:sqlite` (`DatabaseSync`) — **not** `sql.js`, `better-sqlite3`, or `bun:sqlite`
-- **CLI**: `gunshi` — **not** `commander` (despite what old docs may say)
+- **CLI**: self-contained `src/cli/` — **not** `gunshi` or `commander`
 - **Package manager**: `pnpm` — **not** npm or bun
 - **Local imports**: use `.ts` extension (`import { x } from "./foo.ts"`)
 - **Node built-ins**: use `node:` prefix (`node:fs`, `node:path`, `node:os`)
