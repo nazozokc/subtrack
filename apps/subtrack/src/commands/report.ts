@@ -1,5 +1,5 @@
 // ── Report/analytics commands ──────────────────────────
-import { define } from "gunshi"
+import { define } from "../cli/types.ts"
 import { fail } from "../error.ts"
 import type { NamedCycle } from "@subtrack/lib/date"
 import type { NotifyChannel } from "../types.ts"

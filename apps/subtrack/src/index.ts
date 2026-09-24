@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { cli, define } from "gunshi"
+import { cli } from "./cli/index.ts"
+import { define } from "./cli/types.ts"
 import { consola } from "@subtrack/lib/logger"
 import { createRequire } from "node:module"
 import { markStartup, reportStartup } from "./startup-profile.ts"
@@ -11,9 +12,9 @@ const require = createRequire(import.meta.url)
 const pkg = require("../package.json") as { version: string }
 const args = process.argv.slice(2)
 
-// Version output does not need command definitions or gunshi parsing.
-// Keep this fast path limited to the standalone form so all other parsing
-// behavior remains owned by gunshi.
+// Version output does not need command definitions or parsing.
+// Keep this fast path limited to the standalone form so `--version` stays
+// dependency-free and instant.
 if (args.length === 1 && (args[0] === "--version" || args[0] === "-v")) {
   process.stdout.write(`${pkg.version}\n`)
   process.exit(0)
@@ -51,8 +52,8 @@ try {
     name: "subtrack",
     version: pkg.version,
     subCommands,
-    // MCP speaks JSON-RPC on stdout — suppress gunshi's header/usage banner
-    // so the protocol stream stays pure.
+    // MCP speaks JSON-RPC on stdout — suppress the header/usage banner so the
+    // protocol stream stays pure.
     usageSilent: args[0] === "mcp",
   })
   reportStartup("cli complete")

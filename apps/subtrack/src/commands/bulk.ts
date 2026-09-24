@@ -1,5 +1,5 @@
 // ── Bulk operation commands ────────────────────────────
-import { define } from "gunshi"
+import { define } from "../cli/types.ts"
 import { consola } from "@subtrack/lib/logger"
 
 const bulkStatusCmd = define({

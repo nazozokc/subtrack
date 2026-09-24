@@ -1,4 +1,4 @@
-import { define } from "gunshi"
+import { define } from "../cli/types.ts"
 import { fail } from "../error.ts"
 
 function ids(ctx: { positionals: string[] }): number[] | undefined {

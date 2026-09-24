@@ -1,5 +1,5 @@
 // ── Backup/Restore commands ────────────────────────────
-import { define } from "gunshi"
+import { define } from "../cli/types.ts"
 
 export const backupCommand = define({
   name: "backup",

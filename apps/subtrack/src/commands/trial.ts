@@ -1,5 +1,5 @@
 // ── Trial commands ─────────────────────────────────────
-import { define } from "gunshi"
+import { define } from "../cli/types.ts"
 import { consola } from "@subtrack/lib/logger"
 
 const trialAddCmd = define({

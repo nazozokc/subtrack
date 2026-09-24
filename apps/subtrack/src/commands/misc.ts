@@ -1,5 +1,5 @@
 // ── Misc commands (mcp, audit, maintenance, cleanup, currency, profile) ──
-import { define } from "gunshi"
+import { define } from "../cli/types.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 // Lazy imports for MCP to avoid loading MCP SDK WASM at module load time
