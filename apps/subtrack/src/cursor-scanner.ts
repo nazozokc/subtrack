@@ -1,10 +1,8 @@
-import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { consola } from "@subtrack/lib/logger"
-import { DatabaseSync } from "node:sqlite"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
+import { findExistingPath, scanSqliteKv } from "./scanner-support.ts"
 import { safeJsonParse } from "@subtrack/lib/json"
 import { isDateInRange, estimateTokenSplit } from "@subtrack/lib/date"
 
@@ -20,10 +18,7 @@ function findCursorDb(): string | null {
     // Windows (via WSL or Git Bash)
     join(homedir(), "AppData", "Roaming", "Cursor", "User", "globalStorage", "state.vscdb"),
   ]
-  for (const p of candidates) {
-    if (existsSync(p)) return p
-  }
-  return null
+  return findExistingPath(candidates)
 }
 
 /**
@@ -77,61 +72,9 @@ function parseCursorKvValue(key: string, value: string): AddLlmUsageFromLogArgs 
  */
 export function scanCursor(from?: string, to?: string): ScanResult {
   const dbPath = findCursorDb()
-  if (!dbPath) {
-    consola.info("Cursor state DB not found — skip")
-    return { source: "cursor", entries: [] }
-  }
-
-  consola.info(`Reading Cursor DB: ${dbPath}`)
-
-  let db: DatabaseSync | null = null
-  const entries: AddLlmUsageFromLogArgs[] = []
-
-  try {
-    db = new DatabaseSync(dbPath, { readOnly: true })
-
-    // Try both possible table names
-    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as unknown as {
-      name: string
-    }[]
-    const tableNames = tables.map((r) => String(r.name))
-    const knownTables = ["cursorDiskKV", "ItemTable"]
-    const tableName = knownTables.find((t) => tableNames.includes(t))
-    if (!tableName) {
-      consola.info("No known Cursor KV table found")
-      return { source: "cursor", entries: [] }
-    }
-
-    // tableName is guaranteed to be one of `knownTables` by construction
-    // (see the `.find` above), so no further SQL injection guard is needed
-
-    const rows = db
-      .prepare(`SELECT key, value FROM "${tableName}" WHERE key LIKE 'bubbleId:%'`)
-      .all() as unknown as { key: string; value: string }[]
-
-    if (rows.length === 0) {
-      consola.info("No usage data found in Cursor DB")
-      return { source: "cursor", entries: [] }
-    }
-
-    for (const row of rows) {
-      const key = String(row.key ?? "")
-      const rawValue = String(row.value ?? "")
-
-      const parsed = parseCursorKvValue(key, rawValue)
-      if (parsed && isDateInRange(parsed.date, from, to)) {
-        entries.push(parsed)
-      }
-    }
-  } catch (err) {
-    consola.warn(`Error scanning Cursor DB: ${String(err)}`)
-    return { source: "cursor", entries: [] }
-  } finally {
-    if (db) db.close()
-  }
-
-  consola.info(`Found ${entries.length} usage entr${entries.length === 1 ? "y" : "ies"} in Cursor DB`)
-  return { source: "cursor", entries }
+  return scanSqliteKv("Cursor", dbPath, ["cursorDiskKV", "ItemTable"],
+    (table) => `SELECT key, value FROM "${table}" WHERE key LIKE 'bubbleId:%'`,
+    parseCursorKvValue, from, to)
 }
 
 /**

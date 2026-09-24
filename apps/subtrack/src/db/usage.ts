@@ -133,15 +133,22 @@ export const getLlmUsage = (options?: GetLlmUsageOptions): LlmUsageEntry[] => {
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
-  const limitClause = options?.limit ? ` LIMIT ?` : ""
-  if (options?.limit) params.push(options.limit)
-  const offsetClause = options?.offset ? ` OFFSET ?` : ""
-  if (options?.offset) params.push(options.offset)
+  const limitClause = options?.limit !== undefined ? ` LIMIT ?` : ""
+  if (options?.limit !== undefined) params.push(options.limit)
+  const offsetClause = options?.offset !== undefined ? ` OFFSET ?` : ""
+  if (options?.offset !== undefined) params.push(options.offset)
+
+  // SQLite requires LIMIT before OFFSET — emit LIMIT -1 (unlimited) when only an offset is given
+  const pagination = limitClause
+    ? `${limitClause}${offsetClause}`
+    : offsetClause
+      ? ` LIMIT -1${offsetClause}`
+      : ""
 
   return execObjs<LlmUsageEntry>(
     db,
     `SELECT id, provider, model, input_tokens, output_tokens, cost, date, description
-     FROM llm_usage ${where} ORDER BY date DESC, id DESC${limitClause}${offsetClause}`,
+     FROM llm_usage ${where} ORDER BY date DESC, id DESC${pagination}`,
     params,
   )
 }

@@ -312,6 +312,29 @@ test("getSubscriptions returns all subscriptions ordered by id", async () => {
   expect(subs[2].name).toBe("C")
 })
 
+test("getSubscriptions supports offset without limit", async () => {
+  const db = await import("../db.ts")
+
+  for (const name of ["A", "B", "C"]) {
+    db.writeSubscription({ name, price: 100, currency: "USD", cycle: "monthly", tags: [] })
+  }
+
+  // Regression: a bare OFFSET without LIMIT used to produce "near OFFSET: syntax error"
+  const skipped = db.getSubscriptions({ offset: 2 })
+  expect(skipped.map((s) => s.name)).toEqual(["C"])
+})
+
+test("getSubscriptions combines limit and offset", async () => {
+  const db = await import("../db.ts")
+
+  for (const name of ["A", "B", "C", "D"]) {
+    db.writeSubscription({ name, price: 100, currency: "USD", cycle: "monthly", tags: [] })
+  }
+
+  const page = db.getSubscriptions({ limit: 2, offset: 1 })
+  expect(page.map((s) => s.name)).toEqual(["B", "C"])
+})
+
 test("deleteSubscription removes a subscription", async () => {
   const db = await import("../db.ts")
 

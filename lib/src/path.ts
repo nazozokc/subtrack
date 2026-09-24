@@ -21,8 +21,9 @@ export function safeOutputPath(targetPath: string): string | null {
   return resolveSafeOutputPath(defaultBases(), targetPath)
 }
 
-/** Check if `child` path starts with `parent` directory, using platform separator. */
+/** Check if `child` path is within `parent` directory (or equals it), using platform separator. */
 function isWithin(child: string, parent: string): boolean {
+  if (child === parent) return true
   const prefix = parent.endsWith(sep) ? parent : `${parent}${sep}`
   return child.startsWith(prefix)
 }
