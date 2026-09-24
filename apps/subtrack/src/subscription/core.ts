@@ -3,11 +3,11 @@
  * Separated from the more complex add/edit workflows.
  */
 
-import { checkbox, confirm, select, isValidCurrency, isValidCycle, validatePrice } from "../prompts.ts"
+import { checkbox, confirm, isValidCurrency, isValidCycle, validatePrice } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import { loadConfig } from "../config.ts"
-import type { Currency, Cycle, SharedArgs, AddFlags } from "../types.ts"
+import type { Currency, Cycle, AddFlags } from "../types.ts"
 import {
   tagsSubscription,
   getLlmUsageTotal,

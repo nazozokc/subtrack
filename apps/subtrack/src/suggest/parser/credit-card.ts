@@ -17,7 +17,6 @@ type CardPattern = {
   detect: RegExp
   namePattern: RegExp
   amountPattern: RegExp
-  datePattern: RegExp
 }
 
 const CARD_PATTERNS: CardPattern[] = [
@@ -27,7 +26,6 @@ const CARD_PATTERNS: CardPattern[] = [
     detect: /楽天カード|Rakuten Card/i,
     namePattern: /(?:ご利用先|加盟店)[：:]\s*(.+)/,
     amountPattern: /(?:ご利用金額|お支払金額)[：:]\s*[¥￥]?\s*([0-9,]+)/,
-    datePattern: /(?:ご利用日|お取引日)[：:]\s*(\d{4}\/\d{1,2}\/\d{1,2})/,
   },
   // SMBC Card / Vpass
   {
@@ -35,7 +33,6 @@ const CARD_PATTERNS: CardPattern[] = [
     detect: /三井住友|Vpass|SMBC Card/i,
     namePattern: /(?:ご利用先|加盟店名)[：:]\s*(.+)/,
     amountPattern: /(?:ご利用金額|お支払金額|ご利用額)[：:]\s*[¥￥]?\s*([0-9,]+)/,
-    datePattern: /(?:ご利用日|お取引日)[：:]\s*(\d{4}\/\d{1,2}\/\d{1,2})/,
   },
   // JCB
   {
@@ -43,7 +40,6 @@ const CARD_PATTERNS: CardPattern[] = [
     detect: /JCB|ジェーシービー/i,
     namePattern: /(?:ご利用先|ショップ名)[：:]\s*(.+)/,
     amountPattern: /(?:ご利用金額|お支払金額)[：:]\s*[¥￥]?\s*([0-9,]+)/,
-    datePattern: /(?:ご利用日|お取引日)[：:]\s*(\d{4}\/\d{1,2}\/\d{1,2})/,
   },
   // American Express
   {
@@ -51,7 +47,6 @@ const CARD_PATTERNS: CardPattern[] = [
     detect: /American Express|AMEX|アメックス/i,
     namePattern: /(?:Merchant|商家?)[：:]\s*(.+)/i,
     amountPattern: /(?:Amount|金額)[：:]\s*[¥$￥€£]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i,
-    datePattern: /(?:Date|日付)[：:]\s*(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}\/\d{1,2}\/\d{1,2})/i,
   },
   // Generic Visa/Mastercard
   {
@@ -59,7 +54,6 @@ const CARD_PATTERNS: CardPattern[] = [
     detect: /VISA|MasterCard|マスターカード|クレジットカード/i,
     namePattern: /(?:ご利用先|加盟店|Merchant|Vendor)[：:]\s*(.+)/i,
     amountPattern: /(?:ご利用金額|金額|Amount)[：:]\s*[¥￥$€£]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i,
-    datePattern: /(?:ご利用日|日付|Date)[：:]\s*(\d{4}\/\d{1,2}\/\d{1,2}|\d{1,2}\/\d{1,2}\/\d{4})/i,
   },
 ]
 
@@ -75,7 +69,6 @@ export function parseCreditCardEmail(email: RawEmail): SuggestionCandidate | nul
 
     const nameMatch = text.match(pattern.namePattern)
     const amountMatch = text.match(pattern.amountPattern)
-    const dateMatch = text.match(pattern.datePattern)
 
     if (!nameMatch || !amountMatch) continue
 
@@ -100,19 +93,6 @@ export function parseCreditCardEmail(email: RawEmail): SuggestionCandidate | nul
       : Math.round(parseFloat(rawAmount) * 100)
 
     if (isNaN(amount) || amount <= 0 || amount > 99999999) continue
-
-    let date: string | null = null
-    if (dateMatch) {
-      const d = dateMatch[1]
-      if (d.includes("/")) {
-        const parts = d.split("/")
-        if (parts[0].length === 4) {
-          date = `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`
-        } else if (parts[2].length === 4) {
-          date = `${parts[2]}-${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}`
-        }
-      }
-    }
 
     return {
       name,

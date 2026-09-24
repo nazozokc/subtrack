@@ -1,5 +1,4 @@
 import { checkbox, confirm, input, search, select } from "./prompts/index.ts"
-import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { cycleDays } from "@subtrack/lib/date"
 import type { NamedCycle } from "@subtrack/lib/date"

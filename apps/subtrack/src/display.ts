@@ -126,7 +126,7 @@ const ALL_EXTRA_COLS: ColumnConfig = {
 
 function renderTable(rows: string[][], config: ColumnConfig): string {
   const widths = calcColumnWidths(rows, config)
-  const colAligns = config.headers.map((h, i) =>
+  const colAligns = config.headers.map((_, i) =>
     i === config.headers.length - 1 ? "right" : "left",
   ) as ("left" | "right")[]
 

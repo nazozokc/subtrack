@@ -1,10 +1,9 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import type { SharedArgs, Cycle, Currency } from "./types.ts"
-import { getSubscriptions, getNonCancelledSubscriptions } from "./db.ts"
+import { getNonCancelledSubscriptions } from "./db.ts"
 import { formatPrice } from "./price.ts"
 import { fetchFxRates, tryConvert } from "./fx.ts"
-import type { FxRates } from "./fx.ts"
 import { toDate, formatDate, formatShortDate, dateWithClampedDay, daysUntil, cycleDays, nextDayCycleDate, isDayCycle } from "@subtrack/lib/date"
 import { runPreCommandHooks } from "./pre-command.ts"
 

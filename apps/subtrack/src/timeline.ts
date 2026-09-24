@@ -6,7 +6,6 @@ import type { SharedArgs, Currency } from "./types.ts"
 import { periodFactor, SHORT_MONTH_NAMES } from "@subtrack/lib/date"
 import { formatPrice } from "./price.ts"
 import { fetchFxRates, convertSubsWithRates } from "./fx.ts"
-import type { FxRates } from "./fx.ts"
 
 export type TimelineOptions = {
   months?: number

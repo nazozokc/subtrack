@@ -12,8 +12,6 @@ import { calcSubTotal } from "./payment.ts"
 import { TABLE_CHARS, getTableStyle, calcColumnWidths } from "./display-constants.ts"
 import type { ColumnConfig } from "./display-constants.ts"
 
-type PeriodLabel = string
-
 type CompareRow = {
   label: string
   current: string

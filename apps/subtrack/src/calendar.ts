@@ -4,7 +4,6 @@ import { getNonCancelledSubscriptions } from "./db.ts"
 import { formatPrice } from "./price.ts"
 import type { SharedArgs, Currency, Status } from "./types.ts"
 import { fetchFxRates, tryConvert } from "./fx.ts"
-import type { FxRates } from "./fx.ts"
 import { toDate, clampDay, daysInMonth, cycleDays, dayCycleDaysInMonth, isDayCycle } from "@subtrack/lib/date"
 import { statusColor } from "./display-constants.ts"
 

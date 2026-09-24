@@ -1,7 +1,6 @@
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { writeFileSync } from "node:fs"
-import os from "node:os"
 import type { SharedArgs, Currency } from "./types.ts"
 import { formatPrice } from "./price.ts"
 import { generateXlsx } from "@subtrack/lib/xlsx"

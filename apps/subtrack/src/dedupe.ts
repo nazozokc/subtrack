@@ -1,6 +1,6 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
-import { getSubscriptions, getNonCancelledSubscriptions, getSubscription, mergeSubscriptions } from "./db.ts"
+import { getNonCancelledSubscriptions, getSubscription, mergeSubscriptions } from "./db.ts"
 import { logAudit } from "./audit-log.ts"
 import { fail } from "./error.ts"
 import { formatPrice } from "./price.ts"

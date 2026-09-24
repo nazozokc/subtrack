@@ -132,7 +132,7 @@ export function tokenize(argv: string[]): Token[] {
 
 const kebabize = (name: string): string => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
 
-const getOptionName = (rawArg: string, schema: ArgSchema, toKebab: boolean): string =>
+const getOptionName = (rawArg: string, toKebab: boolean): string =>
   toKebab ? kebabize(rawArg) : rawArg
 
 /**
@@ -157,7 +157,7 @@ export class ArgValidationError extends Error {
   }
 }
 
-const createRequireError = (rawArg: string, option: string, schema: ArgSchema): ArgValidationError =>
+const createRequireError = (option: string, schema: ArgSchema): ArgValidationError =>
   new ArgValidationError(
     schema.type === "positional"
       ? `Positional argument '${option}' is required`
@@ -167,7 +167,7 @@ const createRequireError = (rawArg: string, option: string, schema: ArgSchema): 
     schema,
   )
 
-const createTypeError = (rawArg: string, option: string, schema: ArgSchema): ArgValidationError =>
+const createTypeError = (option: string, schema: ArgSchema): ArgValidationError =>
   new ArgValidationError(
     `Optional argument ${createOptionDisplayName(option, schema)} should be '${schema.type}'`,
     option,
@@ -219,7 +219,7 @@ export function resolveArgs(argv: string[], args: Args, options: ResolveOptions 
   for (const [rawArg, schema] of Object.entries(args)) {
     if (schema.short) shortToSchema.set(schema.short, schema)
     if (schema.type !== "boolean") continue
-    booleanLongOptionNames.add(getOptionName(rawArg, schema, toKebab))
+    booleanLongOptionNames.add(getOptionName(rawArg, toKebab))
   }
 
   const flushLong = (value?: string): void => {
@@ -294,7 +294,7 @@ export function resolveArgs(argv: string[], args: Args, options: ResolveOptions 
 
   let positionalsCount = skip
   for (const [rawArg, schema] of argEntries) {
-    const arg = getOptionName(rawArg, schema, toKebab)
+    const arg = getOptionName(rawArg, toKebab)
 
     if (schema.type === "positional") {
       if (schema.array === true) {
@@ -307,10 +307,10 @@ export function resolveArgs(argv: string[], args: Args, options: ResolveOptions 
             values[rawArg] = positionalTokens.slice(positionalsCount, end).map((t) => t.value)
             positionalsCount = end
           } else if (schema.required === true) {
-            errors.push(createRequireError(rawArg, arg, schema))
+            errors.push(createRequireError(arg, schema))
           }
         } else if (schema.required === true) {
-          errors.push(createRequireError(rawArg, arg, schema))
+          errors.push(createRequireError(arg, schema))
         }
       } else if (shouldRequireMissingSinglePositional(schema)) {
         const positional = positionalTokens[positionalsCount]
@@ -318,7 +318,7 @@ export function resolveArgs(argv: string[], args: Args, options: ResolveOptions 
           values[rawArg] = positional.value
           positionalsCount++
         } else {
-          errors.push(createRequireError(rawArg, arg, schema))
+          errors.push(createRequireError(arg, schema))
         }
       } else {
         const positional = positionalTokens[positionalsCount]
@@ -337,12 +337,12 @@ export function resolveArgs(argv: string[], args: Args, options: ResolveOptions 
       (token.rawName.startsWith("--") && token.name === arg),
     )
     if (schema.required === true && matches.length === 0) {
-      errors.push(createRequireError(rawArg, arg, schema))
+      errors.push(createRequireError(arg, schema))
       continue
     }
     for (const token of matches) {
       if (schema.required === true && schema.type !== "boolean" && !token.value) {
-        errors.push(createRequireError(rawArg, arg, schema))
+        errors.push(createRequireError(arg, schema))
         continue
       }
       if (schema.type === "boolean") {
@@ -361,7 +361,7 @@ export function resolveArgs(argv: string[], args: Args, options: ResolveOptions 
           values[rawArg] = value
         }
       } else {
-        errors.push(createTypeError(rawArg, arg, schema))
+        errors.push(createTypeError(arg, schema))
       }
     }
   }

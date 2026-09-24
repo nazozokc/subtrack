@@ -15,7 +15,6 @@ import {
   validateAutoRenewal,
   validateDateString,
 } from "./prompts.ts"
-import os from "node:os"
 import { safePath } from "@subtrack/lib/path"
 import type { Status, DiscountType } from "./types.ts"
 

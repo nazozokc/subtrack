@@ -1,6 +1,5 @@
 // ── Core subscription commands ──────────────────────────
 import { define } from "../cli/types.ts"
-import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 
 export const listCommand = define({

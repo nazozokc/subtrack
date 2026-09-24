@@ -4,7 +4,7 @@ import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
 import { findExistingPath, scanSqliteKv } from "./scanner-support.ts"
 import { safeJsonParse } from "@subtrack/lib/json"
-import { isDateInRange, estimateTokenSplit } from "@subtrack/lib/date"
+import { estimateTokenSplit } from "@subtrack/lib/date"
 
 /**
  * Known paths for Cursor's state.vscdb across platforms.

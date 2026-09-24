@@ -3,7 +3,7 @@
  * Each exported function handles one tool and returns an McpResponse.
  */
 
-import type { SharedArgs, AddSharedArgs, Cycle, Status, Currency } from "../types.ts"
+import type { AddSharedArgs, Cycle, Status, Currency } from "../types.ts"
 import type { FxRates } from "../fx.ts"
 import type { McpResponse } from "./types.ts"
 import {
@@ -26,7 +26,7 @@ import {
   getLlmUsageTotalByModel,
 } from "../db.ts"
 import { calcSummary, calcSubTotal, calcPreviousTotals } from "../payment.ts"
-import { getPeriodDateRange, getPreviousPeriodDateRange, periodFactor } from "@subtrack/lib/date"
+import { getPeriodDateRange, periodFactor } from "@subtrack/lib/date"
 import type { NamedCycle } from "@subtrack/lib/date"
 import { calcCalendarEntries } from "../calendar.ts"
 import { exportCsv, exportJson, exportMd } from "../export.ts"

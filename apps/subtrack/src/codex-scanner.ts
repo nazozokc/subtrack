@@ -6,10 +6,9 @@ import { DatabaseSync } from "node:sqlite"
 import type { SQLInputValue } from "node:sqlite"
 import type { AddLlmUsageFromLogArgs } from "./types.ts"
 import { defineScanner, type ScanResult } from "./scanner-types.ts"
-import { isInDateRange, dateToStartOfDayMs, dateToEndOfDayMs, estimateTokenSplit } from "@subtrack/lib/date"
+import { dateToStartOfDayMs, dateToEndOfDayMs, estimateTokenSplit } from "@subtrack/lib/date"
 
 const STATE_DB_PATH = join(homedir(), ".codex", "state_5.sqlite")
-const GOALS_DB_PATH = join(homedir(), ".codex", "goals_1.sqlite")
 
 /**
  * Scan Codex CLI database and extract LLM usage entries.

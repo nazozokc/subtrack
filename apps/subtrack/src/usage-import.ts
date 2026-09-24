@@ -1,5 +1,4 @@
 import { openSync, fstatSync, readSync, closeSync } from "node:fs"
-import os from "node:os"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import type { UsageImportFlags } from "./types.ts"

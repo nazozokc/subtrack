@@ -2,10 +2,9 @@ import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { getSubscriptions, getAllPriceChanges } from "./db.ts"
 import type { SharedArgs, Currency } from "./types.ts"
-import { periodFactor, OCCURRENCES_PER_YEAR } from "@subtrack/lib/date"
+import { periodFactor } from "@subtrack/lib/date"
 import { formatPrice } from "./price.ts"
 import { fetchFxRates, convertSubsWithRates } from "./fx.ts"
-import type { FxRates } from "./fx.ts"
 
 export type OptimizeOptions = {
   json?: boolean
@@ -64,14 +63,6 @@ type OptimizeResult = {
 }
 
 // ── Analysis helpers ──────────────────────────────────────
-
-/**
- * Estimate yearly savings from switching monthly to yearly billing.
- * Uses a conservative 15% discount (common for most SaaS).
- */
-function estimateYearlyDiscount(monthlyPrice: number, discountRate: number = 15): number {
-  return Math.round(monthlyPrice * 12 * (discountRate / 100))
-}
 
 /**
  * Tokenize a subscription name for comparison.
@@ -247,8 +238,6 @@ function renderCycleSuggestions(suggestions: CycleSuggestion[], displayCurrency:
 
   let totalSavings = 0
   for (const s of suggestions) {
-    const currentYearly = s.currentMonthly * 12
-    const suggestedYearly = s.suggestedMonthly * 12
     lines.push(
       `    ${s.name}` +
         `  ${pc.dim(`${formatPrice(s.currentMonthly, displayCurrency)}/mo → `)}` +
