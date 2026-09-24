@@ -489,6 +489,46 @@ test("handleList passes sort and desc to getSubscriptions", async () => {
   expect(aIdx).toBeLessThan(bIdx)
 })
 
+test("handleList converts to the target currency when --currency is set", async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ base: "USD", rates: { JPY: 160, USD: 1 } }))
+  try {
+    const db = await import("../db.ts")
+    db.writeSubscription({ name: "Foreign", price: 10, currency: "USD", cycle: "monthly", tags: [] })
+
+    const { handleList } = await import("../subscription/core.ts")
+    await handleList({ currency: "JPY" })
+
+    const combined = logMessages.join("\n")
+    expect(combined).toContain("¥1,600")
+    expect(combined).toContain("JPY TOTAL")
+    expect(combined).not.toContain("USD TOTAL")
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test("handleList falls back to grouped currencies when FX fetch fails", async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => {
+    throw new Error("Network error")
+  }
+  try {
+    const db = await import("../db.ts")
+    db.writeSubscription({ name: "US", price: 15, currency: "USD", cycle: "monthly", tags: [] })
+
+    const { handleList } = await import("../subscription/core.ts")
+    await handleList({ currency: "JPY" })
+
+    expect(warnMessages.some((m) => m.includes("Failed to fetch exchange rates"))).toBe(true)
+    const combined = logMessages.join("\n")
+    expect(combined).toContain("USD TOTAL")
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 // ── handleEdit (non-interactive, with flags) ────────────
 
 test("handleEdit shows info when no subscriptions", async () => {

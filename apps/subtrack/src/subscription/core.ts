@@ -16,6 +16,7 @@ import {
 import { subscriptionRepository } from "../application/repositories.ts"
 import { formatPrice } from "../price.ts"
 import { spreadSubscription, showApiUsage } from "../display.ts"
+import { fetchConvertedSubs } from "../fx.ts"
 import { logAudit } from "../audit.ts"
 import { runPreCommandHooks } from "../pre-command.ts"
 
@@ -60,7 +61,28 @@ export async function handleList(options: {
   // Flag > config > default (off)
   const showNotes = options.notes ?? loadConfig().listShowNotes === "on"
   const showMethod = options.method ?? loadConfig().listShowMethod === "on"
-  await spreadSubscription(list, options.currency as Currency | undefined, showNotes, showMethod, options.showContract, options.showVendor)
+
+  // Currency conversion is the handler's job: fetch rates, convert, and pass
+  // the converted list to the pure rendering layer.
+  let displayList = list
+  let displayCurrency = options.currency as Currency | undefined
+  if (displayCurrency) {
+    consola.info("Fetching the latest exchange rates...")
+    const converted = await fetchConvertedSubs(list, displayCurrency)
+    if (converted) {
+      consola.success("Exchange rates updated")
+      displayList = converted.list
+      if (converted.hasMissing) {
+        consola.warn(
+          "Some prices could not be converted (missing rate). They are shown in original currency.",
+        )
+      }
+    } else {
+      consola.warn("Failed to fetch exchange rates; showing in original currencies")
+      displayCurrency = undefined
+    }
+  }
+  spreadSubscription(displayList, displayCurrency, showNotes, showMethod, options.showContract, options.showVendor)
 
   if (options.api) {
     const now = new Date()
