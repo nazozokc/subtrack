@@ -341,6 +341,9 @@ export async function handlePayment(
         convertedAmounts = result.converted
         subTotal = result.converted.reduce<number>((sum, v) => sum + (v ?? 0), 0)
         finalCurrency = targetCurrency
+        if (result.hasMissing) {
+          consola.warn("Some prices could not be converted (missing rate); excluded from totals")
+        }
       }
     }
 
@@ -362,7 +365,12 @@ export async function handlePayment(
         let amount = entry.convertedPrice
         if (finalCurrency && rates && convertedAmounts) {
           const converted = convertedAmounts[i]
-          if (converted !== null && converted !== undefined) amount = converted
+          if (converted === null || converted === undefined) {
+            // Missing rate — same policy as the total: excluded, never mixed
+            // into the totals as an unconverted amount.
+            continue
+          }
+          amount = converted
         }
         byMethod[method].total += amount
         if (!byMethod[method].currencies.includes(currency)) { byMethod[method].currencies.push(currency) }

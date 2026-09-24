@@ -217,6 +217,35 @@ test("handlePayment json byMethod converts when target currency is set", async (
   expect(out.byMethod.card.byCurrency).toEqual({ USD: 110 })
 })
 
+test("handlePayment json excludes unconvertible entries from total and byMethod consistently", async () => {
+  // JPY → USD rate is missing from the API response
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ base: "USD", rates: { USD: 1 } }))
+  try {
+    const d = await db()
+    d.writeSubscription({ name: "A", price: 1600, currency: "JPY", cycle: "monthly", tags: [], paymentMethod: "card" })
+    d.writeSubscription({ name: "B", price: 100, currency: "USD", cycle: "monthly", tags: [], paymentMethod: "card" })
+
+    const { handlePayment } = await import("../payment.ts")
+    const out = await captureJson(() => handlePayment("monthly", { json: true, method: true, currency: "USD" })) as {
+      total: number
+      currency: string
+      byMethod: Record<string, { total: number; currencies: string[]; byCurrency: Record<string, number> }>
+    }
+
+    expect(out.currency).toBe("USD")
+    // Missing rate: excluded from the total (never mixed in unconverted) ...
+    expect(out.total).toBe(100)
+    // ... and excluded from byMethod with the same policy — totals stay consistent
+    expect(out.byMethod.card.total).toBe(100)
+    expect(out.byMethod.card.byCurrency).toEqual({ USD: 100 })
+    expect(out.byMethod.card.currencies).toEqual(["USD"])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test("handlePayment json includes API usage when requested", async () => {
   const d = await db()
   d.writeSubscription({ name: "A", price: 1000, currency: "JPY", cycle: "monthly", tags: [] })

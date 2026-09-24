@@ -529,6 +529,43 @@ test("handleList falls back to grouped currencies when FX fetch fails", async ()
   }
 })
 
+test("handleList skips the rate fetch when every subscription already uses the target currency", async () => {
+  const originalFetch = globalThis.fetch
+  const fetchMock = vi.fn(async () =>
+    new Response(JSON.stringify({ base: "USD", rates: { JPY: 160, USD: 1 } })),
+  )
+  globalThis.fetch = fetchMock
+  try {
+    const db = await import("../db.ts")
+    db.writeSubscription({ name: "Local", price: 1500, currency: "JPY", cycle: "monthly", tags: [] })
+
+    const { handleList } = await import("../subscription/core.ts")
+    await handleList({ currency: "JPY" })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(infoMessages).not.toContain("Fetching the latest exchange rates...")
+    expect(logMessages.join("\n")).toContain("JPY TOTAL")
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test("handleList skips the rate fetch for an empty list", async () => {
+  const originalFetch = globalThis.fetch
+  const fetchMock = vi.fn(async () =>
+    new Response(JSON.stringify({ base: "USD", rates: { JPY: 160 } })),
+  )
+  globalThis.fetch = fetchMock
+  try {
+    const { handleList } = await import("../subscription/core.ts")
+    await handleList({ currency: "JPY" })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 // ── handleEdit (non-interactive, with flags) ────────────
 
 test("handleEdit shows info when no subscriptions", async () => {

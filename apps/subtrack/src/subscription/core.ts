@@ -63,10 +63,12 @@ export async function handleList(options: {
   const showMethod = options.method ?? loadConfig().listShowMethod === "on"
 
   // Currency conversion is the handler's job: fetch rates, convert, and pass
-  // the converted list to the pure rendering layer.
+  // the converted list to the pure rendering layer. Skip the rate fetch when
+  // nothing needs conversion (empty list, or every entry already uses the
+  // target currency).
   let displayList = list
   let displayCurrency = options.currency as Currency | undefined
-  if (displayCurrency) {
+  if (displayCurrency && list.some((s) => s.currency !== displayCurrency)) {
     consola.info("Fetching the latest exchange rates...")
     const converted = await fetchConvertedSubs(list, displayCurrency)
     if (converted) {

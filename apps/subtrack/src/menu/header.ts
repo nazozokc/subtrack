@@ -8,6 +8,7 @@
 
 import pc from "@subtrack/lib/ansi"
 import { createRequire } from "node:module"
+import { existsSync } from "node:fs"
 import { getSubscriptions, getNonCancelledSubscriptions, getDbPath } from "../db.ts"
 import { calcSummary, calcSubTotal } from "../payment.ts"
 import { calcUpcoming } from "../upcoming.ts"
@@ -17,8 +18,22 @@ import { divider } from "../display-constants.ts"
 
 const require = createRequire(import.meta.url)
 
+/**
+ * Resolve apps/subtrack/package.json from the menu module. The menu sits one
+ * directory deeper than the package root: under src/ it is src/menu/, while
+ * the built output places the chunk next to dist/index.mjs (no extra level).
+ */
+function readPkgVersion(): string {
+  for (const rel of ["../../package.json", "../package.json"]) {
+    if (existsSync(new URL(rel, import.meta.url))) {
+      return (require(rel) as { version: string }).version
+    }
+  }
+  return "0.0.0"
+}
+
 export function showMenuHeader(): void {
-  const pkg = require("../package.json") as { version: string }
+  const pkg = { version: readPkgVersion() }
   const count = getSubscriptions().length
   console.log(pc.bold(pc.cyan(`subtrack v${pkg.version}`)))
   console.log(

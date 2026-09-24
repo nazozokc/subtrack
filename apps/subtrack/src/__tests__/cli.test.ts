@@ -208,6 +208,15 @@ describe("resolveCommand", () => {
     expect(r.depth).toBe(0)
   })
 
+  test("inherited Object.prototype members never resolve as commands", () => {
+    for (const token of ["constructor", "toString", "hasOwnProperty"]) {
+      const r = resolveCommand([token], entry, subs)
+      expect(r.unknownName).toBe(token)
+      expect(r.command).toBe(entry)
+      expect(r.depth).toBe(0)
+    }
+  })
+
   test("token with no subcommands available is unknown", () => {
     const r = resolveCommand(["bogus"], entry, {})
     expect(r.unknownName).toBe("bogus")

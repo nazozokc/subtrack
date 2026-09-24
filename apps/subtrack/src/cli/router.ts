@@ -76,7 +76,9 @@ export function resolveCommand(
 
   for (let i = 0; i < positionals.length; i++) {
     const token = positionals[i]
-    const cmd = currentSubCommands[token]
+    // Own-property lookup only — inherited Object.prototype members
+    // (e.g. "constructor", "toString") must not resolve as commands.
+    const cmd = Object.hasOwn(currentSubCommands, token) ? currentSubCommands[token] : undefined
     if (cmd === undefined) {
       // unknown subcommand — parent (or entry) is the target
       return {

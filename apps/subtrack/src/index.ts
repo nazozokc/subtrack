@@ -35,7 +35,7 @@ const needsAllCommands = firstToken === undefined && (args.includes("--help") ||
 let subCommands: Record<string, Command<any>> = {}
 if (firstToken !== undefined) {
   const { commandLoaders } = await import("./commands/lazy.ts")
-  if (firstToken in commandLoaders) {
+  if (Object.hasOwn(commandLoaders, firstToken)) {
     const def = await commandLoaders[firstToken]()
     subCommands = { [firstToken]: def }
   } else {

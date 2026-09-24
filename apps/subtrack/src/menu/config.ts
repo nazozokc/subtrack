@@ -4,9 +4,10 @@
 
 import { select, input, confirm } from "../prompts.ts"
 import { BACK } from "./shared.ts"
-import { handleConfigList, handleConfigGet, handleConfigSet, handleConfigReset } from "../config.ts"
+import { handleConfigList, handleConfigGet, handleConfigSet, handleConfigReset, loadConfig } from "../config.ts"
 import { handleProfile } from "../profile.ts"
 import { handleCurrencyList } from "../currency.ts"
+import { consola } from "@subtrack/lib/logger"
 
 export async function runConfigMenu(): Promise<void> {
   while (true) {
@@ -90,7 +91,17 @@ async function runProfileMenu(): Promise<void> {
         await handleProfile("switch", name.trim())
         break
       }
-      case "show": await handleProfile("show"); break
+      case "show": {
+        // "Show the active profile" — resolve the active profile instead of
+        // calling handleProfile("show") without a name (which always fails).
+        const active = loadConfig().activeProfile
+        if (active) {
+          await handleProfile("show", active)
+        } else {
+          consola.info("No active profile — switch to a profile first")
+        }
+        break
+      }
       case "delete": {
         const name = await input({ message: "profile name:", validate: (v) => v.trim().length > 0 || "Name required" })
         await handleProfile("delete", name.trim())
