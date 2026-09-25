@@ -272,7 +272,7 @@ export function getDb(): DatabaseSync {
 
   _db.exec("PRAGMA foreign_keys = ON")
   _db.exec("PRAGMA secure_delete = ON")
-  runMigrations(_db)
+  runMigrations(_db, dbdir)
 
   return _db
 }
@@ -425,7 +425,7 @@ export function restoreDb(backupPath: string): void {
   _db = new DatabaseSync(oldOpenPath)
   _db.exec("PRAGMA foreign_keys = ON")
   _db.exec("PRAGMA secure_delete = ON")
-  runMigrations(_db)
+  runMigrations(_db, getDbDir())
 }
 
 /** Replace the DB instance for testing (e.g. with in-memory). */
