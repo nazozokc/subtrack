@@ -14,6 +14,8 @@ import {
 import { getPeriodDateRange } from "@subtrack/lib/date"
 import type { NamedCycle } from "@subtrack/lib/date"
 import { formatUsdCost } from "./price.ts"
+import { isValidNamedCycle } from "./validation.ts"
+import { fail } from "./error.ts"
 
 export type UsageTotalOptions = {
   from?: string
@@ -23,6 +25,11 @@ export type UsageTotalOptions = {
 }
 
 export function handleUsageTotal(options: UsageTotalOptions = {}): void {
+  if (options.period !== undefined && !isValidNamedCycle(options.period)) {
+    fail("period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly")
+    return
+  }
+
   let from: string
   let to: string
 

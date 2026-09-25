@@ -88,6 +88,53 @@ afterAll(async () => {
   if (existsSync(dbDir)) rmSync(dbDir, { recursive: true })
 })
 
+test("runMigrations creates the usage generation id unique index on a fresh database", async () => {
+  const freshDb = new DatabaseSync(":memory:")
+  try {
+    const { runMigrations } = await import("../db/schema.ts")
+    runMigrations(freshDb)
+    const indexes = freshDb.prepare("PRAGMA index_list(llm_usage)").all() as Array<{ name: string; unique: number }>
+    expect(indexes).toContainEqual(expect.objectContaining({ name: "idx_llm_usage_generation_id", unique: 1 }))
+
+    freshDb.prepare("INSERT INTO llm_usage (provider, model, cost, generation_id, date) VALUES (?, ?, ?, ?, ?)")
+      .run("test", "model", 0, "same-id", "2026-01-01")
+    expect(() => freshDb.prepare(
+      "INSERT INTO llm_usage (provider, model, cost, generation_id, date) VALUES (?, ?, ?, ?, ?)",
+    ).run("test", "model", 0, "same-id", "2026-01-02")).toThrow()
+  } finally {
+    freshDb.close()
+  }
+})
+
+test("runMigrations keeps existing databases usable when generation IDs are duplicated", async () => {
+  const legacyDb = new DatabaseSync(":memory:")
+  try {
+    legacyDb.exec(`CREATE TABLE llm_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      provider TEXT NOT NULL,
+      model TEXT NOT NULL,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      cost REAL NOT NULL,
+      date TEXT NOT NULL,
+      description TEXT,
+      generation_id TEXT
+    )`)
+    legacyDb.prepare("INSERT INTO llm_usage (provider, model, cost, date, generation_id) VALUES (?, ?, ?, ?, ?)")
+      .run("test", "model", 0, "2026-01-01", "duplicate")
+    legacyDb.prepare("INSERT INTO llm_usage (provider, model, cost, date, generation_id) VALUES (?, ?, ?, ?, ?)")
+      .run("test", "model", 0, "2026-01-02", "duplicate")
+    legacyDb.exec("PRAGMA user_version = 1")
+
+    const { runMigrations } = await import("../db/schema.ts")
+    expect(() => runMigrations(legacyDb)).not.toThrow()
+    const indexes = legacyDb.prepare("PRAGMA index_list(llm_usage)").all() as Array<{ name: string }>
+    expect(indexes.some((index) => index.name === "idx_llm_usage_generation_id_lookup")).toBe(true)
+  } finally {
+    legacyDb.close()
+  }
+})
+
 test("getSubscriptions returns empty when no data exists", async () => {
   const db = await import("../db.ts")
   expect(db.getSubscriptions()).toEqual([])
@@ -242,6 +289,32 @@ test("updateSubscription updates extended fields", async () => {
     discountAmount: 100,
     discountType: "fixed",
     contractEnd: "2026-06-30",
+    autoRenewal: false,
+  })
+})
+
+test("updateSubscription returns false for a missing subscription", async () => {
+  const db = await import("../db.ts")
+  expect(db.updateSubscription(99999, { name: "missing" })).toBe(false)
+})
+
+test("tag search returns the complete subscription shape", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({
+    name: "Tagged",
+    price: 100,
+    currency: "USD",
+    cycle: "monthly",
+    tags: ["work"],
+    vendorName: "Vendor",
+    contractEnd: "2026-12-31",
+    autoRenewal: false,
+  })
+
+  const [found] = db.tagsSubscription("work")
+  expect(found).toMatchObject({
+    vendorName: "Vendor",
+    contractEnd: "2026-12-31",
     autoRenewal: false,
   })
 })
@@ -919,6 +992,8 @@ test("pruneTags removes orphaned tags", async () => {
   // Orphan tag by deleting subscription (CASCADE removes subscription_tags)
   const [sub] = db.getSubscriptions()
   db.deleteSubscription(sub.id)
+  // Keep this test independent of foreign-key pragma state in other suites.
+  testDb.exec("DELETE FROM subscription_tags")
 
   // Re-create the orphan tags directly
   testDb.exec("INSERT INTO tags (name) VALUES ('orphan1'), ('orphan2')")
@@ -1168,7 +1243,7 @@ test("restoreDb replaces in-memory database", async () => {
   const backupDb = new DatabaseSync2(srcDbPath)
   backupDb.exec("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
   backupDb.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
-  backupDb.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
+  backupDb.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id), FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE, FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE)")
   backupDb.exec("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('RestoredService', 999, 'USD', 'monthly')")
   backupDb.close()
   const buf = readFileSync(srcDbPath)

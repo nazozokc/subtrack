@@ -173,6 +173,19 @@ test("handleTrialAdd with all flags", async () => {
   expect(trials[0].notes).toBe("30-day trial")
 })
 
+test("handleTrialAdd preserves decimal major-unit prices", async () => {
+  const { handleTrialAdd } = await import("../trial.ts")
+  await handleTrialAdd({
+    name: "Decimal Trial",
+    expiresAt: "2099-12-31",
+    price: "14.99",
+    currency: "USD",
+    cycle: "monthly",
+  })
+
+  expect(dbModule.getTrials()[0]?.price).toBe(14.99)
+})
+
 test("handleTrialAdd with required flags only", async () => {
   const { handleTrialAdd } = await import("../trial.ts")
   await handleTrialAdd({ name: "Basic Trial", expiresAt: "2099-12-31" })

@@ -20,7 +20,7 @@ const BG_CODES: Record<ColorName, number> = Object.fromEntries(
 ) as Record<ColorName, number>
 
 export function isColorName(value: string): value is ColorName {
-  return value in FG_CODES
+  return Object.hasOwn(FG_CODES, value)
 }
 
 /** Foreground ANSI prefix for a color name, or "" when null. */

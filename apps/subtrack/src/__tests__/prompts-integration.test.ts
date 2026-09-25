@@ -7,7 +7,11 @@
  */
 import { Writable, PassThrough } from "node:stream"
 import { describe, it, expect, vi } from "vitest"
-import { input, confirm, select, checkbox, isValidCycle, validateCycleDays, promptCycle, validateVendorUrl } from "../prompts.ts"
+import {
+  input, confirm, select, checkbox, isValidCycle, validateCycleDays, promptCycle,
+  validateDateString, validateDate, validateExpiresAt, validatePrice, validateDiscountValue,
+  validateVendorUrl,
+} from "../prompts.ts"
 import { Renderer } from "../prompts/renderer.ts"
 import { strlen, takeTail } from "../prompts/ansi.ts"
 
@@ -385,6 +389,24 @@ describe("validateVendorUrl", () => {
   it("rejects malformed URLs", () => {
     expect(validateVendorUrl("not a url")).toContain("http")
     expect(validateVendorUrl("./relative/path")).toContain("http")
+  })
+})
+
+describe("date and numeric validators", () => {
+  it("rejects dates that JavaScript would roll over", () => {
+    expect(validateDateString("2026-02-28")).toBe(true)
+    expect(validateDateString("2024-02-29")).toBe(true)
+    expect(validateDateString("2026-02-31")).toBe("Invalid date")
+    expect(validateDate("2025-02-29")).toBe("Invalid date")
+    expect(validateExpiresAt("2026-04-31")).toBe("Invalid date")
+  })
+
+  it("accepts decimal major-unit prices and discounts", () => {
+    expect(validatePrice("19.99")).toBe(true)
+    expect(validatePrice("19")).toBe(true)
+    expect(validateDiscountValue("1.5")).toBe(true)
+    expect(validateDiscountValue("1")).toBe(true)
+    expect(validatePrice("Infinity")).toContain("non-negative")
   })
 })
 

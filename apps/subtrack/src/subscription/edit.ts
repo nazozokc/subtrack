@@ -190,7 +190,10 @@ export async function handleEdit(
       if (err !== true) { fail(`Invalid autoRenewal: ${err}`); return }
       newData.autoRenewal = flags.autoRenewal === "true"
     }
-    updateSubscription(sub.id, newData)
+    if (!updateSubscription(sub.id, newData)) {
+      fail(`Subscription with id ${sub.id} not found`)
+      return
+    }
     writePriceHistory(sub.id, sub.price, newData.price ?? sub.price, sub.currency, newData.currency ?? sub.currency)
     const updated = getSubscription(sub.id)!
     logAudit("subscription.edit", {
@@ -380,7 +383,10 @@ export async function handleEdit(
     return
   }
 
-  updateSubscription(sub.id, newData)
+  if (!updateSubscription(sub.id, newData)) {
+    fail(`Subscription with id ${sub.id} not found`)
+    return
+  }
   writePriceHistory(sub.id, sub.price, newData.price ?? sub.price, sub.currency, newData.currency ?? sub.currency)
   const updated = getSubscription(sub.id)
   if (!updated) {

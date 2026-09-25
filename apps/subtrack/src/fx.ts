@@ -1,4 +1,5 @@
 import { safeResponseJson } from "@subtrack/lib/json"
+import { roundCurrency } from "./price.ts"
 import type { SharedArgs } from "./types.ts"
 
 export type FxRates = {
@@ -73,7 +74,7 @@ export function convertSubsWithRates(
 ): SharedArgs[] {
   return subs.map((s) => ({
     ...s,
-    price: Math.round(convertPrice(s.price, s.currency, targetCurrency, rates.rates)),
+    price: roundCurrency(convertPrice(s.price, s.currency, targetCurrency, rates.rates)),
     currency: targetCurrency,
   }))
 }
@@ -112,7 +113,7 @@ export function tryConvertSubs(
       hasMissing = true
       return s
     }
-    return { ...s, price: Math.round(amount), currency: targetCurrency }
+    return { ...s, price: roundCurrency(amount), currency: targetCurrency }
   })
   return { list, hasMissing }
 }

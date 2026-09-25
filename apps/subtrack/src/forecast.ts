@@ -8,7 +8,7 @@ import { TABLE_CHARS, getTableStyle, sectionTitle, calcColumnWidths, zebraRow } 
 import type { ColumnConfig } from "./display-constants.ts"
 import { periodFactor, formatCycle } from "@subtrack/lib/date"
 import { getNonCancelledSubscriptions } from "./db.ts"
-import { formatPrice } from "./price.ts"
+import { formatPrice, roundCurrency } from "./price.ts"
 import { fetchFxRates, convertPrice, tryConvert } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
 import {
@@ -97,7 +97,7 @@ export async function handleForecast(
       const priceStr = await input({ message: `Amount per ${formatCycle(cycle)}:`, validate: (v: string) => (Number(v) > 0 ? true : "Enter a positive number") })
       addEntry = {
         name: name.trim(),
-        price: Math.round(Number(priceStr)),
+        price: Number(priceStr),
         currency,
         cycle,
       }
@@ -122,7 +122,7 @@ export async function handleForecast(
     }
     addEntry = {
       name: options.addName,
-      price: Math.round(Number(priceStr)),
+      price: Number(priceStr),
       currency: addCurrency,
       cycle: addCycle,
     }
@@ -179,10 +179,10 @@ export async function handleForecast(
 
     currencyGroups[ccy].entries.push({
       ...entry,
-      monthly: Math.round(monthly),
+      monthly,
       currency: ccy,
     })
-    currencyGroups[ccy].total += Math.round(monthly)
+    currencyGroups[ccy].total += monthly
   }
 
   // ── JSON output ──────────────────────────────────
@@ -199,14 +199,14 @@ export async function handleForecast(
     const groups: Record<string, unknown> = {}
     for (const [ccy, group] of Object.entries(currencyGroups).sort()) {
       groups[ccy] = {
-        total: Math.round(group.total),
-        monthlyTotal: Math.round(group.total),
-        periodTotal: Math.round(group.total * months),
+        total: roundCurrency(group.total),
+        monthlyTotal: roundCurrency(group.total),
+        periodTotal: roundCurrency(group.total * months),
         entries: group.entries.map((e) => ({
           name: e.name,
-          monthly: Math.round(e.monthly),
+          monthly: roundCurrency(e.monthly),
           currency: e.currency,
-          periodTotal: Math.round(e.monthly * months),
+          periodTotal: roundCurrency(e.monthly * months),
         })),
       }
     }
@@ -241,7 +241,7 @@ export async function handleForecast(
       minWidths: [16, 10, 10] as const,
       maxWidths: [60, 20, 20] as const,
     }
-    const colWidths = calcColumnWidths(displayEntries.map((e) => [e.name, formatPrice(e.monthly, e.currency), formatPrice(Math.round(e.monthly * months), e.currency)]), FORECAST_COLS)
+    const colWidths = calcColumnWidths(displayEntries.map((e) => [e.name, formatPrice(e.monthly, e.currency), formatPrice(e.monthly * months, e.currency)]), FORECAST_COLS)
 
     const table = new CliTable3({
       chars: { ...TABLE_CHARS },
@@ -253,7 +253,7 @@ export async function handleForecast(
 
     for (let i = 0; i < displayEntries.length; i++) {
       const e = displayEntries[i]
-      const monthlyTotal = Math.round(e.monthly * months)
+      const monthlyTotal = e.monthly * months
       const row = [
         e.name.length > 30 ? e.name.slice(0, 27) + "..." : e.name,
         formatPrice(e.monthly, e.currency),
@@ -282,8 +282,8 @@ export async function handleForecast(
     ])
 
     // Grand total row
-    const grandMonthly = Math.round(group.total)
-    const grandTotal = Math.round(group.total * months)
+    const grandMonthly = group.total
+    const grandTotal = group.total * months
     table.push([
       pc.bold(pc.yellow("Total")),
       pc.bold(pc.yellow(formatPrice(grandMonthly, ccy))),
@@ -307,16 +307,14 @@ export async function handleForecast(
       let removedMonthly = 0
       for (const re of removedEntries) {
         if (targetCurrency && rates && re.currency !== targetCurrency) {
-          removedMonthly += Math.round(
-            convertPrice(re.monthly, re.currency, targetCurrency, rates.rates),
-          )
+          removedMonthly += convertPrice(re.monthly, re.currency, targetCurrency, rates.rates)
         } else {
-          removedMonthly += Math.round(re.monthly)
+          removedMonthly += re.monthly
         }
       }
 
-      const savedMonthly = Math.round(removedMonthly)
-      const savedTotal = Math.round(removedMonthly * months)
+      const savedMonthly = removedMonthly
+      const savedTotal = removedMonthly * months
       const newMonthly = grandMonthly - savedMonthly
       const newTotal = grandTotal - savedTotal
 

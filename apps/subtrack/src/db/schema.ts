@@ -47,6 +47,20 @@ function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+function ensureUsageGenerationIndex(db: DatabaseSync): void {
+  try {
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!/UNIQUE constraint failed|already exists/i.test(message)) throw error
+    consola.warn(
+      "Could not create the unique usage generation index because duplicate IDs exist.\n" +
+      "  Continuing with a non-unique lookup index so the database remains usable.",
+    )
+    db.exec("CREATE INDEX IF NOT EXISTS idx_llm_usage_generation_id_lookup ON llm_usage(generation_id)")
+  }
+}
+
 /** Apply schema creation and migrations to a database instance. */
 export function runMigrations(db: DatabaseSync, dbDir?: string): void {
   // v0 → v1: baseline schema. Idempotent, so it also repairs databases
@@ -71,6 +85,9 @@ export function runMigrations(db: DatabaseSync, dbDir?: string): void {
       throw error
     }
   }
+
+  // Keep this invariant for both fresh databases and existing v1 databases.
+  ensureUsageGenerationIndex(db)
 
   // Verify database integrity on startup — at most once per day.
   // (The per-open file hash check in connection.ts covers every other run.)
@@ -152,7 +169,6 @@ function migrateToV1(db: DatabaseSync): void {
   const hasGenId = llmCols.some((row) => String(row.name) === "generation_id")
   if (!hasGenId) {
     db.exec("ALTER TABLE llm_usage ADD COLUMN generation_id TEXT")
-    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_usage_generation_id ON llm_usage(generation_id)")
   }
 
   // Migration: add notes column if missing (pre-6.x databases)

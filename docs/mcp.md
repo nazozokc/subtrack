@@ -108,7 +108,7 @@ Each tool accepts a JSON object with the following parameters:
 
 **`add_subscription`**
 - `name` (string, required): Subscription name
-- `price` (number, required): Price in smallest currency unit
+- `price` (number, required): Price in major currency units (for example, `14.99` USD)
 - `currency` (string, required): Currency code (e.g. `USD`, `JPY`)
 - `cycle` (string, required): Billing cycle — `weekly`, `bi-weekly`, `monthly`, `quarterly`, `semi-annual`, `yearly`, or `Nd` for a custom day count (e.g. `3d`, 1–365)
 - `tags` (string, optional): Comma-separated tags
@@ -156,6 +156,7 @@ Each tool accepts a JSON object with the following parameters:
 - `filter_tag` (string, optional): Filter by tag
 - `filter_status` (string, optional): Filter by status
 - `filter_name` (string, optional): Filter by name pattern
+- `confirm` (boolean, optional): Must be `true` for destructive `delete` actions
 
 **`get_history`**
 - `id` (number, optional): Filter by subscription ID

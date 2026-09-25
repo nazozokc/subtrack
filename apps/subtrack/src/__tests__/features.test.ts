@@ -114,6 +114,8 @@ beforeEach(async () => {
   successMessages.length = 0
   errorMessages.length = 0
   process.exitCode = 0
+  vi.mocked(confirm).mockReset().mockResolvedValue(true)
+  vi.mocked(select).mockReset()
 
   consola.mockTypes((type: string, _defaults: object) => {
     const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "")
@@ -203,6 +205,24 @@ test("handleRenew rejects a negative price", async () => {
   await handleRenew(id, { price: "-1" })
   expect(errorMessages.some((m) => m.includes("non-negative"))).toBe(true)
   expect(dbModule.getSubscription(id)?.price).toBe(1000)
+})
+
+test("handleRenew rejects invalid enum and date flags", async () => {
+  const id = insertSub({ name: "Netflix" })
+
+  await handleRenew(id, { currency: "javascript" })
+  expect(errorMessages.some((m) => m.includes("Invalid currency"))).toBe(true)
+
+  await handleRenew(id, { cycle: "bogus" })
+  expect(errorMessages.some((m) => m.includes("Invalid cycle"))).toBe(true)
+
+  await handleRenew(id, { contractEnd: "2026-02-31" })
+  expect(errorMessages.some((m) => m.includes("Invalid contract end"))).toBe(true)
+
+  const sub = dbModule.getSubscription(id)
+  expect(sub?.currency).toBe("JPY")
+  expect(sub?.cycle).toBe("monthly")
+  expect(sub?.contractEnd).toBeNull()
 })
 
 test("handleRenew accepts cycle and contract flags", async () => {

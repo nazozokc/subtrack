@@ -135,7 +135,10 @@ export async function handleCancel(id: number, options: CancelOptions = {}): Pro
     updates.contractEnd = cancellationDate
   }
 
-  updateSubscription(id, updates)
+  if (!updateSubscription(id, updates)) {
+    fail(`Subscription with id ${id} not found`)
+    return
+  }
   logAudit("subscription.cancel", {
     targetType: "subscription",
     targetId: id,

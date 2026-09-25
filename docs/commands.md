@@ -123,7 +123,7 @@ Adds a new subscription. Without flags, prompts for all fields interactively. Pr
 | Option | Description |
 |--------|-------------|
 | `--name <name>` | Subscription name (max 100 characters) |
-| `--price <price>` | Payment amount — integer, non-negative, max 99,999,999 |
+| `--price <price>` | Payment amount in major currency units — non-negative, max 99,999,999 |
 | `--currency <C>` | Currency code (ISO 4217). Accepts any 3-letter code; interactive mode provides a curated list |
 | `--cycle <cycle>` | Billing cycle. One of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly, or `Nd` for a custom day count (e.g. `3d`, 1–365) |
 | `--tags <tags>` | Comma-separated tags (max 10 tags, each max 50 characters) |
@@ -133,7 +133,7 @@ Adds a new subscription. Without flags, prompts for all fields interactively. Pr
 | `--vendorName <name>` | Vendor name (max 100 characters) |
 | `--vendorUrl <url>` | Vendor URL |
 | `--planTier <tier>` | Plan tier (e.g. `Pro`, `Family`) |
-| `--discountAmount <n>` | Discount amount — non-negative integer |
+| `--discountAmount <n>` | Discount amount in major currency units — non-negative |
 | `--discountType <type>` | Discount type: `percentage` or `fixed` |
 | `--contractStart <date>` | Contract start date (`YYYY-MM-DD`) |
 | `--contractEnd <date>` | Contract end date (`YYYY-MM-DD`) |
@@ -553,7 +553,7 @@ AWS,monthly,cloud;hosting,50,USD
 ```
 
 - Tags are separated by `;` (semicolon) in the CSV
-- Price is an integer (smallest currency unit)
+- Price is a non-negative number in major currency units
 - Currency is an ISO 4217 code
 - Cycle must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly, or `Nd` for a custom day count (e.g. `3d`, 1–365)
 

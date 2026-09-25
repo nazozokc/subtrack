@@ -220,6 +220,12 @@ describe("MCP input validation", () => {
     expect(err2).toMatch(/too long/)
   })
 
+  test("validateArgs rejects unsupported enum and non-boolean search flags", async () => {
+    const { validateArgs, INPUT_VALIDATIONS } = await import("../mcp/security.ts")
+    expect(validateArgs({ period: "garbage" }, INPUT_VALIDATIONS.compare!)).toMatch(/unsupported/i)
+    expect(validateArgs({ names: "false" }, INPUT_VALIDATIONS.search_subscriptions!)).toMatch(/boolean/i)
+  })
+
   test("every registered tool has an input validation schema", async () => {
     const { INPUT_VALIDATIONS } = await import("../mcp/security.ts")
     const { TOOLS } = await import("../mcp/tools.ts")
@@ -387,6 +393,79 @@ describe("MCP handlers", () => {
     const data = JSON.parse(res.content[0].text)
     expect(data).toHaveLength(1)
     expect(data[0].provider).toBe("openai")
+  })
+
+  test("handleAddSubscription rejects invalid numeric fields", async () => {
+    const { handleAddSubscription } = await import("../mcp/handlers.ts")
+    const billingDay = await handleAddSubscription({
+      name: "X", price: 100, currency: "USD", cycle: "monthly", billingDay: 99,
+    })
+    expect(billingDay.isError).toBe(true)
+    expect(JSON.stringify(billingDay)).toMatch(/billing day/i)
+
+    const price = await handleAddSubscription({
+      name: "X", price: -1, currency: "USD", cycle: "monthly",
+    })
+    expect(price.isError).toBe(true)
+    expect(JSON.stringify(price)).toMatch(/price/i)
+
+    const decimal = await handleAddSubscription({
+      name: "Decimal", price: 14.99, currency: "USD", cycle: "monthly",
+    })
+    expect(decimal.isError).toBeUndefined()
+  })
+
+  test("handleEditSubscription reports a missing subscription", async () => {
+    const { handleEditSubscription } = await import("../mcp/handlers.ts")
+    const res = await handleEditSubscription({ id: 999, name: "missing" })
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toMatch(/not found/i)
+  })
+
+  test("handleCompare rejects an unsupported period", async () => {
+    const { handleCompare } = await import("../mcp/handlers.ts")
+    const res = await handleCompare({ period: "garbage" })
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toMatch(/period/i)
+  })
+
+  test("handleGetForecast and handleCompare preserve decimal totals", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (name, price, currency, cycle, status) VALUES ('Decimal', 14.99, 'USD', 'monthly', 'active')`,
+    )
+    const { handleGetForecast, handleCompare } = await import("../mcp/handlers.ts")
+
+    const forecast = JSON.parse((await handleGetForecast({})).content[0].text) as {
+      monthlyTotal: number
+      entries: { monthly: number }[]
+    }
+    expect(forecast.monthlyTotal).toBe(14.99)
+    expect(forecast.entries[0]?.monthly).toBe(14.99)
+
+    const compare = JSON.parse((await handleCompare({ period: "monthly" })).content[0].text) as {
+      rows: { current: number }[]
+    }
+    expect(compare.rows[0]?.current).toBe(14.99)
+  })
+
+  test("handleBulkOperations requires explicit confirmation for deletion", async () => {
+    const { handleBulkOperations } = await import("../mcp/handlers.ts")
+    const res = await handleBulkOperations({ action: "delete" })
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toMatch(/confirm/i)
+  })
+
+  test("handleBulkOperations deletes only after confirmation", async () => {
+    testDb.exec(
+      `INSERT INTO subscriptions (name, price, currency, cycle, status) VALUES ('A', 100, 'USD', 'monthly', 'active'), ('B', 200, 'USD', 'monthly', 'active')`,
+    )
+    const { handleBulkOperations } = await import("../mcp/handlers.ts")
+    await handleBulkOperations({ action: "delete" })
+    expect(testDb.prepare("SELECT COUNT(*) AS count FROM subscriptions").get()).toMatchObject({ count: 2 })
+
+    const confirmed = await handleBulkOperations({ action: "delete", confirm: true })
+    expect(confirmed.isError).toBeUndefined()
+    expect(testDb.prepare("SELECT COUNT(*) AS count FROM subscriptions").get()).toMatchObject({ count: 0 })
   })
 
   test("handleBulkOperations reports errors instead of swallowing them", async () => {

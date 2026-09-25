@@ -3,8 +3,12 @@ import { fail } from "./error.ts"
 import { getTagsWithCount, renameTag, deleteTag, pruneTags, mergeTag } from "./db.ts"
 import { logAudit } from "./audit-log.ts"
 
-export function handleTagList() {
-  const tags = getTagsWithCount()
+export function handleTagList(options: { sort?: "name" | "count" } = {}) {
+  const tags = [...getTagsWithCount()]
+  tags.sort((a, b) => {
+    if (options.sort === "count") return b.count - a.count || a.name.localeCompare(b.name)
+    return a.name.localeCompare(b.name)
+  })
   if (tags.length === 0) {
     consola.info("No tags found")
     return

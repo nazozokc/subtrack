@@ -188,6 +188,9 @@ beforeEach(async () => {
   vi.mocked(checkbox).mockReset().mockResolvedValue([])
   vi.mocked(select).mockReset()
   vi.mocked(search).mockReset().mockResolvedValue("gpt-4o")
+
+  const { runAllScanners } = await import("../scanner.ts")
+  vi.mocked(runAllScanners).mockReturnValue({ source: "combined", entries: [] })
 })
 
 afterAll(async () => {
@@ -261,6 +264,17 @@ test("handleTagList displays tags with counts", async () => {
   expect(combined).toContain("2")
   expect(combined).toContain("storage")
   expect(combined).toContain("1")
+})
+
+test("handleTagList can sort by usage count", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({ name: "A", price: 100, currency: "USD", cycle: "monthly", tags: ["alpha", "beta"] })
+  db.writeSubscription({ name: "B", price: 100, currency: "USD", cycle: "monthly", tags: ["beta"] })
+
+  const { handleTagList } = await import("../tag.ts")
+  handleTagList({ sort: "count" })
+  const out = logMessages.join("\n")
+  expect(out.indexOf("beta")).toBeLessThan(out.indexOf("alpha"))
 })
 
 // ── handleTagRename ──────────────────────────────────────
@@ -1498,6 +1512,34 @@ test("handleUsageDelete deletes by ID (non-interactive)", async () => {
   expect(successMessages.some((m) => m.includes(String(id)))).toBe(true)
 })
 
+test("usage delete command parses only IDs after the command path", async () => {
+  const db = await import("../db.ts")
+  db.addLlmUsage({
+    provider: "openai",
+    model: "gpt-4o",
+    input_tokens: 100,
+    output_tokens: 50,
+    cost: 0.1,
+    date: "2026-06-19",
+    description: null,
+  })
+  const id = db.getLlmUsage()[0].id
+
+  const { usageCommand } = await import("../commands/usage.ts")
+  const run = usageCommand.subCommands?.delete?.run
+  expect(run).toBeDefined()
+  await run?.({
+    values: { id: [String(id)] },
+    positionals: ["usage", "delete", String(id)],
+    rest: [],
+    name: "delete",
+    commandName: "delete",
+    commandPath: "usage/delete",
+  })
+
+  expect(db.getLlmUsage()).toHaveLength(0)
+})
+
 test("handleUsageDelete with non-existent ID shows error", async () => {
   const { handleUsageDelete } = await import("../usage.ts")
   await handleUsageDelete([999])
@@ -1849,7 +1891,7 @@ test("handleRestore restores from valid backup file", async () => {
   const backupDb = new DatabaseSync2(srcDbPath)
   backupDb.exec("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
   backupDb.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
-  backupDb.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
+  backupDb.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id), FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE, FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE)")
   backupDb.exec("CREATE TABLE llm_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, model TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, cost REAL NOT NULL, date TEXT NOT NULL, description TEXT)")
   backupDb.exec("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('Restored', 999, 'EUR', 'yearly')")
   backupDb.close()

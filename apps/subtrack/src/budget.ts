@@ -3,7 +3,7 @@ import pc from "@subtrack/lib/ansi"
 import type { Currency, SharedArgs } from "./types.ts"
 import { getNonCancelledSubscriptions } from "./db/subscriptions.ts"
 import { loadConfig } from "./config.ts"
-import { formatPrice } from "./price.ts"
+import { formatPrice, roundCurrency } from "./price.ts"
 import { calcSubTotal } from "./compare-totals.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
@@ -178,7 +178,7 @@ export async function handleBudget(options: BudgetOptions = {}): Promise<void> {
 
   if (currency === null) {
     const parts = Object.entries(totals)
-      .map(([ccy, total]) => formatPrice(Math.round(total), ccy))
+      .map(([ccy, total]) => formatPrice(roundCurrency(total), ccy))
       .join(" + ")
     if (options.json) {
       process.stdout.write(
@@ -186,10 +186,10 @@ export async function handleBudget(options: BudgetOptions = {}): Promise<void> {
           set: true,
           period: comparePeriod,
           budgetName: budget.name,
-          budget: budget.amount,
+          budget: roundCurrency(budget.amount),
           budgetCurrency: budget.currency,
           spendingByCurrency: Object.fromEntries(
-            Object.entries(totals).map(([ccy, total]) => [ccy, Math.round(total)]),
+            Object.entries(totals).map(([ccy, total]) => [ccy, roundCurrency(total)]),
           ),
           comparable: false,
         }, null, 2) + "\n",
@@ -212,11 +212,11 @@ export async function handleBudget(options: BudgetOptions = {}): Promise<void> {
         set: true,
         period: comparePeriod,
         budgetName: budget.name,
-        budget: Math.round(budgetDisplay),
+        budget: roundCurrency(budgetDisplay),
         budgetCurrency: currency,
-        spending: Math.round(spending),
+        spending: roundCurrency(spending),
         currency,
-        remaining: Math.round(remaining),
+        remaining: roundCurrency(remaining),
         over,
       }, null, 2) + "\n",
     )
@@ -225,16 +225,16 @@ export async function handleBudget(options: BudgetOptions = {}): Promise<void> {
 
   const budgetLabel = budget.name ? `Budget (${budget.name})` : "Budget"
   consola.log(
-    `${periodName} spending: ${pc.bold(pc.yellow(formatPrice(Math.round(spending), currency)))}/${periodLabel}`,
+    `${periodName} spending: ${pc.bold(pc.yellow(formatPrice(roundCurrency(spending), currency)))}/${periodLabel}`,
   )
   consola.log(
-    `${budgetLabel}: ${pc.bold(pc.yellow(formatPrice(Math.round(budgetDisplay), currency)))}/${periodLabel}` +
+    `${budgetLabel}: ${pc.bold(pc.yellow(formatPrice(roundCurrency(budgetDisplay), currency)))}/${periodLabel}` +
       (budget.currency !== currency ? ` (${budget.currency})` : ""),
   )
   if (over) {
-    consola.log(`Over budget: ${pc.red(formatPrice(Math.round(-remaining), currency))}`)
+    consola.log(`Over budget: ${pc.red(formatPrice(roundCurrency(-remaining), currency))}`)
   } else {
-    consola.log(`Remaining: ${pc.green(formatPrice(Math.round(remaining), currency))}`)
+    consola.log(`Remaining: ${pc.green(formatPrice(roundCurrency(remaining), currency))}`)
   }
   if (budget.categories && budget.categories.length > 0) {
     consola.log(pc.dim(`(filtered by categories: ${budget.categories.join(", ")})`))

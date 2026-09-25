@@ -8,6 +8,7 @@ import type { FxRates } from "../fx.ts"
 import type { McpResponse } from "./types.ts"
 import {
   getSubscriptions,
+  saveDb,
   getNonCancelledSubscriptions,
   getSubscription,
   writeSubscription,
@@ -32,9 +33,22 @@ import { calcCalendarEntries } from "../calendar.ts"
 import { exportCsv, exportJson, exportMd } from "../export.ts"
 import { fetchFxRates, convertPrice } from "../fx.ts"
 import { searchSubscriptions } from "../search.ts"
+import { roundCurrency } from "../price.ts"
 import { calcUpcoming } from "../upcoming.ts"
-import { isValidCycle, isValidStatus, isValidCurrency } from "../prompts.ts"
-import { rateLimiter, validateToolCall } from "./security.ts"
+import {
+  isValidCycle, isValidStatus, isValidCurrency,
+  validateName, validatePrice, validateBillingDay, validateNotes,
+  validatePaymentMethod, validateTags, isValidNamedCycle,
+} from "../validation.ts"
+import { MAX_TAG_COUNT, rateLimiter, validateToolCall } from "./security.ts"
+
+const MAX_BULK_AFFECTED = 1_000
+const MAX_NEW_TAGS = 10
+
+const errorResponse = (message: string): McpResponse => ({
+  content: [{ type: "text", text: message }],
+  isError: true,
+})
 
 export async function handleListSubscriptions(args?: Record<string, unknown>): Promise<McpResponse> {
   const subs = getSubscriptions({
@@ -47,16 +61,19 @@ export async function handleListSubscriptions(args?: Record<string, unknown>): P
 }
 
 export async function handleGetSubscription(args?: Record<string, unknown>): Promise<McpResponse> {
-  if (args?.id === undefined) {
-    return { content: [{ type: "text", text: "id is required" }], isError: true }
-  }
-  const sub = getSubscription(Number(args.id))
+  if (args?.id === undefined) return errorResponse("id is required")
+  const id = Number(args.id)
+  if (!Number.isInteger(id) || id < 1) return errorResponse("id must be a positive integer")
+  const sub = getSubscription(id)
   return { content: [{ type: "text", text: JSON.stringify(sub ?? null) }] }
 }
 
 export async function handleSearchSubscriptions(args?: Record<string, unknown>): Promise<McpResponse> {
-  if (!args?.query) {
-    return { content: [{ type: "text", text: "query is required" }], isError: true }
+  if (!args?.query) return errorResponse("query is required")
+  for (const key of ["names", "notes", "tags"] as const) {
+    if (args[key] !== undefined && typeof args[key] !== "boolean") {
+      return errorResponse(`${key} must be a boolean`)
+    }
   }
   const results = searchSubscriptions(String(args.query), {
     names: args.names as boolean | undefined,
@@ -68,25 +85,51 @@ export async function handleSearchSubscriptions(args?: Record<string, unknown>):
 
 export async function handleAddSubscription(args?: Record<string, unknown>): Promise<McpResponse> {
   if (!args?.name || args?.price === undefined || !args?.currency || !args?.cycle) {
-    return { content: [{ type: "text", text: "name, price, currency, and cycle are required" }], isError: true }
+    return errorResponse("name, price, currency, and cycle are required")
   }
+
+  const name = String(args.name)
+  const nameError = validateName(name)
+  if (nameError !== true) return errorResponse(`Invalid name: ${nameError}`)
+
+  const priceError = validatePrice(String(args.price))
+  if (priceError !== true) return errorResponse(`Invalid price: ${priceError}`)
+
   const currency = String(args.currency)
   if (!isValidCurrency(currency)) {
-    return { content: [{ type: "text", text: `Invalid currency "${currency}". Use a supported 3-letter ISO code (e.g. USD, JPY)` }], isError: true }
+    return errorResponse(`Invalid currency "${currency}". Use a supported 3-letter ISO code (e.g. USD, JPY)`)
   }
   const cycle = String(args.cycle)
   if (!isValidCycle(cycle)) {
-    return { content: [{ type: "text", text: `Invalid cycle "${cycle}". Use: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly` }], isError: true }
+    return errorResponse(`Invalid cycle "${cycle}". Use: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly`)
   }
   const status = (args.status as Status | undefined) ?? "active"
   if (!isValidStatus(status)) {
-    return { content: [{ type: "text", text: `Invalid status "${status}". Use: active, paused, cancelled, archived` }], isError: true }
+    return errorResponse(`Invalid status "${status}". Use: active, paused, cancelled, archived`)
   }
+
   const tags = args.tags
     ? String(args.tags).split(",").map((t: string) => t.trim()).filter(Boolean)
     : []
+  if (tags.length > MAX_NEW_TAGS) return errorResponse(`Maximum ${MAX_NEW_TAGS} tags allowed`)
+  const tagsError = validateTags(tags.join(","))
+  if (tagsError !== true) return errorResponse(`Invalid tags: ${tagsError}`)
+
+  if (args.billingDay !== undefined) {
+    const billingDayError = validateBillingDay(String(args.billingDay))
+    if (billingDayError !== true) return errorResponse(`Invalid billing day: ${billingDayError}`)
+  }
+  if (args.paymentMethod !== undefined) {
+    const paymentMethodError = validatePaymentMethod(String(args.paymentMethod))
+    if (paymentMethodError !== true) return errorResponse(`Invalid payment method: ${paymentMethodError}`)
+  }
+  if (args.notes !== undefined) {
+    const notesError = validateNotes(String(args.notes))
+    if (notesError !== true) return errorResponse(`Invalid notes: ${notesError}`)
+  }
+
   const addArgs: AddSharedArgs = {
-    name: String(args.name),
+    name,
     price: Number(args.price),
     currency,
     cycle: cycle as Cycle,
@@ -101,10 +144,10 @@ export async function handleAddSubscription(args?: Record<string, unknown>): Pro
 }
 
 export async function handleDeleteSubscription(args?: Record<string, unknown>): Promise<McpResponse> {
-  if (args?.id === undefined) {
-    return { content: [{ type: "text", text: "id is required" }], isError: true }
-  }
-  const success = deleteSubscription(Number(args.id))
+  if (args?.id === undefined) return errorResponse("id is required")
+  const id = Number(args.id)
+  if (!Number.isInteger(id) || id < 1) return errorResponse("id must be a positive integer")
+  const success = deleteSubscription(id)
   return { content: [{ type: "text", text: JSON.stringify({ success }) }] }
 }
 
@@ -152,18 +195,39 @@ export async function handleExportData(args?: Record<string, unknown>): Promise<
 }
 
 export async function handleEditSubscription(args?: Record<string, unknown>): Promise<McpResponse> {
-  if (args?.id === undefined) {
-    return { content: [{ type: "text", text: "id is required" }], isError: true }
+  if (args?.id === undefined) return errorResponse("id is required")
+  const id = Number(args.id)
+  if (!Number.isInteger(id) || id < 1) return errorResponse("id must be a positive integer")
+  if (args.name !== undefined) {
+    const nameError = validateName(String(args.name))
+    if (nameError !== true) return errorResponse(`Invalid name: ${nameError}`)
+  }
+  if (args.price !== undefined) {
+    const priceError = validatePrice(String(args.price))
+    if (priceError !== true) return errorResponse(`Invalid price: ${priceError}`)
   }
   if (args.currency !== undefined && !isValidCurrency(String(args.currency))) {
-    return { content: [{ type: "text", text: `Invalid currency "${String(args.currency)}". Use a supported 3-letter ISO code (e.g. USD, JPY)` }], isError: true }
+    return errorResponse(`Invalid currency "${String(args.currency)}". Use a supported 3-letter ISO code (e.g. USD, JPY)`)
   }
   if (args.cycle !== undefined && !isValidCycle(String(args.cycle))) {
-    return { content: [{ type: "text", text: `Invalid cycle "${String(args.cycle)}". Use: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly` }], isError: true }
+    return errorResponse(`Invalid cycle "${String(args.cycle)}". Use: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly`)
   }
   if (args.status !== undefined && !isValidStatus(String(args.status))) {
-    return { content: [{ type: "text", text: `Invalid status "${String(args.status)}". Use: active, paused, cancelled, archived` }], isError: true }
+    return errorResponse(`Invalid status "${String(args.status)}". Use: active, paused, cancelled, archived`)
   }
+  if (args.billingDay !== undefined) {
+    const billingDayError = validateBillingDay(String(args.billingDay))
+    if (billingDayError !== true) return errorResponse(`Invalid billing day: ${billingDayError}`)
+  }
+  if (args.paymentMethod !== undefined) {
+    const paymentMethodError = validatePaymentMethod(String(args.paymentMethod))
+    if (paymentMethodError !== true) return errorResponse(`Invalid payment method: ${paymentMethodError}`)
+  }
+  if (args.notes !== undefined) {
+    const notesError = validateNotes(String(args.notes))
+    if (notesError !== true) return errorResponse(`Invalid notes: ${notesError}`)
+  }
+
   const editFields: Partial<AddSharedArgs> = {}
   if (args.name !== undefined) editFields.name = String(args.name)
   if (args.price !== undefined) editFields.price = Number(args.price)
@@ -174,9 +238,14 @@ export async function handleEditSubscription(args?: Record<string, unknown>): Pr
   if (args.paymentMethod !== undefined) editFields.paymentMethod = String(args.paymentMethod)
   if (args.notes !== undefined) editFields.notes = String(args.notes)
   if (args.tags !== undefined) {
-    editFields.tags = String(args.tags).split(",").map((t: string) => t.trim()).filter(Boolean)
+    const tags = String(args.tags).split(",").map((t: string) => t.trim()).filter(Boolean)
+    if (tags.length > MAX_NEW_TAGS) return errorResponse(`Maximum ${MAX_NEW_TAGS} tags allowed`)
+    const tagsError = validateTags(tags.join(","))
+    if (tagsError !== true) return errorResponse(`Invalid tags: ${tagsError}`)
+    editFields.tags = tags
   }
-  const success = updateSubscription(Number(args.id), editFields)
+  const success = updateSubscription(id, editFields)
+  if (!success) return errorResponse(`Subscription with id ${id} not found`)
   return { content: [{ type: "text", text: JSON.stringify({ success }) }] }
 }
 
@@ -231,13 +300,16 @@ export async function handleGetForecast(args?: Record<string, unknown>): Promise
   )
 
   const entries: { name: string; price: number; currency: string; cycle: string; monthly: number; monthlyConverted?: number }[] = []
+  let rawMonthlyTotal = 0
 
   for (const sub of activeSubs) {
     const monthly = sub.price * periodFactor(sub.cycle, "monthly")
     let monthlyConverted: number | undefined
+    let monthlyConvertedRaw: number | undefined
     if (targetCurrency && rates) {
       try {
-        monthlyConverted = Math.round(convertPrice(monthly, sub.currency, targetCurrency, rates.rates))
+        monthlyConvertedRaw = convertPrice(monthly, sub.currency, targetCurrency, rates.rates)
+        monthlyConverted = roundCurrency(monthlyConvertedRaw)
       } catch { /* keep original */ }
     }
     entries.push({
@@ -245,15 +317,14 @@ export async function handleGetForecast(args?: Record<string, unknown>): Promise
       price: sub.price,
       currency: sub.currency,
       cycle: sub.cycle,
-      monthly,
+      monthly: roundCurrency(monthly),
       ...(monthlyConverted !== undefined ? { monthlyConverted } : {}),
     })
+    rawMonthlyTotal += monthlyConvertedRaw ?? monthly
   }
 
   const displayCcy = targetCurrency || "mixed"
-  const monthlyTotal = targetCurrency && rates
-    ? entries.reduce((sum: number, e) => sum + (e.monthlyConverted ?? e.monthly), 0)
-    : entries.reduce((sum: number, e) => sum + e.monthly, 0)
+  const monthlyTotal = rawMonthlyTotal
 
   const yearlyTotal = monthlyTotal * 12
 
@@ -263,8 +334,8 @@ export async function handleGetForecast(args?: Record<string, unknown>): Promise
       text: JSON.stringify({
         months,
         currency: displayCcy,
-        monthlyTotal: Math.round(monthlyTotal),
-        yearlyTotal: Math.round(yearlyTotal),
+        monthlyTotal: roundCurrency(monthlyTotal),
+        yearlyTotal: roundCurrency(yearlyTotal),
         totalSubscriptions: entries.length,
         entries,
       }),
@@ -273,7 +344,9 @@ export async function handleGetForecast(args?: Record<string, unknown>): Promise
 }
 
 export async function handleCompare(args?: Record<string, unknown>): Promise<McpResponse> {
-  const period = (args?.period as NamedCycle | undefined) ?? "monthly"
+  const periodValue = String(args?.period ?? "monthly")
+  if (!isValidNamedCycle(periodValue)) return errorResponse(`Invalid period: ${periodValue}`)
+  const period = periodValue as NamedCycle
   const targetCurrency = args?.currency as Currency | undefined
 
   let rates: FxRates | null = null
@@ -291,8 +364,8 @@ export async function handleCompare(args?: Record<string, unknown>): Promise<Mcp
 
   const currencyRows = allCurrencies.map((ccy) => ({
     currency: ccy,
-    current: Math.round(currentTotals[ccy] ?? 0),
-    previous: Math.round(previousTotals[ccy] ?? 0),
+    current: roundCurrency(currentTotals[ccy] ?? 0),
+    previous: roundCurrency(previousTotals[ccy] ?? 0),
   }))
 
   const grandCurrent = currencyRows.reduce((s, r) => s + r.current, 0)
@@ -320,6 +393,9 @@ export async function handleCompare(args?: Record<string, unknown>): Promise<Mcp
 
 export async function handleBulkOperations(args?: Record<string, unknown>): Promise<McpResponse> {
   const action = String(args?.action ?? "")
+  if (action === "delete" && args?.confirm !== true) {
+    return errorResponse("Bulk delete requires confirm: true")
+  }
   const filters: { tag?: string; status?: string; name?: string } = {}
   if (args?.filter_tag) filters.tag = String(args.filter_tag)
   if (args?.filter_status) filters.status = String(args.filter_status)
@@ -345,6 +421,9 @@ export async function handleBulkOperations(args?: Record<string, unknown>): Prom
   }
 
   const affectedIds = affected.map((s) => s.id)
+  if (affectedIds.length > MAX_BULK_AFFECTED) {
+    return errorResponse(`Bulk operation would affect ${affectedIds.length} subscriptions (max ${MAX_BULK_AFFECTED})`)
+  }
   let resultCount = 0
   const errors: string[] = []
 
@@ -359,38 +438,52 @@ export async function handleBulkOperations(args?: Record<string, unknown>): Prom
         return { content: [{ type: "text", text: `Invalid status "${targetStatus}". Use: active, paused, cancelled, archived` }], isError: true }
       }
       for (const id of affectedIds) {
-        try { updateSubscription(id, { status: targetStatus as Status }); resultCount++ } catch (error) { reportError(id, error) }
+        try {
+          if (updateSubscription(id, { status: targetStatus as Status }, { persist: false })) resultCount++
+        } catch (error) { reportError(id, error) }
       }
       break
     }
     case "delete": {
       for (const id of affectedIds) {
-        try { deleteSubscription(id); resultCount++ } catch (error) { reportError(id, error) }
+        try {
+          if (deleteSubscription(id, { persist: false })) resultCount++
+        } catch (error) { reportError(id, error) }
       }
       break
     }
     case "tag_add": {
-      const tagName = String(args?.tag_name ?? "")
-      if (!tagName) {
-        return { content: [{ type: "text", text: "tag_name is required for tag_add action" }], isError: true }
-      }
+      const tagName = String(args?.tag_name ?? "").trim()
+      const tagError = validateTags(tagName)
+      if (!tagName) return errorResponse("tag_name is required for tag_add action")
+      if (tagName.includes(",")) return errorResponse("tag_name must be a single tag")
+      if (tagError !== true) return errorResponse(`Invalid tag name: ${tagError}`)
       for (const s of affected) {
         const currentTags = s.tags ?? []
         if (!currentTags.includes(tagName)) {
-          try { updateSubscription(s.id, { tags: [...currentTags, tagName] }); resultCount++ } catch (error) { reportError(s.id, error) }
+          if (currentTags.length >= MAX_TAG_COUNT) {
+            reportError(s.id, new Error(`Maximum ${MAX_TAG_COUNT} tags allowed`))
+            continue
+          }
+          try {
+            if (updateSubscription(s.id, { tags: [...currentTags, tagName] }, { persist: false })) resultCount++
+          } catch (error) { reportError(s.id, error) }
         }
       }
       break
     }
     case "tag_remove": {
-      const tagName = String(args?.tag_name ?? "")
-      if (!tagName) {
-        return { content: [{ type: "text", text: "tag_name is required for tag_remove action" }], isError: true }
-      }
+      const tagName = String(args?.tag_name ?? "").trim()
+      const tagError = validateTags(tagName)
+      if (!tagName) return errorResponse("tag_name is required for tag_remove action")
+      if (tagName.includes(",")) return errorResponse("tag_name must be a single tag")
+      if (tagError !== true) return errorResponse(`Invalid tag name: ${tagError}`)
       for (const s of affected) {
         const currentTags = s.tags ?? []
         if (currentTags.includes(tagName)) {
-          try { updateSubscription(s.id, { tags: currentTags.filter((t) => t !== tagName) }); resultCount++ } catch (error) { reportError(s.id, error) }
+          try {
+            if (updateSubscription(s.id, { tags: currentTags.filter((t) => t !== tagName) }, { persist: false })) resultCount++
+          } catch (error) { reportError(s.id, error) }
         }
       }
       break
@@ -399,6 +492,7 @@ export async function handleBulkOperations(args?: Record<string, unknown>): Prom
       return { content: [{ type: "text", text: `Unknown bulk action: ${action}. Use: status, delete, tag_add, tag_remove` }], isError: true }
   }
 
+  if (resultCount > 0) saveDb()
   return {
     content: [{
       type: "text",

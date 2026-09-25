@@ -5,7 +5,7 @@ import { formatShortDate, daysUntil, formatCycle } from "@subtrack/lib/date"
 import type { SharedArgs, Currency, LlmUsageEntry } from "./types.ts"
 import { calculateNextBilling } from "./domain/billing.ts"
 
-import { formatPrice, formatUsdCost } from "./price.ts"
+import { formatPrice, formatUsdCost, roundCurrency } from "./price.ts"
 import {
   TABLE_CHARS,
   getTableStyle,
@@ -223,7 +223,7 @@ export const spreadSubscription = (
 
     const totalRow = new Array<string>(config.headers.length).fill("")
     totalRow[config.headers.length - 2] = `${currency} TOTAL`
-    totalRow[config.headers.length - 1] = formatPrice(Math.round(total), currency)
+    totalRow[config.headers.length - 1] = formatPrice(roundCurrency(total), currency)
     rows.push(totalRow)
     consola.log(renderTable(rows, config))
     return

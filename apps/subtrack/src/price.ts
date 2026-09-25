@@ -29,6 +29,11 @@ export function formatPrice(price: number, currency: string): string {
   return formatter.format(price)
 }
 
+/** Round a major-unit monetary value to the two decimal places used by display. */
+export function roundCurrency(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
 /**
  * Format an API usage cost (stored in cents) as a USD string.
  * Defaults to 4 decimal places because LLM API costs are small.

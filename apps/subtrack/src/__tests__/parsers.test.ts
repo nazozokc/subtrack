@@ -3,6 +3,8 @@ import type { RawEmail, SuggestionCandidate } from "../suggest/types.ts"
 import { parseBankEmail } from "../suggest/parser/bank.ts"
 import { parseCreditCardEmail } from "../suggest/parser/credit-card.ts"
 import { parseGenericEmail } from "../suggest/parser/generic.ts"
+import { parseReceiptEmail } from "../suggest/parser/receipt.ts"
+import { parseWalletEmail } from "../suggest/parser/wallet.ts"
 import { parseEmail } from "../suggest/parser/index.ts"
 
 function email(body: string, subject: string | null = null): RawEmail {
@@ -78,22 +80,22 @@ test("card: parses JCB usage notifications", () => {
   expect(result?.price).toBe(700)
 })
 
-test("card: converts foreign currency amounts to minor units", () => {
+test("card: parses foreign currency amounts in major units", () => {
   const usd = parseCreditCardEmail(email("American Express\nMerchant: Apple\nAmount: $19.99"))
   expect(usd?.name).toBe("Apple")
   expect(usd?.currency).toBe("USD")
-  expect(usd?.price).toBe(1999)
+  expect(usd?.price).toBe(19.99)
 
   const eur = parseCreditCardEmail(email("American Express\nMerchant: Spotify\nAmount: €12.50"))
   expect(eur?.currency).toBe("EUR")
-  expect(eur?.price).toBe(1250)
+  expect(eur?.price).toBe(12.5)
 })
 
 test("card: generic Visa/Mastercard pattern with symbol-prefixed amounts", () => {
   const visa = parseCreditCardEmail(email("VISAカードご利用のお知らせ\n加盟店：Amazon\n金額：$49.00"))
   expect(visa?.name).toBe("Amazon")
   expect(visa?.currency).toBe("USD")
-  expect(visa?.price).toBe(4900)
+  expect(visa?.price).toBe(49)
 })
 
 test("card: returns null for non-card emails", () => {
@@ -108,10 +110,20 @@ test("generic: extracts name, price and cycle from an unknown email", () => {
   )
   expect(result).not.toBeNull()
   expect(result?.name).toBe("SomeCo")
-  expect(result?.price).toBe(999) // $9.99 → cents
+  expect(result?.price).toBe(9.99) // $9.99 in major units
   expect(result?.currency).toBe("USD")
   expect(result?.cycle).toBe("monthly")
   expect(result?.confidence).toBeCloseTo(0.4)
+})
+
+test("receipt and wallet parsers preserve major currency units", () => {
+  const receipt = parseReceiptEmail(email("Netflix\nTotal: $9.99 monthly"))
+  expect(receipt?.price).toBe(9.99)
+  expect(receipt?.currency).toBe("USD")
+
+  const wallet = parseWalletEmail(email("PayPal\nPayment to: Spotify\nAmount: $12.50"))
+  expect(wallet?.price).toBe(12.5)
+  expect(wallet?.currency).toBe("USD")
 })
 
 test("generic: returns null when no price is found", () => {

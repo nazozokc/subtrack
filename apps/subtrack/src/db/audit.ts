@@ -158,5 +158,7 @@ export function getAuditLogCount(options: { action?: string; from?: string; to?:
 export function pruneAuditLogs(before: string): number {
   const db = getDb()
   const { changes } = db.prepare("DELETE FROM audit_log WHERE created_at < ?").run(before)
-  return Number(changes)
+  const count = Number(changes)
+  if (count > 0) saveDb()
+  return count
 }

@@ -5,7 +5,7 @@ import { getSubscriptions } from "./db/subscriptions.ts"
 import { getAllPriceChanges } from "./db/price-history.ts"
 import { getAuditLogs } from "./db/audit.ts"
 import { loadConfig } from "./config.ts"
-import { formatPrice } from "./price.ts"
+import { formatPrice, roundCurrency } from "./price.ts"
 import { periodFactor, occurrencesPerYear } from "@subtrack/lib/date"
 import { fetchFxRates, convertPrice, convertSubsWithRates } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
@@ -55,7 +55,7 @@ export function calcYearlyTotals(subs: SharedArgs[], year: number): MonthTotal[]
       label: `${year}-${String(m + 1).padStart(2, "0")}`,
       year,
       month: m,
-      total: Math.round(total),
+      total,
     })
   }
   return results
@@ -165,10 +165,6 @@ export async function handleReport(options: ReportOptions = {}): Promise<void> {
       if (sub.status === "archived") continue
       byCurrency[sub.currency] = (byCurrency[sub.currency] ?? 0) + yearlyCost(sub)
     }
-    // Round for display
-    for (const ccy of Object.keys(byCurrency)) {
-      byCurrency[ccy] = Math.round(byCurrency[ccy]!)
-    }
   }
 
   const top = calcTopSubscriptions(displaySubs, 5)
@@ -187,7 +183,7 @@ export async function handleReport(options: ReportOptions = {}): Promise<void> {
     let ccy = chartCcy
     if (chartCcy && rates && chartCcy !== budgetCurrency) {
       try {
-        spending = Math.round(convertPrice(total, chartCcy, budgetCurrency, rates.rates))
+        spending = convertPrice(total, chartCcy, budgetCurrency, rates.rates)
         ccy = budgetCurrency
       } catch {
         // keep as-is
@@ -196,9 +192,9 @@ export async function handleReport(options: ReportOptions = {}): Promise<void> {
     if (ccy === budgetCurrency) {
       const remaining = yearlyBudget - spending
       budgetInfo = {
-        amount: yearlyBudget,
+        amount: roundCurrency(yearlyBudget),
         currency: budgetCurrency,
-        remaining,
+        remaining: roundCurrency(remaining),
         over: remaining < 0,
       }
     }
@@ -207,14 +203,16 @@ export async function handleReport(options: ReportOptions = {}): Promise<void> {
   if (options.json) {
     const output: Record<string, unknown> = {
       year,
-      total: Math.round(total),
+      total: roundCurrency(total),
       currency: singleCurrency(displayCurrency, byCurrency),
-      byCurrency,
-      monthly: totals.map((t) => ({ month: t.label, total: t.total })),
+       byCurrency: Object.fromEntries(
+         Object.entries(byCurrency).map(([ccy, total]) => [ccy, roundCurrency(total)]),
+       ),
+       monthly: totals.map((t) => ({ month: t.label, total: roundCurrency(t.total) })),
       top: top.map((s) => ({
         id: s.id,
         name: s.name,
-        yearlyCost: Math.round(yearlyCost(s)),
+        yearlyCost: roundCurrency(yearlyCost(s)),
         currency: s.currency,
       })),
       priceChanges: priceChanges.map((c) => ({
@@ -226,7 +224,7 @@ export async function handleReport(options: ReportOptions = {}): Promise<void> {
         newCurrency: c.newCurrency,
         changedAt: c.changedAt,
         diff: c.oldPrice !== null && c.oldCurrency === c.newCurrency && c.oldPrice !== c.newPrice
-          ? c.newPrice - c.oldPrice
+          ? roundCurrency(c.newPrice - c.oldPrice)
           : null,
       })),
       added: added.map((s) => ({ id: s.id, name: s.name, price: s.price, currency: s.currency, cycle: s.cycle, createdAt: s.createdAt })),
@@ -243,7 +241,7 @@ export async function handleReport(options: ReportOptions = {}): Promise<void> {
   // Total spending
   consola.log(pc.bold("Total spending:"))
   if (displayCurrency) {
-    consola.log(`  ${pc.bold(pc.yellow(formatPrice(Math.round(total), displayCurrency)))}`)
+    consola.log(`  ${pc.bold(pc.yellow(formatPrice(roundCurrency(total), displayCurrency)))}`)
   } else if (Object.keys(byCurrency).length === 1) {
     const [ccy, amount] = Object.entries(byCurrency)[0]!
     consola.log(`  ${pc.bold(pc.yellow(formatPrice(amount, ccy)))}`)
@@ -270,7 +268,7 @@ export async function handleReport(options: ReportOptions = {}): Promise<void> {
     consola.log("  (none)")
   }
   for (const s of top) {
-    consola.log(`  ${s.name.padEnd(24)} ${formatPrice(Math.round(yearlyCost(s)), s.currency)}/year`)
+    consola.log(`  ${s.name.padEnd(24)} ${formatPrice(roundCurrency(yearlyCost(s)), s.currency)}/year`)
   }
 
   // Price changes

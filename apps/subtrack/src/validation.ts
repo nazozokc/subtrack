@@ -86,6 +86,10 @@ export function isValidCycle(v: string): v is Cycle {
   return cycleDays(v as Cycle) !== null
 }
 
+export function isValidNamedCycle(v: string): v is NamedCycle {
+  return CYCLE_CHOICES.some((choice) => choice.value === v)
+}
+
 export function validateCycleDays(v: string): string | true {
   if (!v.trim()) return "Days per cycle cannot be empty"
   const n = Number(v)
@@ -113,9 +117,10 @@ export function validateName(v: string): string | true {
 
 export function validatePrice(v: string): string | true {
   if (!v.trim()) return "Please enter a valid number"
-  if (isNaN(Number(v)) || Number(v) < 0)
+  const n = Number(v)
+  if (!Number.isFinite(n) || n < 0)
     return "Please enter a valid non-negative number"
-  if (Number(v) > 99999999) return "Price too high (max 99,999,999)"
+  if (n > 99999999) return "Price too high (max 99,999,999)"
   return true
 }
 
@@ -129,11 +134,16 @@ export function validatePaymentMethod(v: string): string | true {
   return true
 }
 
+/** Validate a calendar date without allowing JavaScript's date rollover. */
+function isValidIsoDate(v: string): boolean {
+  const d = new Date(`${v}T00:00:00.000Z`)
+  return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === v
+}
+
 export function validateDateString(v: string): string | true {
   if (!v.trim()) return true // empty = not set
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return "Use YYYY-MM-DD format"
-  const d = new Date(v + "T00:00:00")
-  if (isNaN(d.getTime())) return "Invalid date"
+  if (!isValidIsoDate(v)) return "Invalid date"
   return true
 }
 
@@ -166,7 +176,7 @@ export function validatePlanTier(v: string): string | true {
 export function validateDiscountValue(v: string): string | true {
   if (!v.trim()) return true
   const n = Number(v)
-  if (isNaN(n) || n < 0) return "Please enter a non-negative number"
+  if (!Number.isFinite(n) || n < 0) return "Please enter a non-negative number"
   if (n > 99999999) return "Value too high"
   return true
 }
@@ -191,8 +201,7 @@ export function validateTrialName(v: string): string | true {
 export function validateExpiresAt(v: string): string | true {
   if (!v.trim()) return "Expiration date cannot be empty"
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return "Use YYYY-MM-DD format"
-  const d = new Date(v + "T00:00:00")
-  if (isNaN(d.getTime())) return "Invalid date"
+  if (!isValidIsoDate(v)) return "Invalid date"
   return true
 }
 
@@ -219,8 +228,7 @@ export function validateTokens(v: string): string | true {
 export function validateDate(v: string): string | true {
   if (!v.trim()) return true // empty means today
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return "Use YYYY-MM-DD format"
-  const d = new Date(v)
-  if (isNaN(d.getTime())) return "Invalid date"
+  if (!isValidIsoDate(v)) return "Invalid date"
   return true
 }
 

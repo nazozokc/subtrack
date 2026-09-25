@@ -132,10 +132,10 @@ export function parseReceiptEmail(email: RawEmail): SuggestionCandidate | null {
     const rawAmount = amountMatch[2].replace(/,/g, "")
     const currencyMap: Record<string, string> = { "$": "USD", "¥": "JPY", "€": "EUR", "£": "GBP" }
     const currency = symbol ? (currencyMap[symbol] ?? "USD") : "USD"
-    // Scale: JPY is zero-decimal, others are fractional (cents)
+    // Subscription prices use major currency units (e.g. 9.99 USD).
     const amount = currency === "JPY"
-      ? parseInt(rawAmount, 10)
-      : Math.round(parseFloat(rawAmount) * 100)
+      ? Math.round(Number(rawAmount))
+      : Number(rawAmount)
 
     if (isNaN(amount) || amount <= 0 || amount > 99999999) continue
 

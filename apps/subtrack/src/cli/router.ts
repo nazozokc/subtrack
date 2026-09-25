@@ -4,7 +4,8 @@
  * until a leaf command is reached; remaining positionals are command args.
  */
 
-import type { Command } from "./types.ts"
+import type { ArgSchema, Command } from "./types.ts"
+import { tokenize } from "./parser.ts"
 
 /**
  * Error thrown for an unknown subcommand. `name` stays "CommandNotFoundError"
@@ -29,6 +30,56 @@ export interface ResolvedCommand {
   omitted: boolean
   /** The unresolved subcommand name when resolution hit an unknown token. */
   unknownName: string | undefined
+}
+
+const toKebabName = (name: string): string => name.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`)
+
+/**
+ * Extract only command-path positionals from raw argv.
+ * Option values are skipped using the command tree's schemas, so a value such
+ * as `--threshold 0.5` cannot be mistaken for an unknown subcommand.
+ */
+export function getCommandPositionals(
+  argv: string[],
+  entry: Command<any>,
+  entrySubCommands: Record<string, Command<any>>,
+): string[] {
+  const valueLongNames = new Set<string>()
+  const valueShortNames = new Set<string>()
+
+  const visit = (command: Command<any>): void => {
+    const schemas = (command.args ?? {}) as Record<string, ArgSchema>
+    for (const [name, schema] of Object.entries(schemas)) {
+      const longNames = new Set([name, toKebabName(name)])
+      if (schema.type !== "boolean") {
+        for (const longName of longNames) valueLongNames.add(longName)
+      }
+      if (schema.short && schema.type !== "boolean") valueShortNames.add(schema.short)
+    }
+    for (const subCommand of Object.values(command.subCommands ?? {})) visit(subCommand)
+  }
+
+  visit(entry)
+  for (const command of Object.values(entrySubCommands)) visit(command)
+
+  const positionals: string[] = []
+  let skipNextPositional = false
+  for (const token of tokenize(argv)) {
+    if (token.kind === "terminator") break
+    if (token.kind === "option") {
+      const takesValue = token.rawName.startsWith("--")
+        ? valueLongNames.has(token.name)
+        : valueShortNames.has(token.name)
+      skipNextPositional = takesValue && !token.inlineValue
+      continue
+    }
+    if (skipNextPositional) {
+      skipNextPositional = false
+      continue
+    }
+    positionals.push(token.value)
+  }
+  return positionals
 }
 
 /**

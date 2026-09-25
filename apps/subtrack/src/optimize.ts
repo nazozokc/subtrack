@@ -3,7 +3,7 @@ import pc from "@subtrack/lib/ansi"
 import { getSubscriptions, getAllPriceChanges } from "./db.ts"
 import type { SharedArgs, Currency } from "./types.ts"
 import { periodFactor } from "@subtrack/lib/date"
-import { formatPrice } from "./price.ts"
+import { formatPrice, roundCurrency } from "./price.ts"
 import { fetchFxRates, convertSubsWithRates } from "./fx.ts"
 
 export type OptimizeOptions = {
@@ -103,7 +103,7 @@ function analyzeCycleOptimization(subs: SharedArgs[], discountRate: number = 15)
 
     const monthlyCost = sub.price
     const yearlyCost = monthlyCost * 12
-    const estimatedYearlyWithDiscount = Math.round(yearlyCost * (1 - discountRate / 100))
+    const estimatedYearlyWithDiscount = yearlyCost * (1 - discountRate / 100)
     const savings = yearlyCost - estimatedYearlyWithDiscount
 
     if (savings > 0) {
@@ -113,8 +113,8 @@ function analyzeCycleOptimization(subs: SharedArgs[], discountRate: number = 15)
         currentCycle: "monthly",
         suggestedCycle: "yearly",
         currentMonthly: monthlyCost,
-        suggestedMonthly: Math.round(estimatedYearlyWithDiscount / 12),
-        yearlySavings: savings,
+        suggestedMonthly: roundCurrency(estimatedYearlyWithDiscount / 12),
+        yearlySavings: roundCurrency(savings),
       })
     }
   }
@@ -161,7 +161,7 @@ function analyzeDuplicates(subs: SharedArgs[]): DuplicateSuggestion[] {
         type: "duplicate",
         names: allSimilar.map((s) => s.name),
         category,
-        totalMonthly: Math.round(totalMonthly),
+        totalMonthly: roundCurrency(totalMonthly),
       })
     }
   }
@@ -197,7 +197,7 @@ function analyzeInactive(subs: SharedArgs[]): InactiveSuggestion[] {
           price: sub.price,
           currency: sub.currency,
           cycle: sub.cycle,
-          monthly: Math.round(sub.price * periodFactor(sub.cycle, "monthly")),
+          monthly: roundCurrency(sub.price * periodFactor(sub.cycle, "monthly")),
           lastChanged: lastChange.slice(0, 10),
         })
       }
@@ -219,7 +219,7 @@ function analyzeCancelledSavings(subs: SharedArgs[]): CancelSaving[] {
       price: sub.price,
       currency: sub.currency,
       cycle: sub.cycle,
-      monthly: Math.round(sub.price * periodFactor(sub.cycle, "monthly")),
+      monthly: roundCurrency(sub.price * periodFactor(sub.cycle, "monthly")),
     })
   }
 
@@ -330,7 +330,7 @@ function renderReport(result: OptimizeResult, displayCurrency: string = "USD"): 
   const cycleSection = renderCycleSuggestions(cycleSuggestions as CycleSuggestion[], displayCurrency)
   const duplicateSection = renderDuplicateSuggestions(duplicateSuggestions as DuplicateSuggestion[], displayCurrency)
   const inactiveSection = renderInactiveSuggestions(inactiveSuggestions as InactiveSuggestion[])
-   const cancelledSection = renderCancelledSavings(cancelledSuggestions as CancelSaving[], displayCurrency)
+  const cancelledSection = renderCancelledSavings(cancelledSuggestions as CancelSaving[], displayCurrency)
 
   if (cycleSection) sections.push(cycleSection)
   if (duplicateSection) sections.push(duplicateSection)
@@ -396,8 +396,9 @@ export async function handleOptimize(options: OptimizeOptions = {}): Promise<voi
     ...cancelledSuggestions,
   ]
 
-  const totalYearlySavings =
-    cycleSuggestions.reduce((s, c) => s + c.yearlySavings, 0)
+  const totalYearlySavings = roundCurrency(
+    cycleSuggestions.reduce((s, c) => s + c.yearlySavings, 0),
+  )
 
   if (minSavings > 0 && totalYearlySavings < minSavings) {
     consola.info(

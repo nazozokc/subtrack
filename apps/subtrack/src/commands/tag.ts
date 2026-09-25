@@ -23,9 +23,17 @@ export const tagsCommand = define({
 const tagListCmd = define({
   name: "list",
   description: "List all tags with usage count",
-  run: async () => {
+  args: {
+    sort: { type: "string", description: "Sort by: name or count (default: name)" },
+  },
+  run: async (ctx) => {
+    const sort = ctx.values.sort
+    if (sort !== undefined && sort !== "name" && sort !== "count") {
+      fail("sort must be one of: name, count")
+      return
+    }
     const { handleTagList } = await import("../tag.ts")
-    return handleTagList()
+    return handleTagList({ sort })
   },
 })
 

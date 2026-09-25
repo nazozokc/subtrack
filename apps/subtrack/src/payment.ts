@@ -5,12 +5,14 @@ import { periodFactor, getPeriodDateRange, formatCycle } from "@subtrack/lib/dat
 import type { NamedCycle } from "@subtrack/lib/date"
 import { getNonCancelledSubscriptions } from "./db/subscriptions.ts"
 import { getLlmUsageTotal, getLlmUsageTotalByProvider } from "./db/usage.ts"
-import { formatPrice, formatUsdCost } from "./price.ts"
+import { formatPrice, formatUsdCost, roundCurrency } from "./price.ts"
 import { fetchFxRates, convertAmounts, tryConvert } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
 import { runPreCommandHooks } from "./pre-command.ts"
 import { calculateTotals } from "./domain/billing.ts"
 import { writeJson } from "./presentation/output.ts"
+import { isValidNamedCycle } from "./validation.ts"
+import { fail } from "./error.ts"
 import { calcSubTotal, calcPreviousTotals } from "./compare-totals.ts"
 
 // Re-export the shared totals helpers for backward compatibility
@@ -81,10 +83,10 @@ export const showPayment = async (
         }
         const grandTotal = subTotal + (apiConverted ?? 0)
         consola.log(
-          `${formatPrice(Math.round(subTotal), currency)}/${fmtPeriod}  ${pc.dim(`+ API ${formatPrice(Math.round(apiConverted ?? 0), currency)} = ${pc.bold(pc.yellow(formatPrice(Math.round(grandTotal), currency)))}/${fmtPeriod}`)}`,
+           `${formatPrice(roundCurrency(subTotal), currency)}/${fmtPeriod}  ${pc.dim(`+ API ${formatPrice(roundCurrency(apiConverted ?? 0), currency)} = ${pc.bold(pc.yellow(formatPrice(roundCurrency(grandTotal), currency)))}/${fmtPeriod}`)}`,
         )
       } else {
-        consola.log(`${formatPrice(Math.round(subTotal), currency)}/${fmtPeriod}`)
+        consola.log(`${formatPrice(roundCurrency(subTotal), currency)}/${fmtPeriod}`)
       }
       if (includeApi && apiTotal <= 0) {
         consola.info("No API usage found for this period")
@@ -99,8 +101,8 @@ export const showPayment = async (
 
   for (const ccy of Object.keys(groups).sort()) {
     const total = groups[ccy]
-    // Round to integer for display (prices are stored as integers)
-    const rounded = Math.round(total)
+    // Normalize to currency precision for display.
+    const rounded = roundCurrency(total)
     consola.log(`${ccy} ${formatPrice(rounded, ccy)}/${fmtPeriod}`)
   }
 
@@ -117,7 +119,7 @@ export const showPayment = async (
     for (const [method, totals] of Object.entries(methodGroups).sort()) {
       const priceStr = Object.entries(totals)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([ccy, total]) => formatPrice(Math.round(total), ccy))
+        .map(([ccy, total]) => formatPrice(roundCurrency(total), ccy))
         .join(" + ")
       consola.log(`  ${method.padEnd(16)} ${priceStr}/${fmtPeriod}`)
     }
@@ -203,7 +205,7 @@ export function showSummary(subs?: SharedArgs[]): void {
   consola.log("")
   consola.log(pc.bold("Monthly by currency:"))
   for (const [ccy, total] of Object.entries(data.monthlyByCurrency).sort()) {
-    consola.log(`  ${ccy}    ${formatPrice(Math.round(total), ccy)}`)
+    consola.log(`  ${ccy}    ${formatPrice(roundCurrency(total), ccy)}`)
   }
 
   if (Object.keys(data.monthlyByTag).length > 0) {
@@ -215,8 +217,8 @@ export function showSummary(subs?: SharedArgs[]): void {
     for (const [tag, info] of sorted) {
       const ccyEntries = Object.entries(info.monthly)
       const priceStr = ccyEntries.length === 1
-        ? formatPrice(Math.round(ccyEntries[0][1]), ccyEntries[0][0])
-        : ccyEntries.map(([ccy, total]) => formatPrice(Math.round(total), ccy)).join(" + ")
+         ? formatPrice(roundCurrency(ccyEntries[0][1]), ccyEntries[0][0])
+         : ccyEntries.map(([ccy, total]) => formatPrice(roundCurrency(total), ccy)).join(" + ")
       consola.log(
         `  ${tag.padEnd(16)} ${priceStr}/month (${info.count} sub${info.count > 1 ? "s" : ""})`,
       )
@@ -230,6 +232,11 @@ export async function handlePayment(
   period: NamedCycle,
   options: { currency?: string; api?: boolean; method?: boolean } & JsonOptions,
 ) {
+  if (!isValidNamedCycle(period)) {
+    fail("period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly")
+    return
+  }
+
   // Show notification banner for non-JSON output
   await runPreCommandHooks(options)
 
@@ -312,16 +319,24 @@ export async function handlePayment(
 
     const output: Record<string, unknown> = {
       period,
-      total: Math.round(subTotal),
+      total: roundCurrency(subTotal),
       currency: finalCurrency ?? null,
       subscriptions: entries.map((e) => ({
         id: e.sub.id, name: e.sub.name, price: e.sub.price,
         currency: e.sub.currency, cycle: e.sub.cycle, status: e.sub.status,
-        periodPrice: Math.round(e.convertedPrice),
+        periodPrice: roundCurrency(e.convertedPrice),
       })),
     }
     if (options.api && apiTotal > 0) { output.apiUsage = { total: apiTotal, byProvider: apiByProvider } }
-    if (options.method && Object.keys(byMethod).length > 0) { output.byMethod = byMethod }
+    if (options.method && Object.keys(byMethod).length > 0) {
+      for (const method of Object.values(byMethod)) {
+        method.total = roundCurrency(method.total)
+        for (const [currency, total] of Object.entries(method.byCurrency)) {
+          method.byCurrency[currency] = roundCurrency(total)
+        }
+      }
+      output.byMethod = byMethod
+    }
     writeJson(output)
     return
   }

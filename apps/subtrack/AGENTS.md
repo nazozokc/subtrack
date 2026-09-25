@@ -67,7 +67,7 @@ CLI tool to manage subscription services from the terminal. Node.js + TypeScript
 - **Node built-ins**: `node:` prefix (`node:fs`, `node:path`, `node:os`)
 - **Type imports**: `type` prefix (`import type { X } from "./foo.ts"`)
 - **No semicolons** in imports/exports
-- **Prices**: integers (smallest unit — JPY no decimal, USD cents)
+- **Prices**: major currency units (for example, `14.99` USD); `llm_usage.cost` is stored in USD cents
 - **DB**: `node:sqlite` — `db.prepare(sql).run(...params)` for writes, `prepare().all()/.get()` for reads, `PRAGMA foreign_keys = ON`, transactions for multi-step writes
 
 ## Environment Variables

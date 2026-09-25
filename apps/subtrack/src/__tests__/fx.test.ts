@@ -69,7 +69,7 @@ describe("fetchConvertedSubs", () => {
 })
 
 describe("tryConvertSubs", () => {
-  test("rounds converted prices to integers", () => {
+  test("rounds converted prices to currency precision", () => {
     const { list } = tryConvertSubs(
       [makeSub({ name: "US", price: 995, currency: "USD" })],
       "JPY",
@@ -77,6 +77,15 @@ describe("tryConvertSubs", () => {
     )
     expect(list[0]!.price).toBe(159_200) // 995 × 160
     expect(list[0]!.currency).toBe("JPY")
+  })
+
+  test("preserves converted decimal prices", () => {
+    const { list } = tryConvertSubs(
+      [makeSub({ name: "Decimal", price: 9.99, currency: "USD" })],
+      "JPY",
+      rates,
+    )
+    expect(list[0]!.price).toBe(1598.4)
   })
 
   test("flags entries whose rate is missing", () => {

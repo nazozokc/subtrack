@@ -31,6 +31,8 @@ export interface ResolveOptions {
   skip?: number
   /** Kebabize option names (e.g. `minPrice` → `min-price`) */
   toKebab?: boolean
+  /** Reject options and positional values not declared by the command schema. */
+  strict?: boolean
 }
 
 export interface ResolveResult {
@@ -146,10 +148,10 @@ const createOptionDisplayName = (option: string, schema: ArgSchema): string =>
  * `String(error)` yields `arg: message` (matches gunshi's rendering).
  */
 export class ArgValidationError extends Error {
-  readonly type: "type" | "required"
+  readonly type: "type" | "required" | "unknown"
   readonly schema: ArgSchema
 
-  constructor(message: string, argName: string, type: "type" | "required", schema: ArgSchema) {
+  constructor(message: string, argName: string, type: "type" | "required" | "unknown", schema: ArgSchema) {
     super(message)
     this.name = argName
     this.type = type
@@ -173,6 +175,17 @@ const createTypeError = (option: string, schema: ArgSchema): ArgValidationError 
     option,
     "type",
     schema,
+  )
+
+const createUnknownOptionError = (option: string): ArgValidationError =>
+  new ArgValidationError(`Unknown option '${option}'`, option, "unknown", { type: "string" })
+
+const createUnexpectedPositionalError = (value: string): ArgValidationError =>
+  new ArgValidationError(
+    `Unexpected positional argument '${value}'`,
+    "positional",
+    "unknown",
+    { type: "positional" },
   )
 
 const shouldRequireMissingSinglePositional = (schema: ArgSchema): boolean => {
@@ -206,7 +219,7 @@ function createRequiredPositionalsAfter(argEntries: [string, ArgSchema][]): Reco
  * assignment starts after the command tokens, mirroring gunshi.
  */
 export function resolveArgs(argv: string[], args: Args, options: ResolveOptions = {}): ResolveResult {
-  const { skip = 0, toKebab = false } = options
+  const { skip = 0, toKebab = false, strict = false } = options
   const tokens = tokenize(argv)
 
   // ── analyze phase: separate positionals, long and short options ──
@@ -215,11 +228,23 @@ export function resolveArgs(argv: string[], args: Args, options: ResolveOptions 
   const rest: string[] = []
 
   const booleanLongOptionNames = new Set<string>()
+  const knownLongOptionNames = new Set<string>()
+  const negatedBooleanOptionNames = new Map<string, string>()
   const shortToSchema = new Map<string, ArgSchema>()
   for (const [rawArg, schema] of Object.entries(args)) {
+    if (schema.type === "positional") continue
+    const optionNames = new Set([rawArg, getOptionName(rawArg, toKebab), kebabize(rawArg)])
+    for (const optionName of optionNames) {
+      knownLongOptionNames.add(optionName)
+      if (schema.type === "boolean") {
+        const negatedName = `no-${optionName}`
+        knownLongOptionNames.add(negatedName)
+        booleanLongOptionNames.add(optionName)
+        booleanLongOptionNames.add(negatedName)
+        negatedBooleanOptionNames.set(negatedName, rawArg)
+      }
+    }
     if (schema.short) shortToSchema.set(schema.short, schema)
-    if (schema.type !== "boolean") continue
-    booleanLongOptionNames.add(getOptionName(rawArg, toKebab))
   }
 
   const flushLong = (value?: string): void => {
@@ -286,9 +311,22 @@ export function resolveArgs(argv: string[], args: Args, options: ResolveOptions 
   flushLong()
   flushShort()
 
+  const unknownOptionNames: string[] = []
+  if (strict) {
+    const unknownOptions = new Set<string>()
+    for (const token of optionTokens) {
+      const known = token.rawName.startsWith("--")
+        ? knownLongOptionNames.has(token.name)
+        : shortToSchema.has(token.name)
+      if (!known && !unknownOptions.has(token.rawName)) unknownOptions.add(token.rawName)
+    }
+    unknownOptionNames.push(...unknownOptions)
+  }
+
   // ── resolve phase ──
   const values: Record<string, unknown> = {}
   const errors: ArgValidationError[] = []
+  for (const option of unknownOptionNames) errors.push(createUnknownOptionError(option))
   const argEntries = Object.entries(args)
   const requiredPositionalsAfter = createRequiredPositionalsAfter(argEntries)
 
@@ -334,7 +372,10 @@ export function resolveArgs(argv: string[], args: Args, options: ResolveOptions 
     // option
     const matches = optionTokens.filter((token) =>
       (schema.short !== undefined && token.name === schema.short && isShortOption(token.rawName)) ||
-      (token.rawName.startsWith("--") && token.name === arg),
+      (token.rawName.startsWith("--") && (
+        token.name === arg || token.name === rawArg || token.name === kebabize(rawArg) ||
+        (schema.type === "boolean" && negatedBooleanOptionNames.get(token.name) === rawArg)
+      )),
     )
     if (schema.required === true && matches.length === 0) {
       errors.push(createRequireError(arg, schema))
@@ -346,11 +387,12 @@ export function resolveArgs(argv: string[], args: Args, options: ResolveOptions 
         continue
       }
       if (schema.type === "boolean") {
+        const value = negatedBooleanOptionNames.get(token.name) !== rawArg
         if (schema.array === true) {
           values[rawArg] ??= []
-          ;(values[rawArg] as unknown[]).push(true)
+          ;(values[rawArg] as unknown[]).push(value)
         } else {
-          values[rawArg] = true
+          values[rawArg] = value
         }
       } else if (typeof token.value === "string") {
         const value = token.value || undefined
@@ -363,6 +405,12 @@ export function resolveArgs(argv: string[], args: Args, options: ResolveOptions 
       } else {
         errors.push(createTypeError(arg, schema))
       }
+    }
+  }
+
+  if (strict) {
+    for (const token of positionalTokens.slice(positionalsCount)) {
+      errors.push(createUnexpectedPositionalError(token.value))
     }
   }
 

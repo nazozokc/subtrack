@@ -2,7 +2,7 @@ import { input, confirm, select } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import type { SharedArgs, Status } from "./types.ts"
-import { getSubscriptions, updateSubscription, deleteSubscription } from "./db.ts"
+import { getSubscriptions, updateSubscription, deleteSubscription, saveDb } from "./db.ts"
 import { logAudit } from "./audit-log.ts"
 import {
   STATUS_CHOICES,
@@ -118,8 +118,9 @@ export async function handleBulkStatus(
   if (!ok) { consola.info("Cancelled"); return }
 
   for (const sub of list) {
-    updateSubscription(sub.id, { status: targetStatus as Status })
+    updateSubscription(sub.id, { status: targetStatus as Status }, { persist: false })
   }
+  saveDb()
   logAudit("subscription.bulk_status", {
     details: `${list.length} subscriptions → "${targetStatus}"`,
   })
@@ -145,8 +146,9 @@ export async function handleBulkDelete(
   if (!ok) { consola.info("Cancelled"); return }
 
   for (const sub of list) {
-    deleteSubscription(sub.id)
+    deleteSubscription(sub.id, { persist: false })
   }
+  saveDb()
   logAudit("subscription.bulk_delete", {
     details: `${list.length} subscriptions deleted`,
   })
@@ -181,8 +183,9 @@ export async function handleBulkTagAdd(
 
   for (const sub of list) {
     const newTags = sub.tags.includes(tagName) ? sub.tags : [...sub.tags, tagName]
-    updateSubscription(sub.id, { tags: newTags })
+    updateSubscription(sub.id, { tags: newTags }, { persist: false })
   }
+  saveDb()
   logAudit("subscription.bulk_tag_add", {
     details: `Tag "${tagName}" added to ${list.length} subscriptions`,
   })
@@ -217,7 +220,8 @@ export async function handleBulkTagRemove(
 
   for (const sub of list) {
     const newTags = sub.tags.filter((t: string) => t !== tagName)
-    updateSubscription(sub.id, { tags: newTags })
+    updateSubscription(sub.id, { tags: newTags }, { persist: false })
   }
+  saveDb()
   consola.success(`Removed tag "${tagName}" from ${list.length} subscription${list.length > 1 ? "s" : ""}`)
 }

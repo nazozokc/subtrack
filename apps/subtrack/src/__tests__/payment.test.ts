@@ -138,6 +138,30 @@ test("handlePayment json sums monthly totals per subscription", async () => {
   expect(netflix?.periodPrice).toBe(1500)
 })
 
+test("handlePayment json preserves major-unit decimal prices", async () => {
+  const d = await db()
+  d.writeSubscription({ name: "Decimal", price: 14.99, currency: "USD", cycle: "monthly", tags: [] })
+
+  const { handlePayment } = await import("../payment.ts")
+  const out = await captureJson(() => handlePayment("monthly", { json: true })) as {
+    total: number
+    subscriptions: { periodPrice: number }[]
+  }
+
+  expect(out.total).toBe(14.99)
+  expect(out.subscriptions[0]?.periodPrice).toBe(14.99)
+})
+
+test("handlePayment json normalizes floating-point totals", async () => {
+  const d = await db()
+  d.writeSubscription({ name: "One", price: 0.1, currency: "USD", cycle: "monthly", tags: [] })
+  d.writeSubscription({ name: "Two", price: 0.2, currency: "USD", cycle: "monthly", tags: [] })
+
+  const { handlePayment } = await import("../payment.ts")
+  const out = await captureJson(() => handlePayment("monthly", { json: true })) as { total: number }
+  expect(out.total).toBe(0.3)
+})
+
 test("handlePayment json excludes cancelled subscriptions", async () => {
   const d = await db()
   d.writeSubscription({ name: "Active", price: 1000, currency: "JPY", cycle: "monthly", tags: [] })

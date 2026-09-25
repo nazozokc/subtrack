@@ -1,6 +1,7 @@
 // ── Report/analytics commands ──────────────────────────
 import { define } from "../cli/types.ts"
 import { fail } from "../error.ts"
+import { isValidNamedCycle } from "../validation.ts"
 import type { NamedCycle } from "@subtrack/lib/date"
 import type { NotifyChannel } from "../types.ts"
 
@@ -26,8 +27,13 @@ export const paymentCommand = define({
     method: { type: "boolean", short: "m", description: "Group by payment method" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-run: async (ctx) => {
-    const period = (ctx.values.period || "monthly") as NamedCycle
+  run: async (ctx) => {
+    const periodValue = ctx.values.period || "monthly"
+    if (!isValidNamedCycle(periodValue)) {
+      fail("period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly")
+      return
+    }
+    const period = periodValue as NamedCycle
     const { handlePayment } = await import("../payment.ts")
     return handlePayment(period, {
       currency: ctx.values.currency,
@@ -83,11 +89,17 @@ export const compareCommand = define({
     period: { type: "positional", description: "Period: monthly, quarterly, yearly (default: monthly)", required: false },
     currency: { type: "string", short: "c", description: "Convert all prices to target currency" },
     api: { type: "boolean", short: "a", description: "Include LLM API usage costs" },
+    json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-run: async (ctx) => {
-    const period = (ctx.values.period || "monthly") as NamedCycle
+  run: async (ctx) => {
+    const periodValue = ctx.values.period || "monthly"
+    if (!isValidNamedCycle(periodValue)) {
+      fail("period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly")
+      return
+    }
+    const period = periodValue as NamedCycle
     const { handleCompare } = await import("../compare.ts")
-    return handleCompare(period, { currency: ctx.values.currency, api: ctx.values.api })
+    return handleCompare(period, { currency: ctx.values.currency, api: ctx.values.api, json: ctx.values.json })
   },
 })
 

@@ -13,7 +13,7 @@ import { getSubscriptions, getNonCancelledSubscriptions, getDbPath } from "../db
 import { calcSummary, calcSubTotal } from "../payment.ts"
 import { calcUpcoming } from "../upcoming.ts"
 import { resolveBudget } from "../budget.ts"
-import { formatPrice } from "../price.ts"
+import { formatPrice, roundCurrency } from "../price.ts"
 import { divider } from "../display-constants.ts"
 
 const require = createRequire(import.meta.url)
@@ -48,7 +48,7 @@ export function showMenuHeader(): void {
     const summary = calcSummary(active)
     const monthly = Object.entries(summary.monthlyByCurrency)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([ccy, total]) => formatPrice(Math.round(total), ccy))
+      .map(([ccy, total]) => formatPrice(roundCurrency(total), ccy))
     console.log(`  Monthly: ${monthly.join(" + ")}`)
 
     const upcoming = calcUpcoming(7)
@@ -59,7 +59,7 @@ export function showMenuHeader(): void {
       }
       const parts = Object.entries(totals)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([ccy, total]) => formatPrice(Math.round(total), ccy))
+        .map(([ccy, total]) => formatPrice(roundCurrency(total), ccy))
       const billLabel = upcoming.length === 1 ? "bill" : "bills"
       console.log(`  Next 7 days: ${upcoming.length} ${billLabel} (${parts.join(" + ")})`)
     }
@@ -75,7 +75,7 @@ export function showMenuHeader(): void {
         if (remaining < 0) {
           console.log(
             pc.red(
-              `  ⚠ Over budget: ${formatPrice(Math.round(-remaining), budget.currency)} (budget ${formatPrice(Math.round(budget.amount), budget.currency)}/month)`,
+              `  ⚠ Over budget: ${formatPrice(roundCurrency(-remaining), budget.currency)} (budget ${formatPrice(roundCurrency(budget.amount), budget.currency)}/month)`,
             ),
           )
         }

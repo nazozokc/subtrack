@@ -44,7 +44,12 @@ async function reviewItem(item: ReviewItem): Promise<void> {
   if (item.sub && action === "pause") await handlePause([item.sub.id], true)
   else if (item.sub && action === "resume") await handleResume([item.sub.id], true)
   else if (item.sub && action === "renew") await handleRenew(item.sub.id, {})
-  else if (item.sub && (action === "cancel" || action === "archive")) { const status = action === "cancel" ? "cancelled" : "archived"; updateSubscription(item.sub.id, { status }); logAudit(status === "cancelled" ? "subscription.cancel" : "subscription.archive", { targetType: "subscription", targetId: item.sub.id, details: item.sub.name }) }
+  else if (item.sub && (action === "cancel" || action === "archive")) {
+    const status = action === "cancel" ? "cancelled" : "archived"
+    if (updateSubscription(item.sub.id, { status })) {
+      logAudit(status === "cancelled" ? "subscription.cancel" : "subscription.archive", { targetType: "subscription", targetId: item.sub.id, details: item.sub.name })
+    }
+  }
   else if (item.trial && action === "add") { writeSubscription({ name: item.trial.name, price: item.trial.price ?? 0, currency: item.trial.currency ?? loadConfig().defaultCurrency, cycle: (item.trial.cycle ?? "monthly") as AddSharedArgs["cycle"], tags: [], notes: item.trial.notes }); deleteTrial(item.trial.id) }
   else if (item.trial && action === "dismiss") deleteTrial(item.trial.id)
 }

@@ -1,7 +1,7 @@
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { statSync, readFileSync } from "node:fs"
-import { writeSubscription, findSubscriptionByName } from "./db.ts"
+import { writeSubscription, findSubscriptionByName, saveDb } from "./db.ts"
 import { logAudit } from "./audit-log.ts"
 import {
   validateName,
@@ -252,7 +252,7 @@ export async function handleImport(
           planTier: planTier ?? undefined,
           discountAmount: discountAmount === null ? undefined : Number(discountAmount),
           discountType: discountType as DiscountType | undefined,
-        })
+        }, { persist: false })
         success++
       } catch (e) {
         consola.warn(`Line ${i + 1}: failed to import: ${String(e)}`)
@@ -264,6 +264,7 @@ export async function handleImport(
   if (options.dryRun) {
     consola.success(`Dry-run complete: ${success} valid, ${failed} invalid`)
   } else {
+    if (success > 0) saveDb()
     logAudit("subscription.import", {
       details: `${success} imported, ${failed} failed from ${file}`,
     })

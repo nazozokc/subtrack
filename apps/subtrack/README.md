@@ -226,7 +226,7 @@ Adds a new subscription. Without flags, prompts for all fields interactively.
 | Option                | Description                          |
 | --------------------- | ------------------------------------ |
 | `--name <name>`       | Subscription name                    |
-| `--price <price>`     | Payment amount (integer)             |
+| `--price <price>`     | Payment amount (major currency unit) |
 | `--currency <currency>` | Currency code (e.g. JPY, USD)      |
 | `--cycle <cycle>`      | Billing cycle (e.g. monthly, yearly) |
 | `--tags <tags>`       | Comma-separated tags                 |
@@ -251,7 +251,7 @@ shows all subscriptions to pick from.
 | Option                  | Description                          |
 | ----------------------- | ------------------------------------ |
 | `--name <name>`         | New subscription name                |
-| `--price <price>`       | New payment amount (integer)         |
+| `--price <price>`       | New payment amount (major currency unit) |
 | `--currency <currency>` | New currency code (e.g. JPY, USD)    |
 | `--cycle <cycle>`       | New billing cycle                    |
 | `--status <status>`     | New status: active, paused, cancelled |
@@ -472,7 +472,7 @@ subtrack config get defaultCurrency
 # Set default currency to JPY
 subtrack config set defaultCurrency JPY
 
-# Set monthly budget (in smallest currency unit: cents for USD, yen for JPY, etc.)
+# Set monthly budget (in major currency units: dollars for USD, yen for JPY, etc.)
 subtrack config set monthlyBudget 50000
 
 # Reset to defaults

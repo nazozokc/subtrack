@@ -85,7 +85,7 @@ All 3 skills are also available automatically via the agent system prompt.
 - **Node built-ins**: use `node:` prefix (`node:fs`, `node:path`, `node:os`)
 - **Type imports**: use `type` prefix (`import type { X } from "./foo.ts"`)
 - **No semicolons** in imports/exports
-- **Prices**: stored as integers (smallest unit — JPY no decimal, USD in cents)
+- **Prices**: stored in major currency units (for example, `14.99` USD); `llm_usage.cost` is stored in USD cents
 - **DB transactions**: use `BEGIN TRANSACTION` / `COMMIT` / `ROLLBACK` for multi-step writes
 - **PRAGMA**: `PRAGMA foreign_keys = ON` at connection time
 
