@@ -9,7 +9,8 @@
 import pc from "@subtrack/lib/ansi"
 import { consola } from "@subtrack/lib/logger"
 import { getPendingSuggestionCount } from "../db/suggestions.ts"
-import { calcUpcoming } from "../upcoming.ts"
+import { getNonCancelledSubscriptions } from "../db/subscriptions.ts"
+import { upcomingWithinDays } from "../domain/billing.ts"
 
 /**
  * Display a compact notification banner in the main output area.
@@ -18,7 +19,7 @@ import { calcUpcoming } from "../upcoming.ts"
  */
 export function showNotificationBanner(): void {
   const suggestionCount = getPendingSuggestionCount()
-  const upcomingEntries = calcUpcoming(7)
+  const upcomingEntries = upcomingWithinDays(getNonCancelledSubscriptions(), 7)
 
   const parts: string[] = []
   if (suggestionCount > 0) {

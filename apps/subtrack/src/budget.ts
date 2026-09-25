@@ -1,10 +1,10 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import type { Currency, SharedArgs } from "./types.ts"
-import { getNonCancelledSubscriptions } from "./db.ts"
+import { getNonCancelledSubscriptions } from "./db/subscriptions.ts"
 import { loadConfig } from "./config.ts"
 import { formatPrice } from "./price.ts"
-import { calcSubTotal } from "./payment.ts"
+import { calcSubTotal } from "./compare-totals.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
 

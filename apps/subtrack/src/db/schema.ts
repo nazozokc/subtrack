@@ -1,9 +1,17 @@
 import type { DatabaseSync } from "node:sqlite"
+import { readFileSync, writeFileSync } from "node:fs"
+import path from "node:path"
 import { consola } from "@subtrack/lib/logger"
 import { createAuditTable } from "./audit.ts"
 
 /** Current schema version. Bump when adding a new migration below. */
 export const SCHEMA_VERSION = 1
+
+/**
+ * Marker file name for the daily integrity check timestamp.
+ * Lives in the DB directory (next to `subtrack.db`).
+ */
+const INTEGRITY_MARKER = ".subtrack.integrity"
 
 /** Read the current PRAGMA user_version of a database. */
 export function getSchemaVersion(db: DatabaseSync): number {
@@ -13,8 +21,34 @@ export function getSchemaVersion(db: DatabaseSync): number {
   return row ? Number(row.user_version) : 0
 }
 
+/**
+ * `PRAGMA integrity_check` scans every page of the database, which is wasteful
+ * on every CLI invocation. The file hash check (`verifyDbHash`) already runs
+ * on each open, so the full scan is throttled to once per calendar day.
+ */
+function integrityCheckDue(dbDir: string | undefined): boolean {
+  if (!dbDir) return true // no directory info (e.g. tests) → always check
+  const marker = path.join(dbDir, INTEGRITY_MARKER)
+  try {
+    return readFileSync(marker, "utf-8").trim() !== today()
+  } catch {
+    return true
+  }
+}
+
+function markIntegrityChecked(dbDir: string | undefined): void {
+  if (!dbDir) return
+  try {
+    writeFileSync(path.join(dbDir, INTEGRITY_MARKER), today() + "\n", { mode: 0o600 })
+  } catch { /* best-effort */ }
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
 /** Apply schema creation and migrations to a database instance. */
-export function runMigrations(db: DatabaseSync): void {
+export function runMigrations(db: DatabaseSync, dbDir?: string): void {
   // v0 → v1: baseline schema. Idempotent, so it also repairs databases
   // created before versioning was introduced (user_version = 0).
   const version = getSchemaVersion(db)
@@ -38,15 +72,19 @@ export function runMigrations(db: DatabaseSync): void {
     }
   }
 
-  // Verify database integrity on startup
-  const integrity = db.prepare("PRAGMA integrity_check").get() as
-    | { integrity_check: string }
-    | undefined
-  if (integrity && String(integrity.integrity_check) !== "ok") {
-    consola.warn(
-      `Database integrity check failed: ${String(integrity.integrity_check)}\n` +
-      "  Run 'subtrack backup' immediately and restore from a known-good backup.",
-    )
+  // Verify database integrity on startup — at most once per day.
+  // (The per-open file hash check in connection.ts covers every other run.)
+  if (integrityCheckDue(dbDir)) {
+    const integrity = db.prepare("PRAGMA integrity_check").get() as
+      | { integrity_check: string }
+      | undefined
+    markIntegrityChecked(dbDir)
+    if (integrity && String(integrity.integrity_check) !== "ok") {
+      consola.warn(
+        `Database integrity check failed: ${String(integrity.integrity_check)}\n` +
+        "  Run 'subtrack backup' immediately and restore from a known-good backup.",
+      )
+    }
   }
 }
 
