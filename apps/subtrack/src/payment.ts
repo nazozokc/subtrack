@@ -3,13 +3,19 @@ import pc from "@subtrack/lib/ansi"
 import type { SharedArgs, Currency } from "./types.ts"
 import { periodFactor, getPeriodDateRange, formatCycle } from "@subtrack/lib/date"
 import type { NamedCycle } from "@subtrack/lib/date"
-import { getNonCancelledSubscriptions, getLlmUsageTotal, getLlmUsageTotalByProvider, getAllPriceChanges } from "./db.ts"
+import { getNonCancelledSubscriptions } from "./db/subscriptions.ts"
+import { getLlmUsageTotal, getLlmUsageTotalByProvider } from "./db/usage.ts"
 import { formatPrice, formatUsdCost } from "./price.ts"
 import { fetchFxRates, convertAmounts, tryConvert } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
 import { runPreCommandHooks } from "./pre-command.ts"
 import { calculateTotals } from "./domain/billing.ts"
 import { writeJson } from "./presentation/output.ts"
+import { calcSubTotal, calcPreviousTotals } from "./compare-totals.ts"
+
+// Re-export the shared totals helpers for backward compatibility
+// (compare.ts, MCP handlers import them from here).
+export { calcSubTotal, calcPreviousTotals }
 
 // ── JSON options helper ───────────────────────────────
 export type JsonOptions = { json?: boolean }
@@ -135,82 +141,8 @@ export const showPayment = async (
 }
 
 // ── Shared compare helpers ─────────────────────────────
-
-type CcyTotals = Record<string, number>
-
-/**
- * Calculate per-currency monthly totals for a set of subscriptions,
- * optionally converting to a target currency.
- * Shared by compare.ts and MCP handlers.
- */
-export function calcSubTotal(
-  subs: SharedArgs[],
-  rates: FxRates | null,
-  targetCurrency: Currency | undefined,
-  period: NamedCycle = "monthly",
-): CcyTotals {
-  const totals: CcyTotals = {}
-  for (const sub of subs) {
-    if (sub.status === "cancelled") continue
-    const normalized = sub.price * periodFactor(sub.cycle, period)
-    if (targetCurrency && rates) {
-      const converted = tryConvert(normalized, sub.currency, targetCurrency, rates.rates)
-      if (converted !== null) {
-        totals[targetCurrency] = (totals[targetCurrency] ?? 0) + converted
-      } else {
-        totals[sub.currency] = (totals[sub.currency] ?? 0) + normalized
-      }
-    } else {
-      totals[sub.currency] = (totals[sub.currency] ?? 0) + normalized
-    }
-  }
-  return totals
-}
-
-/**
- * Calculate per-currency monthly totals using historical prices from
- * price history to estimate the previous period's costs.
- * Shared by compare.ts and MCP handlers.
- */
-export function calcPreviousTotals(
-  activeSubs: SharedArgs[],
-  rates: FxRates | null,
-  targetCurrency: Currency | undefined,
-  period: NamedCycle = "monthly",
-): CcyTotals {
-  const priceChanges = getAllPriceChanges()
-  const priceBefore: Record<number, { price: number; currency: string }> = {}
-
-  for (const change of priceChanges) {
-    if (change.oldPrice !== null && !priceBefore[change.subscriptionId]) {
-      priceBefore[change.subscriptionId] = {
-        price: change.oldPrice,
-        currency: change.oldCurrency ?? change.newCurrency,
-      }
-    }
-  }
-
-  const totals: CcyTotals = {}
-  for (const sub of activeSubs) {
-    if (sub.status === "cancelled") continue
-    const prev = priceBefore[sub.id]
-    const price = prev?.price ?? sub.price
-    const currency = prev?.currency ?? sub.currency
-    const monthly = price * periodFactor(sub.cycle, period)
-
-    if (targetCurrency && rates) {
-      const converted = tryConvert(monthly, currency, targetCurrency, rates.rates)
-      if (converted !== null) {
-        totals[targetCurrency] = (totals[targetCurrency] ?? 0) + converted
-      } else {
-        totals[currency] = (totals[currency] ?? 0) + monthly
-      }
-    } else {
-      totals[currency] = (totals[currency] ?? 0) + monthly
-    }
-  }
-  return totals
-}
+// calcSubTotal / calcPreviousTotals now live in ./compare-totals.ts and are
+// re-exported above for backward compatibility.
 
 // ── Summary ──────────────────────────────────────────────
 

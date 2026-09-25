@@ -3,7 +3,7 @@ import pc from "@subtrack/lib/ansi"
 import { CliTable3 } from "@subtrack/lib/table"
 import { formatShortDate, daysUntil, formatCycle } from "@subtrack/lib/date"
 import type { SharedArgs, Currency, LlmUsageEntry } from "./types.ts"
-import { calculateNextBilling } from "./upcoming.ts"
+import { calculateNextBilling } from "./domain/billing.ts"
 
 import { formatPrice, formatUsdCost } from "./price.ts"
 import {

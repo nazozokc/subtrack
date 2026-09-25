@@ -9,11 +9,8 @@ import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import { loadConfig } from "../config.ts"
 import type { Currency, Cycle, AddFlags } from "../types.ts"
-import {
-  tagsSubscription,
-  getLlmUsageTotal,
-  getLlmUsageTotalByProvider,
-} from "../db.ts"
+import { tagsSubscription } from "../db/tags.ts"
+import { getLlmUsageTotal, getLlmUsageTotalByProvider } from "../db/usage.ts"
 import { subscriptionRepository } from "../application/repositories.ts"
 import { spreadSubscription, showApiUsage } from "../display.ts"
 import { fetchConvertedSubs } from "../fx.ts"

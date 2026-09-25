@@ -1,96 +1,29 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
-import type { SharedArgs, Cycle, Currency } from "./types.ts"
-import { getNonCancelledSubscriptions } from "./db.ts"
+import type { Currency } from "./types.ts"
+import { getNonCancelledSubscriptions } from "./db/subscriptions.ts"
 import { formatPrice } from "./price.ts"
 import { fetchFxRates, tryConvert } from "./fx.ts"
-import { toDate, formatDate, formatShortDate, dateWithClampedDay, daysUntil, cycleDays, nextDayCycleDate, isDayCycle } from "@subtrack/lib/date"
+import { formatDate, formatShortDate, daysUntil } from "@subtrack/lib/date"
 import { runPreCommandHooks } from "./pre-command.ts"
+import {
+  nextDateForCycle,
+  calculateNextBilling,
+  upcomingWithinDays,
+} from "./domain/billing.ts"
+import type { UpcomingEntry } from "./domain/billing.ts"
 
-function getBillingDay(sub: SharedArgs): number {
-  if (sub.billingDay) return sub.billingDay
-  // Fall back to created_at day
-  const created = toDate(sub.createdAt)
-  return created.getDate()
-}
+// Re-export the pure billing-date helpers moved to domain/billing.ts for
+// backward compatibility (cancel.ts, export.ts import them from here).
+export { nextDateForCycle, calculateNextBilling, upcomingWithinDays }
+export type { UpcomingEntry }
 
 /**
- * Date of the k-th period occurrence anchored on `anchorDate`,
- * billed on `day` (clamped to the month length).
+ * Subscriptions that bill within `days` from today.
+ * Thin wrapper over the pure `upcomingWithinDays` that loads the active list.
  */
-function periodDate(anchorDate: Date, periodMonths: number, k: number, day: number): Date {
-  const monthIndex = anchorDate.getMonth() + k * periodMonths
-  const year = anchorDate.getFullYear() + Math.floor(monthIndex / 12)
-  const month = ((monthIndex % 12) + 12) % 12
-  return dateWithClampedDay(year, month, day)
-}
-
-export function nextDateForCycle(anchorDay: number, anchorDate: Date, cycle: Cycle, fromDate: Date): Date {
-  // Every-N-days cycles (custom "Nd", weekly, bi-weekly) share one formula
-  if (isDayCycle(cycle) || cycle === "weekly" || cycle === "bi-weekly") {
-    const days = cycleDays(cycle) ?? (cycle === "weekly" ? 7 : 14)
-    return nextDayCycleDate(anchorDate, anchorDay, days, fromDate)
-  }
-  switch (cycle) {
-    case "monthly": {
-      // Calculate next billing date based on anchor day
-      const candidate = dateWithClampedDay(fromDate.getFullYear(), fromDate.getMonth(), anchorDay)
-      if (candidate >= fromDate) return candidate
-      // Move to next month
-      return dateWithClampedDay(fromDate.getFullYear(), fromDate.getMonth() + 1, anchorDay)
-    }
-    case "yearly": {
-      const candidate = dateWithClampedDay(fromDate.getFullYear(), anchorDate.getMonth(), anchorDay)
-      if (candidate >= fromDate) return candidate
-      return dateWithClampedDay(fromDate.getFullYear() + 1, anchorDate.getMonth(), anchorDay)
-    }
-    case "quarterly":
-    case "semi-annual": {
-      // Every 3/6 months from the anchor month, billed on anchorDay
-      const periodMonths = cycle === "quarterly" ? 3 : 6
-      let k = 0
-      for (;;) {
-        const candidate = periodDate(anchorDate, periodMonths, k, anchorDay)
-        if (candidate >= fromDate) return candidate
-        k++
-      }
-    }
-  }
-}
-
-export function calculateNextBilling(sub: SharedArgs, fromDate: Date): Date {
-  const anchorDate = toDate(sub.createdAt)
-  const day = getBillingDay(sub)
-  return nextDateForCycle(day, anchorDate, sub.cycle, fromDate)
-}
-
-export type UpcomingEntry = {
-  sub: SharedArgs
-  nextDate: Date
-  amount: number
-}
-
 export function calcUpcoming(days: number = 7): UpcomingEntry[] {
-  const list = getNonCancelledSubscriptions()
-  if (list.length === 0) return []
-
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  const endDate = new Date(now)
-  endDate.setDate(endDate.getDate() + days)
-
-  const entries: UpcomingEntry[] = []
-
-  for (const sub of list) {
-    const next = calculateNextBilling(sub, now)
-    if (next >= now && next <= endDate) {
-      const amount = sub.price
-      entries.push({ sub, nextDate: next, amount })
-    }
-  }
-
-  entries.sort((a, b) => a.nextDate.getTime() - b.nextDate.getTime())
-  return entries
+  return upcomingWithinDays(getNonCancelledSubscriptions(), days)
 }
 
 export async function calcUpcomingWithCurrency(days: number = 7, targetCurrency?: string): Promise<UpcomingEntry[]> {
