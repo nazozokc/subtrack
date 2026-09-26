@@ -30,17 +30,22 @@ function writeDbLayer(): void {
 }
 
 function run(): { status: number; output: string } {
+  let raw: string
+  let status = 0
   try {
-    const output = execFileSync(process.execPath, [script, "--report"], {
+    raw = execFileSync(process.execPath, [script, "--report"], {
       env: { ...process.env, ARCH_CHECK_SRC: fixture },
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     })
-    return { status: 0, output }
   } catch (error) {
     const e = error as { status: number; stdout: string; stderr: string }
-    return { status: e.status, output: `${e.stdout ?? ""}${e.stderr ?? ""}` }
+    status = e.status
+    raw = `${e.stdout ?? ""}${e.stderr ?? ""}`
   }
+  // The report contains real paths, so Windows separators are normalised before
+  // the assertions rather than duplicated per platform.
+  return { status, output: raw.replace(/\\/g, "/") }
 }
 
 beforeEach(() => {
