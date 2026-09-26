@@ -4,69 +4,11 @@
 
 import { consola } from "@subtrack/lib/logger"
 import { sectionTitle } from "./display-constants.ts"
-import { getDb, getDbPath } from "./db.ts"
-import type { Status } from "./types.ts"
-import { execObjs } from "./db/connection.ts"
-import { formatBytes, getFileSize } from "@subtrack/lib/format"
-
-type SubStats = {
-  total: number
-  active: number
-  paused: number
-  cancelled: number
-  archived: number
-  totalTags: number
-  totalTrials: number
-  totalUsage: number
-  dbSizeBytes: number
-  priceRange: { min: number; max: number; currencies: string[] }
-}
+import { statsRepository } from "./application/index.ts"
+import { formatBytes } from "@subtrack/lib/format"
 
 export function handleStats(options: { json?: boolean } = {}): void {
-  const db = getDb()
-
-  // Subscription counts by status
-  const statusRows = execObjs<{ status: Status; count: number }>(
-    db,
-    "SELECT status, COUNT(*) AS count FROM subscriptions GROUP BY status",
-  )
-  const statusMap = new Map(statusRows.map((r) => [r.status, r.count]))
-  const total = statusRows.reduce((a, r) => a + r.count, 0)
-  const active = statusMap.get("active") ?? 0
-  const paused = statusMap.get("paused") ?? 0
-  const cancelled = statusMap.get("cancelled") ?? 0
-  const archived = statusMap.get("archived") ?? 0
-
-  // Tags
-  const tagRow = execObjs<{ count: number }>(db, "SELECT COUNT(*) AS count FROM tags")
-  const totalTags = tagRow.length > 0 ? tagRow[0].count : 0
-
-  // Trials
-  const trialRow = execObjs<{ count: number }>(db, "SELECT COUNT(*) AS count FROM trials")
-  const totalTrials = trialRow.length > 0 ? trialRow[0].count : 0
-
-  // Usage entries
-  const usageRow = execObjs<{ count: number }>(db, "SELECT COUNT(*) AS count FROM llm_usage")
-  const totalUsage = usageRow.length > 0 ? usageRow[0].count : 0
-
-  // Price range
-  const priceRows = execObjs<{ price: number; currency: string }>(
-    db,
-    "SELECT price, currency FROM subscriptions WHERE status = 'active'",
-  )
-  const currencies = [...new Set(priceRows.map((r) => r.currency))]
-  const min = priceRows.length > 0 ? Math.min(...priceRows.map((r) => r.price)) : 0
-  const max = priceRows.length > 0 ? Math.max(...priceRows.map((r) => r.price)) : 0
-
-  // DB size
-  const dbSizeBytes = getFileSize(getDbPath())
-
-  const stats: SubStats = {
-    total, active, paused, cancelled, archived,
-    totalTags, totalTrials, totalUsage,
-    dbSizeBytes,
-    priceRange: { min, max, currencies },
-  }
+  const stats = statsRepository.snapshot()
 
   if (options.json) {
     process.stdout.write(JSON.stringify(stats, null, 2) + "\n")
@@ -74,20 +16,18 @@ export function handleStats(options: { json?: boolean } = {}): void {
   }
 
   consola.log(sectionTitle("Database Statistics"))
-  consola.log(`  Subscriptions: ${total}`)
-  consola.log(`    Active:       ${active}`)
-  consola.log(`    Paused:       ${paused}`)
-  consola.log(`    Cancelled:    ${cancelled}`)
-  consola.log(`    Archived:     ${archived}`)
-  consola.log(`  Tags:           ${totalTags}`)
-  consola.log(`  Trials:         ${totalTrials}`)
-  consola.log(`  LLM Usage entries: ${totalUsage}`)
-  if (priceRows.length > 0) {
+  consola.log(`  Subscriptions: ${stats.total}`)
+  consola.log(`    Active:       ${stats.active}`)
+  consola.log(`    Paused:       ${stats.paused}`)
+  consola.log(`    Cancelled:    ${stats.cancelled}`)
+  consola.log(`    Archived:     ${stats.archived}`)
+  consola.log(`  Tags:           ${stats.totalTags}`)
+  consola.log(`  Trials:         ${stats.totalTrials}`)
+  consola.log(`  LLM Usage entries: ${stats.totalUsage}`)
+  if (stats.priceRange.currencies.length > 0) {
     consola.log(`  Active price range:`)
-    consola.log(`    Min:  ${min} (${currencies.join(", ")})`)
-    consola.log(`    Max:  ${max} (${currencies.join(", ")})`)
+    consola.log(`    Min:  ${stats.priceRange.min} (${stats.priceRange.currencies.join(", ")})`)
+    consola.log(`    Max:  ${stats.priceRange.max} (${stats.priceRange.currencies.join(", ")})`)
   }
-  consola.log(`  Database size:   ${formatBytes(dbSizeBytes)}`)
+  consola.log(`  Database size:   ${formatBytes(stats.dbSizeBytes)}`)
 }
-
-

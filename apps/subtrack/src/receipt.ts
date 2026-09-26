@@ -1,8 +1,8 @@
+import { suggestionRepository } from "./application/index.ts"
 import { readFileSync, statSync } from "node:fs"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { logAudit } from "./audit-log.ts"
-import { writeSuggestionBatch } from "./db/suggestions.ts"
 import { parseEmail } from "./suggest/parser/index.ts"
 import { parseCsvLine } from "./import-csv.ts"
 import { handleSuggestReview } from "./suggest/suggest.ts"
@@ -50,7 +50,7 @@ export async function handleReceipt(file: string, options: { dryRun?: boolean; r
   // json and dryRun are read-only previews: no writes, no console noise mixed into stdout
   if (options.json || options.dryRun) { process.stdout.write(JSON.stringify(candidates, null, 2) + "\n"); return }
   if (!candidates.length) { consola.info("No receipt candidates found"); return }
-  writeSuggestionBatch(candidates)
+  suggestionRepository.recordBatch(candidates)
   logAudit("suggestion.receipt", { details: `${candidates.length} receipt candidate(s) imported` })
   consola.success(`Imported ${candidates.length} receipt candidate(s)`)
   if (options.review) await handleSuggestReview()

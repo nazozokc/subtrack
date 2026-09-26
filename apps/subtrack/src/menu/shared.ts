@@ -3,19 +3,20 @@
  * subscription/tag/period pickers and the Back constant.
  */
 
+import { tagRepository } from "../application/index.ts"
+import { subscriptionRepository } from "./../application/index.ts"
 import { select } from "../prompts.ts"
 import { CYCLE_CHOICES } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { formatPrice } from "../price.ts"
 import { formatCycle } from "@subtrack/lib/date"
 import type { NamedCycle } from "@subtrack/lib/date"
-import { getSubscriptions, getAllTags } from "../db.ts"
 import type { Status } from "../types.ts"
 
 export const BACK = { name: "← Back", value: "back" } as const
 
 export async function pickSubscription(message: string, status?: Status): Promise<number | null> {
-  const subs = getSubscriptions({ includeArchived: true })
+  const subs = subscriptionRepository.list({ includeArchived: true })
     .filter((s) => status === undefined || s.status === status)
   if (subs.length === 0) {
     consola.info("No subscriptions found — choose Add from the menu")
@@ -33,7 +34,7 @@ export async function pickSubscription(message: string, status?: Status): Promis
 }
 
 export async function pickTag(message: string): Promise<string | null> {
-  const tags = getAllTags()
+  const tags = tagRepository.list()
   if (tags.length === 0) {
     consola.info("No tags found")
     return null

@@ -345,6 +345,12 @@ export function saveDb(): void {
   replaceEncryptedDb(encryptBuffer(data), _dbPath)
 }
 
+/**
+ * Passed by the application layer's unit of work. `persist: false` means
+ * "a surrounding batch will flush", so the function must not rewrite the file.
+ */
+export type PersistOptions = { persist?: boolean }
+
 export function getDbPath(): string {
   getDb()
   return _dbPath

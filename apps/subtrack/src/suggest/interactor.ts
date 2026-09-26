@@ -8,10 +8,10 @@
  * - [q]uit — stop reviewing
  */
 
+import { subscriptionRepository, suggestionRepository } from "./../application/index.ts"
 import { confirm, input, select } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
-import { writeSubscription, markSuggestionAsAdded, dismissSuggestion } from "../db.ts"
 import { formatPrice } from "../price.ts"
 import type { Suggestion } from "./types.ts"
 import { findMatches, hasPriceConflict } from "./matcher.ts"
@@ -125,7 +125,7 @@ async function reviewOne(suggestion: Suggestion): Promise<boolean> {
         }
       }
 
-      const result = writeSubscription({
+      const result = subscriptionRepository.add({
         name: suggestion.name,
         price: suggestion.price ?? 0,
         currency: suggestion.currency ?? "USD",
@@ -137,7 +137,7 @@ async function reviewOne(suggestion: Suggestion): Promise<boolean> {
         paymentMethod: suggestion.paymentMethod,
       })
 
-      markSuggestionAsAdded(suggestion.id, result)
+      suggestionRepository.markAdded(suggestion.id, result)
       consola.success(`Added: "${safeName}" (${priceStr}/${cycle})`)
       return true
     }
@@ -146,14 +146,14 @@ async function reviewOne(suggestion: Suggestion): Promise<boolean> {
       // Let user edit fields interactively
       const edited = await editSuggestion(suggestion)
       if (edited) {
-        markSuggestionAsAdded(suggestion.id, edited.id)
+        suggestionRepository.markAdded(suggestion.id, edited.id)
         consola.success(`Added: "${displaySafe(edited.name)}"`)
       }
       return true
     }
 
     case "skip": {
-      dismissSuggestion(suggestion.id)
+      suggestionRepository.dismiss(suggestion.id)
       consola.info("Suggestion dismissed.")
       return true
     }
@@ -218,7 +218,7 @@ async function editSuggestion(suggestion: Suggestion): Promise<{ id: number; nam
     return null
   }
 
-  const id = writeSubscription({
+  const id = subscriptionRepository.add({
     name,
     price,
     currency,

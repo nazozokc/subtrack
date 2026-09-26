@@ -6,10 +6,10 @@
  * - Upcoming payment deadlines within the next 7 days
  */
 
+import { subscriptionRepository } from "./../application/index.ts"
+import { suggestionRepository } from "./../application/index.ts"
 import pc from "@subtrack/lib/ansi"
 import { consola } from "@subtrack/lib/logger"
-import { getPendingSuggestionCount } from "../db/suggestions.ts"
-import { getNonCancelledSubscriptions } from "../db/subscriptions.ts"
 import { upcomingWithinDays } from "../domain/billing.ts"
 
 /**
@@ -18,8 +18,8 @@ import { upcomingWithinDays } from "../domain/billing.ts"
  * Skipped when stdout is piped or JSON mode (caller's responsibility).
  */
 export function showNotificationBanner(): void {
-  const suggestionCount = getPendingSuggestionCount()
-  const upcomingEntries = upcomingWithinDays(getNonCancelledSubscriptions(), 7)
+  const suggestionCount = suggestionRepository.pendingCount()
+  const upcomingEntries = upcomingWithinDays(subscriptionRepository.listActive(), 7)
 
   const parts: string[] = []
   if (suggestionCount > 0) {

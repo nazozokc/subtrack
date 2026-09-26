@@ -1,7 +1,7 @@
+import { subscriptionRepository } from "./application/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import type { Currency } from "./types.ts"
-import { getNonCancelledSubscriptions } from "./db/subscriptions.ts"
 import { formatPrice, roundCurrency } from "./price.ts"
 import { fetchFxRates, tryConvert } from "./fx.ts"
 import { formatDate, formatShortDate, daysUntil } from "@subtrack/lib/date"
@@ -23,7 +23,7 @@ export type { UpcomingEntry }
  * Thin wrapper over the pure `upcomingWithinDays` that loads the active list.
  */
 export function calcUpcoming(days: number = 7): UpcomingEntry[] {
-  return upcomingWithinDays(getNonCancelledSubscriptions(), days)
+  return upcomingWithinDays(subscriptionRepository.listActive(), days)
 }
 
 export async function calcUpcomingWithCurrency(days: number = 7, targetCurrency?: string): Promise<UpcomingEntry[]> {

@@ -1,0 +1,3 @@
+# Tracked layer-boundary violations, one `file|rule|target` per line.
+# Regenerate with `node scripts/arch-check.mjs --update`.
+# Remove a line once that import goes through the application ports.

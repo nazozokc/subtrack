@@ -1,3 +1,25 @@
-export type { SubscriptionRepository, UsageRepository } from "./ports.ts"
-export { subscriptionRepository, usageRepository } from "./repositories.ts"
-
+export type {
+  AuditRepository,
+  SearchRepository,
+  StatsRepository,
+  DatabaseInfo,
+  PriceHistoryRepository,
+  SubscriptionRepository,
+  SuggestionRepository,
+  TagRepository,
+  TrialRepository,
+  UsageRepository,
+} from "./ports.ts"
+export {
+  auditRepository,
+  databaseInfo,
+  priceHistoryRepository,
+  searchRepository,
+  statsRepository,
+  subscriptionRepository,
+  suggestionRepository,
+  tagRepository,
+  trialRepository,
+  usageRepository,
+  withBatch,
+} from "./repositories.ts"

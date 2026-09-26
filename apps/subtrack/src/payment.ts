@@ -1,10 +1,9 @@
+import { subscriptionRepository, usageRepository } from "./application/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import type { SharedArgs, Currency } from "./types.ts"
 import { periodFactor, getPeriodDateRange, formatCycle } from "@subtrack/lib/date"
 import type { NamedCycle } from "@subtrack/lib/date"
-import { getNonCancelledSubscriptions } from "./db/subscriptions.ts"
-import { getLlmUsageTotal, getLlmUsageTotalByProvider } from "./db/usage.ts"
 import { formatPrice, formatUsdCost, roundCurrency } from "./price.ts"
 import { fetchFxRates, convertAmounts, tryConvert } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
@@ -29,7 +28,7 @@ export const showPayment = async (
   includeApi?: boolean,
   byMethod?: boolean,
 ): Promise<void> => {
-  const list = subs ?? getNonCancelledSubscriptions()
+  const list = subs ?? subscriptionRepository.listActive()
 
   if (list.length === 0) {
     consola.info("No subscriptions found — try `subtrack add`")
@@ -51,8 +50,8 @@ export const showPayment = async (
   let apiByProvider: { provider: string; total: number }[] = []
   if (includeApi) {
     const { from, to } = getPeriodDateRange(period)
-    apiTotal = getLlmUsageTotal(from, to)
-    apiByProvider = getLlmUsageTotalByProvider(from, to)
+    apiTotal = usageRepository.totalCost(from, to)
+    apiByProvider = usageRepository.totalCostByProvider(from, to)
   }
 
   if (currency) {
@@ -184,7 +183,7 @@ export function calcSummary(subs: SharedArgs[]): SummaryData {
 }
 
 export function showSummary(subs?: SharedArgs[]): void {
-  const list = subs ?? getNonCancelledSubscriptions()
+  const list = subs ?? subscriptionRepository.listActive()
 
   if (list.length === 0) {
     consola.info("No subscriptions found — try `subtrack add`")
@@ -241,7 +240,7 @@ export async function handlePayment(
   await runPreCommandHooks(options)
 
   if (options.json) {
-    const subs = getNonCancelledSubscriptions()
+    const subs = subscriptionRepository.listActive()
     if (subs.length === 0) {
       process.stdout.write(JSON.stringify({ period, total: 0, subscriptions: [] }, null, 2) + "\n")
       return
@@ -258,8 +257,8 @@ export async function handlePayment(
     let apiByProvider: { provider: string; total: number }[] = []
     if (options.api) {
       const { from, to } = getPeriodDateRange(period)
-      apiTotal = getLlmUsageTotal(from, to)
-      apiByProvider = getLlmUsageTotalByProvider(from, to)
+      apiTotal = usageRepository.totalCost(from, to)
+      apiByProvider = usageRepository.totalCostByProvider(from, to)
     }
 
     let targetCurrency = options.currency as Currency | undefined
@@ -347,7 +346,7 @@ export async function handleSummary(options: JsonOptions = {}) {
   await runPreCommandHooks(options)
 
   if (options.json) {
-    const subs = getNonCancelledSubscriptions()
+    const subs = subscriptionRepository.listActive()
     const data = calcSummary(subs)
     process.stdout.write(JSON.stringify(data, null, 2) + "\n")
     return

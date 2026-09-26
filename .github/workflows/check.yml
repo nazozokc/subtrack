@@ -43,6 +43,10 @@ jobs:
         working-directory: ./apps/subtrack
         run: pnpm lint:types
 
+      - name: Enforce layer boundaries
+        working-directory: ./apps/subtrack
+        run: pnpm lint:arch
+
       - name: Type check (lib)
         working-directory: ./lib
         run: pnpm lint:types

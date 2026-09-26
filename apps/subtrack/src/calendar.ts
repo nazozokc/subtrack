@@ -1,6 +1,6 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
-import { getNonCancelledSubscriptions } from "./db.ts"
+import { subscriptionRepository } from "./application/index.ts"
 import { formatPrice, roundCurrency } from "./price.ts"
 import type { SharedArgs, Currency, Status } from "./types.ts"
 import { fetchFxRates, tryConvert } from "./fx.ts"
@@ -70,7 +70,7 @@ export function billingDaysInMonth(sub: SharedArgs, year: number, month: number)
  * @returns Array of calendar entries keyed by day
  */
 export function calcCalendarEntries(month: number, year: number): CalendarEntry[] {
-  const subs = getNonCancelledSubscriptions()
+  const subs = subscriptionRepository.listActive()
 
   const dayMap = new Map<number, CalendarEntry["subs"]>()
 

@@ -6,8 +6,10 @@ export {
 } from "./db/connection.ts"
 export { runMigrations } from "./db/schema.ts"
 export {
-  getSubscriptions, getNonCancelledSubscriptions, getSubscription, writeSubscription, updateSubscription, deleteSubscription, archiveSubscription, unarchiveSubscription, mapTags, findSubscriptionByName, mergeSubscriptions,
+  getSubscriptions, getNonCancelledSubscriptions, getSubscription, writeSubscription, updateSubscription, deleteSubscription, archiveSubscription, unarchiveSubscription, mapTags, findSubscriptionByName, mergeSubscriptions, searchSubscriptions,
 } from "./db/subscriptions.ts"
+
+export { collectStats } from "./db/stats.ts"
 export type { SubscriptionQueryOptions } from "./db/subscriptions.ts"
 export {
   getAllTags, tagsSubscription, getTagsWithCount, renameTag, deleteTag, pruneTags, mergeTag,

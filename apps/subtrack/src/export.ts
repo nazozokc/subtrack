@@ -1,3 +1,4 @@
+import { subscriptionRepository } from "./application/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { writeFileSync } from "node:fs"
@@ -6,7 +7,6 @@ import { formatPrice } from "./price.ts"
 import { generateXlsx } from "@subtrack/lib/xlsx"
 import { isDayCycle } from "@subtrack/lib/date"
 import { calculateNextBilling } from "./domain/billing.ts"
-import { tagsSubscription, getSubscriptions } from "./db.ts"
 import { fetchFxRates, convertSubsWithRates } from "./fx.ts"
 import { safeOutputPath } from "@subtrack/lib/path"
 
@@ -242,9 +242,10 @@ export async function handleExport(
     return
   }
 
-  let list = options.tags
-    ? tagsSubscription(options.tags.split(",").map((t) => t.trim()))
-    : getSubscriptions({ includeArchived: true })
+  let list = subscriptionRepository.list({
+    includeArchived: true,
+    tags: options.tags ? options.tags.split(",").map((t) => t.trim()) : undefined,
+  })
 
   if (options.status) {
     const statuses = options.status.split(",").map((s) => s.trim().toLowerCase())

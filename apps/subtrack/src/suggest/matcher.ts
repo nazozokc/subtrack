@@ -2,8 +2,8 @@
  * Duplicate detection — compares a suggestion against existing subscriptions.
  */
 
+import { subscriptionRepository } from "./../application/index.ts"
 import type { SharedArgs } from "../types.ts"
-import { getSubscriptions, findSubscriptionByName } from "../db.ts"
 import type { Suggestion } from "./types.ts"
 
 export type MatchResult = {
@@ -17,11 +17,11 @@ export type MatchResult = {
  * Find existing subscriptions that may match a suggestion.
  */
 export function findMatches(suggestion: Pick<Suggestion, "name" | "price">): MatchResult {
-  const all = getSubscriptions({ includeArchived: true })
+  const all = subscriptionRepository.list({ includeArchived: true })
   const name = suggestion.name.toLowerCase().trim()
 
   // Try exact case-insensitive name match
-  const exact = findSubscriptionByName(suggestion.name)
+  const exact = subscriptionRepository.findByName(suggestion.name)
   if (exact) {
     return { matches: [exact], exactMatch: true }
   }

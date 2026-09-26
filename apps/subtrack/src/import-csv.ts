@@ -1,7 +1,7 @@
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { statSync, readFileSync } from "node:fs"
-import { writeSubscription, findSubscriptionByName, saveDb } from "./db.ts"
+import { subscriptionRepository, withBatch } from "./application/index.ts"
 import { logAudit } from "./audit-log.ts"
 import {
   validateName,
@@ -134,146 +134,150 @@ export async function handleImport(
   let failed = 0
   let skipped = 0
 
-  for (let i = 1; i < lines.length; i++) {
-    const fields = parseCsvLine(lines[i])
-    fieldsOfRow = fields
-    if (fields.length < requiredCols.length) {
-      consola.warn(`Line ${i + 1}: skipping (expected ${requiredCols.length} fields, got ${fields.length})`)
-      failed++
-      continue
-    }
-
-    // Field length check (prevent memory exhaustion)
-    const fieldTooLong = fields.some((f) => f.length > MAX_FIELD_LENGTH)
-    if (fieldTooLong) {
-      consola.warn(`Line ${i + 1}: skipping (field exceeds ${MAX_FIELD_LENGTH} characters)`)
-      failed++
-      continue
-    }
-
-    const name = col("name") ?? ""
-    const cycle = col("cycle") ?? ""
-    const tagsStr = col("tags") ?? ""
-    const priceStr = col("price") ?? ""
-    const currency = col("currency") ?? ""
-    const notes = col("notes") ?? null
-
-    // Optional fields — only read when the column exists in the header
-    const status = col("status") ?? "active"
-    const paymentMethod = col("payment_method") ?? null
-    const contractStart = col("contract_start") ?? null
-    const contractEnd = col("contract_end") ?? null
-    const autoRenewal = col("auto_renewal")
-    const vendorName = col("vendor_name") ?? null
-    const vendorUrl = col("vendor_url") ?? null
-    const planTier = col("plan_tier") ?? null
-    const discountAmount = col("discount_amount") ?? null
-    const discountType = col("discount_type") ?? null
-    const billingDay = col("billing_day") ?? null
-
-    // Sanitize: strip control characters from name/notes (CSV injection defense)
-    const sanitized = name.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
-
-    // Validate
-    const nameErr = validateName(sanitized)
-    if (nameErr !== true) { consola.warn(`Line ${i + 1}: ${nameErr}`); failed++; continue }
-
-    const priceErr = validatePrice(priceStr)
-    if (priceErr !== true) { consola.warn(`Line ${i + 1}: ${priceErr}`); failed++; continue }
-
-    if (!isValidCurrency(currency)) {
-      consola.warn(`Line ${i + 1}: invalid currency "${currency}"`)
-      failed++
-      continue
-    }
-    if (!isValidCycle(cycle)) {
-      consola.warn(`Line ${i + 1}: invalid cycle "${cycle}"`)
-      failed++
-      continue
-    }
-    if (!isValidStatus(status)) {
-      consola.warn(`Line ${i + 1}: invalid status "${status}"`)
-      failed++
-      continue
-    }
-    if (discountAmount !== null) {
-      const discountErr = validateDiscountValue(discountAmount)
-      if (discountErr !== true) { consola.warn(`Line ${i + 1}: ${discountErr}`); failed++; continue }
-    }
-    if (discountType !== null) {
-      const discountTypeErr = validateDiscountType(discountType)
-      if (discountTypeErr !== true) { consola.warn(`Line ${i + 1}: ${discountTypeErr}`); failed++; continue }
-    }
-    if (autoRenewal !== undefined) {
-      const autoRenewalErr = validateAutoRenewal(autoRenewal)
-      if (autoRenewalErr !== true) { consola.warn(`Line ${i + 1}: ${autoRenewalErr}`); failed++; continue }
-    }
-    if (contractStart !== null) {
-      const csErr = validateDateString(contractStart)
-      if (csErr !== true) { consola.warn(`Line ${i + 1}: ${csErr}`); failed++; continue }
-    }
-    if (contractEnd !== null) {
-      const ceErr = validateDateString(contractEnd)
-      if (ceErr !== true) { consola.warn(`Line ${i + 1}: ${ceErr}`); failed++; continue }
-    }
-    if (billingDay !== null) {
-      const bdErr = validateBillingDay(billingDay)
-      if (bdErr !== true) { consola.warn(`Line ${i + 1}: ${bdErr}`); failed++; continue }
-    }
-
-    const tags = tagsStr.split(";").map((t) => t.trim()).filter(Boolean)
-    const tagsErr = validateTags(tags.join(","))
-    if (tagsErr !== true) { consola.warn(`Line ${i + 1}: ${tagsErr}`); failed++; continue }
-
-    // Dedup check: skip if same name already exists (a skip is not a failure)
-    if (options.deduplicate) {
-      const existing = findSubscriptionByName(sanitized.trim())
-      if (existing) {
-        consola.warn(
-          `Line ${i + 1}: "${sanitized.trim()}" already exists (id=${existing.id}) — skipping`,
-        )
-        skipped++
+  // One batch for the whole file: the database is encrypted and rewritten
+  // wholesale, so a thousand-row import must not flush a thousand times. A row
+  // that throws is counted and skipped, and the rest still commit.
+  withBatch(() => {
+    for (let i = 1; i < lines.length; i++) {
+      const fields = parseCsvLine(lines[i])
+      fieldsOfRow = fields
+      if (fields.length < requiredCols.length) {
+        consola.warn(`Line ${i + 1}: skipping (expected ${requiredCols.length} fields, got ${fields.length})`)
+        failed++
         continue
       }
-    }
 
-    if (options.dryRun) {
-      consola.info(`[dry-run] Would import: ${sanitized} (${priceStr} ${currency}, ${cycle})`)
-      success++
-    } else {
-      try {
-        writeSubscription({
-          name: sanitized.trim(),
-          price: Number(priceStr),
-          currency,
-          cycle,
-          tags,
-          notes: notes ?? undefined,
-          status: status as Status,
-          paymentMethod: paymentMethod ?? undefined,
-          contractStart: contractStart ?? undefined,
-          contractEnd: contractEnd ?? undefined,
-          autoRenewal: autoRenewal === undefined ? undefined : autoRenewal === "true",
-          vendorName: vendorName ?? undefined,
-          vendorUrl: vendorUrl ?? undefined,
-          planTier: planTier ?? undefined,
-          discountAmount: discountAmount === null ? undefined : Number(discountAmount),
-          discountType: discountType as DiscountType | undefined,
-          billingDay: billingDay === null ? undefined : Number(billingDay),
-        }, { persist: false })
-        success++
-      } catch (e) {
-        consola.warn(`Line ${i + 1}: failed to import: ${String(e)}`)
+      // Field length check (prevent memory exhaustion)
+      const fieldTooLong = fields.some((f) => f.length > MAX_FIELD_LENGTH)
+      if (fieldTooLong) {
+        consola.warn(`Line ${i + 1}: skipping (field exceeds ${MAX_FIELD_LENGTH} characters)`)
         failed++
+        continue
+      }
+
+      const name = col("name") ?? ""
+      const cycle = col("cycle") ?? ""
+      const tagsStr = col("tags") ?? ""
+      const priceStr = col("price") ?? ""
+      const currency = col("currency") ?? ""
+      const notes = col("notes") ?? null
+
+      // Optional fields — only read when the column exists in the header
+      const status = col("status") ?? "active"
+      const paymentMethod = col("payment_method") ?? null
+      const contractStart = col("contract_start") ?? null
+      const contractEnd = col("contract_end") ?? null
+      const autoRenewal = col("auto_renewal")
+      const vendorName = col("vendor_name") ?? null
+      const vendorUrl = col("vendor_url") ?? null
+      const planTier = col("plan_tier") ?? null
+      const discountAmount = col("discount_amount") ?? null
+      const discountType = col("discount_type") ?? null
+      const billingDay = col("billing_day") ?? null
+
+      // Sanitize: strip control characters from name/notes (CSV injection defense)
+      const sanitized = name.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+
+      // Validate
+      const nameErr = validateName(sanitized)
+      if (nameErr !== true) { consola.warn(`Line ${i + 1}: ${nameErr}`); failed++; continue }
+
+      const priceErr = validatePrice(priceStr)
+      if (priceErr !== true) { consola.warn(`Line ${i + 1}: ${priceErr}`); failed++; continue }
+
+      if (!isValidCurrency(currency)) {
+        consola.warn(`Line ${i + 1}: invalid currency "${currency}"`)
+        failed++
+        continue
+      }
+      if (!isValidCycle(cycle)) {
+        consola.warn(`Line ${i + 1}: invalid cycle "${cycle}"`)
+        failed++
+        continue
+      }
+      if (!isValidStatus(status)) {
+        consola.warn(`Line ${i + 1}: invalid status "${status}"`)
+        failed++
+        continue
+      }
+      if (discountAmount !== null) {
+        const discountErr = validateDiscountValue(discountAmount)
+        if (discountErr !== true) { consola.warn(`Line ${i + 1}: ${discountErr}`); failed++; continue }
+      }
+      if (discountType !== null) {
+        const discountTypeErr = validateDiscountType(discountType)
+        if (discountTypeErr !== true) { consola.warn(`Line ${i + 1}: ${discountTypeErr}`); failed++; continue }
+      }
+      if (autoRenewal !== undefined) {
+        const autoRenewalErr = validateAutoRenewal(autoRenewal)
+        if (autoRenewalErr !== true) { consola.warn(`Line ${i + 1}: ${autoRenewalErr}`); failed++; continue }
+      }
+      if (contractStart !== null) {
+        const csErr = validateDateString(contractStart)
+        if (csErr !== true) { consola.warn(`Line ${i + 1}: ${csErr}`); failed++; continue }
+      }
+      if (contractEnd !== null) {
+        const ceErr = validateDateString(contractEnd)
+        if (ceErr !== true) { consola.warn(`Line ${i + 1}: ${ceErr}`); failed++; continue }
+      }
+      if (billingDay !== null) {
+        const bdErr = validateBillingDay(billingDay)
+        if (bdErr !== true) { consola.warn(`Line ${i + 1}: ${bdErr}`); failed++; continue }
+      }
+
+      const tags = tagsStr.split(";").map((t) => t.trim()).filter(Boolean)
+      const tagsErr = validateTags(tags.join(","))
+      if (tagsErr !== true) { consola.warn(`Line ${i + 1}: ${tagsErr}`); failed++; continue }
+
+      // Dedup check: skip if same name already exists (a skip is not a failure)
+      if (options.deduplicate) {
+        const existing = subscriptionRepository.findByName(sanitized.trim())
+        if (existing) {
+          consola.warn(
+            `Line ${i + 1}: "${sanitized.trim()}" already exists (id=${existing.id}) — skipping`,
+          )
+          skipped++
+          continue
+        }
+      }
+
+      if (options.dryRun) {
+        consola.info(`[dry-run] Would import: ${sanitized} (${priceStr} ${currency}, ${cycle})`)
+        success++
+      } else {
+        try {
+          subscriptionRepository.add({
+            name: sanitized.trim(),
+            price: Number(priceStr),
+            currency,
+            cycle,
+            tags,
+            notes: notes ?? undefined,
+            status: status as Status,
+            paymentMethod: paymentMethod ?? undefined,
+            contractStart: contractStart ?? undefined,
+            contractEnd: contractEnd ?? undefined,
+            autoRenewal: autoRenewal === undefined ? undefined : autoRenewal === "true",
+            vendorName: vendorName ?? undefined,
+            vendorUrl: vendorUrl ?? undefined,
+            planTier: planTier ?? undefined,
+            discountAmount: discountAmount === null ? undefined : Number(discountAmount),
+            discountType: discountType as DiscountType | undefined,
+            billingDay: billingDay === null ? undefined : Number(billingDay),
+          })
+          success++
+        } catch (e) {
+          consola.warn(`Line ${i + 1}: failed to import: ${String(e)}`)
+          failed++
+        }
       }
     }
-  }
+  })
 
   const skipNote = skipped > 0 ? `, ${skipped} skipped (already exists)` : ""
   if (options.dryRun) {
     consola.success(`Dry-run complete: ${success} valid, ${failed} invalid${skipNote}`)
   } else {
-    if (success > 0) saveDb()
     logAudit("subscription.import", {
       details: `${success} imported, ${failed} failed, ${skipped} skipped from ${file}`,
     })

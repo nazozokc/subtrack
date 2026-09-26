@@ -1,9 +1,8 @@
+import { auditRepository } from "./application/index.ts"
+import { priceHistoryRepository, subscriptionRepository } from "./application/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import type { Currency, SharedArgs } from "./types.ts"
-import { getSubscriptions } from "./db/subscriptions.ts"
-import { getAllPriceChanges } from "./db/price-history.ts"
-import { getAuditLogs } from "./db/audit.ts"
 import { loadConfig } from "./config.ts"
 import { formatPrice, roundCurrency } from "./price.ts"
 import { periodFactor, occurrencesPerYear } from "@subtrack/lib/date"
@@ -96,14 +95,14 @@ export function calcCancelledThisYear(subs: SharedArgs[], year: number): { name:
     }
   }
 
-  const auditEntries = getAuditLogs({
+  const auditEntries = auditRepository.list({
     action: "subscription.cancel",
     from: `${year}-01-01`,
     limit: 1000,
   })
   for (const entry of auditEntries) {
-    if (entry.created_at.startsWith(prefix)) {
-      results.set(entry.details ?? `#${entry.target_id}`, entry.created_at.slice(0, 10))
+    if (entry.createdAt.startsWith(prefix)) {
+      results.set(entry.details ?? `#${entry.targetId}`, entry.createdAt.slice(0, 10))
     }
   }
 
@@ -137,7 +136,7 @@ export async function handleReport(options: ReportOptions = {}): Promise<void> {
     return
   }
 
-  const subs = getSubscriptions({ includeArchived: true })
+  const subs = subscriptionRepository.list({ includeArchived: true })
 
   // Convert to target currency when requested
   let displaySubs: SharedArgs[] = subs
@@ -168,7 +167,7 @@ export async function handleReport(options: ReportOptions = {}): Promise<void> {
   }
 
   const top = calcTopSubscriptions(displaySubs, 5)
-  const priceChanges = getAllPriceChanges().filter((c) => c.changedAt.startsWith(`${year}-`))
+  const priceChanges = priceHistoryRepository.listRecent().filter((c) => c.changedAt.startsWith(`${year}-`))
   const added = calcAddedThisYear(subs, year)
   const cancelled = calcCancelledThisYear(subs, year)
 

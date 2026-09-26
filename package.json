@@ -10,6 +10,7 @@
     "test": "pnpm -r test",
     "start": "pnpm --filter subtrack start",
     "lint:types": "pnpm -r lint:types",
+    "lint:arch": "pnpm --filter subtrack lint:arch",
     "lint:security": "pnpm -r lint:security",
     "format": "nix fmt",
     "clean": "pnpm -r exec rm -rf dist node_modules"

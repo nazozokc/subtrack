@@ -4,14 +4,12 @@
  * delete flow (subscription/delete.ts).
  */
 
+import { subscriptionRepository, usageRepository } from "../application/index.ts"
 import { isValidCurrency, isValidCycle, validatePrice } from "../validation.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import { loadConfig } from "../config.ts"
 import type { Currency, Cycle, AddFlags } from "../types.ts"
-import { tagsSubscription } from "../db/tags.ts"
-import { getLlmUsageTotal, getLlmUsageTotalByProvider } from "../db/usage.ts"
-import { subscriptionRepository } from "../application/repositories.ts"
 import { spreadSubscription, showApiUsage } from "../display.ts"
 import { fetchConvertedSubs } from "../fx.ts"
 import { logAudit } from "../audit-log.ts"
@@ -39,7 +37,10 @@ export async function handleList(options: {
   await runPreCommandHooks(options)
 
   const list = options.tags
-    ? tagsSubscription(options.tags.split(",").map((t) => t.trim()))
+    ? subscriptionRepository.list({
+        tags: options.tags.split(",").map((t) => t.trim()),
+        includeArchived: true,
+      })
     : subscriptionRepository.list({
         sort: options.sort,
         desc: options.desc,
@@ -91,14 +92,14 @@ export async function handleList(options: {
     const to = `${y}-${String(m).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
     const monthLabel = `${now.toLocaleString("en-US", { month: "long" })} ${y}`
 
-    const total = getLlmUsageTotal(from, to)
-    const byProvider = getLlmUsageTotalByProvider(from, to)
+    const total = usageRepository.totalCost(from, to)
+    const byProvider = usageRepository.totalCostByProvider(from, to)
     showApiUsage(total, byProvider, monthLabel)
   }
 }
 
 export async function handleTags(taglist: string[]) {
-  const list = tagsSubscription(taglist)
+  const list = subscriptionRepository.list({ tags: taglist, includeArchived: true })
   await spreadSubscription(list)
 }
 

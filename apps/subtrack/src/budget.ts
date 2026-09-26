@@ -1,7 +1,7 @@
+import { subscriptionRepository } from "./application/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import type { Currency, SharedArgs } from "./types.ts"
-import { getNonCancelledSubscriptions } from "./db/subscriptions.ts"
 import { loadConfig } from "./config.ts"
 import { formatPrice, roundCurrency } from "./price.ts"
 import { calcSubTotal } from "./compare-totals.ts"
@@ -94,7 +94,7 @@ export function convertTotals(
 
 export async function handleBudget(options: BudgetOptions = {}): Promise<void> {
   const period = options.period ?? "monthly"
-  const subs = getNonCancelledSubscriptions()
+  const subs = subscriptionRepository.listActive()
 
   const budget = resolveBudget(period, options.name)
   if (!budget) {

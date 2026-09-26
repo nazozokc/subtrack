@@ -1,10 +1,10 @@
+import { subscriptionRepository } from "./application/index.ts"
 import { confirm } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { mkdirSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
-import { getSubscription, updateSubscription } from "./db.ts"
 import { logAudit } from "./audit-log.ts"
 import { fail } from "./error.ts"
 import { loadConfig } from "./config.ts"
@@ -32,7 +32,7 @@ function safeFileName(name: string): string {
 }
 
 export async function handleCancel(id: number, options: CancelOptions = {}): Promise<void> {
-  const sub = getSubscription(id)
+  const sub = subscriptionRepository.get(id)
   if (!sub) {
     fail(`Subscription with id ${id} not found`)
     return
@@ -135,7 +135,7 @@ export async function handleCancel(id: number, options: CancelOptions = {}): Pro
     updates.contractEnd = cancellationDate
   }
 
-  if (!updateSubscription(id, updates)) {
+  if (!subscriptionRepository.update(id, updates)) {
     fail(`Subscription with id ${id} not found`)
     return
   }

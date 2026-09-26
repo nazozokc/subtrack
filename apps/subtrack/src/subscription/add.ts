@@ -3,11 +3,12 @@
  * Separated from core.ts because of its complex interactive prompt logic.
  */
 
+import { tagRepository } from "../application/index.ts"
+import { subscriptionRepository } from "./../application/index.ts"
 import { input, confirm } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import type { AddFlags, Cycle, Status } from "../types.ts"
-import { writeSubscription, getAllTags } from "../db.ts"
 import { formatPrice } from "../price.ts"
 import { logAudit } from "../audit-log.ts"
 import {
@@ -89,7 +90,7 @@ export async function resolveAddOptions(flags: AddFlags): Promise<{
 
   if (tagsStr === undefined) {
     if (prompted) {
-      const existingTags = getAllTags()
+      const existingTags = tagRepository.list()
       tagsStr = await input({
         message:
           "tags" +
@@ -326,7 +327,7 @@ export async function handleAdd(flags: AddFlags) {
   const result = await resolveAddOptions(flags)
   if (!result) return
   try {
-    const id = writeSubscription(result)
+    const id = subscriptionRepository.add(result)
     logAudit("subscription.add", {
       targetType: "subscription",
       targetId: id,

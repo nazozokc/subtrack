@@ -1,16 +1,9 @@
 import type { SQLInputValue } from "node:sqlite"
-import { getDb, execObjs, saveDb } from "./connection.ts"
+import type { PriceHistoryEntry } from "../types.ts"
+import { execObjs, getDb, saveDb } from "./connection.ts"
+import type { PersistOptions } from "./connection.ts"
 
-export type PriceHistoryEntry = {
-  id: number
-  subscriptionId: number
-  subscriptionName: string
-  oldPrice: number | null
-  newPrice: number
-  oldCurrency: string | null
-  newCurrency: string
-  changedAt: string
-}
+export type { PriceHistoryEntry } from "../types.ts"
 
 type RawPriceHistory = {
   id: number
@@ -42,6 +35,7 @@ export const writePriceHistory = (
   newPrice: number,
   oldCurrency: string | null,
   newCurrency: string,
+  options: PersistOptions = {},
 ): void => {
   const db = getDb()
   // Only record if price or currency actually changed
@@ -50,7 +44,7 @@ export const writePriceHistory = (
     `INSERT INTO price_history (subscription_id, old_price, new_price, old_currency, new_currency)
      VALUES (?, ?, ?, ?, ?)`,
   ).run(subscriptionId, oldPrice, newPrice, oldCurrency, newCurrency)
-  saveDb()
+  if (options.persist !== false) saveDb()
 }
 
 /** Get price history for a specific subscription (newest first). */

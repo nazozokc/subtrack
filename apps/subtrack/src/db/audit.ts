@@ -1,3 +1,4 @@
+import type { AddAuditArgs, AuditEntry } from "../types.ts"
 /**
  * Audit log database operations.
  *
@@ -5,87 +6,28 @@
  * for security diagnostics and change history.
  */
 
-import type { DatabaseSync, SQLInputValue } from "node:sqlite"
-import { getDb, execObjs, saveDb } from "./connection.ts"
+import type { SQLInputValue } from "node:sqlite"
+import { execObjs, getDb, saveDb } from "./connection.ts"
+import type { PersistOptions } from "./connection.ts"
 
-export type AuditAction =
-  | "subscription.add"
-  | "subscription.edit"
-  | "subscription.delete"
-  | "subscription.archive"
-  | "subscription.unarchive"
-  | "subscription.restore"
-  | "subscription.import"
-  | "subscription.bulk_status"
-  | "subscription.bulk_delete"
-  | "subscription.bulk_tag_add"
-  | "subscription.bulk_tag_remove"
-  | "subscription.clone"
-  | "subscription.merge"
-  | "subscription.cancel"
-  | "subscription.pause"
-  | "subscription.resume"
-  | "subscription.renew"
-  | "trial.add"
-  | "trial.delete"
-  | "tag.rename"
-  | "tag.delete"
-  | "tag.prune"
-  | "tag.merge"
-  | "config.set"
-  | "config.reset"
-  | "backup.restore"
-  | "usage.add"
-  | "usage.edit"
-  | "usage.delete"
-  | "cleanup"
-  | "suggestion.receipt"
-  | "template.add"
-  | "template.edit"
-  | "template.delete"
-  | "template.use"
-
-export type AuditEntry = {
-  id: number
-  action: AuditAction
-  target_type: string | null
-  target_id: number | null
-  details: string | null
-  created_at: string
-}
-
-export type AddAuditArgs = {
-  action: AuditAction
-  targetType?: string | null
-  targetId?: number | null
-  details?: string | null
-}
-
-/** Create the audit_log table (called from schema migrations). */
-export function createAuditTable(db: DatabaseSync): void {
-  db.exec(`CREATE TABLE IF NOT EXISTS audit_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    action TEXT NOT NULL,
-    target_type TEXT,
-    target_id INTEGER,
-    details TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  )`)
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)`)
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)`)
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id)`)
-}
+export type { AddAuditArgs, AuditAction, AuditEntry } from "../types.ts"
 
 /** Insert an audit log entry. */
-export function addAuditLog(args: AddAuditArgs): void {
+/**
+ * Append an audit entry. Returns whether a row was actually written, so a
+ * caller batching several writes does not flush for an entry that was dropped.
+ */
+export function addAuditLog(args: AddAuditArgs, options: PersistOptions = {}): boolean {
   const db = getDb()
   try {
     db.prepare(
       `INSERT INTO audit_log (action, target_type, target_id, details) VALUES (?, ?, ?, ?)`,
     ).run(args.action, args.targetType ?? null, args.targetId ?? null, args.details ?? null)
-    saveDb()
+    if (options.persist !== false) saveDb()
+    return true
   } catch {
     // Silently ignore if table doesn't exist (test environments, first-run edge cases)
+    return false
   }
 }
 
@@ -124,7 +66,8 @@ export function getAuditLogs(options: {
 
   return execObjs<AuditEntry>(
     getDb(),
-    `SELECT * FROM audit_log ${where} ORDER BY id DESC LIMIT ? OFFSET ?`,
+    `SELECT id, action, target_type AS targetType, target_id AS targetId, details, created_at AS createdAt
+     FROM audit_log ${where} ORDER BY id DESC LIMIT ? OFFSET ?`,
     [...params, limit, offset],
   )
 }
@@ -155,10 +98,10 @@ export function getAuditLogCount(options: { action?: string; from?: string; to?:
 }
 
 /** Prune audit log entries older than a given date. */
-export function pruneAuditLogs(before: string): number {
+export function pruneAuditLogs(before: string, options: PersistOptions = {}): number {
   const db = getDb()
   const { changes } = db.prepare("DELETE FROM audit_log WHERE created_at < ?").run(before)
   const count = Number(changes)
-  if (count > 0) saveDb()
+  if (count > 0 && options.persist !== false) saveDb()
   return count
 }
