@@ -24,7 +24,9 @@ import { dirname, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const here = dirname(fileURLToPath(import.meta.url))
-const srcRoot = resolve(here, "..", "src")
+// Overridable so the checker can be pointed at a fixture tree by its tests;
+// production runs scan the real `src`.
+const srcRoot = process.env.ARCH_CHECK_SRC ?? resolve(here, "..", "src")
 const baselineFile = resolve(here, "arch-check-baseline.txt")
 
 /**
@@ -39,6 +41,7 @@ const baselineFile = resolve(here, "arch-check-baseline.txt")
 const DB_ALLOWED = new Set([
   "db.ts", // the re-export barrel
   "application/repositories.ts", // the adapter that is supposed to import db
+  "index.ts", // entry point: owns the process and flushes on SIGINT/SIGTERM
   "backup.ts", // operates on the database file itself
   "cleanup.ts",
   "diagnostics.ts",
@@ -207,7 +210,10 @@ function scanImports(source) {
       continue
     }
     prev = c
-    prevWord = ""
+    // `import("./db.ts")` is a module specifier too. The paren must not erase
+    // the keyword, otherwise a dynamic import is an invisible way to reach
+    // past the layer rules. Any other punctuation does clear it.
+    if (c !== "(" || prevWord !== "import") prevWord = ""
     i++
   }
 

@@ -99,13 +99,29 @@ function write<T>(
 
 export function withBatch<T>(fn: () => T): T {
   batchDepth++
+  let callbackError: unknown
   try {
     return fn()
+  } catch (error) {
+    callbackError = error
+    throw error
   } finally {
     batchDepth--
     if (batchDepth === 0 && batchDirty) {
       batchDirty = false
-      saveDb()
+      try {
+        saveDb()
+      } catch (flushError) {
+        // Swallowing is deliberate here. The callback's error is already on its
+        // way out, and throwing from `finally` would replace it with an
+        // encryption or disk error, hiding the actual cause. The flush failure
+        // is attached instead so it is still reachable.
+        if (callbackError instanceof Error && callbackError.cause === undefined) {
+          callbackError.cause = flushError
+        } else if (callbackError === undefined) {
+          throw flushError
+        }
+      }
     }
   }
 }

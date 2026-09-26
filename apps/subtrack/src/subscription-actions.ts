@@ -28,15 +28,17 @@ async function changeStatus(ids: number[] | undefined, target: Status, force: bo
   // The status change and its audit entry belong to the same edit, and the db
   // is rewritten as a whole file on flush, so a run of N subscriptions is one
   // flush rather than two per row.
-  withBatch(() => {
+  const ok = withBatch(() => {
     for (const sub of pending) {
       if (!subscriptionRepository.update(sub.id, { status: target })) {
         fail(`Subscription with id ${sub.id} not found`)
-        return
+        return false
       }
       logAudit(target === "active" ? "subscription.resume" : "subscription.pause", { targetType: "subscription", targetId: sub.id, details: sub.name })
     }
+    return true
   })
+  if (!ok) return
   consola.success(`Updated ${pending.length} subscription(s)`)
 }
 

@@ -18,7 +18,7 @@ vi.mock("@subtrack/lib/logger", () => {
 // on `db/connection.ts` would never be observed by the repository adapter.
 // Every flush writes a `.subtrack.db.<uuid>.tmp` before renaming it into place,
 // which gives an unambiguous, implementation-independent counter.
-const flushes = { count: 0 }
+const flushes = { count: 0, fail: false }
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>()
   return {
@@ -27,6 +27,7 @@ vi.mock("node:fs", async (importOriginal) => {
     writeFileSync: (file: never, ...rest: never[]) => {
       if (typeof file === "string" && file.includes(".subtrack.db.") && file.endsWith(".tmp")) {
         flushes.count++
+        if (flushes.fail) throw new Error("flush failed: disk or encryption error")
       }
       return (actual.writeFileSync as (...a: never[]) => void)(file, ...rest)
     },
@@ -56,6 +57,7 @@ afterAll(() => {
 
 beforeEach(() => {
   flushes.count = 0
+  flushes.fail = false
   const db = conn.getDb()
   db.exec("DELETE FROM subscriptions")
   db.exec("DELETE FROM tags")
@@ -281,4 +283,48 @@ test("an empty batch does not rewrite the file", () => {
   })
 
   expect(flushes.count).toBe(0)
+})
+
+// The flush happens in a `finally`, so a failure there would otherwise replace
+// whatever the callback was already throwing — turning a real bug report into
+// a confusing disk error.
+test("a failing flush does not replace the callback's error", () => {
+  const id = seed("Explodes")
+  const original = new Error("callback exploded")
+  flushes.fail = true
+
+  let caught: unknown
+  try {
+    repos.withBatch(() => {
+      repos.subscriptionRepository.archive(id)
+      throw original
+    })
+  } catch (error) {
+    caught = error
+  } finally {
+    flushes.fail = false
+  }
+
+  expect(caught).toBe(original)
+  // The flush error is still reachable rather than discarded.
+  expect((caught as Error).cause).toBeInstanceOf(Error)
+  expect(((caught as Error).cause as Error).message).toContain("flush failed")
+})
+
+test("a failing flush surfaces when the callback succeeded", () => {
+  const id = seed("FlushOnly")
+  flushes.fail = true
+
+  let caught: unknown
+  try {
+    repos.withBatch(() => {
+      repos.subscriptionRepository.archive(id)
+    })
+  } catch (error) {
+    caught = error
+  } finally {
+    flushes.fail = false
+  }
+
+  expect((caught as Error | undefined)?.message).toContain("flush failed")
 })
