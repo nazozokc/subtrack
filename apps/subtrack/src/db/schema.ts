@@ -2,7 +2,6 @@ import type { DatabaseSync } from "node:sqlite"
 import { readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { consola } from "@subtrack/lib/logger"
-import { createAuditTable } from "./audit.ts"
 
 /** Current schema version. Bump when adding a new migration below. */
 export const SCHEMA_VERSION = 1
@@ -59,6 +58,28 @@ function ensureUsageGenerationIndex(db: DatabaseSync): void {
     )
     db.exec("CREATE INDEX IF NOT EXISTS idx_llm_usage_generation_id_lookup ON llm_usage(generation_id)")
   }
+}
+
+/**
+ * Create the audit_log table.
+ *
+ * Lives here rather than in `db/audit.ts` so that schema DDL stays a leaf of the
+ * db layer: `audit.ts` needs `getDb()` from `connection.ts`, `connection.ts`
+ * needs `runMigrations` from this file, so defining the DDL in `audit.ts` closed
+ * an import cycle (audit → connection → schema → audit).
+ */
+function createAuditTable(db: DatabaseSync): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT NOT NULL,
+    target_type TEXT,
+    target_id INTEGER,
+    details TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id)`)
 }
 
 /** Apply schema creation and migrations to a database instance. */

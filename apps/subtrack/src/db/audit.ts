@@ -5,7 +5,7 @@
  * for security diagnostics and change history.
  */
 
-import type { DatabaseSync, SQLInputValue } from "node:sqlite"
+import type { SQLInputValue } from "node:sqlite"
 import { getDb, execObjs, saveDb } from "./connection.ts"
 
 export type AuditAction =
@@ -59,21 +59,6 @@ export type AddAuditArgs = {
   targetType?: string | null
   targetId?: number | null
   details?: string | null
-}
-
-/** Create the audit_log table (called from schema migrations). */
-export function createAuditTable(db: DatabaseSync): void {
-  db.exec(`CREATE TABLE IF NOT EXISTS audit_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    action TEXT NOT NULL,
-    target_type TEXT,
-    target_id INTEGER,
-    details TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  )`)
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)`)
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)`)
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id)`)
 }
 
 /** Insert an audit log entry. */
