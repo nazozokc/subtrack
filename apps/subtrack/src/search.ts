@@ -1,9 +1,8 @@
 import { input } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
-import { getDb, mapTags } from "./db.ts"
+import { searchRepository } from "./application/index.ts"
 import { spreadSubscription } from "./display.ts"
 import type { SharedArgs } from "./types.ts"
-import type { SQLInputValue } from "node:sqlite"
 
 export type SearchOptions = {
   names?: boolean
@@ -80,61 +79,14 @@ export async function handleSearch(
   await spreadSubscription(results)
 }
 
+/** Free-text lookup, delegated to the repository. */
 export function searchSubscriptions(
   query: string,
   fields: { names?: boolean; notes?: boolean; tags?: boolean },
 ): SharedArgs[] {
-  // Apply defaults: search all fields if none specified
-  fields = {
+  return searchRepository.find(query, {
     names: fields.names ?? (!fields.notes && !fields.tags),
     notes: fields.notes ?? (!fields.names && !fields.tags),
     tags: fields.tags ?? (!fields.names && !fields.notes),
-  }
-  const db = getDb()
-  const pattern = `%${query}%`
-  const conditions: string[] = []
-  const params: SQLInputValue[] = []
-
-  if (fields.names) {
-    conditions.push("s.name LIKE ?")
-    params.push(pattern)
-  }
-  if (fields.notes) {
-    conditions.push("s.notes LIKE ?")
-    params.push(pattern)
-  }
-  if (fields.tags) {
-    conditions.push(
-      "s.id IN (SELECT st.subscription_id FROM subscription_tags st JOIN tags t ON t.id = st.tag_id WHERE t.name LIKE ?)",
-    )
-    params.push(pattern)
-  }
-
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" OR ")}` : ""
-  const sql = `SELECT DISTINCT s.id, s.name, s.price, s.currency, s.cycle, s.status, s.billing_day AS billingDay, s.created_at AS createdAt, s.notes, s.payment_method AS paymentMethod, s.contract_start AS contractStart, s.contract_end AS contractEnd, s.auto_renewal AS autoRenewal, s.vendor_name AS vendorName, s.vendor_url AS vendorUrl, s.plan_tier AS planTier, s.discount_amount AS discountAmount, s.discount_type AS discountType FROM subscriptions s ${whereClause} ORDER BY s.name`
-
-  const rows = db.prepare(sql).all(...params) as unknown as SharedArgs[]
-  const subs: SharedArgs[] = rows.map((obj) => ({
-    id: Number(obj.id),
-    name: String(obj.name),
-    price: Number(obj.price),
-    currency: String(obj.currency),
-    cycle: String(obj.cycle),
-    status: String(obj.status),
-    billingDay: obj.billingDay !== null ? Number(obj.billingDay) : null,
-    createdAt: String(obj.createdAt),
-    notes: obj.notes !== null ? String(obj.notes) : null,
-    paymentMethod: obj.paymentMethod !== null ? String(obj.paymentMethod) : null,
-    contractStart: obj.contractStart !== null ? String(obj.contractStart) : null,
-    contractEnd: obj.contractEnd !== null ? String(obj.contractEnd) : null,
-    autoRenewal: obj.autoRenewal !== null ? Boolean(obj.autoRenewal) : true,
-    vendorName: obj.vendorName !== null ? String(obj.vendorName) : null,
-    vendorUrl: obj.vendorUrl !== null ? String(obj.vendorUrl) : null,
-    planTier: obj.planTier !== null ? String(obj.planTier) : null,
-    discountAmount: obj.discountAmount !== null ? Number(obj.discountAmount) : null,
-    discountType: obj.discountType !== null ? (String(obj.discountType) as "percentage" | "fixed") : null,
-    tags: [],
-  })) as SharedArgs[]
-
-  return mapTags(subs)
+  })
 }

@@ -1,3 +1,4 @@
+import type { AddAuditArgs, AuditEntry } from "../types.ts"
 /**
  * Audit log database operations.
  *
@@ -8,58 +9,7 @@
 import type { SQLInputValue } from "node:sqlite"
 import { getDb, execObjs, saveDb } from "./connection.ts"
 
-export type AuditAction =
-  | "subscription.add"
-  | "subscription.edit"
-  | "subscription.delete"
-  | "subscription.archive"
-  | "subscription.unarchive"
-  | "subscription.restore"
-  | "subscription.import"
-  | "subscription.bulk_status"
-  | "subscription.bulk_delete"
-  | "subscription.bulk_tag_add"
-  | "subscription.bulk_tag_remove"
-  | "subscription.clone"
-  | "subscription.merge"
-  | "subscription.cancel"
-  | "subscription.pause"
-  | "subscription.resume"
-  | "subscription.renew"
-  | "trial.add"
-  | "trial.delete"
-  | "tag.rename"
-  | "tag.delete"
-  | "tag.prune"
-  | "tag.merge"
-  | "config.set"
-  | "config.reset"
-  | "backup.restore"
-  | "usage.add"
-  | "usage.edit"
-  | "usage.delete"
-  | "cleanup"
-  | "suggestion.receipt"
-  | "template.add"
-  | "template.edit"
-  | "template.delete"
-  | "template.use"
-
-export type AuditEntry = {
-  id: number
-  action: AuditAction
-  target_type: string | null
-  target_id: number | null
-  details: string | null
-  created_at: string
-}
-
-export type AddAuditArgs = {
-  action: AuditAction
-  targetType?: string | null
-  targetId?: number | null
-  details?: string | null
-}
+export type { AddAuditArgs, AuditAction, AuditEntry } from "../types.ts"
 
 /** Insert an audit log entry. */
 export function addAuditLog(args: AddAuditArgs): void {

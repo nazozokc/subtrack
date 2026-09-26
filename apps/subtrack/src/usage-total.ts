@@ -2,15 +2,10 @@
  * Usage total command — aggregated LLM API usage summary.
  */
 
+import { usageRepository } from "./application/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { sectionTitle, divider } from "./display-constants.ts"
-import {
-  getLlmUsageTotal,
-  getLlmUsageTokenTotal,
-  getLlmUsageTotalByProvider,
-  getLlmUsageTotalByModel,
-} from "./db.ts"
 import { getPeriodDateRange } from "@subtrack/lib/date"
 import type { NamedCycle } from "@subtrack/lib/date"
 import { formatUsdCost } from "./price.ts"
@@ -42,10 +37,10 @@ export function handleUsageTotal(options: UsageTotalOptions = {}): void {
     to = range.to
   }
 
-  const total = getLlmUsageTotal(from, to)
-  const byProvider = getLlmUsageTotalByProvider(from, to)
-  const byModel = getLlmUsageTotalByModel(from, to)
-  const tokens = getLlmUsageTokenTotal(from, to)
+  const total = usageRepository.totalCost(from, to)
+  const byProvider = usageRepository.totalCostByProvider(from, to)
+  const byModel = usageRepository.totalCostByModel(from, to)
+  const tokens = usageRepository.totalTokens(from, to)
 
   if (options.json) {
     process.stdout.write(JSON.stringify({

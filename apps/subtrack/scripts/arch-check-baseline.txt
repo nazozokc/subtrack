@@ -1,17 +1,3 @@
 # Files with a known, tracked layer-boundary violation.
 # Regenerate with `node scripts/arch-check.mjs --update`.
 # Remove a line once its module goes through the application ports.
-audit-log.ts
-audit.ts
-export.ts
-notifications/banner.ts
-receipt.ts
-report.ts
-search.ts
-stats.ts
-subscription/core.ts
-suggest/interactor.ts
-suggest/suggest.ts
-tag.ts
-templates.ts
-usage-total.ts

@@ -5,10 +5,10 @@
  * the audit trail of all mutating operations.
  */
 
+import { auditRepository } from "./application/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { CliTable3 } from "@subtrack/lib/table"
-import { getAuditLogs, getAuditLogCount, pruneAuditLogs } from "./db/audit.ts"
 import { TABLE_CHARS, getTableStyle, calcColumnWidths, zebraRow } from "./display-constants.ts"
 import type { ColumnConfig } from "./display-constants.ts"
 import { SHORT_MONTH_NAMES, pad2 } from "@subtrack/lib/date"
@@ -70,7 +70,7 @@ export function handleAuditList(options: {
   from?: string
   to?: string
 }): void {
-  const entries = getAuditLogs({
+  const entries = auditRepository.list({
     action: options.action,
     limit: options.limit ?? 50,
     from: options.from,
@@ -87,7 +87,7 @@ export function handleAuditList(options: {
     return
   }
 
-  const total = getAuditLogCount({ action: options.action, from: options.from, to: options.to })
+  const total = auditRepository.count({ action: options.action, from: options.from, to: options.to })
 
   const headers = ["ID", "Action", "Target", "Details"] as const
   const AUDIT_COLS: ColumnConfig = {
@@ -138,7 +138,7 @@ export function handleAuditPrune(options: {
   const before = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
   const beforeStr = before.toISOString().replace("T", " ").slice(0, 19)
 
-  const count = getAuditLogCount({ to: beforeStr })
+  const count = auditRepository.count({ to: beforeStr })
 
   if (count === 0) {
     consola.info(`No audit log entries older than ${days} days`)
@@ -153,7 +153,7 @@ export function handleAuditPrune(options: {
     return
   }
 
-  const deleted = pruneAuditLogs(beforeStr)
+  const deleted = auditRepository.prune(beforeStr)
   consola.success(`Pruned ${deleted} audit log entr${deleted !== 1 ? "ies" : "y"}`)
 }
 

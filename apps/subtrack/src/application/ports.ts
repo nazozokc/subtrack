@@ -1,13 +1,19 @@
 import type {
+  AddAuditArgs,
   AddLlmUsageArgs,
   AddLlmUsageFromLogArgs,
   AddSharedArgs,
   AddTrialArgs,
+  AuditEntry,
   GetLlmUsageOptions,
   LlmUsageEntry,
   PriceHistoryEntry,
   SharedArgs,
+  StatsSnapshot,
   SubscriptionQueryOptions,
+  Suggestion,
+  SuggestionInput,
+  SuggestionStatus,
   TrialEntry,
   UsageModelTotal,
   UsageProviderTotal,
@@ -61,6 +67,52 @@ export interface TrialRepository {
   listExpiringSoon(days: number): TrialEntry[]
   add(data: AddTrialArgs): void
   remove(id: number): boolean
+}
+
+/** Which columns a free-text search should look at. Unset means "all". */
+export type SearchFields = {
+  names?: boolean
+  notes?: boolean
+  tags?: boolean
+}
+
+export interface SearchRepository {
+  /** Subscriptions whose name, notes, or tags contain `query`. */
+  find(query: string, fields: SearchFields): SharedArgs[]
+}
+
+export interface StatsRepository {
+  /** Row counts and aggregates for the `stats` command. */
+  snapshot(): StatsSnapshot
+}
+
+export interface AuditQuery {
+  action?: string
+  from?: string
+  to?: string
+  limit?: number
+  offset?: number
+}
+
+export interface AuditRepository {
+  list(options?: AuditQuery): AuditEntry[]
+  count(options?: AuditQuery): number
+  /** Append one entry. */
+  record(args: AddAuditArgs): void
+  /** Drop entries older than `before`. Returns rows removed. */
+  prune(before: string): number
+}
+
+export interface SuggestionRepository {
+  list(status?: SuggestionStatus): Suggestion[]
+  get(id: number): Suggestion | undefined
+  pendingCount(): number
+  record(data: SuggestionInput): void
+  /** Insert many, skipping ones already pending. Returns rows inserted. */
+  recordBatch(entries: SuggestionInput[]): number
+  markAdded(suggestionId: number, subscriptionId: number): void
+  dismiss(id: number): boolean
+  dismissAll(): number
 }
 
 export interface TagRepository {

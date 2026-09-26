@@ -1,10 +1,10 @@
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
-import { getTagsWithCount, renameTag, deleteTag, pruneTags, mergeTag } from "./db.ts"
+import { tagRepository } from "./application/index.ts"
 import { logAudit } from "./audit-log.ts"
 
 export function handleTagList(options: { sort?: "name" | "count" } = {}) {
-  const tags = [...getTagsWithCount()]
+  const tags = [...tagRepository.listWithCount()]
   tags.sort((a, b) => {
     if (options.sort === "count") return b.count - a.count || a.name.localeCompare(b.name)
     return a.name.localeCompare(b.name)
@@ -27,7 +27,7 @@ export function handleTagRename(oldName: string, newName: string) {
     return
   }
   try {
-    if (renameTag(oldName, newName)) {
+    if (tagRepository.rename(oldName, newName)) {
       logAudit("tag.rename", { details: `"${oldName}" → "${newName}"` })
       consola.success(`Renamed tag: "${oldName}" → "${newName}"`)
     } else {
@@ -43,7 +43,7 @@ export function handleTagDelete(name: string) {
     fail("Usage: subtrack tag delete <name>")
     return
   }
-  if (deleteTag(name)) {
+  if (tagRepository.remove(name)) {
     logAudit("tag.delete", { details: `"${name}"` })
     consola.success(`Deleted tag: "${name}"`)
   } else {
@@ -57,7 +57,7 @@ export function handleTagMerge(source: string, target: string) {
     return
   }
   try {
-    if (mergeTag(source, target)) {
+    if (tagRepository.merge(source, target)) {
       logAudit("tag.merge", { details: `"${source}" → "${target}"` })
       consola.success(`Merged tag: "${source}" → "${target}"`)
     } else {
@@ -69,7 +69,7 @@ export function handleTagMerge(source: string, target: string) {
 }
 
 export function handleTagPrune() {
-  const count = pruneTags()
+  const count = tagRepository.prune()
   if (count > 0) {
     logAudit("tag.prune", { details: `${count} orphaned tags removed` })
     consola.success(`Removed ${count} orphaned tag${count > 1 ? "s" : ""}`)

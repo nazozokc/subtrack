@@ -8,10 +8,23 @@ import {
   getAllPriceChanges,
   getAllTags,
   deleteTag,
+  addAuditLog,
+  getAuditLogCount,
+  getAuditLogs,
+  pruneAuditLogs,
+  collectStats,
+  dismissAllSuggestions,
+  dismissSuggestion,
+  getPendingSuggestionCount,
+  getSuggestion,
+  getSuggestions,
+  markSuggestionAsAdded,
+  pruneTags,
+  writeSuggestion,
+  writeSuggestionBatch,
   getDbPath,
   getTagsWithCount,
   mergeTag,
-  pruneTags,
   renameTag,
   getLlmUsage,
   getLlmUsageTokenTotal,
@@ -22,6 +35,7 @@ import {
   getPriceHistory,
   getSubscription,
   getSubscriptions,
+  searchSubscriptions,
   getTrial,
   getTrials,
   getTrialsExpiringSoon,
@@ -38,8 +52,12 @@ import {
   writeTrial,
 } from "../db.ts"
 import type {
+  AuditRepository,
+  SearchRepository,
+  StatsRepository,
   DatabaseInfo,
   PriceHistoryRepository,
+  SuggestionRepository,
   SubscriptionRepository,
   TagRepository,
   TrialRepository,
@@ -80,6 +98,46 @@ export function withBatch<T>(fn: () => T): T {
 const unitOfWork: UnitOfWork = { batch: withBatch }
 
 export const databaseInfo: DatabaseInfo = { path: getDbPath }
+
+export const searchRepository: SearchRepository = { find: searchSubscriptions }
+
+export const statsRepository: StatsRepository = { snapshot: collectStats }
+
+export const auditRepository: AuditRepository = {
+  list: (options) => getAuditLogs(options),
+  count: (options) => getAuditLogCount(options),
+  record: (args) => addAuditLog(args),
+  prune: pruneAuditLogs,
+}
+
+export const suggestionRepository: SuggestionRepository = {
+  list: getSuggestions,
+  get: getSuggestion,
+  pendingCount: getPendingSuggestionCount,
+  record: (data) => {
+    writeSuggestion(data, persistOpt())
+    markDirty()
+  },
+  recordBatch: (entries) => {
+    const n = writeSuggestionBatch(entries, persistOpt())
+    markDirty()
+    return n
+  },
+  markAdded: (suggestionId, subscriptionId) => {
+    markSuggestionAsAdded(suggestionId, subscriptionId, persistOpt())
+    markDirty()
+  },
+  dismiss: (id) => {
+    const ok = dismissSuggestion(id, persistOpt())
+    markDirty()
+    return ok
+  },
+  dismissAll: () => {
+    const n = dismissAllSuggestions(persistOpt())
+    markDirty()
+    return n
+  },
+}
 
 export const tagRepository: TagRepository = {
   list: getAllTags,

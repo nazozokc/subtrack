@@ -6,12 +6,12 @@
  * dependency graph.
  */
 
-import { addAuditLog } from "./db/audit.ts"
-import type { AuditAction, AddAuditArgs } from "./db/audit.ts"
+import { auditRepository } from "./application/index.ts"
+import type { AuditAction, AddAuditArgs } from "./types.ts"
 
 /**
  * Convenience function to log an audit entry from command handlers.
  */
 export function logAudit(action: AuditAction, args: Omit<AddAuditArgs, "action"> = {}): void {
-  addAuditLog({ action, ...args })
+  auditRepository.record({ action, ...args })
 }

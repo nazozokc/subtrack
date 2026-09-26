@@ -16,6 +16,9 @@ export const SUB_COLUMNS = `
   discount_amount AS discountAmount, discount_type AS discountType
 `.trim()
 
+/** The same projection, table-qualified for joins and subqueries. */
+const SUB_COLUMNS_S = SUB_COLUMNS.replace(/(\w+)( AS \w+)?/g, (_m, col, alias) => `s.${col}${alias ?? ""}`)
+
 export function mapTags(subs: SharedArgs[]): SharedArgs[] {
   if (subs.length === 0) return subs
 
@@ -70,6 +73,12 @@ export const getSubscriptions = (
   if (options?.maxPrice !== undefined) {
     conditions.push("price <= ?")
   }
+  // Tags live in a side table keyed by tag id, so filter with a subquery.
+  // All requested tags must match (AND semantics).
+  const tagFilter = options?.tags?.length
+    ? `id IN (SELECT st.subscription_id FROM subscription_tags st JOIN tags t ON t.id = st.tag_id WHERE t.name IN (${options.tags.map(() => "?").join(",")}) GROUP BY st.subscription_id HAVING COUNT(DISTINCT t.name) = ${options.tags.length})`
+    : ""
+  if (tagFilter) conditions.push(tagFilter)
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
   let limitClause = ""
@@ -84,6 +93,9 @@ export const getSubscriptions = (
   }
   if (options?.maxPrice !== undefined) {
     params.push(options.maxPrice)
+  }
+  if (options?.tags?.length) {
+    params.push(...options.tags)
   }
   if (options?.limit !== undefined) {
     limitClause = " LIMIT ?"
@@ -322,4 +334,54 @@ export const mergeSubscriptions = (keepId: number, removeId: number): boolean =>
     try { db.exec("ROLLBACK") } catch { /* ok */ }
     throw error
   }
+}
+
+/**
+ * Free-text search across name, notes, and/or tags.
+ * A subscription matches when any enabled field matches, and appears once.
+ */
+export const searchSubscriptions = (
+  query: string,
+  fields: { names?: boolean; notes?: boolean; tags?: boolean },
+): SharedArgs[] => {
+  const db = getDb()
+  const pattern = `%${query}%`
+  const conditions: string[] = []
+  const params: SQLInputValue[] = []
+
+  if (fields.names) {
+    conditions.push("s.name LIKE ?")
+    params.push(pattern)
+  }
+  if (fields.notes) {
+    conditions.push("s.notes LIKE ?")
+    params.push(pattern)
+  }
+  if (fields.tags) {
+    conditions.push(
+      "s.id IN (SELECT st.subscription_id FROM subscription_tags st JOIN tags t ON t.id = st.tag_id WHERE t.name LIKE ?)",
+    )
+    params.push(pattern)
+  }
+
+  if (conditions.length === 0) return []
+
+  const whereClause = `WHERE ${conditions.join(" OR ")}`
+  const rows = execObjs<SharedArgs>(
+    db,
+    `SELECT DISTINCT ${SUB_COLUMNS_S} FROM subscriptions s ${whereClause} ORDER BY s.name`,
+    params,
+  )
+
+  return mapTags(
+    rows.map((row) => ({
+      ...row,
+      id: Number(row.id),
+      price: Number(row.price),
+      billingDay: row.billingDay !== null ? Number(row.billingDay) : null,
+      autoRenewal: row.autoRenewal !== null ? Boolean(row.autoRenewal) : true,
+      discountAmount: row.discountAmount !== null ? Number(row.discountAmount) : null,
+      tags: [],
+    })),
+  )
 }

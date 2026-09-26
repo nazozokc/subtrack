@@ -7,7 +7,7 @@
 
 import type { SQLInputValue } from "node:sqlite"
 import { getDb, execObjs, execObj, saveDb } from "./connection.ts"
-import type { Suggestion } from "../suggest/types.ts"
+import type { Suggestion, SuggestionInput } from "../types.ts"
 
 /** Add a new suggestion to the database. */
 export function writeSuggestion(
@@ -67,19 +67,8 @@ export function writeSuggestion(
 
 /** Batch insert suggestions with dedup by name+price+source (case-insensitive). */
 export function writeSuggestionBatch(
-  items: Array<{
-    name: string
-    price: number | null
-    currency: string | null
-    cycle: string | null
-    vendorName?: string | null
-    source: string
-    sourceDetail?: string | null
-    emailSubject?: string | null
-    emailFrom?: string | null
-    emailDate?: string | null
-    confidence?: number
-  }>,
+  items: SuggestionInput[],
+  options: { persist?: boolean } = {},
 ): number {
   const db = getDb()
   let inserted = 0
@@ -106,7 +95,7 @@ export function writeSuggestionBatch(
     throw error
   }
 
-  if (inserted > 0) saveDb()
+  if (inserted > 0 && options.persist !== false) saveDb()
   return inserted
 }
 
@@ -175,32 +164,39 @@ export function getSuggestion(id: number): Suggestion | undefined {
 }
 
 /** Mark a suggestion as dismissed. */
-export function dismissSuggestion(id: number): boolean {
+export function dismissSuggestion(
+  id: number,
+  options: { persist?: boolean } = {},
+): boolean {
   const db = getDb()
   const { changes } = db.prepare(
     "UPDATE suggestions SET status = 'dismissed' WHERE id = ? AND status = 'pending'",
   ).run(id)
   const modified = Number(changes) > 0
-  if (modified) saveDb()
+  if (modified && options.persist !== false) saveDb()
   return modified
 }
 
 /** Mark all pending suggestions as dismissed. */
-export function dismissAllSuggestions(): number {
+export function dismissAllSuggestions(options: { persist?: boolean } = {}): number {
   const db = getDb()
   const { changes } = db.prepare(
     "UPDATE suggestions SET status = 'dismissed' WHERE status = 'pending'",
   ).run()
   const modified = Number(changes)
-  if (modified > 0) saveDb()
+  if (modified > 0 && options.persist !== false) saveDb()
   return modified
 }
 
 /** Mark a suggestion as added (linked to a subscription). */
-export function markSuggestionAsAdded(suggestionId: number, subscriptionId: number): void {
+export function markSuggestionAsAdded(
+  suggestionId: number,
+  subscriptionId: number,
+  options: { persist?: boolean } = {},
+): void {
   const db = getDb()
   db.prepare(
     "UPDATE suggestions SET status = 'added', matched_sub_id = ? WHERE id = ? AND status = 'pending'",
   ).run(subscriptionId, suggestionId)
-  saveDb()
+  if (options.persist !== false) saveDb()
 }

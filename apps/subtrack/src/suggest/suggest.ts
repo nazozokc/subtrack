@@ -4,17 +4,10 @@
  * Provides the backing logic for all `subtrack suggest` subcommands.
  */
 
+import { subscriptionRepository, suggestionRepository } from "../application/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import pc from "@subtrack/lib/ansi"
-import {
-  getSuggestions,
-  getSuggestion,
-  dismissSuggestion,
-  dismissAllSuggestions,
-  writeSubscription,
-  markSuggestionAsAdded,
-} from "../db.ts"
 import { formatPrice } from "../price.ts"
 import { reviewSuggestions } from "./interactor.ts"
 import type { SuggestListFlags, SuggestDismissFlags } from "./types.ts"
@@ -22,7 +15,7 @@ import type { SuggestListFlags, SuggestDismissFlags } from "./types.ts"
 /** List pending suggestions. */
 export function handleSuggestList(flags: SuggestListFlags = {}): void {
   const status = flags.all ? undefined : "pending"
-  const suggestions = getSuggestions(status)
+  const suggestions = suggestionRepository.list(status)
 
   if (flags.json) {
     process.stdout.write(JSON.stringify(suggestions, null, 2) + "\n")
@@ -56,7 +49,7 @@ export function handleSuggestList(flags: SuggestListFlags = {}): void {
 
 /** View a single suggestion in detail. */
 export function handleSuggestView(id: number): void {
-  const suggestion = getSuggestion(id)
+  const suggestion = suggestionRepository.get(id)
   if (!suggestion) {
     fail(`Suggestion #${id} not found.`)
     return
@@ -85,7 +78,7 @@ export function handleSuggestView(id: number): void {
 
 /** Review suggestions interactively (add/edit/skip). */
 export async function handleSuggestReview(): Promise<void> {
-  const suggestions = getSuggestions("pending")
+  const suggestions = suggestionRepository.list("pending")
   if (suggestions.length === 0) {
     consola.info("No pending suggestions to review.")
     return
@@ -95,7 +88,7 @@ export async function handleSuggestReview(): Promise<void> {
 
 /** Dismiss a suggestion by id. */
 export function handleSuggestDismiss(id: number): void {
-  const ok = dismissSuggestion(id)
+  const ok = suggestionRepository.dismiss(id)
   if (ok) {
     consola.success(`Suggestion #${id} dismissed.`)
   } else {
@@ -105,18 +98,18 @@ export function handleSuggestDismiss(id: number): void {
 
 /** Dismiss all pending suggestions. */
 export function handleSuggestDismissAll(_flags: SuggestDismissFlags = {}): void {
-  const count = getSuggestions("pending").length
+  const count = suggestionRepository.list("pending").length
   if (count === 0) {
     consola.info("No pending suggestions to dismiss.")
     return
   }
-  dismissAllSuggestions()
+  suggestionRepository.dismissAll()
   consola.success(`${count} suggestion${count > 1 ? "s" : ""} dismissed.`)
 }
 
 /** Add a suggestion as a subscription directly (non-interactive). */
 export function handleSuggestAdd(id: number): void {
-  const suggestion = getSuggestion(id)
+  const suggestion = suggestionRepository.get(id)
   if (!suggestion) {
     fail(`Suggestion #${id} not found.`)
     return
@@ -130,7 +123,7 @@ export function handleSuggestAdd(id: number): void {
   const currency = suggestion.currency ?? "USD"
   const cycle = (suggestion.cycle ?? "monthly") as import("../types.ts").Cycle
 
-  const subId = writeSubscription({
+  const subId = subscriptionRepository.add({
     name: suggestion.name,
     price,
     currency,
@@ -141,6 +134,6 @@ export function handleSuggestAdd(id: number): void {
     paymentMethod: suggestion.paymentMethod,
   })
 
-  markSuggestionAsAdded(id, subId)
+  suggestionRepository.markAdded(id, subId)
   consola.success(`Added "${suggestion.name}" as subscription #${subId}.`)
 }
