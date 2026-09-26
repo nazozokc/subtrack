@@ -2,7 +2,7 @@ import { input, confirm, select } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import type { SharedArgs, Status } from "./types.ts"
-import { getSubscriptions, updateSubscription, deleteSubscription, saveDb } from "./db.ts"
+import { subscriptionRepository, withBatch } from "./application/index.ts"
 import { logAudit } from "./audit-log.ts"
 import {
   STATUS_CHOICES,
@@ -24,7 +24,7 @@ export type BulkOptions = {
 function getFilteredSubscriptions(
   filters: BulkFilters,
 ): SharedArgs[] {
-  let list = getSubscriptions()
+  let list = subscriptionRepository.list()
 
   if (filters.tag) {
     const tag = filters.tag.trim().toLowerCase()
@@ -126,10 +126,11 @@ export async function handleBulkStatus(
   )
   if (!shouldProceed(decision)) return
 
-  for (const sub of list) {
-    updateSubscription(sub.id, { status: targetStatus as Status }, { persist: false })
-  }
-  saveDb()
+  withBatch(() => {
+    for (const sub of list) {
+      subscriptionRepository.update(sub.id, { status: targetStatus as Status })
+    }
+  })
   logAudit("subscription.bulk_status", {
     details: `${list.length} subscriptions → "${targetStatus}"`,
   })
@@ -154,10 +155,11 @@ export async function handleBulkDelete(
   )
   if (!shouldProceed(decision)) return
 
-  for (const sub of list) {
-    deleteSubscription(sub.id, { persist: false })
-  }
-  saveDb()
+  withBatch(() => {
+    for (const sub of list) {
+      subscriptionRepository.remove(sub.id)
+    }
+  })
   logAudit("subscription.bulk_delete", {
     details: `${list.length} subscriptions deleted`,
   })
@@ -190,11 +192,12 @@ export async function handleBulkTagAdd(
   )
   if (!shouldProceed(decision)) return
 
-  for (const sub of list) {
-    const newTags = sub.tags.includes(tagName) ? sub.tags : [...sub.tags, tagName]
-    updateSubscription(sub.id, { tags: newTags }, { persist: false })
-  }
-  saveDb()
+  withBatch(() => {
+    for (const sub of list) {
+      const newTags = sub.tags.includes(tagName) ? sub.tags : [...sub.tags, tagName]
+      subscriptionRepository.update(sub.id, { tags: newTags })
+    }
+  })
   logAudit("subscription.bulk_tag_add", {
     details: `Tag "${tagName}" added to ${list.length} subscriptions`,
   })
@@ -227,10 +230,11 @@ export async function handleBulkTagRemove(
   )
   if (!shouldProceed(decision)) return
 
-  for (const sub of list) {
-    const newTags = sub.tags.filter((t: string) => t !== tagName)
-    updateSubscription(sub.id, { tags: newTags }, { persist: false })
-  }
-  saveDb()
+  withBatch(() => {
+    for (const sub of list) {
+      const newTags = sub.tags.filter((t: string) => t !== tagName)
+      subscriptionRepository.update(sub.id, { tags: newTags })
+    }
+  })
   consola.success(`Removed tag "${tagName}" from ${list.length} subscription${list.length > 1 ? "s" : ""}`)
 }

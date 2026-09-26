@@ -5,7 +5,6 @@ analytics.ts
 audit-log.ts
 audit.ts
 budget.ts
-bulk.ts
 calendar.ts
 cancel.ts
 compare-totals.ts

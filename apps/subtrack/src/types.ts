@@ -153,6 +153,56 @@ export type AddTrialArgs = {
   notes?: string | null
 }
 
+/**
+ * Filter and ordering options for subscription queries.
+ *
+ * Lives here rather than in `db/subscriptions.ts` so the application ports can
+ * describe a query without importing from the database layer.
+ */
+export type SubscriptionQueryOptions = {
+  sort?: string
+  desc?: boolean
+  limit?: number
+  offset?: number
+  includeArchived?: boolean
+  status?: string
+  minPrice?: number
+  maxPrice?: number
+}
+
+/** A recorded price or currency change for a subscription. */
+export type PriceHistoryEntry = {
+  id: number
+  subscriptionId: number
+  subscriptionName: string
+  oldPrice: number | null
+  newPrice: number
+  oldCurrency: string | null
+  newCurrency: string
+  changedAt: string
+}
+
+/** Token counts aggregated over a date range. */
+export type UsageTokenTotal = {
+  inputTokens: number
+  outputTokens: number
+}
+
+/** Cost in USD cents attributed to one LLM provider. */
+export type UsageProviderTotal = {
+  provider: string
+  total: number
+}
+
+/** Cost and token counts attributed to one model. */
+export type UsageModelTotal = {
+  model: string
+  provider: string
+  total: number
+  inputTokens: number
+  outputTokens: number
+}
+
 export type TrialAddFlags = {
   name?: string
   expiresAt?: string

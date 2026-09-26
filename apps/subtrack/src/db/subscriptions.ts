@@ -4,16 +4,8 @@ import type { SharedArgs, AddSharedArgs } from "../types.ts"
 
 const SORT_FIELDS = ["id", "name", "price", "currency", "cycle", "status"] as const
 
-export type SubscriptionQueryOptions = {
-  sort?: string
-  desc?: boolean
-  limit?: number
-  offset?: number
-  includeArchived?: boolean
-  status?: string
-  minPrice?: number
-  maxPrice?: number
-}
+import type { SubscriptionQueryOptions } from "../types.ts"
+export type { SubscriptionQueryOptions } from "../types.ts"
 
 /** Column projection shared by all subscription queries. */
 export const SUB_COLUMNS = `

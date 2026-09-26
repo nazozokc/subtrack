@@ -1,14 +1,43 @@
-import type { AddLlmUsageArgs, AddLlmUsageFromLogArgs, AddSharedArgs, GetLlmUsageOptions, LlmUsageEntry, SharedArgs } from "../types.ts"
+import type {
+  AddLlmUsageArgs,
+  AddLlmUsageFromLogArgs,
+  AddSharedArgs,
+  AddTrialArgs,
+  GetLlmUsageOptions,
+  LlmUsageEntry,
+  PriceHistoryEntry,
+  SharedArgs,
+  SubscriptionQueryOptions,
+  TrialEntry,
+  UsageModelTotal,
+  UsageProviderTotal,
+  UsageTokenTotal,
+} from "../types.ts"
 
-/** Application-facing persistence contracts. Implementations stay in infrastructure. */
+/**
+ * Application-facing persistence contracts. Implementations stay in
+ * infrastructure (`repositories.ts`).
+ *
+ * Ports speak domain language: a caller asks for "active subscriptions" or
+ * "price changes in the last N days", never for a SQL string. Anything a port
+ * cannot express cleanly is a sign the query belongs in the adapter, not that
+ * the caller should reach past the boundary.
+ */
 export interface SubscriptionRepository {
-  list(options?: import("../db/subscriptions.ts").SubscriptionQueryOptions): SharedArgs[]
+  list(options?: SubscriptionQueryOptions): SharedArgs[]
+  /** Subscriptions that are not cancelled — the default set for money totals. */
+  listActive(): SharedArgs[]
   get(id: number): SharedArgs | undefined
+  findByName(name: string): SharedArgs | undefined
+  /** Attach a tag array to each row (tags live in a side table). */
+  withTags(subs: SharedArgs[]): SharedArgs[]
   add(data: AddSharedArgs): number
   update(id: number, fields: Partial<AddSharedArgs>): boolean
   remove(id: number): boolean
   archive(id: number): boolean
   unarchive(id: number): boolean
+  /** Fold `removeId` into `keepId`. Returns false when either is missing. */
+  merge(keepId: number, removeId: number): boolean
 }
 
 export interface UsageRepository {
@@ -18,4 +47,43 @@ export interface UsageRepository {
   addFromLog(data: AddLlmUsageFromLogArgs): boolean
   addBatch(entries: AddLlmUsageFromLogArgs[]): { added: number; skipped: number }
   remove(id: number): boolean
+  /** Total cost in USD cents over an inclusive `YYYY-MM-DD` range. */
+  totalCost(from: string, to: string): number
+  totalTokens(from: string, to: string): UsageTokenTotal
+  totalCostByProvider(from: string, to: string): UsageProviderTotal[]
+  totalCostByModel(from: string, to: string): UsageModelTotal[]
+}
+
+export interface TrialRepository {
+  list(): TrialEntry[]
+  get(id: number): TrialEntry | undefined
+  /** Trials whose end date falls within `days` of today. */
+  listExpiringSoon(days: number): TrialEntry[]
+  add(data: AddTrialArgs): void
+  remove(id: number): boolean
+}
+
+export interface PriceHistoryRepository {
+  /** Record a price (or currency) change for a subscription. */
+  record(
+    subscriptionId: number,
+    oldPrice: number | null,
+    newPrice: number,
+    oldCurrency: string | null,
+    newCurrency: string,
+  ): void
+  listForSubscription(subscriptionId: number): PriceHistoryEntry[]
+  /** All changes, optionally limited to the last `days`. */
+  listRecent(days?: number): PriceHistoryEntry[]
+}
+
+/**
+ * Unit of work for multi-row writes.
+ *
+ * The database file is encrypted and rewritten wholesale, so a bulk edit must
+ * flush once at the end rather than per row. `batch` lets a handler say "these
+ * writes are one operation" without knowing how persistence is implemented.
+ */
+export interface UnitOfWork {
+  batch<T>(fn: () => T): T
 }

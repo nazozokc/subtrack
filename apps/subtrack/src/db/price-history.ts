@@ -1,16 +1,8 @@
 import type { SQLInputValue } from "node:sqlite"
+import type { PriceHistoryEntry } from "../types.ts"
 import { getDb, execObjs, saveDb } from "./connection.ts"
 
-export type PriceHistoryEntry = {
-  id: number
-  subscriptionId: number
-  subscriptionName: string
-  oldPrice: number | null
-  newPrice: number
-  oldCurrency: string | null
-  newCurrency: string
-  changedAt: string
-}
+export type { PriceHistoryEntry } from "../types.ts"
 
 type RawPriceHistory = {
   id: number
