@@ -16,7 +16,7 @@ export type SubscriptionQueryOptions = {
 }
 
 /** Column projection shared by all subscription queries. */
-const SUB_COLUMNS = `
+export const SUB_COLUMNS = `
   id, name, price, currency, cycle, status,
   billing_day AS billingDay, created_at AS createdAt, notes, payment_method AS paymentMethod,
   contract_start AS contractStart, contract_end AS contractEnd, auto_renewal AS autoRenewal,
@@ -121,7 +121,10 @@ export const getSubscriptions = (
 export const getNonCancelledSubscriptions = (): SharedArgs[] =>
   getSubscriptions().filter((s) => s.status !== "cancelled")
 
-export const writeSubscription = (data: AddSharedArgs): number => {
+export const writeSubscription = (
+  data: AddSharedArgs,
+  options: { persist?: boolean } = {},
+): number => {
   const db = getDb()
   const uniqueTags = Array.from(new Set(data.tags))
 
@@ -166,7 +169,7 @@ export const writeSubscription = (data: AddSharedArgs): number => {
     }
 
     db.exec("COMMIT")
-    saveDb()
+    if (options.persist !== false) saveDb()
     return subscriptionId
   } catch (error) {
     try {
@@ -178,11 +181,11 @@ export const writeSubscription = (data: AddSharedArgs): number => {
   }
 }
 
-export const deleteSubscription = (id: number): boolean => {
+export const deleteSubscription = (id: number, options: { persist?: boolean } = {}): boolean => {
   const db = getDb()
   const { changes } = db.prepare("DELETE FROM subscriptions WHERE id = ?").run(id)
   const modified = Number(changes) > 0
-  if (modified) saveDb()
+  if (modified && options.persist !== false) saveDb()
   return modified
 }
 
@@ -200,11 +203,18 @@ export const getSubscription = (id: number): SharedArgs | undefined => {
 export const updateSubscription = (
   id: number,
   fields: Partial<AddSharedArgs>,
+  options: { persist?: boolean } = {},
 ): boolean => {
   const db = getDb()
 
   db.exec("BEGIN TRANSACTION")
   try {
+    const existing = db.prepare("SELECT 1 AS found FROM subscriptions WHERE id = ?").get(id)
+    if (!existing) {
+      db.exec("ROLLBACK")
+      return false
+    }
+
     const sets: string[] = []
     const params: SQLInputValue[] = []
 
@@ -249,7 +259,7 @@ export const updateSubscription = (
     }
 
     db.exec("COMMIT")
-    saveDb()
+    if (options.persist !== false) saveDb()
     return true
   } catch (error) {
     try { db.exec("ROLLBACK") } catch { /* ok */ }

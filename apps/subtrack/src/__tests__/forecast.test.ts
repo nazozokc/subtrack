@@ -210,6 +210,59 @@ test("forecast with add-name adds hypothetical subscription", async () => {
   expect(combined).toContain("¥1,500")
 })
 
+test("forecast JSON preserves decimal prices and totals", async () => {
+  const { handleForecast } = await import("../forecast.ts")
+  const writes: string[] = []
+  const originalWrite = process.stdout.write.bind(process.stdout)
+  process.stdout.write = ((chunk: string) => {
+    writes.push(String(chunk))
+    return true
+  }) as typeof process.stdout.write
+
+  try {
+    await handleForecast({
+      months: 1,
+      json: true,
+      addName: "Decimal",
+      addPrice: "14.99",
+      addCurrency: "USD",
+      addCycle: "monthly",
+    })
+  } finally {
+    process.stdout.write = originalWrite
+  }
+
+  const result = JSON.parse(writes.join("")) as {
+    groups: Record<string, { total: number; entries: { monthly: number }[] }>
+  }
+  expect(result.groups.USD?.total).toBe(14.99)
+  expect(result.groups.USD?.entries[0]?.monthly).toBe(14.99)
+})
+
+test("forecast JSON normalizes floating-point totals", async () => {
+  seedSub("One", { price: 0.1, currency: "USD" })
+  seedSub("Two", { price: 0.2, currency: "USD" })
+
+  const { handleForecast } = await import("../forecast.ts")
+  const writes: string[] = []
+  const originalWrite = process.stdout.write.bind(process.stdout)
+  process.stdout.write = ((chunk: string) => {
+    writes.push(String(chunk))
+    return true
+  }) as typeof process.stdout.write
+
+  try {
+    await handleForecast({ months: 1, json: true })
+  } finally {
+    process.stdout.write = originalWrite
+  }
+
+  const result = JSON.parse(writes.join("")) as {
+    groups: Record<string, { total: number }>
+  }
+  expect(result.groups.USD?.total).toBe(0.3)
+})
+
 test("forecast with currency converts to target", async () => {
   seedSub("JP Sub", { price: 1600, currency: "JPY" })
   seedSub("US Sub", { price: 10, currency: "USD" })

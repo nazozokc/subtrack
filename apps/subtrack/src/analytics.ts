@@ -2,7 +2,7 @@ import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import type { AnalyticsOptions } from "./types.ts"
 import { getSubscriptions, getNonCancelledSubscriptions } from "./db.ts"
-import { formatPrice } from "./price.ts"
+import { formatPrice, roundCurrency } from "./price.ts"
 import { calcSummary } from "./payment.ts"
 import { loadConfig } from "./config.ts"
 import { periodFactor } from "@subtrack/lib/date"
@@ -16,6 +16,20 @@ export async function handleAnalytics(options: AnalyticsOptions = {}): Promise<v
 
     const output: Record<string, unknown> = {
       ...data,
+      monthlyByCurrency: Object.fromEntries(
+        Object.entries(data.monthlyByCurrency).map(([ccy, total]) => [ccy, roundCurrency(total)]),
+      ),
+      monthlyByTag: Object.fromEntries(
+        Object.entries(data.monthlyByTag).map(([tag, info]) => [
+          tag,
+          {
+            ...info,
+            monthly: Object.fromEntries(
+              Object.entries(info.monthly).map(([ccy, total]) => [ccy, roundCurrency(total)]),
+            ),
+          },
+        ]),
+      ),
       period: options.period ?? "monthly",
     }
 
@@ -39,7 +53,7 @@ export async function handleAnalytics(options: AnalyticsOptions = {}): Promise<v
           converted[ccy] = (converted[ccy] ?? 0) + total
         }
         output.monthlyByCurrency = Object.fromEntries(
-          Object.entries(converted).map(([ccy, total]) => [ccy, Math.round(total)]),
+          Object.entries(converted).map(([ccy, total]) => [ccy, roundCurrency(total)]),
         )
       }
       output.currency = options.currency
@@ -113,7 +127,7 @@ export async function showAnalytics(options: AnalyticsOptions = {}): Promise<voi
     byCurrency[ccy] = (byCurrency[ccy] ?? 0) + amount * mult
   }
   for (const [ccy, total] of Object.entries(byCurrency).sort()) {
-    consola.log(`  ${ccy}    ${formatPrice(Math.round(total), ccy)}`)
+    consola.log(`  ${ccy}    ${formatPrice(roundCurrency(total), ccy)}`)
   }
 
   // Budget comparison (converted to the display currency when possible)
@@ -169,8 +183,8 @@ export async function showAnalytics(options: AnalyticsOptions = {}): Promise<voi
     for (const [tag, info] of sorted) {
       const ccyEntries = Object.entries(info.monthly)
       const priceStr = ccyEntries.length === 1
-        ? formatPrice(Math.round(ccyEntries[0][1] * mult), ccyEntries[0][0])
-        : ccyEntries.map(([ccy, total]) => formatPrice(Math.round(total * mult), ccy)).join(" + ")
+        ? formatPrice(roundCurrency(ccyEntries[0][1] * mult), ccyEntries[0][0])
+        : ccyEntries.map(([ccy, total]) => formatPrice(roundCurrency(total * mult), ccy)).join(" + ")
       consola.log(
         `  ${tag.padEnd(16)} ${priceStr}/${periodLabel.toLowerCase()} (${info.count} sub${info.count > 1 ? "s" : ""})`,
       )

@@ -1,8 +1,8 @@
 import { test, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { DatabaseSync } from "node:sqlite"
-import { mkdtempSync, writeFileSync, existsSync, rmSync } from "node:fs"
-import { join } from "node:path"
-import { tmpdir } from "node:os"
+import { mkdtempSync, writeFileSync, existsSync, realpathSync, rmSync } from "node:fs"
+import { join, sep } from "node:path"
+import { homedir, tmpdir } from "node:os"
 
 // Give this test file its own DB directory so parallel vitest workers
 // (each running a different test file) never race on the same backing files.
@@ -188,6 +188,9 @@ beforeEach(async () => {
   vi.mocked(checkbox).mockReset().mockResolvedValue([])
   vi.mocked(select).mockReset()
   vi.mocked(search).mockReset().mockResolvedValue("gpt-4o")
+
+  const { runAllScanners } = await import("../scanner.ts")
+  vi.mocked(runAllScanners).mockReturnValue({ source: "combined", entries: [] })
 })
 
 afterAll(async () => {
@@ -261,6 +264,17 @@ test("handleTagList displays tags with counts", async () => {
   expect(combined).toContain("2")
   expect(combined).toContain("storage")
   expect(combined).toContain("1")
+})
+
+test("handleTagList can sort by usage count", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({ name: "A", price: 100, currency: "USD", cycle: "monthly", tags: ["alpha", "beta"] })
+  db.writeSubscription({ name: "B", price: 100, currency: "USD", cycle: "monthly", tags: ["beta"] })
+
+  const { handleTagList } = await import("../tag.ts")
+  handleTagList({ sort: "count" })
+  const out = logMessages.join("\n")
+  expect(out.indexOf("beta")).toBeLessThan(out.indexOf("alpha"))
 })
 
 // ── handleTagRename ──────────────────────────────────────
@@ -794,8 +808,8 @@ test("handleImport skips invalid rows", async () => {
 })
 
 test("handleImport accepts the export CSV header (roundtrip)", async () => {
-  const header = "name,status,cycle,tags,price,currency,notes,payment_method,contract_start,contract_end,auto_renewal,vendor_name,vendor_url,plan_tier,discount_amount,discount_type"
-  const row = 'Netflix,active,monthly,video;entertainment,1490,JPY,"my notes",credit_card,2026-01-01,2027-01-01,true,Netflix Inc,https://netflix.com,Standard,,'
+  const header = "name,status,cycle,tags,price,currency,notes,payment_method,contract_start,contract_end,auto_renewal,vendor_name,vendor_url,plan_tier,discount_amount,discount_type,billing_day"
+  const row = 'Netflix,active,monthly,video;entertainment,1490,JPY,"my notes",credit_card,2026-01-01,2027-01-01,true,Netflix Inc,https://netflix.com,Standard,,,15'
   const filePath = writeTempFile("export-format.csv", `${header}\n${row}`)
 
   const { handleImport } = await import("../import-csv.ts")
@@ -820,8 +834,56 @@ test("handleImport accepts the export CSV header (roundtrip)", async () => {
     vendorUrl: "https://netflix.com",
     planTier: "Standard",
     discountAmount: null,
+    // Regression: billing_day used to be dropped, so export → import lost it
+    billingDay: 15,
   })
   expect(successMessages.some((m) => m.includes("1 imported"))).toBe(true)
+})
+
+test("handleImport leaves billingDay null when the column is absent or empty", async () => {
+  const filePath = writeTempFile(
+    "no-billing-day.csv",
+    "name,status,cycle,tags,price,currency\nNoDay,active,monthly,,100,JPY\n" +
+      "name,status,cycle,tags,price,currency,billing_day\nEmptyDay,active,monthly,,100,JPY,",
+  )
+
+  const { handleImport } = await import("../import-csv.ts")
+  await handleImport(filePath, {})
+
+  const db = await import("../db.ts")
+  const subs = db.getSubscriptions()
+  expect(subs).toHaveLength(2)
+  expect(subs.every((s) => s.billingDay === null)).toBe(true)
+})
+
+test("handleImport rejects an out-of-range billing_day", async () => {
+  const filePath = writeTempFile(
+    "bad-billing-day.csv",
+    "name,status,cycle,tags,price,currency,billing_day\nBad,active,monthly,,100,JPY,99",
+  )
+
+  const { handleImport } = await import("../import-csv.ts")
+  await handleImport(filePath, {})
+
+  const db = await import("../db.ts")
+  expect(db.getSubscriptions()).toHaveLength(0)
+  expect(warnMessages.some((m) => m.includes("between 1 and 31"))).toBe(true)
+})
+
+test("handleImport --deduplicate counts skips separately from failures", async () => {
+  const csv = "name,cycle,tags,price,currency\nDup,monthly,,100,JPY"
+  const first = writeTempFile("dup-first.csv", csv)
+
+  const { handleImport } = await import("../import-csv.ts")
+  await handleImport(first, {})
+  await handleImport(first, { deduplicate: true })
+
+  const db = await import("../db.ts")
+  expect(db.getSubscriptions()).toHaveLength(1)
+  // Regression: a skipped duplicate was counted as `failed`, so a fully-deduplicated
+  // re-import reported "0 imported, 1 failed".
+  const summary = successMessages.at(-1) ?? ""
+  expect(summary).toContain("0 imported, 0 failed, 1 skipped")
 })
 
 test("handleImport rejects rows with invalid status in export format", async () => {
@@ -1192,6 +1254,26 @@ test("handleUsageAdd with --cost flag uses manual cost when pricing not found", 
   expect(entries[0].model).toBe("unknown-model-xyz")
 })
 
+test("handleUsageAdd --cost overrides auto-pricing for a known model", async () => {
+  const db = await import("../db.ts")
+  const { handleUsageAdd } = await import("../usage.ts")
+
+  // Regression: --cost was only consulted when the pricing lookup failed, so a
+  // known model silently stored the auto-priced amount instead of the flag value.
+  await handleUsageAdd({
+    provider: "openai",
+    model: "gpt-4o",
+    inputTokens: "100000",
+    outputTokens: "20000",
+    date: "2026-06-19",
+    cost: "12.34",
+  })
+
+  const entries = db.getLlmUsage()
+  expect(entries).toHaveLength(1)
+  expect(entries[0].cost).toBe(1234) // 12.34 USD = 1234 cents
+})
+
 test("handleUsageAdd with invalid --cost shows error", async () => {
   const { handleUsageAdd } = await import("../usage.ts")
   await handleUsageAdd({
@@ -1496,6 +1578,34 @@ test("handleUsageDelete deletes by ID (non-interactive)", async () => {
 
   expect(db.getLlmUsage()).toHaveLength(0)
   expect(successMessages.some((m) => m.includes(String(id)))).toBe(true)
+})
+
+test("usage delete command parses only IDs after the command path", async () => {
+  const db = await import("../db.ts")
+  db.addLlmUsage({
+    provider: "openai",
+    model: "gpt-4o",
+    input_tokens: 100,
+    output_tokens: 50,
+    cost: 0.1,
+    date: "2026-06-19",
+    description: null,
+  })
+  const id = db.getLlmUsage()[0].id
+
+  const { usageCommand } = await import("../commands/usage.ts")
+  const run = usageCommand.subCommands?.delete?.run
+  expect(run).toBeDefined()
+  await run?.({
+    values: { id: [String(id)] },
+    positionals: ["usage", "delete", String(id)],
+    rest: [],
+    name: "delete",
+    commandName: "delete",
+    commandPath: "usage/delete",
+  })
+
+  expect(db.getLlmUsage()).toHaveLength(0)
 })
 
 test("handleUsageDelete with non-existent ID shows error", async () => {
@@ -1849,7 +1959,7 @@ test("handleRestore restores from valid backup file", async () => {
   const backupDb = new DatabaseSync2(srcDbPath)
   backupDb.exec("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
   backupDb.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
-  backupDb.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
+  backupDb.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id), FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE, FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE)")
   backupDb.exec("CREATE TABLE llm_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, model TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, cost REAL NOT NULL, date TEXT NOT NULL, description TEXT)")
   backupDb.exec("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('Restored', 999, 'EUR', 'yearly')")
   backupDb.close()
@@ -1877,11 +1987,56 @@ test("handleRestore restores from valid backup file", async () => {
   if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
 })
 
-test("handleRestore with non-existent file shows error", async () => {
+test("handleRestore with non-existent file reports it as not found", async () => {
   const { handleRestore } = await import("../backup.ts")
   await handleRestore("/nonexistent/file.db.gz")
-  expect(errorMessages.some((m) => m.includes("Invalid backup file"))).toBe(true)
+  expect(errorMessages.some((m) => m.includes("Backup file not found"))).toBe(true)
 })
+
+/**
+ * An existing file that lives outside every allowed base ($HOME and the temp dir),
+ * or null when the platform exposes no such known path.
+ *
+ * Temp files cannot be used here: on Windows the temp dir sits under the user
+ * profile, so it is always inside an allowed base. `/etc/hostname` is Linux-only,
+ * hence the per-platform candidates.
+ */
+const outsideBaseFile = (() => {
+  const bases = [homedir(), tmpdir()].map((base) => {
+    try {
+      return realpathSync(base)
+    } catch {
+      return base
+    }
+  })
+  const candidates =
+    process.platform === "win32"
+      ? [join(process.env.SystemRoot ?? "C:\\Windows", "System32", "drivers", "etc", "hosts")]
+      : ["/etc/hosts", "/etc/passwd"]
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue
+    let resolved: string
+    try {
+      resolved = realpathSync(candidate)
+    } catch {
+      continue
+    }
+    const insideBase = bases.some(
+      (base) => resolved === base || resolved.startsWith(base.endsWith(sep) ? base : `${base}${sep}`),
+    )
+    if (!insideBase) return candidate
+  }
+  return null
+})()
+
+test.skipIf(!outsideBaseFile)(
+  "handleRestore rejects an existing file outside the allowed bases",
+  async () => {
+    const { handleRestore } = await import("../backup.ts")
+    await handleRestore(outsideBaseFile!)
+    expect(errorMessages.some((m) => m.includes("Invalid backup file"))).toBe(true)
+  },
+)
 
 test("handleRestore interactive: shows info when no backups found", async () => {
   const { mkdtempSync, existsSync, rmSync } = await import("node:fs")

@@ -5,11 +5,13 @@ import type { Currency, CompareOptions } from "./types.ts"
 import { periodFactor, getPeriodDateRange, getPreviousPeriodDateRange, SHORT_MONTH_NAMES } from "@subtrack/lib/date"
 import type { NamedCycle } from "@subtrack/lib/date"
 import { getNonCancelledSubscriptions, getLlmUsageTotal, getAllPriceChanges } from "./db.ts"
-import { formatPrice } from "./price.ts"
+import { formatPrice, roundCurrency } from "./price.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
 import { calcSubTotal } from "./payment.ts"
 import { TABLE_CHARS, getTableStyle, calcColumnWidths } from "./display-constants.ts"
+import { isValidNamedCycle } from "./validation.ts"
+import { fail } from "./error.ts"
 import type { ColumnConfig } from "./display-constants.ts"
 
 type CompareRow = {
@@ -52,7 +54,7 @@ function fmtChange(current: number, previous: number, currency: string): string 
   const pct = previous > 0 ? ((diff / previous) * 100) : 0
   const sign = diff >= 0 ? "+" : ""
   const colored = pct >= 0 ? pc.red(`${sign}${(pct).toFixed(1)}%`) : pc.green(`${sign}${(pct).toFixed(1)}%`)
-  return `${formatPrice(Math.round(diff), currency)} (${colored})`
+  return `${formatPrice(roundCurrency(diff), currency)} (${colored})`
 }
 
 function renderCompareTable(
@@ -171,8 +173,8 @@ export async function showCompare(
   let grandPrevious = 0
 
   for (const ccy of currencies) {
-    const cur = Math.round(currentTotals[ccy] ?? 0)
-    const prev = Math.round(previousTotals[ccy] ?? 0)
+    const cur = roundCurrency(currentTotals[ccy] ?? 0)
+    const prev = roundCurrency(previousTotals[ccy] ?? 0)
     grandCurrent += cur
     grandPrevious += prev
     rows.push({
@@ -208,13 +210,13 @@ export async function showCompare(
     const apiCcy = targetCurrency && rates ? targetCurrency : "USD"
     rows.push({
       label: pc.dim("API Usage"),
-      current: pc.dim(formatPrice(Math.round(curApiDisplay), apiCcy)),
-      previous: pc.dim(formatPrice(Math.round(prevApiDisplay), apiCcy)),
-      change: pc.dim(fmtChange(Math.round(curApiDisplay), Math.round(prevApiDisplay), apiCcy)),
+      current: pc.dim(formatPrice(roundCurrency(curApiDisplay), apiCcy)),
+      previous: pc.dim(formatPrice(roundCurrency(prevApiDisplay), apiCcy)),
+      change: pc.dim(fmtChange(roundCurrency(curApiDisplay), roundCurrency(prevApiDisplay), apiCcy)),
     })
 
-    grandCurrent += Math.round(curApiDisplay)
-    grandPrevious += Math.round(prevApiDisplay)
+    grandCurrent += roundCurrency(curApiDisplay)
+    grandPrevious += roundCurrency(prevApiDisplay)
   }
 
   // Grand total — only show when a target currency is set or there's a single currency
@@ -241,6 +243,10 @@ export async function handleCompare(
   period: NamedCycle,
   options: CompareOptions = {},
 ): Promise<void> {
+  if (!isValidNamedCycle(period)) {
+    fail("period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly")
+    return
+  }
   if (options.json) {
     const subs = getNonCancelledSubscriptions()
     if (subs.length === 0) {
@@ -257,7 +263,9 @@ export async function handleCompare(
 
     process.stdout.write(JSON.stringify({
       period,
-      currentPeriod: currentTotals,
+      currentPeriod: Object.fromEntries(
+        Object.entries(currentTotals).map(([ccy, total]) => [ccy, roundCurrency(total)]),
+      ),
       subscriptions: activeSubs.length,
     }, null, 2) + "\n")
     return

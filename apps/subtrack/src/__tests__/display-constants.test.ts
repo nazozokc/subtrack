@@ -11,6 +11,7 @@ import {
   getTableStyle,
 } from "../display-constants.ts"
 import { loadConfig, saveConfig, resetConfig, getConfigPath } from "../config.ts"
+import { isColorName } from "@subtrack/lib/ansi"
 
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "")
 
@@ -22,6 +23,15 @@ beforeEach(() => {
 afterEach(() => {
   resetConfig()
   try { unlinkSync(getConfigPath()) } catch { /* no config yet */ }
+})
+
+describe("color name validation", () => {
+  test("does not accept Object.prototype properties as colors", () => {
+    expect(isColorName("red")).toBe(true)
+    expect(isColorName("toString")).toBe(false)
+    expect(isColorName("constructor")).toBe(false)
+    expect(isColorName("__proto__")).toBe(false)
+  })
 })
 
 describe("statusColor", () => {

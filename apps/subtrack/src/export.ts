@@ -36,7 +36,7 @@ function csvField(val: unknown): string {
 }
 
 export function exportCsv(subs: SharedArgs[]): string {
-  const header = "name,status,cycle,tags,price,currency,notes,payment_method,contract_start,contract_end,auto_renewal,vendor_name,vendor_url,plan_tier,discount_amount,discount_type"
+  const header = "name,status,cycle,tags,price,currency,notes,payment_method,contract_start,contract_end,auto_renewal,vendor_name,vendor_url,plan_tier,discount_amount,discount_type,billing_day"
   const rows = subs.map((s) => {
     const tags = s.tags.map((t) => escapeCsv(t)).join(";")
     const fields = [
@@ -48,6 +48,7 @@ export function exportCsv(subs: SharedArgs[]): string {
       csvField(s.vendorName), csvField(s.vendorUrl),
       csvField(s.planTier),
       csvField(s.discountAmount), csvField(s.discountType),
+      csvField(s.billingDay),
     ]
     return fields.join(",")
   })

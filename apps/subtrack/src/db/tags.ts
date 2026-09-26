@@ -1,6 +1,6 @@
 import { getDb, execObjs, execObj, saveDb } from "./connection.ts"
 import type { SharedArgs } from "../types.ts"
-import { mapTags } from "./subscriptions.ts"
+import { mapTags, SUB_COLUMNS } from "./subscriptions.ts"
 
 export const getAllTags = (): string[] => {
   const db = getDb()
@@ -35,8 +35,7 @@ export const tagsSubscription = (tag: string[] | string): SharedArgs[] => {
   const idPlaceholders = ids.map(() => "?").join(",")
   const subs = execObjs<SharedArgs>(
     db,
-    `SELECT id, name, price, currency, cycle, status, billing_day AS billingDay, created_at AS createdAt, notes, payment_method AS paymentMethod FROM subscriptions
-     WHERE id IN (${idPlaceholders})`,
+    `SELECT ${SUB_COLUMNS} FROM subscriptions WHERE id IN (${idPlaceholders})`,
     ids,
   )
 
@@ -97,7 +96,11 @@ export const deleteTag = (name: string): boolean => {
 
 export const mergeTag = (source: string, target: string): boolean => {
   const db = getDb()
-  if (source === target) return true
+  // Merging a tag into itself is a no-op, but the source must still exist —
+  // otherwise the caller would report success for a tag that was never there.
+  if (source === target) {
+    return !!execObj<{ id: number }>(db, "SELECT id FROM tags WHERE name = ?", [source])
+  }
 
   db.exec("BEGIN TRANSACTION")
   try {

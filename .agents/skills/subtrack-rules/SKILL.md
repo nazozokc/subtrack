@@ -117,7 +117,7 @@ subtrack has **zero runtime dependencies** — everything is self-contained:
 
 ## Conventions
 
-- Prices are stored as integers (smallest unit, e.g. JPY has no decimal, USD stored as cents)
+- Prices are stored in major currency units (e.g. `14.99` USD); `llm_usage.cost` is stored in USD cents
 - Currencies: JPY/USD/EUR/GBP/AUD/CAD/KRW/CNY/SGD/HKD
 - Cycles: weekly/bi-weekly/monthly/quarterly/semi-annual/yearly
 - Tags are stored in a normalized many-to-many relation

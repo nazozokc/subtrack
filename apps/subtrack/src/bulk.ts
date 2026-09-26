@@ -2,7 +2,7 @@ import { input, confirm, select } from "./prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import type { SharedArgs, Status } from "./types.ts"
-import { getSubscriptions, updateSubscription, deleteSubscription } from "./db.ts"
+import { getSubscriptions, updateSubscription, deleteSubscription, saveDb } from "./db.ts"
 import { logAudit } from "./audit-log.ts"
 import {
   STATUS_CHOICES,
@@ -73,22 +73,31 @@ async function promptFilters(): Promise<BulkFilters> {
 
 // ── Confirmation prompt ────────────────────────────────
 
+/** Returns false when the user declines *or* nothing matched; `matched` tells them apart. */
 async function confirmAction(
   message: string,
   count: number,
   force?: boolean,
-): Promise<boolean> {
+): Promise<{ proceed: boolean; matched: boolean }> {
   if (count === 0) {
     consola.info("No subscriptions match the filter")
-    return false
+    return { proceed: false, matched: false }
   }
 
-  if (force) return true
+  if (force) return { proceed: true, matched: true }
 
-  return await confirm({
+  const ok = await confirm({
     message: `${message} (${count} subscription${count > 1 ? "s" : ""})?`,
     default: false,
   })
+  return { proceed: ok, matched: true }
+}
+
+/** Resolve a confirmAction() result into a "should we continue" decision. */
+function shouldProceed(result: { proceed: boolean; matched: boolean }): boolean {
+  if (!result.matched) return false // already reported "No subscriptions match the filter"
+  if (!result.proceed) { consola.info("Cancelled"); return false }
+  return true
 }
 
 // ── Command handlers ───────────────────────────────────
@@ -110,16 +119,17 @@ export async function handleBulkStatus(
 
   const list = getFilteredSubscriptions(filters)
 
-  const ok = await confirmAction(
+  const decision = await confirmAction(
     `Change status to "${targetStatus}"`,
     list.length,
     options.force,
   )
-  if (!ok) { consola.info("Cancelled"); return }
+  if (!shouldProceed(decision)) return
 
   for (const sub of list) {
-    updateSubscription(sub.id, { status: targetStatus as Status })
+    updateSubscription(sub.id, { status: targetStatus as Status }, { persist: false })
   }
+  saveDb()
   logAudit("subscription.bulk_status", {
     details: `${list.length} subscriptions → "${targetStatus}"`,
   })
@@ -137,16 +147,17 @@ export async function handleBulkDelete(
 
   const list = getFilteredSubscriptions(filters)
 
-  const ok = await confirmAction(
+  const decision = await confirmAction(
     `Delete`,
     list.length,
     options.force,
   )
-  if (!ok) { consola.info("Cancelled"); return }
+  if (!shouldProceed(decision)) return
 
   for (const sub of list) {
-    deleteSubscription(sub.id)
+    deleteSubscription(sub.id, { persist: false })
   }
+  saveDb()
   logAudit("subscription.bulk_delete", {
     details: `${list.length} subscriptions deleted`,
   })
@@ -172,17 +183,18 @@ export async function handleBulkTagAdd(
 
   const list = getFilteredSubscriptions(filters)
 
-  const ok = await confirmAction(
+  const decision = await confirmAction(
     `Add tag "${tagName}" to`,
     list.length,
     options.force,
   )
-  if (!ok) { consola.info("Cancelled"); return }
+  if (!shouldProceed(decision)) return
 
   for (const sub of list) {
     const newTags = sub.tags.includes(tagName) ? sub.tags : [...sub.tags, tagName]
-    updateSubscription(sub.id, { tags: newTags })
+    updateSubscription(sub.id, { tags: newTags }, { persist: false })
   }
+  saveDb()
   logAudit("subscription.bulk_tag_add", {
     details: `Tag "${tagName}" added to ${list.length} subscriptions`,
   })
@@ -208,16 +220,17 @@ export async function handleBulkTagRemove(
 
   const list = getFilteredSubscriptions(filters)
 
-  const ok = await confirmAction(
+  const decision = await confirmAction(
     `Remove tag "${tagName}" from`,
     list.length,
     options.force,
   )
-  if (!ok) { consola.info("Cancelled"); return }
+  if (!shouldProceed(decision)) return
 
   for (const sub of list) {
     const newTags = sub.tags.filter((t: string) => t !== tagName)
-    updateSubscription(sub.id, { tags: newTags })
+    updateSubscription(sub.id, { tags: newTags }, { persist: false })
   }
+  saveDb()
   consola.success(`Removed tag "${tagName}" from ${list.length} subscription${list.length > 1 ? "s" : ""}`)
 }

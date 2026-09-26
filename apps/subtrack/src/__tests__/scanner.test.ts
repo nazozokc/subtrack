@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from "vitest"
+import { describe, test, expect, afterEach, beforeEach } from "vitest"
 import type { Scanner } from "../scanner-types.ts"
 
 // Import the functions we want to test
@@ -6,6 +6,10 @@ import type { Scanner } from "../scanner-types.ts"
 import { registerScanner, getRegisteredScanners, runAllScanners, clearScanners } from "../scanner.ts"
 
 describe("scanner registry", () => {
+  beforeEach(() => {
+    clearScanners()
+    registerScanner({ name: "opencode", scan: () => ({ source: "opencode", entries: [] }) })
+  })
   test("getRegisteredScanners returns registered scanners", () => {
     const scanners = getRegisteredScanners()
     // By default, the built-in scanners are registered at import time

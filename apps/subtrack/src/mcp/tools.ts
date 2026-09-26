@@ -51,7 +51,7 @@ export const TOOLS: Tool[] = [
       type: "object",
       properties: {
         name: { type: "string", description: "Subscription name" },
-        price: { type: "number", description: "Price in smallest currency unit" },
+        price: { type: "number", description: "Price in major currency units (e.g. 14.99 USD)" },
         currency: { type: "string", description: "Currency code (e.g. USD, JPY)" },
         cycle: { type: "string", description: "Billing cycle: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly" },
         tags: { type: "string", description: "Comma-separated tags" },
@@ -119,7 +119,7 @@ export const TOOLS: Tool[] = [
       properties: {
         id: { type: "number", description: "Subscription ID to edit" },
         name: { type: "string", description: "New name" },
-        price: { type: "number", description: "New price in smallest currency unit" },
+        price: { type: "number", description: "New price in major currency units (e.g. 14.99 USD)" },
         currency: { type: "string", description: "New currency code" },
         cycle: { type: "string", description: "New billing cycle" },
         status: { type: "string", description: "New status: active, paused, cancelled" },
@@ -182,6 +182,7 @@ export const TOOLS: Tool[] = [
         filter_tag: { type: "string", description: "Only affect subscriptions with this tag" },
         filter_status: { type: "string", description: "Only affect subscriptions with this status" },
         filter_name: { type: "string", description: "Only affect subscriptions whose name contains this" },
+        confirm: { type: "boolean", description: "Must be true to perform a destructive bulk action" },
       },
       required: ["action"],
     },

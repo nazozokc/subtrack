@@ -1,7 +1,7 @@
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { getNonCancelledSubscriptions } from "./db.ts"
-import { formatPrice } from "./price.ts"
+import { formatPrice, roundCurrency } from "./price.ts"
 import type { SharedArgs, Currency, Status } from "./types.ts"
 import { fetchFxRates, tryConvert } from "./fx.ts"
 import { toDate, clampDay, daysInMonth, cycleDays, dayCycleDaysInMonth, isDayCycle } from "@subtrack/lib/date"
@@ -125,7 +125,7 @@ export async function showCalendar(options: CalendarOptions): Promise<void> {
         day: entry.day,
         subs: entry.subs.map((sub) => {
           const converted = tryConvert(sub.price, sub.currency, targetCcy as Currency, rates.rates)
-          return converted !== null ? { ...sub, price: Math.round(converted), currency: targetCcy } : sub
+          return converted !== null ? { ...sub, price: roundCurrency(converted), currency: targetCcy } : sub
         }),
       }))
     } catch {
@@ -199,7 +199,7 @@ export async function showCalendar(options: CalendarOptions): Promise<void> {
     consola.log("")
     const parts = Object.entries(currencyTotals)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([ccy, total]) => formatPrice(Math.round(total), ccy))
+      .map(([ccy, total]) => formatPrice(roundCurrency(total), ccy))
     consola.log(`  ${pc.bold("Total:")} ${parts.join(" + ")} (${totalSubs} event${totalSubs > 1 ? "s" : ""})`)
   }
 }

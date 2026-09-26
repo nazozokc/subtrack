@@ -147,18 +147,18 @@ async function resolveUsageAddOptions(flags: UsageAddFlags) {
     description = str.trim() || null
   }
 
-  // Cost calculation
+  // Cost calculation — an explicit --cost always wins over auto-pricing
   let manualCost = false
-  if (pricing) {
+  if (manualCostCents !== null) {
+    costCents = manualCostCents
+    manualCost = true
+  } else if (pricing) {
     costCents = calculateCostCents(pricing, inputTokens, outputTokens)
   }
 
   if (costCents === null) {
-    // Fallback: --cost flag or manual input
-    if (manualCostCents !== null) {
-      costCents = manualCostCents
-      manualCost = true
-    } else if (!prompted) {
+    // Fallback: manual input
+    if (!prompted) {
       fail(
         `Could not find pricing for "${model}". Provide --cost to set cost manually (e.g. --cost 0.50 for 50 cents).`,
       )

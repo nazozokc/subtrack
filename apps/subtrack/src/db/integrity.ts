@@ -49,20 +49,36 @@ export function verifyDbHash(encryptedData: Buffer, dbFilePath?: string): {
   ok: boolean
   expected: string | null
   actual: string | null
+  recoverable: boolean
 } {
-  if (!dbFilePath) return { ok: true, expected: null, actual: null }
+  if (!dbFilePath) return { ok: true, expected: null, actual: null, recoverable: false }
 
   const hashPath = getDbHashPath(dbFilePath)
+  const actual = sha256(encryptedData)
 
   if (!existsSync(hashPath)) {
-    // No sidecar yet — first run or migration. Create one.
-    writeDbHash(encryptedData, dbFilePath)
-    return { ok: true, expected: null, actual: sha256(encryptedData) }
+    // No sidecar yet — first run or migration. Create one when possible.
+    try {
+      writeDbHash(encryptedData, dbFilePath)
+      return { ok: true, expected: null, actual, recoverable: false }
+    } catch {
+      return { ok: false, expected: null, actual, recoverable: true }
+    }
   }
 
-  const expected = readFileSync(hashPath, "utf-8").trim()
-  const actual = sha256(encryptedData)
-  return { ok: expected === actual, expected, actual }
+  let expected: string
+  try {
+    expected = readFileSync(hashPath, "utf-8").trim()
+  } catch {
+    // A present but unreadable sidecar is reported like a mismatch. It is not
+    // silently replaced because the integrity metadata itself is suspect.
+    return { ok: false, expected: null, actual, recoverable: false }
+  }
+
+  if (!/^[a-f0-9]{64}$/.test(expected)) {
+    return { ok: false, expected, actual, recoverable: false }
+  }
+  return { ok: expected === actual, expected, actual, recoverable: false }
 }
 
 /**

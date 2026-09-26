@@ -2,7 +2,7 @@ import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import type { Currency } from "./types.ts"
 import { getNonCancelledSubscriptions } from "./db/subscriptions.ts"
-import { formatPrice } from "./price.ts"
+import { formatPrice, roundCurrency } from "./price.ts"
 import { fetchFxRates, tryConvert } from "./fx.ts"
 import { formatDate, formatShortDate, daysUntil } from "@subtrack/lib/date"
 import { runPreCommandHooks } from "./pre-command.ts"
@@ -35,8 +35,8 @@ export async function calcUpcomingWithCurrency(days: number = 7, targetCurrency?
     for (const entry of entries) {
       const converted = tryConvert(entry.amount, entry.sub.currency, targetCurrency as Currency, rates.rates)
       if (converted !== null) {
-        entry.amount = Math.round(converted)
-        entry.sub = { ...entry.sub, price: Math.round(converted), currency: targetCurrency }
+        entry.amount = roundCurrency(converted)
+        entry.sub = { ...entry.sub, price: roundCurrency(converted), currency: targetCurrency }
       }
     }
   } catch {
@@ -71,7 +71,7 @@ export async function showUpcoming(days: number = 7, options: { currency?: strin
     consola.log("")
     const totalParts = Object.entries(currencyTotals)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([ccy, total]) => formatPrice(Math.round(total), ccy))
+      .map(([ccy, total]) => formatPrice(roundCurrency(total), ccy))
     consola.log(`  ${pc.bold("Total:")} ${totalParts.join(" + ")} (across ${entries.length} subscription${entries.length > 1 ? "s" : ""})`)
   }
 }
@@ -91,7 +91,7 @@ export async function handleUpcoming(days: number = 7, options: { json?: boolean
       currency: e.sub.currency,
       cycle: e.sub.cycle,
       nextDate: formatDate(e.nextDate),
-      amount: Math.round(e.amount),
+      amount: roundCurrency(e.amount),
       tags: e.sub.tags,
     }))
     process.stdout.write(JSON.stringify(data, null, 2) + "\n")

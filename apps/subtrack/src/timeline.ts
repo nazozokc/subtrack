@@ -4,7 +4,7 @@ import pc from "@subtrack/lib/ansi"
 import { getSubscriptions } from "./db.ts"
 import type { SharedArgs, Currency } from "./types.ts"
 import { periodFactor, SHORT_MONTH_NAMES } from "@subtrack/lib/date"
-import { formatPrice } from "./price.ts"
+import { formatPrice, roundCurrency } from "./price.ts"
 import { fetchFxRates, convertSubsWithRates } from "./fx.ts"
 
 export type TimelineOptions = {
@@ -58,7 +58,7 @@ function calcMonthlyTotals(
       total += sub.price * periodFactor(sub.cycle, "monthly")
     }
 
-    results.push({ label, year: y, month: m, total: Math.round(total) })
+    results.push({ label, year: y, month: m, total })
   }
 
   return results
@@ -103,11 +103,6 @@ function calcMonthlyTotalsByCategory(
     }
   }
 
-  // Round all values
-  for (const cd of catData) {
-    cd.months = cd.months.map((v) => Math.round(v))
-  }
-
   return { totals, categories: catData }
 }
 
@@ -137,7 +132,7 @@ export function renderBarChart(totals: MonthTotal[], currency: string = "USD"): 
   lines.push("")
   lines.push("─".repeat(barWidth + labelWidth + 16))
 
-  const avg = Math.round(totals.reduce((s, t) => s + t.total, 0) / totals.length)
+  const avg = totals.reduce((s, t) => s + t.total, 0) / totals.length
   const totalSum = totals.reduce((s, t) => s + t.total, 0)
   lines.push(
     ` ${pc.dim(`Avg: ${formatPrice(avg, currency)}/mo  │  Total: ${formatPrice(totalSum, currency)}`)}`,
@@ -222,21 +217,21 @@ export async function handleTimeline(options: TimelineOptions = {}): Promise<voi
     const data: Record<string, unknown> = {
       months,
       currency: ccy,
-      total: totals.reduce((s, t) => s + t.total, 0),
+      total: roundCurrency(totals.reduce((s, t) => s + t.total, 0)),
       average:
         totals.length > 0
-          ? Math.round(totals.reduce((s, t) => s + t.total, 0) / totals.length)
+          ? roundCurrency(totals.reduce((s, t) => s + t.total, 0) / totals.length)
           : 0,
       entries: totals.map((t) => ({
         month: t.label,
-        total: t.total,
+        total: roundCurrency(t.total),
       })),
     }
     if (options.categories) {
       const { categories } = calcMonthlyTotalsByCategory(activeSubs, months)
       const catData: Record<string, number[]> = {}
       for (const cd of categories) {
-        catData[cd.category] = cd.months
+        catData[cd.category] = cd.months.map((value) => roundCurrency(value))
       }
       data.categories = catData
     }

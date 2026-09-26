@@ -72,8 +72,10 @@ function extractPrice(text: string): { amount: number; currency: string } | null
       if (ccy) {
         const rawAmount = parseFloat(match[1].replace(/,/g, ""))
         if (rawAmount > 0 && rawAmount < 99999999) {
-          // Scale: JPY is zero-decimal, others are fractional
-          const amount = ccy === "JPY" ? Math.round(rawAmount) : Math.round(rawAmount * 100)
+          // Subscription prices use major currency units (e.g. 9.99 USD).
+          const amount = ccy === "JPY"
+            ? Math.round(rawAmount)
+            : rawAmount
           return { amount, currency: ccy }
         }
       } else {
@@ -82,7 +84,9 @@ function extractPrice(text: string): { amount: number; currency: string } | null
         const rawAmount = parseFloat(match[2].replace(/,/g, ""))
         const currency = CURRENCY_SYMBOLS[symbol] ?? "USD"
         if (rawAmount > 0 && rawAmount < 99999999) {
-          const amount = currency === "JPY" ? Math.round(rawAmount) : Math.round(rawAmount * 100)
+          const amount = currency === "JPY"
+            ? Math.round(rawAmount)
+            : rawAmount
           return { amount, currency }
         }
       }

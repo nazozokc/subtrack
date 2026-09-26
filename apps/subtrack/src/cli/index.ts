@@ -13,8 +13,8 @@
  *   9. run the command
  */
 
-import { resolveArgs, tokenize } from "./parser.ts"
-import { resolveCommand, createCommandNotFoundError, CommandNotFoundError } from "./router.ts"
+import { resolveArgs } from "./parser.ts"
+import { getCommandPositionals, resolveCommand, createCommandNotFoundError, CommandNotFoundError } from "./router.ts"
 import { renderUsage } from "./help.ts"
 import type { Args, Command, CommandContext } from "./types.ts"
 
@@ -56,9 +56,7 @@ export async function cli(
   }
 
   // ── 1/2. resolve the command tree from positional tokens ──
-  const positionals = tokenize(argv)
-    .filter((t): t is { kind: "positional"; value: string } => t.kind === "positional")
-    .map((t) => t.value)
+  const positionals = getCommandPositionals(argv, entry, cliSubCommands)
   const resolved = resolveCommand(positionals, entry, cliSubCommands)
 
   const additionalErrors: Error[] = []
@@ -77,6 +75,7 @@ export async function cli(
   const { values, positionals: ctxPositionals, rest, error } = resolveArgs(argv, args, {
     toKebab: targetCommand.toKebab === true,
     skip: targetDepth,
+    strict: resolved.unknownName === undefined,
   })
 
   const errors: Error[] = [...additionalErrors]

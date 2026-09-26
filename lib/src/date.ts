@@ -249,12 +249,18 @@ export function dayCycleDaysInMonth(
  * Days until a target date (YYYY-MM-DD string or Date), relative to today.
  * Returns 0 for today, negative for past dates.
  */
+function calendarDayNumber(date: Date): number {
+  const normalized = new Date(0)
+  normalized.setUTCHours(0, 0, 0, 0)
+  normalized.setUTCFullYear(date.getFullYear(), date.getMonth(), date.getDate())
+  return normalized.getTime() / (24 * 60 * 60 * 1000)
+}
+
 export function daysUntil(target: string | Date): number {
   const now = new Date()
-  now.setHours(0, 0, 0, 0)
   const parsed = typeof target === "string" ? new Date(target + "T00:00:00") : new Date(target)
-  parsed.setHours(0, 0, 0, 0)
-  return Math.ceil((parsed.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+  if (Number.isNaN(parsed.getTime())) return Number.NaN
+  return Math.round(calendarDayNumber(parsed) - calendarDayNumber(now))
 }
 
 /**

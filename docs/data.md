@@ -142,9 +142,9 @@ Every time a subscription's price or currency is changed via `subtrack edit`, th
 
 All mutating operations (add, edit, delete, clone, archive, import, bulk operations, tag changes, config changes, usage changes) are recorded in the `audit_log` table. View the audit trail with `subtrack audit list` and prune old entries with `subtrack audit prune`.
 
-## Prices are stored as integers
+## Prices use major currency units
 
-Prices are stored as whole numbers (integers) in the database. This avoids floating-point precision issues. For display, prices are formatted with the appropriate currency symbol and decimal places using `Intl.NumberFormat`.
+Subscription prices are represented in major currency units (for example, `14.99` USD). They are validated and displayed with the appropriate currency symbol and decimal places using `Intl.NumberFormat`. LLM usage costs are the exception: `llm_usage.cost` is stored in USD cents.
 
 ## Encryption
 

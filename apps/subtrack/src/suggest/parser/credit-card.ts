@@ -87,10 +87,10 @@ export function parseCreditCardEmail(email: RawEmail): SuggestionCandidate | nul
     const currencySymbol = amountMatch[0].match(/[¥$€£]/)?.[0] ?? ""
     const currencyMap: Record<string, string> = { "$": "USD", "¥": "JPY", "€": "EUR", "£": "GBP" }
     const currency = currencySymbol ? (currencyMap[currencySymbol] ?? "JPY") : "JPY"
-    // Scale: JPY is zero-decimal, others are fractional (cents)
+    // Subscription prices use major currency units (e.g. 19.99 USD).
     const amount = currency === "JPY"
-      ? parseInt(rawAmount, 10)
-      : Math.round(parseFloat(rawAmount) * 100)
+      ? Math.round(Number(rawAmount))
+      : Number(rawAmount)
 
     if (isNaN(amount) || amount <= 0 || amount > 99999999) continue
 

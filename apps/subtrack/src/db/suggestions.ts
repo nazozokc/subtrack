@@ -10,46 +10,59 @@ import { getDb, execObjs, execObj, saveDb } from "./connection.ts"
 import type { Suggestion } from "../suggest/types.ts"
 
 /** Add a new suggestion to the database. */
-export function writeSuggestion(data: {
-  name: string
-  price: number | null
-  currency: string | null
-  cycle: string | null
-  vendorName?: string | null
-  vendorUrl?: string | null
-  planTier?: string | null
-  paymentMethod?: string | null
-  source: string
-  sourceDetail?: string | null
-  emailSubject?: string | null
-  emailFrom?: string | null
-  emailDate?: string | null
-  confidence?: number
-}): number {
+export function writeSuggestion(
+  data: {
+    name: string
+    price: number | null
+    currency: string | null
+    cycle: string | null
+    vendorName?: string | null
+    vendorUrl?: string | null
+    planTier?: string | null
+    paymentMethod?: string | null
+    source: string
+    sourceDetail?: string | null
+    emailSubject?: string | null
+    emailFrom?: string | null
+    emailDate?: string | null
+    confidence?: number
+  },
+  options: { persist?: boolean; transaction?: boolean } = {},
+): number {
   const db = getDb()
-  db.prepare(
-    `INSERT INTO suggestions (name, price, currency, cycle, vendor_name, vendor_url, plan_tier, payment_method, source, source_detail, email_subject, email_from, email_date, confidence)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    data.name,
-    data.price ?? null,
-    data.currency ?? null,
-    data.cycle ?? null,
-    data.vendorName ?? null,
-    data.vendorUrl ?? null,
-    data.planTier ?? null,
-    data.paymentMethod ?? null,
-    data.source,
-    data.sourceDetail ?? null,
-    data.emailSubject ?? null,
-    data.emailFrom ?? null,
-    data.emailDate ?? null,
-    data.confidence ?? 0.0,
-  )
-  const idRow = execObj<Record<string, number>>(db, "SELECT last_insert_rowid() AS id")
-  const id = Number(idRow?.id ?? 0)
-  saveDb()
-  return id
+  const ownsTransaction = options.transaction !== false
+  if (ownsTransaction) db.exec("BEGIN TRANSACTION")
+  try {
+    db.prepare(
+      `INSERT INTO suggestions (name, price, currency, cycle, vendor_name, vendor_url, plan_tier, payment_method, source, source_detail, email_subject, email_from, email_date, confidence)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      data.name,
+      data.price ?? null,
+      data.currency ?? null,
+      data.cycle ?? null,
+      data.vendorName ?? null,
+      data.vendorUrl ?? null,
+      data.planTier ?? null,
+      data.paymentMethod ?? null,
+      data.source,
+      data.sourceDetail ?? null,
+      data.emailSubject ?? null,
+      data.emailFrom ?? null,
+      data.emailDate ?? null,
+      data.confidence ?? 0.0,
+    )
+    const idRow = execObj<Record<string, number>>(db, "SELECT last_insert_rowid() AS id")
+    const id = Number(idRow?.id ?? 0)
+    if (ownsTransaction) db.exec("COMMIT")
+    if (options.persist !== false) saveDb()
+    return id
+  } catch (error) {
+    if (ownsTransaction) {
+      try { db.exec("ROLLBACK") } catch { /* best-effort rollback */ }
+    }
+    throw error
+  }
 }
 
 /** Batch insert suggestions with dedup by name+price+source (case-insensitive). */
@@ -71,21 +84,29 @@ export function writeSuggestionBatch(
   const db = getDb()
   let inserted = 0
 
-  for (const item of items) {
-    // Dedup: skip if same name+price+source already exists as pending
-    const existing = execObjs<Record<string, number>>(
-      db,
-      `SELECT id FROM suggestions
-       WHERE LOWER(name) = LOWER(?) AND price IS ? AND source = ? AND status = 'pending'
-       LIMIT 1`,
-      [item.name, item.price ?? null, item.source],
-    )
-    if (existing.length > 0) continue
+  db.exec("BEGIN TRANSACTION")
+  try {
+    for (const item of items) {
+      // Dedup: skip if same name+price+source already exists as pending
+      const existing = execObjs<Record<string, number>>(
+        db,
+        `SELECT id FROM suggestions
+         WHERE LOWER(name) = LOWER(?) AND price IS ? AND source = ? AND status = 'pending'
+         LIMIT 1`,
+        [item.name, item.price ?? null, item.source],
+      )
+      if (existing.length > 0) continue
 
-    writeSuggestion(item)
-    inserted++
+      writeSuggestion(item, { persist: false, transaction: false })
+      inserted++
+    }
+    db.exec("COMMIT")
+  } catch (error) {
+    try { db.exec("ROLLBACK") } catch { /* best-effort rollback */ }
+    throw error
   }
 
+  if (inserted > 0) saveDb()
   return inserted
 }
 

@@ -1,6 +1,6 @@
 import { test, expect, describe, vi } from "vitest"
 import { tokenize, resolveArgs, ArgValidationError } from "../cli/parser.ts"
-import { resolveCommand, CommandNotFoundError } from "../cli/router.ts"
+import { getCommandPositionals, resolveCommand, CommandNotFoundError } from "../cli/router.ts"
 import { renderUsage } from "../cli/help.ts"
 import { cli } from "../cli/index.ts"
 import { define } from "../cli/types.ts"
@@ -78,13 +78,48 @@ describe("resolveArgs", () => {
     expect(resolveArgs(["-c=USD"], args).values.currency).toBe("USD")
   })
 
-  test("unknown options are ignored (non-strict)", () => {
+  test("unknown options are ignored in compatibility mode", () => {
     const r = resolveArgs(["--unknown", "--limit=3"], {
       limit: { type: "string" },
       json: { type: "boolean" },
     })
     expect(r.error).toBeUndefined()
     expect(r.values.limit).toBe("3")
+  })
+
+  test("supports negated boolean options", () => {
+    const r = resolveArgs(["--no-json"], { json: { type: "boolean" } }, { strict: true })
+    expect(r.error).toBeUndefined()
+    expect(r.values.json).toBe(false)
+  })
+
+  test("negates only the boolean option that owns the flag", () => {
+    const r = resolveArgs(
+      ["list", "--no-desc"],
+      {
+        desc: { type: "boolean" },
+        json: { type: "boolean" },
+        active: { type: "boolean" },
+        limit: { type: "string" },
+      },
+      { skip: 1, strict: true },
+    )
+    expect(r.error).toBeUndefined()
+    expect(r.values).toEqual({ desc: false })
+  })
+
+  test("strict mode rejects unknown options and extra positionals", () => {
+    const unknown = resolveArgs(["--dry-rnu"], { json: { type: "boolean" } }, { strict: true })
+    expect(unknown.error).toBeInstanceOf(AggregateError)
+    expect((unknown.error as AggregateError).errors[0]).toMatchObject({
+      message: "Unknown option '--dry-rnu'",
+    })
+
+    const extra = resolveArgs(["1", "2"], { id: { type: "positional" } }, { strict: true })
+    expect(extra.error).toBeInstanceOf(AggregateError)
+    expect((extra.error as AggregateError).errors[0]).toMatchObject({
+      message: "Unexpected positional argument '2'",
+    })
   })
 
   test("string flag without value is a type error", () => {
@@ -151,9 +186,11 @@ describe("resolveArgs", () => {
     expect(r.error).toBeUndefined()
   })
 
-  test("kebabized option names match camelCase schemas when toKebab", () => {
+  test("kebabized and camelCase option names both match toKebab schemas", () => {
     const r = resolveArgs(["--input-tokens=5"], { inputTokens: { type: "string" } }, { toKebab: true })
     expect(r.values.inputTokens).toBe("5")
+    const legacy = resolveArgs(["--inputTokens=6"], { inputTokens: { type: "string" } }, { toKebab: true })
+    expect(legacy.values.inputTokens).toBe("6")
   })
 
   test("skip assignment with nested path (depth 2)", () => {
@@ -176,6 +213,12 @@ describe("resolveCommand", () => {
     subCommands: { list: { name: "list", run: () => undefined }, rename: { name: "rename", run: () => undefined } },
   }
   const subs = { tag: parent, delete: leaf }
+
+  test("command path extraction skips option values", () => {
+    const entry: Command = { name: "subtrack", run: () => undefined }
+    const dedupe: Command = define({ name: "dedupe", args: { threshold: { type: "string" } }, run: () => undefined })
+    expect(getCommandPositionals(["dedupe", "--threshold", "0.5"], entry, { dedupe })).toEqual(["dedupe"])
+  })
 
   test("empty positionals resolves the entry", () => {
     const r = resolveCommand([], entry, subs)
@@ -357,6 +400,20 @@ describe("cli", () => {
       expect(lines[0]).toBe("subtrack (subtrack v1.2.3)")
       expect(lines[1]).toBe("")
       expect(lines[2]).toBe("Positional argument 'id' is required")
+    } finally {
+      restore()
+    }
+  })
+
+  test("rejects unknown options before running a command", async () => {
+    const { lines, restore } = captureLogs()
+    try {
+      await expect(cli(["list", "--dry-rnu"], makeEntry(), {
+        name: "subtrack",
+        version: "1.2.3",
+        subCommands: { list: define({ name: "list", run: () => undefined }) },
+      })).rejects.toThrow(AggregateError)
+      expect(lines).toContain("Unknown option '--dry-rnu'")
     } finally {
       restore()
     }

@@ -1,6 +1,8 @@
 // ── LLM API Usage commands ───────────────────────────
 import { define } from "../cli/types.ts"
 import { consola } from "@subtrack/lib/logger"
+import { fail } from "../error.ts"
+import { isValidNamedCycle } from "../validation.ts"
 import type { NamedCycle } from "@subtrack/lib/date"
 import type { UsageRefreshFlags } from "../types.ts"
 
@@ -39,7 +41,7 @@ const usageListCommand = define({
     if (ctx.values.limit !== undefined) {
       limit = Number(ctx.values.limit)
       if (!Number.isInteger(limit) || limit < 1) {
-        consola.fail("Invalid --limit. Enter a positive integer (e.g. --limit 200)")
+        fail("Invalid --limit. Enter a positive integer (e.g. --limit 200)")
         return
       }
     }
@@ -47,7 +49,7 @@ const usageListCommand = define({
     if (ctx.values.offset !== undefined) {
       offset = Number(ctx.values.offset)
       if (!Number.isInteger(offset) || offset < 0) {
-        consola.fail("Invalid --offset. Enter a non-negative integer (e.g. --offset 100)")
+        fail("Invalid --offset. Enter a non-negative integer (e.g. --offset 100)")
         return
       }
     }
@@ -73,7 +75,7 @@ const usageEditCommand = define({
   run: async (ctx) => {
     const id = Number(ctx.values.id)
     if (isNaN(id)) {
-      consola.fail("Invalid id. Provide the usage entry ID (e.g. usage edit 5 --cost 0.50)")
+      fail("Invalid id. Provide the usage entry ID (e.g. usage edit 5 --cost 0.50)")
       return
     }
     const { handleUsageEdit } = await import("../usage.ts")
@@ -88,7 +90,11 @@ const usageDeleteCommand = define({
     id: { type: "positional", array: true, description: "Entry ID(s) to delete (omit for interactive selection)", required: false },
   },
   run: async (ctx) => {
-    const ids = ctx.positionals.slice(1).map(Number).filter((n) => !isNaN(n))
+    const ids = (ctx.values.id ?? []).map(Number)
+    if (ids.some((id) => !Number.isInteger(id) || id < 1)) {
+      fail("Usage entry IDs must be positive integers")
+      return
+    }
     const { handleUsageDelete } = await import("../usage.ts")
     return handleUsageDelete(ids.length > 0 ? ids : undefined)
   },
@@ -131,8 +137,13 @@ const usageTotalCommand = define({
     period: { type: "string", description: "Period: monthly, quarterly, yearly (default: monthly)" },
     json: { type: "boolean", short: "j", description: "Output as JSON" },
   },
-run: async (ctx) => {
-    const period = (ctx.values.period || "monthly") as NamedCycle
+  run: async (ctx) => {
+    const periodValue = ctx.values.period || "monthly"
+    if (!isValidNamedCycle(periodValue)) {
+      fail("period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly")
+      return
+    }
+    const period = periodValue as NamedCycle
     const { handleUsageTotal } = await import("../usage-total.ts")
     return handleUsageTotal({ from: ctx.values.from, to: ctx.values.to, period, json: ctx.values.json })
   },

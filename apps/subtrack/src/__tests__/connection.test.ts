@@ -1,7 +1,7 @@
 import { test, expect, vi, beforeAll, afterAll, afterEach } from "vitest"
 import { DatabaseSync } from "node:sqlite"
 import {
-  mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync,
+  mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync,
 } from "node:fs"
 import { join, parse } from "node:path"
 import { tmpdir } from "node:os"
@@ -58,6 +58,7 @@ afterAll(async () => {
 
 afterEach(() => {
   delete process.env.SUBSC_CLI_DB_PASSPHRASE
+  process.env.SUBSC_CLI_DB_DIR = mainDir
 })
 
 // ── Directory validation ───────────────────────────────
@@ -88,6 +89,9 @@ test("getDbDir accepts a valid temp directory", () => {
 // caches _db and skips lock acquisition afterwards.
 
 test("getDb throws when another instance holds the lock", () => {
+  // The connection module caches the open handle; close it so this test is
+  // independent of execution order within the file.
+  conn.closeDb()
   const dir = mkdtempSync(join(tmpdir(), "subtrack-conn-lock-"))
   tempDirs.push(dir)
   process.env.SUBSC_CLI_DB_DIR = dir
@@ -98,6 +102,7 @@ test("getDb throws when another instance holds the lock", () => {
 })
 
 test("getDb acquires lock, creates lock file, and sets db path", () => {
+  conn.closeDb()
   process.env.SUBSC_CLI_DB_DIR = mainDir
 
   conn.getDb()
@@ -112,6 +117,7 @@ test("getDb acquires lock, creates lock file, and sets db path", () => {
 // ── saveDb ────────────────────────────────────────────
 
 test("saveDb writes encrypted database with integrity hash", async () => {
+  conn.closeDb()
   process.env.SUBSC_CLI_DB_DIR = mainDir
 
   const db = conn.getDb()
@@ -143,15 +149,28 @@ test("saveDb writes encrypted database with integrity hash", async () => {
   expect(verifyDbHash(tampered, dbPath).ok).toBe(false)
 })
 
+test("verifyDbHash reports an unreadable sidecar as a mismatch", async () => {
+  const { verifyDbHash } = await import("../db/integrity.ts")
+  const dir = mkdtempSync(join(tmpdir(), "subtrack-hash-"))
+  const dbPath = join(dir, "subtrack.db")
+  const data = Buffer.from("encrypted database")
+  writeFileSync(dbPath, data)
+  mkdirSync(`${dbPath}.sha256`)
+
+  expect(verifyDbHash(data, dbPath)).toMatchObject({ ok: false, recoverable: false })
+  rmSync(dir, { recursive: true, force: true })
+})
+
 // ── restoreDb variants ────────────────────────────────
 
-async function makeBackupBytes(): Promise<Buffer> {
+async function makeBackupBytes(userVersion?: number): Promise<Buffer> {
   const srcPath = join(mainDir, `.subtrack-src-${Date.now()}.db`)
   const backup = new DatabaseSync(srcPath)
   backup.exec("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
   backup.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
-  backup.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id))")
+  backup.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id), FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE, FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE)")
   backup.exec("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('GzService', 999, 'USD', 'monthly')")
+  if (userVersion !== undefined) backup.exec(`PRAGMA user_version = ${userVersion}`)
   backup.close()
   const buf = readFileSync(srcPath)
   rmSync(srcPath, { force: true })
@@ -159,6 +178,7 @@ async function makeBackupBytes(): Promise<Buffer> {
 }
 
 test("restoreDb restores from a gzipped backup (.db.gz)", async () => {
+  conn.closeDb()
   process.env.SUBSC_CLI_DB_DIR = mainDir
 
   const backupBytes = await makeBackupBytes()
@@ -172,9 +192,22 @@ test("restoreDb restores from a gzipped backup (.db.gz)", async () => {
     | undefined
   expect(row).toBeTruthy()
   expect(String(row?.name)).toBe("GzService")
+
+  const migratedPath = join(mainDir, ".subtrack-migrated-check.db")
+  const activePath = conn.getDbPath() || join(mainDir, "subtrack.db")
+  if (existsSync(activePath)) {
+    writeFileSync(migratedPath, decryptBuffer(readFileSync(activePath)))
+    const migrated = new DatabaseSync(migratedPath, { readOnly: true })
+    const version = migrated.prepare("PRAGMA user_version").get() as { user_version: number }
+    expect(Number(version.user_version)).toBe(1)
+    expect(migrated.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'audit_log'").get()).toBeTruthy()
+    migrated.close()
+    rmSync(migratedPath, { force: true })
+  }
 })
 
 test("restoreDb restores from an encrypted backup (.db.enc)", async () => {
+  conn.closeDb()
   process.env.SUBSC_CLI_DB_DIR = mainDir
 
   const backupBytes = await makeBackupBytes()
@@ -188,6 +221,28 @@ test("restoreDb restores from an encrypted backup (.db.enc)", async () => {
     | undefined
   expect(row).toBeTruthy()
   expect(String(row?.name)).toBe("GzService")
+})
+
+test("restoreDb rejects a current-version backup with an incomplete schema", async () => {
+  process.env.SUBSC_CLI_DB_DIR = mainDir
+
+  const backupBytes = await makeBackupBytes(1)
+  const backupPath = join(mainDir, "incomplete-current.db")
+  writeFileSync(backupPath, backupBytes)
+
+  expect(() => conn.restoreDb(backupPath)).toThrow(/missing table|missing column/i)
+  expect(existsSync(join(mainDir, ".subtrack.save.db"))).toBe(false)
+})
+
+test("restoreDb rejects a backup from a newer schema version", async () => {
+  process.env.SUBSC_CLI_DB_DIR = mainDir
+
+  const backupBytes = await makeBackupBytes(2)
+  const backupPath = join(mainDir, "future.db")
+  writeFileSync(backupPath, backupBytes)
+
+  expect(() => conn.restoreDb(backupPath)).toThrow(/newer than supported/i)
+  expect(existsSync(join(mainDir, ".subtrack.save.db"))).toBe(false)
 })
 
 test("restoreDb rejects an encrypted backup with the wrong key", async () => {

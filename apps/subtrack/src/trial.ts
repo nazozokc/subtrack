@@ -59,15 +59,15 @@ async function resolveTrialAddOptions(flags: TrialAddFlags): Promise<AddTrialArg
     const trimmed = priceStr.trim()
     if (trimmed) {
       const num = Number(trimmed)
-      if (isNaN(num) || num < 0) { fail("Price must be a non-negative number"); return null }
-      price = Math.round(num)
+      if (!Number.isFinite(num) || num < 0) { fail("Price must be a non-negative number"); return null }
+      price = num
     }
   } else if (prompted) {
     const pStr = await input({
       message: "price after trial (optional, number)",
-      validate: (v: string) => !v.trim() || (!isNaN(Number(v)) && Number(v) >= 0) ? true : "Enter a valid non-negative number",
+      validate: (v: string) => !v.trim() || (Number.isFinite(Number(v)) && Number(v) >= 0) ? true : "Enter a valid non-negative number",
     })
-    if (pStr.trim()) price = Math.round(Number(pStr))
+    if (pStr.trim()) price = Number(pStr)
   }
 
   // currency (optional)
