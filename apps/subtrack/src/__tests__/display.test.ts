@@ -282,11 +282,11 @@ test("currency with empty list shows info", () => {
 // ── exportCsv tests ──────────────────────────────────────
 
 function expectedCsvHeader(): string {
-  return "\uFEFFname,status,cycle,tags,price,currency,notes,payment_method,contract_start,contract_end,auto_renewal,vendor_name,vendor_url,plan_tier,discount_amount,discount_type"
+  return "\uFEFFname,status,cycle,tags,price,currency,notes,payment_method,contract_start,contract_end,auto_renewal,vendor_name,vendor_url,plan_tier,discount_amount,discount_type,billing_day"
 }
 
-function expectedCsvRow(name: string, cycle = "monthly", tags = "", price = "1000", currency = "JPY", status = "active"): string {
-  return `${name},${status},${cycle},${tags},${price},${currency},,,,,false,,,,,`
+function expectedCsvRow(name: string, cycle = "monthly", tags = "", price = "1000", currency = "JPY", status = "active", billingDay = ""): string {
+  return `${name},${status},${cycle},${tags},${price},${currency},,,,,false,,,,,,${billingDay}`
 }
 
 test("exportCsv returns header-only when no subscriptions", async () => {
@@ -338,6 +338,18 @@ test("exportCsv begins with BOM", async () => {
   const { exportCsv } = await import("../export.ts")
   const csv = exportCsv([makeSub()])
   expect(csv.charCodeAt(0)).toBe(0xfeff)
+})
+
+test("exportCsv includes billing_day so CSV round-trips losslessly", async () => {
+  const { exportCsv } = await import("../export.ts")
+  const csv = exportCsv([
+    makeSub({ id: 1, name: "WithDay", billingDay: 7 }),
+    makeSub({ id: 2, name: "NoDay", billingDay: null }),
+  ])
+  const lines = csv.split("\n")
+  expect(lines[0]).toContain("billing_day")
+  expect(lines[1]).toBe(expectedCsvRow("WithDay", "monthly", "", "1000", "JPY", "active", "7"))
+  expect(lines[2]).toBe(expectedCsvRow("NoDay", "monthly", "", "1000", "JPY", "active", ""))
 })
 
 test("exportCsv escapes formula injection chars in ALL fields (status, cycle, price, currency)", async () => {

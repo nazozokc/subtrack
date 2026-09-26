@@ -1431,3 +1431,27 @@ test("batchAddLlmUsageFromLog with empty array returns zeroes", async () => {
   expect(r.added).toBe(0)
   expect(r.skipped).toBe(0)
 })
+
+// ── mergeTag ──────────────────────────────────────────────
+
+test("mergeTag into itself is a no-op that keeps the tag and its associations", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({
+    name: "SelfMerge",
+    price: 100,
+    currency: "USD",
+    cycle: "monthly",
+    tags: ["keepme"],
+  })
+
+  expect(db.mergeTag("keepme", "keepme")).toBe(true)
+  expect(db.tagsSubscription("keepme")).toHaveLength(1)
+  expect(db.getAllTags()).toContain("keepme")
+})
+
+test("mergeTag into itself reports failure for a tag that does not exist", async () => {
+  const db = await import("../db.ts")
+  // Regression: this used to short-circuit to `true`, so the CLI printed
+  // "✔ Merged tag" (and wrote an audit entry) for a nonexistent tag.
+  expect(db.mergeTag("ghost", "ghost")).toBe(false)
+})

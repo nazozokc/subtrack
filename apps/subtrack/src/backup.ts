@@ -195,7 +195,13 @@ export async function handleRestore(
     // ── Non-interactive ──────────────────────────────────
     const resolvedPath = safePath(path.resolve(file))
     if (!resolvedPath) {
-      fail(`Invalid backup file — must be within home directory`)
+      // safePath() rejects both "escapes the allowed bases" and "does not exist";
+      // report the far more common cause first so the message is actionable.
+      fail(
+        existsSync(file)
+          ? `Invalid backup file — must be within home or temp directory`
+          : `Backup file not found: ${file}`,
+      )
       return
     }
 

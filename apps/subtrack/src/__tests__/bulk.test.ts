@@ -225,6 +225,22 @@ test("bulk status no match shows info", async () => {
   await handleBulkStatus("cancelled", filters, options)
 
   expect(infoMessages).toContain("No subscriptions match the filter")
+  // A no-match is not a user cancellation — reporting "Cancelled" too is contradictory
+  expect(infoMessages).not.toContain("Cancelled")
+})
+
+test("bulk status reports Cancelled only when the user declines", async () => {
+  seedSub("Existing", { status: "active" })
+
+  vi.mocked(confirm).mockResolvedValue(false)
+
+  const filters: BulkFilters = { name: "Existing" }
+
+  const { handleBulkStatus } = await import("../bulk.ts")
+  await handleBulkStatus("cancelled", filters, {})
+
+  expect(infoMessages).toContain("Cancelled")
+  expect(infoMessages).not.toContain("No subscriptions match the filter")
 })
 
 // ── handleBulkDelete ─────────────────────────────────────
@@ -254,6 +270,7 @@ test("bulk delete no match shows info", async () => {
   await handleBulkDelete(filters, options)
 
   expect(infoMessages).toContain("No subscriptions match the filter")
+  expect(infoMessages).not.toContain("Cancelled")
   expect(dbModule.getSubscriptions()).toHaveLength(1)
 })
 

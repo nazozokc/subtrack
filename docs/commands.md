@@ -579,13 +579,13 @@ subtrack tag merge entertainment fun
 
 ## `import <file>`
 
-Imports subscriptions from a CSV file. The CSV must have a header row with `name,cycle,tags,price,currency` (an optional `notes` column is also accepted). CSVs produced by `subtrack export csv` can be imported as-is (extra columns such as `status`, `payment_method`, and contract fields are preserved).
+Imports subscriptions from a CSV file. The CSV must have a header row with `name,cycle,tags,price,currency` (an optional `notes` column is also accepted). CSVs produced by `subtrack export csv` can be imported as-is (extra columns such as `status`, `billing_day`, `payment_method`, and contract fields are preserved).
 
 | Argument | Description |
 |----------|-------------|
 | `<file>` | Path to the CSV file |
 | `--dry-run` | Validate rows without importing |
-| `--deduplicate` | Skip or update existing subscriptions with the same name |
+| `--deduplicate` | Skip rows whose name already exists |
 
 ### CSV format
 
@@ -600,6 +600,7 @@ AWS,monthly,cloud;hosting,50,USD
 - Price is a non-negative number in major currency units
 - Currency is an ISO 4217 code
 - Cycle must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly, or `Nd` for a custom day count (e.g. `3d`, 1–365)
+- Optional columns recognised by name: `status`, `notes`, `billing_day` (1–31), `payment_method`, `contract_start`, `contract_end`, `auto_renewal`, `vendor_name`, `vendor_url`, `plan_tier`, `discount_amount`, `discount_type`
 
 ### Examples
 

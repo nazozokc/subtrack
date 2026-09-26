@@ -29,7 +29,7 @@ export const importCommand = define({
   args: {
     file: { type: "positional", description: "CSV file to import" },
     dryRun: { type: "boolean", description: "Validate without importing" },
-    deduplicate: { type: "boolean", description: "Skip or update existing subscriptions with the same name" },
+    deduplicate: { type: "boolean", description: "Skip rows whose name already exists" },
   },
   run: async (ctx) => {
     const { handleImport } = await import("../import-csv.ts")

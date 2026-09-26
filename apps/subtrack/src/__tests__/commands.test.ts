@@ -808,8 +808,8 @@ test("handleImport skips invalid rows", async () => {
 })
 
 test("handleImport accepts the export CSV header (roundtrip)", async () => {
-  const header = "name,status,cycle,tags,price,currency,notes,payment_method,contract_start,contract_end,auto_renewal,vendor_name,vendor_url,plan_tier,discount_amount,discount_type"
-  const row = 'Netflix,active,monthly,video;entertainment,1490,JPY,"my notes",credit_card,2026-01-01,2027-01-01,true,Netflix Inc,https://netflix.com,Standard,,'
+  const header = "name,status,cycle,tags,price,currency,notes,payment_method,contract_start,contract_end,auto_renewal,vendor_name,vendor_url,plan_tier,discount_amount,discount_type,billing_day"
+  const row = 'Netflix,active,monthly,video;entertainment,1490,JPY,"my notes",credit_card,2026-01-01,2027-01-01,true,Netflix Inc,https://netflix.com,Standard,,,15'
   const filePath = writeTempFile("export-format.csv", `${header}\n${row}`)
 
   const { handleImport } = await import("../import-csv.ts")
@@ -834,8 +834,56 @@ test("handleImport accepts the export CSV header (roundtrip)", async () => {
     vendorUrl: "https://netflix.com",
     planTier: "Standard",
     discountAmount: null,
+    // Regression: billing_day used to be dropped, so export → import lost it
+    billingDay: 15,
   })
   expect(successMessages.some((m) => m.includes("1 imported"))).toBe(true)
+})
+
+test("handleImport leaves billingDay null when the column is absent or empty", async () => {
+  const filePath = writeTempFile(
+    "no-billing-day.csv",
+    "name,status,cycle,tags,price,currency\nNoDay,active,monthly,,100,JPY\n" +
+      "name,status,cycle,tags,price,currency,billing_day\nEmptyDay,active,monthly,,100,JPY,",
+  )
+
+  const { handleImport } = await import("../import-csv.ts")
+  await handleImport(filePath, {})
+
+  const db = await import("../db.ts")
+  const subs = db.getSubscriptions()
+  expect(subs).toHaveLength(2)
+  expect(subs.every((s) => s.billingDay === null)).toBe(true)
+})
+
+test("handleImport rejects an out-of-range billing_day", async () => {
+  const filePath = writeTempFile(
+    "bad-billing-day.csv",
+    "name,status,cycle,tags,price,currency,billing_day\nBad,active,monthly,,100,JPY,99",
+  )
+
+  const { handleImport } = await import("../import-csv.ts")
+  await handleImport(filePath, {})
+
+  const db = await import("../db.ts")
+  expect(db.getSubscriptions()).toHaveLength(0)
+  expect(warnMessages.some((m) => m.includes("between 1 and 31"))).toBe(true)
+})
+
+test("handleImport --deduplicate counts skips separately from failures", async () => {
+  const csv = "name,cycle,tags,price,currency\nDup,monthly,,100,JPY"
+  const first = writeTempFile("dup-first.csv", csv)
+
+  const { handleImport } = await import("../import-csv.ts")
+  await handleImport(first, {})
+  await handleImport(first, { deduplicate: true })
+
+  const db = await import("../db.ts")
+  expect(db.getSubscriptions()).toHaveLength(1)
+  // Regression: a skipped duplicate was counted as `failed`, so a fully-deduplicated
+  // re-import reported "0 imported, 1 failed".
+  const summary = successMessages.at(-1) ?? ""
+  expect(summary).toContain("0 imported, 0 failed, 1 skipped")
 })
 
 test("handleImport rejects rows with invalid status in export format", async () => {
@@ -1204,6 +1252,26 @@ test("handleUsageAdd with --cost flag uses manual cost when pricing not found", 
   expect(entries).toHaveLength(1)
   expect(entries[0].cost).toBe(75) // 0.75 USD = 75 cents
   expect(entries[0].model).toBe("unknown-model-xyz")
+})
+
+test("handleUsageAdd --cost overrides auto-pricing for a known model", async () => {
+  const db = await import("../db.ts")
+  const { handleUsageAdd } = await import("../usage.ts")
+
+  // Regression: --cost was only consulted when the pricing lookup failed, so a
+  // known model silently stored the auto-priced amount instead of the flag value.
+  await handleUsageAdd({
+    provider: "openai",
+    model: "gpt-4o",
+    inputTokens: "100000",
+    outputTokens: "20000",
+    date: "2026-06-19",
+    cost: "12.34",
+  })
+
+  const entries = db.getLlmUsage()
+  expect(entries).toHaveLength(1)
+  expect(entries[0].cost).toBe(1234) // 12.34 USD = 1234 cents
 })
 
 test("handleUsageAdd with invalid --cost shows error", async () => {
@@ -1919,9 +1987,16 @@ test("handleRestore restores from valid backup file", async () => {
   if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
 })
 
-test("handleRestore with non-existent file shows error", async () => {
+test("handleRestore with non-existent file reports it as not found", async () => {
   const { handleRestore } = await import("../backup.ts")
   await handleRestore("/nonexistent/file.db.gz")
+  expect(errorMessages.some((m) => m.includes("Backup file not found"))).toBe(true)
+})
+
+test("handleRestore rejects an existing file outside the allowed bases", async () => {
+  const { handleRestore } = await import("../backup.ts")
+  // /etc/hostname exists but is neither in $HOME nor in the temp dir
+  await handleRestore("/etc/hostname")
   expect(errorMessages.some((m) => m.includes("Invalid backup file"))).toBe(true)
 })
 

@@ -14,6 +14,7 @@ import {
   validateDiscountType,
   validateAutoRenewal,
   validateDateString,
+  validateBillingDay,
 } from "./prompts.ts"
 import { safePath } from "@subtrack/lib/path"
 import type { Status, DiscountType } from "./types.ts"
@@ -109,7 +110,7 @@ export async function handleImport(
   // (name,cycle,tags,price,currency[,notes]) and the export format
   // (name,status,cycle,tags,price,currency,notes,payment_method,contract_start,
   //  contract_end,auto_renewal,vendor_name,vendor_url,plan_tier,discount_amount,
-  //  discount_type) are accepted.
+  //  discount_type,billing_day) are accepted.
   const header = parseCsvLine(lines[0]).map((h) => h.toLowerCase().trim())
   const colIndex = new Map<string, number>()
   header.forEach((h, i) => { if (h) colIndex.set(h, i) })
@@ -131,6 +132,7 @@ export async function handleImport(
 
   let success = 0
   let failed = 0
+  let skipped = 0
 
   for (let i = 1; i < lines.length; i++) {
     const fields = parseCsvLine(lines[i])
@@ -167,6 +169,7 @@ export async function handleImport(
     const planTier = col("plan_tier") ?? null
     const discountAmount = col("discount_amount") ?? null
     const discountType = col("discount_type") ?? null
+    const billingDay = col("billing_day") ?? null
 
     // Sanitize: strip control characters from name/notes (CSV injection defense)
     const sanitized = name.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
@@ -213,19 +216,23 @@ export async function handleImport(
       const ceErr = validateDateString(contractEnd)
       if (ceErr !== true) { consola.warn(`Line ${i + 1}: ${ceErr}`); failed++; continue }
     }
+    if (billingDay !== null) {
+      const bdErr = validateBillingDay(billingDay)
+      if (bdErr !== true) { consola.warn(`Line ${i + 1}: ${bdErr}`); failed++; continue }
+    }
 
     const tags = tagsStr.split(";").map((t) => t.trim()).filter(Boolean)
     const tagsErr = validateTags(tags.join(","))
     if (tagsErr !== true) { consola.warn(`Line ${i + 1}: ${tagsErr}`); failed++; continue }
 
-    // Dedup check: skip or warn if same name already exists
+    // Dedup check: skip if same name already exists (a skip is not a failure)
     if (options.deduplicate) {
       const existing = findSubscriptionByName(sanitized.trim())
       if (existing) {
         consola.warn(
           `Line ${i + 1}: "${sanitized.trim()}" already exists (id=${existing.id}) — skipping`,
         )
-        failed++
+        skipped++
         continue
       }
     }
@@ -252,6 +259,7 @@ export async function handleImport(
           planTier: planTier ?? undefined,
           discountAmount: discountAmount === null ? undefined : Number(discountAmount),
           discountType: discountType as DiscountType | undefined,
+          billingDay: billingDay === null ? undefined : Number(billingDay),
         }, { persist: false })
         success++
       } catch (e) {
@@ -261,13 +269,14 @@ export async function handleImport(
     }
   }
 
+  const skipNote = skipped > 0 ? `, ${skipped} skipped (already exists)` : ""
   if (options.dryRun) {
-    consola.success(`Dry-run complete: ${success} valid, ${failed} invalid`)
+    consola.success(`Dry-run complete: ${success} valid, ${failed} invalid${skipNote}`)
   } else {
     if (success > 0) saveDb()
     logAudit("subscription.import", {
-      details: `${success} imported, ${failed} failed from ${file}`,
+      details: `${success} imported, ${failed} failed, ${skipped} skipped from ${file}`,
     })
-    consola.success(`Import complete: ${success} imported, ${failed} failed`)
+    consola.success(`Import complete: ${success} imported, ${failed} failed${skipNote}`)
   }
 }

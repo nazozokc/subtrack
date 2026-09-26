@@ -96,7 +96,11 @@ export const deleteTag = (name: string): boolean => {
 
 export const mergeTag = (source: string, target: string): boolean => {
   const db = getDb()
-  if (source === target) return true
+  // Merging a tag into itself is a no-op, but the source must still exist —
+  // otherwise the caller would report success for a tag that was never there.
+  if (source === target) {
+    return !!execObj<{ id: number }>(db, "SELECT id FROM tags WHERE name = ?", [source])
+  }
 
   db.exec("BEGIN TRANSACTION")
   try {

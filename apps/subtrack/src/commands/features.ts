@@ -42,8 +42,26 @@ export const reviewCommand = define({
   description: "Review upcoming renewals, bills, and trials",
   args: { billDays: { type: "string" }, contractDays: { type: "string" }, trialDays: { type: "string" }, json: { type: "boolean", short: "j" } },
   run: async (ctx) => {
+    // Reject non-numeric/negative values: Number("abc") is NaN, which would make
+    // every day-window comparison false and silently report "Nothing needs review".
+    const days = (flag: "billDays" | "contractDays" | "trialDays"): number | undefined | null => {
+      const raw = ctx.values[flag]
+      if (raw === undefined) return undefined
+      const n = Number(raw)
+      if (!Number.isInteger(n) || n < 0) {
+        fail(`${flag} must be a non-negative integer`)
+        return null
+      }
+      return n
+    }
+    const billDays = days("billDays")
+    if (billDays === null) return
+    const contractDays = days("contractDays")
+    if (contractDays === null) return
+    const trialDays = days("trialDays")
+    if (trialDays === null) return
     const { handleReview } = await import("../features.ts")
-    return handleReview({ billDays: ctx.values.billDays ? Number(ctx.values.billDays) : undefined, contractDays: ctx.values.contractDays ? Number(ctx.values.contractDays) : undefined, trialDays: ctx.values.trialDays ? Number(ctx.values.trialDays) : undefined, json: ctx.values.json })
+    return handleReview({ billDays, contractDays, trialDays, json: ctx.values.json })
   },
 })
 export const yearlyCommand = define({
