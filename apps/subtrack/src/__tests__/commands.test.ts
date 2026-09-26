@@ -1,8 +1,8 @@
 import { test, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { DatabaseSync } from "node:sqlite"
-import { mkdtempSync, writeFileSync, existsSync, rmSync } from "node:fs"
-import { join } from "node:path"
-import { tmpdir } from "node:os"
+import { mkdtempSync, writeFileSync, existsSync, realpathSync, rmSync } from "node:fs"
+import { join, sep } from "node:path"
+import { homedir, tmpdir } from "node:os"
 
 // Give this test file its own DB directory so parallel vitest workers
 // (each running a different test file) never race on the same backing files.
@@ -1993,12 +1993,50 @@ test("handleRestore with non-existent file reports it as not found", async () =>
   expect(errorMessages.some((m) => m.includes("Backup file not found"))).toBe(true)
 })
 
-test("handleRestore rejects an existing file outside the allowed bases", async () => {
-  const { handleRestore } = await import("../backup.ts")
-  // /etc/hostname exists but is neither in $HOME nor in the temp dir
-  await handleRestore("/etc/hostname")
-  expect(errorMessages.some((m) => m.includes("Invalid backup file"))).toBe(true)
-})
+/**
+ * An existing file that lives outside every allowed base ($HOME and the temp dir),
+ * or null when the platform exposes no such known path.
+ *
+ * Temp files cannot be used here: on Windows the temp dir sits under the user
+ * profile, so it is always inside an allowed base. `/etc/hostname` is Linux-only,
+ * hence the per-platform candidates.
+ */
+const outsideBaseFile = (() => {
+  const bases = [homedir(), tmpdir()].map((base) => {
+    try {
+      return realpathSync(base)
+    } catch {
+      return base
+    }
+  })
+  const candidates =
+    process.platform === "win32"
+      ? [join(process.env.SystemRoot ?? "C:\\Windows", "System32", "drivers", "etc", "hosts")]
+      : ["/etc/hosts", "/etc/passwd"]
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue
+    let resolved: string
+    try {
+      resolved = realpathSync(candidate)
+    } catch {
+      continue
+    }
+    const insideBase = bases.some(
+      (base) => resolved === base || resolved.startsWith(base.endsWith(sep) ? base : `${base}${sep}`),
+    )
+    if (!insideBase) return candidate
+  }
+  return null
+})()
+
+test.skipIf(!outsideBaseFile)(
+  "handleRestore rejects an existing file outside the allowed bases",
+  async () => {
+    const { handleRestore } = await import("../backup.ts")
+    await handleRestore(outsideBaseFile!)
+    expect(errorMessages.some((m) => m.includes("Invalid backup file"))).toBe(true)
+  },
+)
 
 test("handleRestore interactive: shows info when no backups found", async () => {
   const { mkdtempSync, existsSync, rmSync } = await import("node:fs")
