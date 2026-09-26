@@ -1,7 +1,7 @@
+import { subscriptionRepository } from "./application/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import pc from "@subtrack/lib/ansi"
-import { getSubscriptions } from "./db.ts"
 import type { SharedArgs, Currency } from "./types.ts"
 import { periodFactor, SHORT_MONTH_NAMES } from "@subtrack/lib/date"
 import { formatPrice, roundCurrency } from "./price.ts"
@@ -186,7 +186,7 @@ export async function handleTimeline(options: TimelineOptions = {}): Promise<voi
     return
   }
 
-  const subs = getSubscriptions()
+  const subs = subscriptionRepository.list()
 
   if (subs.length === 0) {
     consola.info("No subscriptions found")

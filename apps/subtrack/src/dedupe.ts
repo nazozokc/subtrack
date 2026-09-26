@@ -1,6 +1,6 @@
+import { subscriptionRepository } from "./application/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
-import { getNonCancelledSubscriptions, getSubscription, mergeSubscriptions } from "./db.ts"
 import { logAudit } from "./audit-log.ts"
 import { fail } from "./error.ts"
 import { formatPrice } from "./price.ts"
@@ -93,7 +93,7 @@ export function handleDedupe(options: DedupeOptions = {}): void {
     return
   }
 
-  const subs = getNonCancelledSubscriptions()
+  const subs = subscriptionRepository.listActive()
   const pairs = findDuplicates(subs, threshold)
 
   if (options.json) {
@@ -138,8 +138,8 @@ export function handleDedupeMerge(keepId: number, removeId: number): void {
     fail("keep and remove IDs must differ")
     return
   }
-  const keep = getSubscription(keepId)
-  const remove = getSubscription(removeId)
+  const keep = subscriptionRepository.get(keepId)
+  const remove = subscriptionRepository.get(removeId)
   if (!keep) {
     fail(`Subscription with id ${keepId} not found`)
     return
@@ -150,7 +150,7 @@ export function handleDedupeMerge(keepId: number, removeId: number): void {
   }
 
   try {
-    if (mergeSubscriptions(keepId, removeId)) {
+    if (subscriptionRepository.merge(keepId, removeId)) {
       logAudit("subscription.merge", {
         targetType: "subscription",
         targetId: keepId,

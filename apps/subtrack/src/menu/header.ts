@@ -6,10 +6,11 @@
  * (payment, upcoming, budget). No FX fetching keeps menu startup fast.
  */
 
+import { databaseInfo } from "../application/index.ts"
+import { subscriptionRepository } from "./../application/index.ts"
 import pc from "@subtrack/lib/ansi"
 import { createRequire } from "node:module"
 import { existsSync } from "node:fs"
-import { getSubscriptions, getNonCancelledSubscriptions, getDbPath } from "../db.ts"
 import { calcSummary, calcSubTotal } from "../payment.ts"
 import { calcUpcoming } from "../upcoming.ts"
 import { resolveBudget } from "../budget.ts"
@@ -34,16 +35,16 @@ function readPkgVersion(): string {
 
 export function showMenuHeader(): void {
   const pkg = { version: readPkgVersion() }
-  const count = getSubscriptions().length
+  const count = subscriptionRepository.list().length
   console.log(pc.bold(pc.cyan(`subtrack v${pkg.version}`)))
   console.log(
     pc.dim(
-      `  ${count} subscription${count === 1 ? "" : "s"} · ${getDbPath()}`,
+      `  ${count} subscription${count === 1 ? "" : "s"} · ${databaseInfo.path()}`,
     ),
   )
 
   // Financial overview (synchronous only — no FX fetch, keeps menu startup fast)
-  const active = getNonCancelledSubscriptions()
+  const active = subscriptionRepository.listActive()
   if (active.length > 0) {
     const summary = calcSummary(active)
     const monthly = Object.entries(summary.monthlyByCurrency)

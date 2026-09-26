@@ -63,6 +63,18 @@ export interface TrialRepository {
   remove(id: number): boolean
 }
 
+export interface TagRepository {
+  /** Every tag in use, alphabetically. */
+  list(): string[]
+  listWithCount(): { name: string; count: number }[]
+  rename(oldName: string, newName: string): boolean
+  remove(name: string): boolean
+  /** Fold `source` into `target`. */
+  merge(source: string, target: string): boolean
+  /** Drop tags no longer attached to any subscription. Returns rows removed. */
+  prune(): number
+}
+
 export interface PriceHistoryRepository {
   /** Record a price (or currency) change for a subscription. */
   record(
@@ -86,4 +98,12 @@ export interface PriceHistoryRepository {
  */
 export interface UnitOfWork {
   batch<T>(fn: () => T): T
+}
+
+/**
+ * Read-only access to the database file's own location. Callers that display a
+ * path (menus, diagnostics) should not need a handle on the connection.
+ */
+export interface DatabaseInfo {
+  path(): string
 }

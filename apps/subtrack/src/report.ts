@@ -1,8 +1,7 @@
+import { priceHistoryRepository, subscriptionRepository } from "./application/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import type { Currency, SharedArgs } from "./types.ts"
-import { getSubscriptions } from "./db/subscriptions.ts"
-import { getAllPriceChanges } from "./db/price-history.ts"
 import { getAuditLogs } from "./db/audit.ts"
 import { loadConfig } from "./config.ts"
 import { formatPrice, roundCurrency } from "./price.ts"
@@ -137,7 +136,7 @@ export async function handleReport(options: ReportOptions = {}): Promise<void> {
     return
   }
 
-  const subs = getSubscriptions({ includeArchived: true })
+  const subs = subscriptionRepository.list({ includeArchived: true })
 
   // Convert to target currency when requested
   let displaySubs: SharedArgs[] = subs
@@ -168,7 +167,7 @@ export async function handleReport(options: ReportOptions = {}): Promise<void> {
   }
 
   const top = calcTopSubscriptions(displaySubs, 5)
-  const priceChanges = getAllPriceChanges().filter((c) => c.changedAt.startsWith(`${year}-`))
+  const priceChanges = priceHistoryRepository.listRecent().filter((c) => c.changedAt.startsWith(`${year}-`))
   const added = calcAddedThisYear(subs, year)
   const cancelled = calcCancelledThisYear(subs, year)
 

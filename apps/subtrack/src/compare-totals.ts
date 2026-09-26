@@ -6,12 +6,12 @@
  * load path — they only need the totals math.
  */
 
+import { priceHistoryRepository } from "./application/index.ts"
 import type { Currency, SharedArgs } from "./types.ts"
 import type { NamedCycle } from "@subtrack/lib/date"
 import { periodFactor } from "@subtrack/lib/date"
 import { tryConvert } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
-import { getAllPriceChanges } from "./db/price-history.ts"
 
 export type CcyTotals = Record<string, number>
 
@@ -53,7 +53,7 @@ export function calcPreviousTotals(
   targetCurrency: Currency | undefined,
   period: NamedCycle = "monthly",
 ): CcyTotals {
-  const priceChanges = getAllPriceChanges()
+  const priceChanges = priceHistoryRepository.listRecent()
   const priceBefore: Record<number, { price: number; currency: string }> = {}
 
   for (const change of priceChanges) {

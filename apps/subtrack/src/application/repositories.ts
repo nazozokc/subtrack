@@ -6,6 +6,13 @@ import {
   deleteTrial,
   findSubscriptionByName,
   getAllPriceChanges,
+  getAllTags,
+  deleteTag,
+  getDbPath,
+  getTagsWithCount,
+  mergeTag,
+  pruneTags,
+  renameTag,
   getLlmUsage,
   getLlmUsageTokenTotal,
   getLlmUsageTotal,
@@ -31,8 +38,10 @@ import {
   writeTrial,
 } from "../db.ts"
 import type {
+  DatabaseInfo,
   PriceHistoryRepository,
   SubscriptionRepository,
+  TagRepository,
   TrialRepository,
   UnitOfWork,
   UsageRepository,
@@ -69,6 +78,17 @@ export function withBatch<T>(fn: () => T): T {
 }
 
 const unitOfWork: UnitOfWork = { batch: withBatch }
+
+export const databaseInfo: DatabaseInfo = { path: getDbPath }
+
+export const tagRepository: TagRepository = {
+  list: getAllTags,
+  listWithCount: getTagsWithCount,
+  rename: renameTag,
+  remove: deleteTag,
+  merge: mergeTag,
+  prune: pruneTags,
+}
 
 // ── Adapters ──────────────────────────────────────────────────────────────
 

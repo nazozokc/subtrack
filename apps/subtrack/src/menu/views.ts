@@ -3,9 +3,9 @@
  * subscription data.
  */
 
+import { tagRepository } from "../application/index.ts"
 import { select, checkbox } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
-import { getAllTags } from "../db.ts"
 import { BACK, pickSubscription, pickPeriod } from "./shared.ts"
 import { handleList, handleTags } from "../subscription/core.ts"
 import { handleSearch } from "../search.ts"
@@ -58,7 +58,7 @@ export async function runViewMenu(): Promise<void> {
 }
 
 async function runTagFilter(): Promise<void> {
-  const tags = getAllTags()
+  const tags = tagRepository.list()
   if (tags.length === 0) {
     consola.info("No tags found")
     return

@@ -3,11 +3,12 @@
  * Handles both non-interactive (flag-based) and interactive (prompt-based) editing.
  */
 
+import { tagRepository } from "../application/index.ts"
+import { priceHistoryRepository, subscriptionRepository } from "./../application/index.ts"
 import { input, confirm, checkbox, select } from "../prompts.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "../error.ts"
 import type { Cycle, Status, AddSharedArgs, AddFlags } from "../types.ts"
-import { getSubscriptions, getSubscription, updateSubscription, getAllTags, writePriceHistory } from "../db.ts"
 import { formatPrice } from "../price.ts"
 import { logAudit } from "../audit-log.ts"
 import {
@@ -36,13 +37,13 @@ export async function handleEdit(
   id?: number,
   flags: Partial<AddFlags> = {},
 ) {
-  const all = getSubscriptions()
+  const all = subscriptionRepository.list()
   if (all.length === 0) {
     consola.info("No subscriptions found — try `subtrack add`")
     return
   }
 
-  const sub = id !== undefined ? getSubscription(id) : await select({
+  const sub = id !== undefined ? subscriptionRepository.get(id) : await select({
     message: "select subscription to edit",
     loop: false,
     pageSize: 10,
@@ -190,12 +191,12 @@ export async function handleEdit(
       if (err !== true) { fail(`Invalid autoRenewal: ${err}`); return }
       newData.autoRenewal = flags.autoRenewal === "true"
     }
-    if (!updateSubscription(sub.id, newData)) {
+    if (!subscriptionRepository.update(sub.id, newData)) {
       fail(`Subscription with id ${sub.id} not found`)
       return
     }
-    writePriceHistory(sub.id, sub.price, newData.price ?? sub.price, sub.currency, newData.currency ?? sub.currency)
-    const updated = getSubscription(sub.id)!
+    priceHistoryRepository.record(sub.id, sub.price, newData.price ?? sub.price, sub.currency, newData.currency ?? sub.currency)
+    const updated = subscriptionRepository.get(sub.id)!
     logAudit("subscription.edit", {
       targetType: "subscription",
       targetId: sub.id,
@@ -286,7 +287,7 @@ export async function handleEdit(
     newData.billingDay = day.trim() ? Number(day) : null
   }
   if (fields.includes("tags")) {
-    const existingTags = getAllTags()
+    const existingTags = tagRepository.list()
     const tags = await input({
       message:
         "New tags (comma-separated)" +
@@ -383,12 +384,12 @@ export async function handleEdit(
     return
   }
 
-  if (!updateSubscription(sub.id, newData)) {
+  if (!subscriptionRepository.update(sub.id, newData)) {
     fail(`Subscription with id ${sub.id} not found`)
     return
   }
-  writePriceHistory(sub.id, sub.price, newData.price ?? sub.price, sub.currency, newData.currency ?? sub.currency)
-  const updated = getSubscription(sub.id)
+  priceHistoryRepository.record(sub.id, sub.price, newData.price ?? sub.price, sub.currency, newData.currency ?? sub.currency)
+  const updated = subscriptionRepository.get(sub.id)
   if (!updated) {
     fail("Failed to retrieve updated subscription")
     return

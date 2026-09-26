@@ -1,7 +1,7 @@
+import { subscriptionRepository } from "./application/index.ts"
 import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import type { AnalyticsOptions } from "./types.ts"
-import { getSubscriptions, getNonCancelledSubscriptions } from "./db.ts"
 import { formatPrice, roundCurrency } from "./price.ts"
 import { calcSummary } from "./payment.ts"
 import { loadConfig } from "./config.ts"
@@ -11,7 +11,7 @@ import type { FxRates } from "./fx.ts"
 
 export async function handleAnalytics(options: AnalyticsOptions = {}): Promise<void> {
   if (options.json) {
-    const subs = getNonCancelledSubscriptions()
+    const subs = subscriptionRepository.listActive()
     const data = calcSummary(subs)
 
     const output: Record<string, unknown> = {
@@ -66,7 +66,7 @@ export async function handleAnalytics(options: AnalyticsOptions = {}): Promise<v
 }
 
 export async function showAnalytics(options: AnalyticsOptions = {}): Promise<void> {
-  const all = getSubscriptions()
+  const all = subscriptionRepository.list()
   const list = all.filter((s) => s.status !== "cancelled")
   if (list.length === 0) {
     consola.info("No active subscriptions found — try `subtrack add` or change status")

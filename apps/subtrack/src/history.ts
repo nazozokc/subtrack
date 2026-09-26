@@ -1,8 +1,8 @@
+import { priceHistoryRepository, subscriptionRepository } from "./application/index.ts"
+import type { PriceHistoryEntry } from "./types.ts"
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import pc from "@subtrack/lib/ansi"
-import { getPriceHistory, getAllPriceChanges, getSubscription } from "./db.ts"
-import type { PriceHistoryEntry } from "./db.ts"
 import { formatPrice } from "./price.ts"
 
 export type HistoryOptions = {
@@ -61,29 +61,29 @@ export function handleHistory(id?: number, options: HistoryOptions = {}): void {
   if (options.json) {
     let entries: PriceHistoryEntry[]
     if (id !== undefined) {
-      entries = getPriceHistory(id)
+      entries = priceHistoryRepository.listForSubscription(id)
     } else {
-      entries = getAllPriceChanges(options.days)
+      entries = priceHistoryRepository.listRecent(options.days)
     }
     process.stdout.write(JSON.stringify(entries, null, 2) + "\n")
     return
   }
 
   if (id !== undefined) {
-    const sub = getSubscription(id)
+    const sub = subscriptionRepository.get(id)
     if (!sub) {
       fail(`Subscription with id ${id} not found`)
       return
     }
     consola.log(pc.bold(`Price history for: ${sub.name}`))
     consola.log("")
-    const entries = getPriceHistory(id)
+    const entries = priceHistoryRepository.listForSubscription(id)
     displayHistory(entries)
     return
   }
 
   if (options.all) {
-    const entries = getAllPriceChanges(options.days)
+    const entries = priceHistoryRepository.listRecent(options.days)
     if (entries.length === 0) {
       consola.info("No price changes recorded")
       return
