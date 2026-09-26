@@ -142,17 +142,6 @@ export interface PriceHistoryRepository {
 }
 
 /**
- * Unit of work for multi-row writes.
- *
- * The database file is encrypted and rewritten wholesale, so a bulk edit must
- * flush once at the end rather than per row. `batch` lets a handler say "these
- * writes are one operation" without knowing how persistence is implemented.
- */
-export interface UnitOfWork {
-  batch<T>(fn: () => T): T
-}
-
-/**
  * Read-only access to the database file's own location. Callers that display a
  * path (menus, diagnostics) should not need a handle on the connection.
  */

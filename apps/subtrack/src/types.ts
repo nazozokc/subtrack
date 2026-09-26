@@ -362,10 +362,10 @@ export type AuditAction =
 export type AuditEntry = {
   id: number
   action: AuditAction
-  target_type: string | null
-  target_id: number | null
+  targetType: string | null
+  targetId: number | null
   details: string | null
-  created_at: string
+  createdAt: string
 }
 
 export type AddAuditArgs = {

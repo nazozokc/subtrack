@@ -1,23 +1,52 @@
 import type { SQLInputValue } from "node:sqlite"
-import { getDb, execObjs, execObj, saveDb } from "./connection.ts"
-import type { SharedArgs, AddSharedArgs } from "../types.ts"
+import { execObj, execObjs, getDb, saveDb } from "./connection.ts"
+import type { PersistOptions } from "./connection.ts"
+import type {
+  AddSharedArgs,
+  SharedArgs,
+  SubscriptionQueryOptions,
+} from "../types.ts"
 
 const SORT_FIELDS = ["id", "name", "price", "currency", "cycle", "status"] as const
 
-import type { SubscriptionQueryOptions } from "../types.ts"
 export type { SubscriptionQueryOptions } from "../types.ts"
 
+/**
+ * Column projection shared by all subscription queries, as `[column, alias]`
+ * pairs. Deriving both SQL forms from one list keeps the plain and the
+ * table-qualified projection from drifting apart.
+ */
+const SUB_COLUMN_SPECS: readonly (readonly [string, string | null])[] = [
+  ["id", null],
+  ["name", null],
+  ["price", null],
+  ["currency", null],
+  ["cycle", null],
+  ["status", null],
+  ["billing_day", "billingDay"],
+  ["created_at", "createdAt"],
+  ["notes", null],
+  ["payment_method", "paymentMethod"],
+  ["contract_start", "contractStart"],
+  ["contract_end", "contractEnd"],
+  ["auto_renewal", "autoRenewal"],
+  ["vendor_name", "vendorName"],
+  ["vendor_url", "vendorUrl"],
+  ["plan_tier", "planTier"],
+  ["discount_amount", "discountAmount"],
+  ["discount_type", "discountType"],
+]
+
+const projection = (qualifier?: string): string =>
+  SUB_COLUMN_SPECS.map(([col, alias]) =>
+    alias ? `${qualifier ? `${qualifier}.` : ""}${col} AS ${alias}` : `${qualifier ? `${qualifier}.` : ""}${col}`,
+  ).join(", ")
+
 /** Column projection shared by all subscription queries. */
-export const SUB_COLUMNS = `
-  id, name, price, currency, cycle, status,
-  billing_day AS billingDay, created_at AS createdAt, notes, payment_method AS paymentMethod,
-  contract_start AS contractStart, contract_end AS contractEnd, auto_renewal AS autoRenewal,
-  vendor_name AS vendorName, vendor_url AS vendorUrl, plan_tier AS planTier,
-  discount_amount AS discountAmount, discount_type AS discountType
-`.trim()
+export const SUB_COLUMNS = projection()
 
 /** The same projection, table-qualified for joins and subqueries. */
-const SUB_COLUMNS_S = SUB_COLUMNS.replace(/(\w+)( AS \w+)?/g, (_m, col, alias) => `s.${col}${alias ?? ""}`)
+const SUB_COLUMNS_S = projection("s")
 
 export function mapTags(subs: SharedArgs[]): SharedArgs[] {
   if (subs.length === 0) return subs
@@ -74,11 +103,14 @@ export const getSubscriptions = (
     conditions.push("price <= ?")
   }
   // Tags live in a side table keyed by tag id, so filter with a subquery.
-  // All requested tags must match (AND semantics).
-  const tagFilter = options?.tags?.length
-    ? `id IN (SELECT st.subscription_id FROM subscription_tags st JOIN tags t ON t.id = st.tag_id WHERE t.name IN (${options.tags.map(() => "?").join(",")}) GROUP BY st.subscription_id HAVING COUNT(DISTINCT t.name) = ${options.tags.length})`
-    : ""
-  if (tagFilter) conditions.push(tagFilter)
+  // All requested tags must match (AND semantics). Repeat arguments are
+  // collapsed first: `tags a a` must behave like `tags a`, not match nothing.
+  const tags = options?.tags ? [...new Set(options.tags)] : []
+  if (tags.length > 0) {
+    conditions.push(
+      `id IN (SELECT st.subscription_id FROM subscription_tags st JOIN tags t ON t.id = st.tag_id WHERE t.name IN (${tags.map(() => "?").join(",")}) GROUP BY st.subscription_id HAVING COUNT(DISTINCT t.name) = ?)`,
+    )
+  }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
   let limitClause = ""
@@ -94,8 +126,8 @@ export const getSubscriptions = (
   if (options?.maxPrice !== undefined) {
     params.push(options.maxPrice)
   }
-  if (options?.tags?.length) {
-    params.push(...options.tags)
+  if (tags.length > 0) {
+    params.push(...tags, tags.length)
   }
   if (options?.limit !== undefined) {
     limitClause = " LIMIT ?"
@@ -271,23 +303,23 @@ export const updateSubscription = (
   }
 }
 
-export const archiveSubscription = (id: number): boolean => {
+export const archiveSubscription = (id: number, options: PersistOptions = {}): boolean => {
   const db = getDb()
   const { changes } = db.prepare(
     "UPDATE subscriptions SET status = 'archived' WHERE id = ? AND status != 'archived'",
   ).run(id)
   const modified = Number(changes) > 0
-  if (modified) saveDb()
+  if (modified && options.persist !== false) saveDb()
   return modified
 }
 
-export const unarchiveSubscription = (id: number): boolean => {
+export const unarchiveSubscription = (id: number, options: PersistOptions = {}): boolean => {
   const db = getDb()
   const { changes } = db.prepare(
     "UPDATE subscriptions SET status = 'active' WHERE id = ? AND status = 'archived'",
   ).run(id)
   const modified = Number(changes) > 0
-  if (modified) saveDb()
+  if (modified && options.persist !== false) saveDb()
   return modified
 }
 
@@ -311,7 +343,7 @@ export const findSubscriptionByName = (name: string): SharedArgs | undefined => 
  * Tags from the removed subscription are transferred to the kept one,
  * then the removed subscription is deleted (price_history cascades).
  */
-export const mergeSubscriptions = (keepId: number, removeId: number): boolean => {
+export const mergeSubscriptions = (keepId: number, removeId: number, options: PersistOptions = {}): boolean => {
   const db = getDb()
   if (keepId === removeId) return false
 
@@ -328,7 +360,7 @@ export const mergeSubscriptions = (keepId: number, removeId: number): boolean =>
       return false
     }
     db.exec("COMMIT")
-    saveDb()
+    if (options.persist !== false) saveDb()
     return true
   } catch (error) {
     try { db.exec("ROLLBACK") } catch { /* ok */ }
@@ -349,22 +381,24 @@ export const searchSubscriptions = (
   const conditions: string[] = []
   const params: SQLInputValue[] = []
 
-  if (fields.names) {
+  // `SearchFields` documents "unset means all", so the default is applied here
+  // rather than trusting each caller to expand it.
+  const searchAll = !fields.names && !fields.notes && !fields.tags
+
+  if (fields.names || searchAll) {
     conditions.push("s.name LIKE ?")
     params.push(pattern)
   }
-  if (fields.notes) {
+  if (fields.notes || searchAll) {
     conditions.push("s.notes LIKE ?")
     params.push(pattern)
   }
-  if (fields.tags) {
+  if (fields.tags || searchAll) {
     conditions.push(
       "s.id IN (SELECT st.subscription_id FROM subscription_tags st JOIN tags t ON t.id = st.tag_id WHERE t.name LIKE ?)",
     )
     params.push(pattern)
   }
-
-  if (conditions.length === 0) return []
 
   const whereClause = `WHERE ${conditions.join(" OR ")}`
   const rows = execObjs<SharedArgs>(

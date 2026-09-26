@@ -183,3 +183,102 @@ test("batch depth does not leak across cases", () => {
   expect(flushes.count).toBe(1)
   expect(conn.getDb()).toBeInstanceOf(DatabaseSync)
 })
+
+// Every write adapter must honour the batch. A method that takes part in the
+// bookkeeping but never passes `persist: false` would still rewrite the whole
+// file per row, so the batch would look like it works while doing N flushes.
+// These cases pin the contract for the repositories beyond subscriptions, and
+// fail loudly if a new adapter is added without joining the protocol.
+test("every write repository participates in the batch", () => {
+  const id = seed("Batch")
+  flushes.count = 0
+
+  repos.withBatch(() => {
+    repos.subscriptionRepository.archive(id)
+    repos.subscriptionRepository.unarchive(id)
+    repos.trialRepository.add({ name: "Trial", expiresAt: "2027-01-01" } as never)
+    repos.trialRepository.remove(1)
+    repos.usageRepository.add({
+      provider: "openai",
+      model: "gpt-5",
+      input_tokens: 1,
+      output_tokens: 1,
+      cost: 1,
+      date: "2026-01-01",
+      description: null,
+    })
+    repos.priceHistoryRepository.record(id, 1000, 1200, "JPY", "JPY")
+    repos.auditRepository.record({ action: "subscription.edit" })
+  })
+
+  expect(flushes.count).toBe(1)
+})
+
+test("writes outside a batch flush exactly once each", () => {
+  const id = seed("Solo")
+  flushes.count = 0
+
+  repos.subscriptionRepository.archive(id)
+  repos.trialRepository.add({ name: "Solo", expiresAt: "2027-01-01" } as never)
+  repos.auditRepository.record({ action: "subscription.edit" })
+
+  expect(flushes.count).toBe(3)
+})
+
+test("a no-op write inside a batch does not force a rewrite", () => {
+  seed("Noop")
+  flushes.count = 0
+
+  repos.withBatch(() => {
+    // Both target a row that is not there, so neither changes anything and
+    // the file should not be rewritten.
+    expect(repos.subscriptionRepository.update(999_999, { status: "paused" })).toBe(false)
+    expect(repos.subscriptionRepository.remove(999_999)).toBe(false)
+    expect(repos.subscriptionRepository.archive(999_999)).toBe(false)
+  })
+
+  expect(flushes.count).toBe(0)
+})
+
+// `write()` decides "does this batch owe a flush" from the db function's
+// return value: `false` and a zero count mean nothing changed, `void` means the
+// write happened. A db function that starts returning one of those shapes
+// without its adapter saying so would rewrite the file for a no-op, so the
+// three shapes are pinned here.
+test("a skipped write inside a batch does not force a rewrite", () => {
+  seed("Dedup")
+  flushes.count = 0
+
+  repos.withBatch(() => {
+    // addFromLog deduplicates on generation_id, so the second one writes nothing.
+    const entry = {
+      provider: "openai",
+      model: "gpt-5",
+      input_tokens: 1,
+      output_tokens: 1,
+      cost: 1,
+      date: "2026-01-01",
+      description: null,
+      generation_id: "gen-dedup",
+    }
+    expect(repos.usageRepository.addFromLog(entry)).toBe(true)
+    expect(repos.usageRepository.addFromLog(entry)).toBe(false)
+  })
+
+  expect(flushes.count).toBe(1)
+})
+
+test("an empty batch does not rewrite the file", () => {
+  seed("Untouched")
+  flushes.count = 0
+
+  repos.withBatch(() => {
+    // Reads only: nothing here owes a flush.
+    repos.subscriptionRepository.list()
+    repos.subscriptionRepository.get(1)
+    repos.tagRepository.list()
+    repos.trialRepository.list()
+  })
+
+  expect(flushes.count).toBe(0)
+})

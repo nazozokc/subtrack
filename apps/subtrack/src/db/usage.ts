@@ -1,8 +1,9 @@
 import type { SQLInputValue } from "node:sqlite"
-import { getDb, execObjs, execObj, saveDb } from "./connection.ts"
+import { execObj, execObjs, getDb, saveDb } from "./connection.ts"
+import type { PersistOptions } from "./connection.ts"
 import type { LlmUsageEntry, AddLlmUsageArgs, AddLlmUsageFromLogArgs, GetLlmUsageOptions } from "../types.ts"
 
-export const addLlmUsage = (data: AddLlmUsageArgs): void => {
+export const addLlmUsage = (data: AddLlmUsageArgs, options: PersistOptions = {}): void => {
   const db = getDb()
   db.prepare(
     `INSERT INTO llm_usage (provider, model, input_tokens, output_tokens, cost, date, description)
@@ -16,11 +17,11 @@ export const addLlmUsage = (data: AddLlmUsageArgs): void => {
     data.date,
     data.description,
   )
-  saveDb()
+  if (options.persist !== false) saveDb()
 }
 
 /** Add from log import if not duplicate (by generation_id). Returns true if added, false if duplicate. */
-export const addLlmUsageFromLog = (data: AddLlmUsageFromLogArgs): boolean => {
+export const addLlmUsageFromLog = (data: AddLlmUsageFromLogArgs, options: PersistOptions = {}): boolean => {
   const db = getDb()
 
   // Dedup: skip if generation_id already exists
@@ -46,7 +47,7 @@ export const addLlmUsageFromLog = (data: AddLlmUsageFromLogArgs): boolean => {
     data.description,
     data.generation_id ?? null,
   )
-  saveDb()
+  if (options.persist !== false) saveDb()
   return true
 }
 
@@ -57,6 +58,7 @@ export const addLlmUsageFromLog = (data: AddLlmUsageFromLogArgs): boolean => {
  */
 export const batchAddLlmUsageFromLog = (
   entries: AddLlmUsageFromLogArgs[],
+  options: PersistOptions = {},
 ): { added: number; skipped: number } => {
   if (entries.length === 0) return { added: 0, skipped: 0 }
 
@@ -100,7 +102,7 @@ export const batchAddLlmUsageFromLog = (
       added++
     }
     db.exec("COMMIT")
-    saveDb()
+    if (options.persist !== false) saveDb()
   } catch (error) {
     db.exec("ROLLBACK")
     throw error
@@ -153,16 +155,16 @@ export const getLlmUsage = (options?: GetLlmUsageOptions): LlmUsageEntry[] => {
   )
 }
 
-export const deleteLlmUsage = (id: number): boolean => {
+export const deleteLlmUsage = (id: number, options: PersistOptions = {}): boolean => {
   const db = getDb()
   const { changes } = db.prepare("DELETE FROM llm_usage WHERE id = ?").run(id)
   const modified = Number(changes) > 0
-  if (modified) saveDb()
+  if (modified && options.persist !== false) saveDb()
   return modified
 }
 
 /** Update fields of a usage entry. Returns false if the entry does not exist. */
-export const updateLlmUsage = (id: number, fields: Partial<AddLlmUsageArgs>): boolean => {
+export const updateLlmUsage = (id: number, fields: Partial<AddLlmUsageArgs>, options: PersistOptions = {}): boolean => {
   const db = getDb()
   const allowed: (keyof AddLlmUsageArgs)[] = [
     "provider",
@@ -186,7 +188,7 @@ export const updateLlmUsage = (id: number, fields: Partial<AddLlmUsageArgs>): bo
   params.push(id)
   const { changes } = db.prepare(`UPDATE llm_usage SET ${sets.join(", ")} WHERE id = ?`).run(...params)
   const modified = Number(changes) > 0
-  if (modified) saveDb()
+  if (modified && options.persist !== false) saveDb()
   return modified
 }
 

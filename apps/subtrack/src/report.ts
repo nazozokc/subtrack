@@ -101,8 +101,8 @@ export function calcCancelledThisYear(subs: SharedArgs[], year: number): { name:
     limit: 1000,
   })
   for (const entry of auditEntries) {
-    if (entry.created_at.startsWith(prefix)) {
-      results.set(entry.details ?? `#${entry.target_id}`, entry.created_at.slice(0, 10))
+    if (entry.createdAt.startsWith(prefix)) {
+      results.set(entry.details ?? `#${entry.targetId}`, entry.createdAt.slice(0, 10))
     }
   }
 

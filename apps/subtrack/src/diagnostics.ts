@@ -36,7 +36,7 @@ export function handleChanges(options: { id?: number; from?: string; to?: string
     return (options.id === undefined || entry.subscriptionId === options.id) &&
       (!options.from || date >= options.from) && (!options.to || date <= options.to)
   }).map((entry) => ({ type: "price", date: entry.changedAt, id: entry.subscriptionId, details: `${entry.subscriptionName}: ${entry.oldPrice ?? "—"} → ${entry.newPrice}` }))
-  const result = [...audit.map((entry) => ({ type: "audit", date: entry.created_at, id: entry.target_id, details: `${entry.action}: ${entry.details ?? ""}` })), ...prices].sort((a, b) => b.date.localeCompare(a.date)).slice(0, limit)
+  const result = [...audit.map((entry) => ({ type: "audit", date: entry.createdAt, id: entry.targetId, details: `${entry.action}: ${entry.details ?? ""}` })), ...prices].sort((a, b) => b.date.localeCompare(a.date)).slice(0, limit)
   if (options.json) process.stdout.write(JSON.stringify(result, null, 2) + "\n")
   else if (!result.length) consola.info("No changes found")
   else for (const entry of result) consola.log(`${pc.dim(entry.date)}  ${entry.details}`)

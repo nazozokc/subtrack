@@ -37,7 +37,10 @@ export async function handleList(options: {
   await runPreCommandHooks(options)
 
   const list = options.tags
-    ? subscriptionRepository.list({ tags: options.tags.split(",").map((t) => t.trim()) })
+    ? subscriptionRepository.list({
+        tags: options.tags.split(",").map((t) => t.trim()),
+        includeArchived: true,
+      })
     : subscriptionRepository.list({
         sort: options.sort,
         desc: options.desc,
@@ -96,7 +99,7 @@ export async function handleList(options: {
 }
 
 export async function handleTags(taglist: string[]) {
-  const list = subscriptionRepository.list({ tags: taglist })
+  const list = subscriptionRepository.list({ tags: taglist, includeArchived: true })
   await spreadSubscription(list)
 }
 

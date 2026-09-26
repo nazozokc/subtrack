@@ -253,7 +253,11 @@ for (const file of listTsFiles(srcRoot)) {
 
 // ── rules ────────────────────────────────────────────────────────────────
 
-/** @type {{file: string, line: number, rule: string, reason: string}[]} */
+// One violation is identified by where it is and what it reaches, so a
+// baseline entry accepts that edge and not every edge in the same file.
+const violationKey = (file, rule, target) => `${file}|${rule}|${target}`
+
+/** @type {{file: string, line: number, rule: string, target: string, reason: string}[]} */
 const violations = []
 const seen = new Set()
 
@@ -265,10 +269,10 @@ for (const [file, specs] of graph) {
   }
 
   const push = (t, rule, reason) => {
-    const key = `${file}|${rule}|${t.target}`
+    const key = violationKey(file, rule, t.target)
     if (seen.has(key)) return
     seen.add(key)
-    violations.push({ file, line: t.line, rule, reason: `${reason} (imports ${t.target})` })
+    violations.push({ file, line: t.line, rule, target: t.target, reason: `${reason} (imports ${t.target})` })
   }
 
   // Rule 1 — persistence is reached only through the application ports.
@@ -305,20 +309,25 @@ const baseline = new Set(
     : [],
 )
 
-const fresh = violations.filter((v) => !baseline.has(v.file))
-const tracked = violations.filter((v) => baseline.has(v.file))
+// A baseline keyed on file path alone would let a *new* violation appear inside
+// an already-tracked file without failing. Key on file|rule|target, which is
+// the same identity `push()` uses to dedupe, so accepting one edge does not
+// silently accept another in the same file.
+const keyOf = (v) => violationKey(v.file, v.rule, v.target)
+const fresh = violations.filter((v) => !baseline.has(keyOf(v)))
+const tracked = violations.filter((v) => baseline.has(keyOf(v)))
 
 if (mode === "--update") {
-  const files = [...new Set(violations.map((v) => v.file))].sort()
+  const keys = [...new Set(violations.map((v) => violationKey(v.file, v.rule, v.target)))].sort()
   const body = [
-    "# Files with a known, tracked layer-boundary violation.",
+    "# Tracked layer-boundary violations, one `file|rule|target` per line.",
     "# Regenerate with `node scripts/arch-check.mjs --update`.",
-    "# Remove a line once its module goes through the application ports.",
-    ...files,
+    "# Remove a line once that import goes through the application ports.",
+    ...keys,
     "",
   ].join("\n")
   writeFileSync(baselineFile, body)
-  console.log(`arch-check: baseline written — ${files.length} file(s)`)
+  console.log(`arch-check: baseline written — ${keys.length} violation(s)`)
   process.exit(0)
 }
 

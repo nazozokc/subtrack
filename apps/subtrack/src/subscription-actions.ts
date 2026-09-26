@@ -25,13 +25,18 @@ async function changeStatus(ids: number[] | undefined, target: Status, force: bo
   const pending = subs.filter((s) => s.status !== target && s.status !== "archived")
   if (!pending.length) { consola.info("No subscriptions need changing"); return }
   if (!force && !(await confirm({ message: `Change ${pending.length} subscription(s) to ${target}?`, default: false }))) { consola.info("Cancelled"); return }
-  for (const sub of pending) {
-    if (!subscriptionRepository.update(sub.id, { status: target })) {
-      fail(`Subscription with id ${sub.id} not found`)
-      return
+  // The status change and its audit entry belong to the same edit, and the db
+  // is rewritten as a whole file on flush, so a run of N subscriptions is one
+  // flush rather than two per row.
+  withBatch(() => {
+    for (const sub of pending) {
+      if (!subscriptionRepository.update(sub.id, { status: target })) {
+        fail(`Subscription with id ${sub.id} not found`)
+        return
+      }
+      logAudit(target === "active" ? "subscription.resume" : "subscription.pause", { targetType: "subscription", targetId: sub.id, details: sub.name })
     }
-    logAudit(target === "active" ? "subscription.resume" : "subscription.pause", { targetType: "subscription", targetId: sub.id, details: sub.name })
-  }
+  })
   consola.success(`Updated ${pending.length} subscription(s)`)
 }
 
@@ -89,19 +94,24 @@ export async function handleRenew(id: number, flags: { price?: string; currency?
     }
   }
   if (flags.autoRenewal !== undefined) fields.autoRenewal = flags.autoRenewal
-  if (!subscriptionRepository.update(id, fields)) {
-    fail(`Subscription with id ${id} not found`)
-    return
-  }
-  withBatch(() =>
+  // The new price, the history entry that explains it and the audit entry are
+  // one edit: if the update reports a missing row there is nothing to record,
+  // and if it lands they all land in the same flush.
+  const updated = withBatch(() => {
+    if (!subscriptionRepository.update(id, fields)) return false
     priceHistoryRepository.record(
       id,
       sub.price,
       fields.price ?? sub.price,
       sub.currency,
       fields.currency ?? sub.currency,
-    ),
-  )
-  logAudit("subscription.renew", { targetType: "subscription", targetId: id, details: `${sub.name} renewed` })
+    )
+    logAudit("subscription.renew", { targetType: "subscription", targetId: id, details: `${sub.name} renewed` })
+    return true
+  })
+  if (!updated) {
+    fail(`Subscription with id ${id} not found`)
+    return
+  }
   consola.success(`Renewed: ${sub.name}`)
 }

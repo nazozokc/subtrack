@@ -1455,3 +1455,101 @@ test("mergeTag into itself reports failure for a tag that does not exist", async
   // "✔ Merged tag" (and wrote an audit entry) for a nonexistent tag.
   expect(db.mergeTag("ghost", "ghost")).toBe(false)
 })
+
+// ── getSubscriptions tag filter ──────────────────────────────────────────
+//
+// This is the path `subtrack tags` and `subtrack list --tags` now take, in
+// place of `tagsSubscription`. Two behaviours are easy to regress and were
+// caught in review: a repeated tag must not silently match nothing, and
+// archived rows must stay visible to a tag query.
+
+test("the tag filter collapses repeated names", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({
+    name: "Video",
+    price: 1000,
+    currency: "JPY",
+    cycle: "monthly",
+    tags: ["video"],
+  })
+  db.writeSubscription({
+    name: "Audio",
+    price: 500,
+    currency: "JPY",
+    cycle: "monthly",
+    tags: ["audio"],
+  })
+
+  // `subtrack tags video video` is the natural typo and must behave like
+  // `subtrack tags video`, not return an empty list.
+  expect(db.getSubscriptions({ tags: ["video"] }).map((s) => s.name)).toEqual(["Video"])
+  expect(db.getSubscriptions({ tags: ["video", "video"] }).map((s) => s.name)).toEqual(["Video"])
+  expect(db.getSubscriptions({ tags: ["video", "audio"] })).toEqual([])
+})
+
+test("the tag filter honours includeArchived", async () => {
+  const db = await import("../db.ts")
+  db.writeSubscription({
+    name: "Retired",
+    price: 900,
+    currency: "JPY",
+    cycle: "monthly",
+    tags: ["legacy"],
+  })
+  db.archiveSubscription(db.findSubscriptionByName("Retired")!.id)
+
+  // Default excludes archived, exactly like every other list.
+  expect(db.getSubscriptions({ tags: ["legacy"] })).toEqual([])
+  expect(
+    db.getSubscriptions({ tags: ["legacy"], includeArchived: false }),
+  ).toEqual([])
+  // A tag query widened to archived rows still finds them.
+  expect(
+    db.getSubscriptions({ tags: ["legacy"], includeArchived: true }).map((s) => s.name),
+  ).toEqual(["Retired"])
+})
+
+// ── collectStats ─────────────────────────────────────────────────────────
+//
+// `subtrack stats` reads from a new module, so its SQL is worth pinning: the
+// counts must reflect only the rows present, and the price range must be
+// limited to active subscriptions.
+
+test("collectStats counts rows and ranges only active prices", async () => {
+  const db = await import("../db.ts")
+
+  db.writeSubscription({
+    name: "Active",
+    price: 1000,
+    currency: "JPY",
+    cycle: "monthly",
+    tags: ["a"],
+  })
+  db.writeSubscription({
+    name: "Also active",
+    price: 3000,
+    currency: "USD",
+    cycle: "monthly",
+  })
+  const pausedId = db.writeSubscription({
+    name: "Paused",
+    price: 50,
+    currency: "JPY",
+    cycle: "monthly",
+  })
+  db.updateSubscription(pausedId, { status: "paused" })
+  db.writeTrial({ name: "Trial", expiresAt: "2027-01-01" })
+
+  const stats = db.collectStats()
+
+  expect(stats.total).toBe(3)
+  expect(stats.active).toBe(2)
+  expect(stats.paused).toBe(1)
+  expect(stats.cancelled).toBe(0)
+  expect(stats.archived).toBe(0)
+  expect(stats.totalTags).toBe(1)
+  expect(stats.totalTrials).toBe(1)
+  // The paused row's 50 must not widen the active range.
+  expect(stats.priceRange).toEqual({ min: 1000, max: 3000, currencies: ["JPY", "USD"] })
+  expect(stats.dbSizeBytes).toBeGreaterThanOrEqual(0)
+})

@@ -61,25 +61,40 @@ import type {
   SubscriptionRepository,
   TagRepository,
   TrialRepository,
-  UnitOfWork,
   UsageRepository,
 } from "./ports.ts"
 
 // ── Unit of work ──────────────────────────────────────────────────────────
 //
 // The database file is encrypted and rewritten wholesale on every flush, so a
-// bulk edit must persist once at the end rather than per row. Writes issued
-// inside `withBatch` are given `persist: false` and a single flush happens when
-// the outermost batch closes. Handlers therefore never see `saveDb` or
-// `persist`; they just say "these writes are one operation".
+// bulk edit must persist once at the end rather than per row. Inside
+// `withBatch`, `write()` hands the db function `persist: false` and records
+// that this unit of work now owes a flush; the outermost batch pays it. A
+// write outside any batch is flushed immediately by the db function itself.
+//
+// The two halves travel together on purpose: a function that only skipped the
+// save without marking dirty would lose the write, and one that only marked
+// dirty without skipping the save would flush twice. Use `write()`, never
+// `persistOpt()` and `markDirty()` separately.
 let batchDepth = 0
 let batchDirty = false
 
-const persistOpt = () => ({ persist: batchDepth === 0 })
-
-/** Mark the current unit of work as needing a flush. */
-function markDirty(): void {
-  if (batchDepth > 0) batchDirty = true
+/**
+ * Run one write against the db layer, participating in the current batch.
+ *
+ * `mutated` decides whether the batch now owes a flush. It defaults to "the
+ * result is not `false`", which covers the two shapes the db layer returns:
+ * `boolean` (false = nothing matched) and `void` (the write happened). Callers
+ * that return a count pass `(n) => n > 0` so an empty prune is not a rewrite.
+ */
+function write<T>(
+  fn: (options: { persist: boolean }) => T,
+  mutated: (result: T) => boolean = (result) => result !== false,
+): T {
+  const inBatch = batchDepth > 0
+  const result = fn({ persist: !inBatch })
+  if (inBatch && mutated(result)) batchDirty = true
+  return result
 }
 
 export function withBatch<T>(fn: () => T): T {
@@ -95,8 +110,6 @@ export function withBatch<T>(fn: () => T): T {
   }
 }
 
-const unitOfWork: UnitOfWork = { batch: withBatch }
-
 export const databaseInfo: DatabaseInfo = { path: getDbPath }
 
 export const searchRepository: SearchRepository = { find: searchSubscriptions }
@@ -106,116 +119,55 @@ export const statsRepository: StatsRepository = { snapshot: collectStats }
 export const auditRepository: AuditRepository = {
   list: (options) => getAuditLogs(options),
   count: (options) => getAuditLogCount(options),
-  record: (args) => addAuditLog(args),
-  prune: pruneAuditLogs,
+  record: (args) => write((o) => addAuditLog(args, o), (inserted) => inserted),
+  prune: (before) => write((o) => pruneAuditLogs(before, o), (n) => n > 0),
 }
 
 export const suggestionRepository: SuggestionRepository = {
   list: getSuggestions,
   get: getSuggestion,
   pendingCount: getPendingSuggestionCount,
-  record: (data) => {
-    writeSuggestion(data, persistOpt())
-    markDirty()
-  },
-  recordBatch: (entries) => {
-    const n = writeSuggestionBatch(entries, persistOpt())
-    markDirty()
-    return n
-  },
-  markAdded: (suggestionId, subscriptionId) => {
-    markSuggestionAsAdded(suggestionId, subscriptionId, persistOpt())
-    markDirty()
-  },
-  dismiss: (id) => {
-    const ok = dismissSuggestion(id, persistOpt())
-    markDirty()
-    return ok
-  },
-  dismissAll: () => {
-    const n = dismissAllSuggestions(persistOpt())
-    markDirty()
-    return n
-  },
+  record: (data) => write((o) => writeSuggestion(data, o)),
+  recordBatch: (entries) => write((o) => writeSuggestionBatch(entries, o), (n) => n > 0),
+  markAdded: (suggestionId, subscriptionId) =>
+    write((o) => markSuggestionAsAdded(suggestionId, subscriptionId, o)),
+  dismiss: (id) => write((o) => dismissSuggestion(id, o)),
+  dismissAll: () => write((o) => dismissAllSuggestions(o), (n) => n > 0),
 }
 
 export const tagRepository: TagRepository = {
   list: getAllTags,
   listWithCount: getTagsWithCount,
-  rename: renameTag,
-  remove: deleteTag,
-  merge: mergeTag,
-  prune: pruneTags,
+  rename: (from, to) => write((o) => renameTag(from, to, o)),
+  remove: (name) => write((o) => deleteTag(name, o)),
+  merge: (source, target) => write((o) => mergeTag(source, target, o)),
+  prune: () => write((o) => pruneTags(o), (n) => n > 0),
 }
 
 // ── Adapters ──────────────────────────────────────────────────────────────
 
 export const subscriptionRepository: SubscriptionRepository = {
   list: (options) => getSubscriptions(options),
-  listActive: () => getNonCancelledSubscriptions(),
+  listActive: getNonCancelledSubscriptions,
   get: getSubscription,
   findByName: findSubscriptionByName,
   withTags: mapTags,
-  add: (data) => {
-    const id = writeSubscription(data, persistOpt())
-    markDirty()
-    return id
-  },
-  update: (id, fields) => {
-    const ok = updateSubscription(id, fields, persistOpt())
-    if (ok) markDirty()
-    return ok
-  },
-  remove: (id) => {
-    const ok = deleteSubscription(id, persistOpt())
-    if (ok) markDirty()
-    return ok
-  },
-  archive: (id) => {
-    const ok = archiveSubscription(id)
-    if (ok) markDirty()
-    return ok
-  },
-  unarchive: (id) => {
-    const ok = unarchiveSubscription(id)
-    if (ok) markDirty()
-    return ok
-  },
-  merge: (keepId, removeId) => {
-    // Merging is transactional inside the db layer; it reports false when the
-    // source row is already gone, so nothing needs persisting in that case.
-    const ok = mergeSubscriptions(keepId, removeId)
-    if (ok) markDirty()
-    return ok
-  },
+  add: (data) => write((o) => writeSubscription(data, o)),
+  update: (id, fields) => write((o) => updateSubscription(id, fields, o)),
+  remove: (id) => write((o) => deleteSubscription(id, o)),
+  archive: (id) => write((o) => archiveSubscription(id, o)),
+  unarchive: (id) => write((o) => unarchiveSubscription(id, o)),
+  merge: (keepId, removeId) => write((o) => mergeSubscriptions(keepId, removeId, o)),
 }
 
 export const usageRepository: UsageRepository = {
   list: getLlmUsage,
-  add: (data) => {
-    addLlmUsage(data)
-    markDirty()
-  },
-  update: (id, fields) => {
-    const ok = updateLlmUsage(id, fields)
-    if (ok) markDirty()
-    return ok
-  },
-  addFromLog: (data) => {
-    const ok = addLlmUsageFromLog(data)
-    if (ok) markDirty()
-    return ok
-  },
-  addBatch: (entries) => {
-    const result = batchAddLlmUsageFromLog(entries)
-    if (result.added > 0) markDirty()
-    return result
-  },
-  remove: (id) => {
-    const ok = deleteLlmUsage(id)
-    if (ok) markDirty()
-    return ok
-  },
+  add: (data) => write((o) => addLlmUsage(data, o)),
+  update: (id, fields) => write((o) => updateLlmUsage(id, fields, o)),
+  addFromLog: (data) => write((o) => addLlmUsageFromLog(data, o)),
+  addBatch: (entries) =>
+    write((o) => batchAddLlmUsageFromLog(entries, o), (r) => r.added > 0),
+  remove: (id) => write((o) => deleteLlmUsage(id, o)),
   totalCost: getLlmUsageTotal,
   totalTokens: getLlmUsageTokenTotal,
   totalCostByProvider: getLlmUsageTotalByProvider,
@@ -226,24 +178,13 @@ export const trialRepository: TrialRepository = {
   list: getTrials,
   get: getTrial,
   listExpiringSoon: getTrialsExpiringSoon,
-  add: (data) => {
-    writeTrial(data)
-    markDirty()
-  },
-  remove: (id) => {
-    const ok = deleteTrial(id)
-    if (ok) markDirty()
-    return ok
-  },
+  add: (data) => write((o) => writeTrial(data, o)),
+  remove: (id) => write((o) => deleteTrial(id, o)),
 }
 
 export const priceHistoryRepository: PriceHistoryRepository = {
-  record: (subscriptionId, oldPrice, newPrice, oldCurrency, newCurrency) => {
-    writePriceHistory(subscriptionId, oldPrice, newPrice, oldCurrency, newCurrency)
-    markDirty()
-  },
+  record: (subscriptionId, oldPrice, newPrice, oldCurrency, newCurrency) =>
+    write((o) => writePriceHistory(subscriptionId, oldPrice, newPrice, oldCurrency, newCurrency, o)),
   listForSubscription: getPriceHistory,
   listRecent: getAllPriceChanges,
 }
-
-export { unitOfWork }

@@ -10,8 +10,10 @@ import { getDb, getDbPath, execObjs } from "./connection.ts"
 
 import type { Status, StatsSnapshot } from "../types.ts"
 
-const countOf = (table: string): number => {
-  const rows = execObjs<{ count: number }>(getDb(), `SELECT COUNT(*) AS count FROM ${table}`)
+// Each count is a fixed statement rather than a table name interpolated into
+// SQL, so this module never builds a query from a variable.
+const countOf = (sql: string): number => {
+  const rows = execObjs<{ count: number }>(getDb(), sql)
   return rows.length > 0 ? Number(rows[0].count) : 0
 }
 
@@ -36,9 +38,9 @@ export const collectStats = (): StatsSnapshot => {
     paused: statusMap.get("paused") ?? 0,
     cancelled: statusMap.get("cancelled") ?? 0,
     archived: statusMap.get("archived") ?? 0,
-    totalTags: countOf("tags"),
-    totalTrials: countOf("trials"),
-    totalUsage: countOf("llm_usage"),
+    totalTags: countOf("SELECT COUNT(*) AS count FROM tags"),
+    totalTrials: countOf("SELECT COUNT(*) AS count FROM trials"),
+    totalUsage: countOf("SELECT COUNT(*) AS count FROM llm_usage"),
     dbSizeBytes: getFileSize(getDbPath()),
     priceRange: {
       min: priceRows.length > 0 ? Math.min(...priceRows.map((r) => Number(r.price))) : 0,

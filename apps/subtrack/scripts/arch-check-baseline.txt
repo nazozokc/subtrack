@@ -1,3 +1,3 @@
-# Files with a known, tracked layer-boundary violation.
+# Tracked layer-boundary violations, one `file|rule|target` per line.
 # Regenerate with `node scripts/arch-check.mjs --update`.
-# Remove a line once its module goes through the application ports.
+# Remove a line once that import goes through the application ports.

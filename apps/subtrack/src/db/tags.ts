@@ -1,4 +1,5 @@
-import { getDb, execObjs, execObj, saveDb } from "./connection.ts"
+import { execObj, execObjs, getDb, saveDb } from "./connection.ts"
+import type { PersistOptions } from "./connection.ts"
 import type { SharedArgs } from "../types.ts"
 import { mapTags, SUB_COLUMNS } from "./subscriptions.ts"
 
@@ -50,7 +51,7 @@ export const getTagsWithCount = (): { name: string; count: number }[] => {
   )
 }
 
-export const renameTag = (oldName: string, newName: string): boolean => {
+export const renameTag = (oldName: string, newName: string, options: PersistOptions = {}): boolean => {
   const db = getDb()
   if (oldName === newName) return true
   db.exec("BEGIN TRANSACTION")
@@ -78,7 +79,7 @@ export const renameTag = (oldName: string, newName: string): boolean => {
       db.prepare("UPDATE tags SET name = ? WHERE id = ?").run(newName, oldRow.id)
     }
     db.exec("COMMIT")
-    saveDb()
+    if (options.persist !== false) saveDb()
     return true
   } catch (error) {
     try { db.exec("ROLLBACK") } catch { /* ok */ }
@@ -86,15 +87,15 @@ export const renameTag = (oldName: string, newName: string): boolean => {
   }
 }
 
-export const deleteTag = (name: string): boolean => {
+export const deleteTag = (name: string, options: PersistOptions = {}): boolean => {
   const db = getDb()
   const { changes } = db.prepare("DELETE FROM tags WHERE name = ?").run(name)
   const modified = Number(changes) > 0
-  if (modified) saveDb()
+  if (modified && options.persist !== false) saveDb()
   return modified
 }
 
-export const mergeTag = (source: string, target: string): boolean => {
+export const mergeTag = (source: string, target: string, options: PersistOptions = {}): boolean => {
   const db = getDb()
   // Merging a tag into itself is a no-op, but the source must still exist —
   // otherwise the caller would report success for a tag that was never there.
@@ -130,7 +131,7 @@ export const mergeTag = (source: string, target: string): boolean => {
     db.prepare("DELETE FROM tags WHERE id = ?").run(srcRow.id)
 
     db.exec("COMMIT")
-    saveDb()
+    if (options.persist !== false) saveDb()
     return true
   } catch (error) {
     try { db.exec("ROLLBACK") } catch { /* ok */ }
@@ -138,12 +139,12 @@ export const mergeTag = (source: string, target: string): boolean => {
   }
 }
 
-export const pruneTags = (): number => {
+export const pruneTags = (options: PersistOptions = {}): number => {
   const db = getDb()
   const { changes } = db.prepare(
     "DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM subscription_tags)",
   ).run()
   const count = Number(changes)
-  if (count > 0) saveDb()
+  if (count > 0 && options.persist !== false) saveDb()
   return count
 }

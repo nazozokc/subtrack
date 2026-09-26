@@ -1,12 +1,13 @@
-import { getDb, execObjs, execObj, saveDb } from "./connection.ts"
+import { execObj, execObjs, getDb, saveDb } from "./connection.ts"
+import type { PersistOptions } from "./connection.ts"
 import type { TrialEntry, AddTrialArgs } from "../types.ts"
 
-export const writeTrial = (data: AddTrialArgs): void => {
+export const writeTrial = (data: AddTrialArgs, options: PersistOptions = {}): void => {
   const db = getDb()
   db.prepare(
     "INSERT INTO trials (name, expires_at, price, currency, cycle, notes) VALUES (?, ?, ?, ?, ?, ?)",
   ).run(data.name, data.expiresAt, data.price ?? null, data.currency ?? null, data.cycle ?? null, data.notes ?? null)
-  saveDb()
+  if (options.persist !== false) saveDb()
 }
 
 export const getTrials = (): TrialEntry[] => {
@@ -26,11 +27,11 @@ export const getTrial = (id: number): TrialEntry | undefined => {
   )
 }
 
-export const deleteTrial = (id: number): boolean => {
+export const deleteTrial = (id: number, options: PersistOptions = {}): boolean => {
   const db = getDb()
   const { changes } = db.prepare("DELETE FROM trials WHERE id = ?").run(id)
   const modified = Number(changes) > 0
-  if (modified) saveDb()
+  if (modified && options.persist !== false) saveDb()
   return modified
 }
 

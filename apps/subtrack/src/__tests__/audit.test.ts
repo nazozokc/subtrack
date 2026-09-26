@@ -105,7 +105,7 @@ test("logAudit writes an audit entry", () => {
   const entries = getAuditLogs({})
   expect(entries).toHaveLength(1)
   expect(entries[0]!.action).toBe("subscription.add")
-  expect(entries[0]!.target_id).toBe(7)
+  expect(entries[0]!.targetId).toBe(7)
   expect(entries[0]!.details).toBe("created")
 })
 

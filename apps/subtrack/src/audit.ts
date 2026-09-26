@@ -95,7 +95,7 @@ export function handleAuditList(options: {
     minWidths: [6, 14, 18, 30] as const,
     maxWidths: [8, 20, 30, 80] as const,
   }
-  const colWidths = calcColumnWidths(entries.map((e) => [String(e.id), formatAction(e.action), e.target_type ?? "", e.details ?? ""]), AUDIT_COLS)
+  const colWidths = calcColumnWidths(entries.map((e) => [String(e.id), formatAction(e.action), e.targetType ?? "", e.details ?? ""]), AUDIT_COLS)
 
   const table = new CliTable3({
     chars: { ...TABLE_CHARS },
@@ -108,15 +108,15 @@ export function handleAuditList(options: {
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i]
     const action = formatAction(e.action)
-    const target = e.target_type
-      ? `${e.target_type}${e.target_id ? ` #${e.target_id}` : ""}`
+    const target = e.targetType
+      ? `${e.targetType}${e.targetId ? ` #${e.targetId}` : ""}`
       : ""
     const details = e.details
       ? e.details.length > 60
         ? e.details.slice(0, 57) + "..."
         : e.details
       : ""
-    const ts = formatTimestamp(e.created_at)
+    const ts = formatTimestamp(e.createdAt)
     const row = [String(e.id), action, target, `${ts} ${details}`]
     if (i % 2 === 0) {
       table.push(zebraRow(row))

@@ -8,7 +8,6 @@ export type {
   SuggestionRepository,
   TagRepository,
   TrialRepository,
-  UnitOfWork,
   UsageRepository,
 } from "./ports.ts"
 export {
@@ -21,7 +20,6 @@ export {
   suggestionRepository,
   tagRepository,
   trialRepository,
-  unitOfWork,
   usageRepository,
   withBatch,
 } from "./repositories.ts"
