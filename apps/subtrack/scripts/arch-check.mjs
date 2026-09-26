@@ -277,7 +277,7 @@ for (const [file, specs] of graph) {
   const targets = []
   for (const { spec, line } of specs) {
     const resolved = resolveModule(spec, dirname(resolve(srcRoot, file)))
-    if (resolved) targets.push({ target: relative(srcRoot, resolved), line })
+    if (resolved) targets.push({ target: toPosix(relative(srcRoot, resolved)), line })
   }
 
   const push = (t, rule, reason) => {
