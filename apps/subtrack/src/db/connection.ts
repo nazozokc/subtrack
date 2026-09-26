@@ -512,6 +512,12 @@ export function restoreDb(backupPath: string): void {
     // Complete migrations on the isolated backup before it can become live.
     runMigrations(newDb)
   } catch (error) {
+    // Close before unlinking: this catch runs before the finally block, and
+    // Windows cannot delete a file that is still open (EBUSY/EPERM).
+    if (newDb) {
+      try { newDb.close() } catch { /* best-effort cleanup */ }
+      newDb = null
+    }
     try { unlinkSync(savePath) } catch { /* best-effort cleanup */ }
     throw error
   } finally {
