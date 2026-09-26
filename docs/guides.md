@@ -48,7 +48,7 @@ To see subscription IDs, run `subtrack list`.
 
 ### Managing status and billing day
 
-Each subscription has a **status** (`active`, `paused`, `cancelled`) and an optional **billing day** (day of month).
+Each subscription has a **status** (`active`, `paused`, `cancelled`, `archived`) and an optional **billing day** (day of month).
 
 ```bash
 # Pause a subscription (excluded from totals and upcoming bills)
@@ -62,6 +62,41 @@ subtrack edit 3 --status active
 ```
 
 Paused subscriptions are preserved in the database but excluded from payment calculations. Cancelled subscriptions are kept for record-keeping but excluded from all totals.
+
+## Pausing, resuming, and renewing
+
+`subtrack edit --status` works, but the dedicated commands are faster for multiple IDs:
+
+```bash
+# Pause one or more subscriptions
+subtrack pause 3
+subtrack pause 3 5 --force
+
+# Bring a paused or cancelled subscription back to active
+subtrack resume 3 --force
+
+# Renew with a new price and contract end date (recorded in price history)
+subtrack renew 3 --price 1980 --contractEnd 2027-08-31
+```
+
+`--force` skips the confirmation prompt, which makes these safe to script.
+
+## Cancelling with the guided checklist
+
+`subtrack cancel` walks through optional data export, alternative-service checks, a cancellation-date note, and a final confirmation. The subscription is marked `cancelled` (not deleted) and written to the audit log.
+
+```bash
+# Guided cancellation
+subtrack cancel 3
+
+# Non-interactive (cron / scripting)
+subtrack cancel 3 --force
+
+# Inspect what would be cancelled without changing anything
+subtrack cancel 3 --json
+```
+
+To remove a cancelled subscription permanently, use `subtrack delete <id>`.
 
 ## Tracking upcoming bills
 
@@ -96,6 +131,37 @@ subtrack analytics
 ```
 
 The analytics command shows whether you're within budget or over.
+
+## Budgets and yearly reports
+
+Set a budget and check it against actual spending:
+
+```bash
+# Monthly budget
+subtrack config set monthlyBudget 5000
+subtrack budget
+
+# Yearly budget, with a cron-friendly exit code
+subtrack config set yearlyBudget 60000
+subtrack budget --period yearly --check
+
+# Named budgets (JSON array — amount, currency, optional period/categories)
+subtrack config set budgets '[{"name":"streaming","amount":3000,"currency":"JPY","categories":["video","music"]}]'
+subtrack budget --name streaming
+```
+
+`--check` exits with code 1 when spending exceeds the budget, which makes it usable as a cron guardrail.
+
+For a full yearly breakdown, use `subtrack report` (or its alias `subtrack yearly`):
+
+```bash
+subtrack report
+subtrack report --year 2025
+subtrack report --year 2025 --currency USD
+subtrack report --year 2025 --json
+```
+
+The report shows total spending, a monthly bar chart, top subscriptions, what was added or cancelled during the year, price changes, and a comparison against `yearlyBudget`.
 
 ## Importing from CSV
 
@@ -260,8 +326,8 @@ subtrack usage add
 subtrack usage add \
   --provider openai \
   --model gpt-4o \
-  --inputTokens 5000 \
-  --outputTokens 1500 \
+  --input-tokens 5000 \
+  --output-tokens 1500 \
   --date 2026-06-19 \
   --description "Code review"
 ```
@@ -381,7 +447,7 @@ subtrack forecast
 subtrack forecast --cancel Netflix
 
 # What if I add a new service?
-subtrack forecast --add-name "New Service" --add-price 1500 --add-currency JPY --add-cycle monthly
+subtrack forecast --addName "New Service" --addPrice 1500 --addCurrency JPY --addCycle monthly
 ```
 
 ## Cost optimization
@@ -620,6 +686,78 @@ CLI flags (`subtrack list --notes --method`) always take precedence over these d
 
 ```bash
 subtrack config list
+```
+
+## Finding duplicates
+
+`subtrack dedupe` compares normalized subscription names for near-matches (Levenshtein distance, default threshold 0.8; pairs sharing a vendor URL are boosted):
+
+```bash
+subtrack dedupe
+subtrack dedupe --threshold 0.7
+subtrack dedupe --json
+
+# Merge the duplicate (price history and tags move to the kept entry)
+subtrack dedupe merge 4 5
+```
+
+## Reusable templates
+
+Save a frequently used subscription shape once, then create instances from it:
+
+```bash
+subtrack template add spotify --price 980 --currency JPY --cycle monthly --tags music
+subtrack template list
+
+# Create a subscription from the template
+subtrack template use spotify
+
+# Override fields at creation time
+subtrack template use spotify --price 1080
+
+subtrack template edit spotify --price 1080
+subtrack template delete spotify
+```
+
+## Reviewing what's coming up
+
+`subtrack review` combines upcoming bills, contract expirations, and expiring trials into one screen:
+
+```bash
+subtrack review
+subtrack review --billDays 30 --contractDays 60 --trialDays 14
+subtrack review --json
+```
+
+## Subscription suggestions
+
+Suggestions are candidate subscriptions detected by the scanner (for example AI tool usage that looks like a paid plan) or imported from a receipt file:
+
+```bash
+# List pending candidates
+subtrack suggest list
+subtrack suggest view 3
+
+# Accept a candidate
+subtrack suggest add 3
+
+# Dismiss one, or all
+subtrack suggest dismiss 3
+subtrack suggest dismiss --all
+```
+
+`subtrack receipt <file>` parses a receipt and creates candidates; use `--dryRun` to inspect without writing.
+
+## Data integrity and change history
+
+```bash
+# Check for data problems (exits 1 with --strict)
+subtrack check
+subtrack check --strict
+
+# Review what changed and when
+subtrack changes --from 2026-01-01 --to 2026-12-31
+subtrack changes --id 3
 ```
 
 ## MCP integration
