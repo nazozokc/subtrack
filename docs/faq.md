@@ -16,6 +16,29 @@ Without a backup, the data cannot be recovered — the database is stored locall
 
 **Recommendation:** Set up regular automated backups via cron or Task Scheduler. See the [Data & Storage](/data) page for details.
 
+## Why is there no banner or version header when I pipe the output?
+
+By design. The startup header and the notification banner are printed only when stdout is a TTY, so redirecting or piping produces clean output:
+
+```bash
+subtrack list > subs.txt
+subtrack list --json | jq '.[0].name'
+```
+
+This also makes piped commands faster: the banner's extra database queries are skipped entirely.
+
+## A flag I passed had no effect. Why?
+
+subtrack silently ignores unknown flags instead of erroring, so a typo fails quietly. Two naming styles are in use and they are not interchangeable:
+
+| Command group | Style | Example |
+|---------------|-------|---------|
+| `usage add` / `usage edit` | kebab-case | `subtrack usage add --input-tokens 500` |
+| `add`, `edit`, `forecast`, `renew`, `template` | camelCase | `subtrack forecast --addName "New Service"` |
+| `list`, `import`, `receipt` | camelCase | `subtrack list --min-price 500` |
+
+Check `subtrack <command> --help` for the authoritative list.
+
 ## Can I add support for more currencies?
 
 The `Currency` type now accepts any ISO 4217 3-letter code, so all currencies supported by [open.er-api.com](https://open.er-api.com) work out of the box. The interactive prompt provides a curated list of 37 commonly used currencies. If you need a currency not in the list, use the `--currency` flag directly with any valid code.
@@ -85,9 +108,9 @@ Model pricing is fetched from the [LiteLLM GitHub repository](https://github.com
 
 ## Can I pause a subscription instead of deleting it?
 
-Yes! Each subscription has a `status` field: `active`, `paused`, or `cancelled`. Paused subscriptions are preserved in the database but excluded from payment totals, analytics, and upcoming bills. This is useful for subscriptions you want to keep for reference but aren't currently paying for.
+Yes! Each subscription has a `status` field: `active`, `paused`, `cancelled`, or `archived`. Paused subscriptions are preserved in the database but excluded from payment totals, analytics, and upcoming bills. This is useful for subscriptions you want to keep for reference but aren't currently paying for.
 
-Use `subtrack edit <id> --status paused` or edit interactively and select the `status` field.
+Use `subtrack edit <id> --status paused` (or `subtrack pause <id>`), and edit interactively to select the `status` field.
 
 ## What is the billing day for?
 
@@ -137,7 +160,7 @@ Your database will be preserved — updates only affect the CLI code, not your d
 
 ## What is MCP and how do I use it?
 
-MCP (Model Context Protocol) is a standard that allows AI assistants to interact with tools. subtrack implements an MCP server that exposes 16 tools for subscription management. Start it with `subtrack mcp` and configure it in Claude Desktop, Cursor, Windsurf, or any MCP-compatible host. See the [MCP page](/mcp) for full details.
+MCP (Model Context Protocol) is a standard that allows AI assistants to interact with tools. subtrack implements an MCP server that exposes 20 tools for subscription management. Start it with `subtrack mcp` and configure it in Claude Desktop, Cursor, Windsurf, or any MCP-compatible host. See the [MCP page](/mcp) for full details.
 
 ## How do I search for subscriptions?
 
@@ -153,7 +176,7 @@ Yes. The `subtrack bulk` command lets you change status, delete, or modify tags 
 
 ## What does the forecast command do?
 
-`subtrack forecast` projects your subscription spending over a given number of months (default: 12). It supports what-if scenarios — you can simulate cancelling subscriptions (`--cancel`) or adding hypothetical ones (`--add-name`, `--add-price`) to see how your costs would change.
+`subtrack forecast` projects your subscription spending over a given number of months (default: 12). It supports what-if scenarios — you can simulate cancelling subscriptions (`--cancel`) or adding hypothetical ones (`--addName`, `--addPrice`) to see how your costs would change.
 
 ## What is the timeline command?
 

@@ -15,7 +15,7 @@ The database is created automatically on first use. No database server or config
 
 ## Database structure
 
-Seven tables — three for subscriptions with a many-to-many relationship, one for LLM API usage tracking, one for free trials, one for price change history, and one for the audit log:
+Eight tables — three for subscriptions with a many-to-many relationship, plus tables for LLM API usage tracking, free trials, price change history, subscription suggestions, and the audit log:
 
 ```
 subscriptions
@@ -28,7 +28,15 @@ subscriptions
 ├── billing_day      INTEGER
 ├── created_at       TEXT NOT NULL DEFAULT (date('now'))
 ├── notes            TEXT
-└── payment_method   TEXT
+├── payment_method   TEXT
+├── contract_start   TEXT
+├── contract_end     TEXT
+├── auto_renewal     INTEGER NOT NULL DEFAULT 1
+├── vendor_name      TEXT
+├── vendor_url       TEXT
+├── plan_tier        TEXT
+├── discount_amount  INTEGER
+└── discount_type    TEXT
 
 tags
 ├── id   INTEGER PRIMARY KEY AUTOINCREMENT
@@ -69,15 +77,46 @@ price_history
 ├── new_currency     TEXT NOT NULL
 └── changed_at       TEXT NOT NULL DEFAULT (datetime('now'))
 
+suggestions
+├── id               INTEGER PRIMARY KEY AUTOINCREMENT
+├── name             TEXT NOT NULL
+├── price            INTEGER
+├── currency         TEXT
+├── cycle            TEXT
+├── vendor_name      TEXT
+├── vendor_url       TEXT
+├── plan_tier        TEXT
+├── payment_method   TEXT
+├── source           TEXT NOT NULL DEFAULT 'email'
+├── source_detail    TEXT
+├── email_subject    TEXT
+├── email_from       TEXT
+├── email_date       TEXT
+├── confidence       REAL DEFAULT 0.0
+├── status           TEXT NOT NULL DEFAULT 'pending' (pending|dismissed|added)
+├── matched_sub_id   INTEGER (FK → subscriptions.id, ON DELETE SET NULL)
+└── created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+
 audit_log
 ├── id               INTEGER PRIMARY KEY AUTOINCREMENT
 ├── action           TEXT NOT NULL
 ├── target_type      TEXT
 ├── target_id        INTEGER
 ├── details          TEXT
-├── metadata         TEXT (JSON)
 └── created_at       TEXT NOT NULL DEFAULT (datetime('now'))
 ```
+
+### Contract, vendor & discount fields
+
+`contract_start` / `contract_end` store contract dates (`YYYY-MM-DD`), `auto_renewal` stores whether the subscription renews automatically, `vendor_name` / `vendor_url` record the vendor, `plan_tier` the plan name, and `discount_amount` + `discount_type` (`percentage` or `fixed`) any active discount. Set them with `subtrack add` / `subtrack edit` flags such as `--contractEnd`, `--vendorName`, or `--planTier`. `subtrack list --contract --vendor` shows them as extra columns, and `subtrack review` surfaces upcoming contract expirations.
+
+### Suggestions
+
+The `suggestions` table stores candidate subscriptions detected by the scanner or imported with `subtrack receipt`. Each row moves through `pending` → `added` (accepted via `subtrack suggest add <id>`) or `pending` → `dismissed`.
+
+### Config-backed data
+
+Some data lives in `~/.config/subtrack/config.json` rather than the database: saved filter profiles (`profiles`, `activeProfile`), reusable templates (`templates`), budgets, and display settings. See the [Configuration](/configuration) page.
 
 ### Status
 

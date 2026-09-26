@@ -85,6 +85,7 @@ See the [Commands reference](/commands#config) for full details.
 | `yearlyBudget` | Yearly budget target in USD | — |
 | `profiles` | Saved filter profiles (stored as JSON object) | `{}` |
 | `activeProfile` | Currently active filter profile name | — |
+| `templates` | Reusable subscription templates (stored as JSON object) | `{}` |
 | `budgets` | Multiple named budgets for budget-vs-actual tracking | — |
 | `tableBorderColor` | Table border color override (color name) | theme default |
 | `tableHeaderColor` | Table header color override (color name) | theme default |

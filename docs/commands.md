@@ -5,6 +5,13 @@ description: Full reference for all subtrack CLI commands.
 
 subtrack provides the following commands. Most support both interactive and non-interactive modes.
 
+## Scripting notes
+
+- **Piped output is clean.** The notification banner and the `subtrack (subtrack vX.Y.Z)` header are printed only when stdout is a TTY, so `subtrack list > out.txt` and `subtrack list | jq` produce machine-readable output without stripping anything.
+- **JSON mode never prompts.** Passing `-j, --json` (or `SUBSC_CLI_DB_DIR` pointing at a fresh directory) is enough to keep a command non-interactive.
+- **Exit codes for automation.** `budget --check` exits 1 when over budget; `check --strict` exits 1 when data problems are found.
+- **Unknown flags are ignored.** A typo like `--inputTokens` (correct form: `--input-tokens`) does not error out — it is silently dropped. Always confirm against `subtrack <command> --help`.
+
 <details>
 <summary><strong>Quick navigation</strong></summary>
 
@@ -53,10 +60,18 @@ subtrack provides the following commands. Most support both interactive and non-
 - [`changes`](#changes)
 - [`receipt`](#receipt)
 - [`template`](#template)
+- [`suggest`](#suggest)
 - [`budget`](#budget)
 - [`dedupe`](#dedupe)
 - [`cancel`](#cancel)
 - [`report`](#report)
+
+::: tip Not listed here?
+`subtrack <command> --help` is always authoritative. Option names are
+case-sensitive and unknown flags are silently ignored, so copy-paste errors
+fail quietly. Common traps: `usage` uses kebab-case (`--input-tokens`), while
+`add` / `edit` / `forecast` use camelCase (`--billingDay`, `--addName`).
+:::
 
 </details>
 
@@ -72,11 +87,19 @@ Lists all subscriptions in a formatted table. Subscriptions are grouped by curre
 | `-a, --api` | Include LLM API usage costs for the current month |
 | `-n, --notes` | Show notes column |
 | `-m, --method` | Show payment method column |
+| `--contract` | Show contract dates column |
+| `--vendor` | Show vendor column |
+| `--status <status>` | Filter by status: `active`, `paused`, `cancelled`, `archived` |
+| `--min-price <n>` | Filter by minimum price (smallest currency unit) |
+| `--max-price <n>` | Filter by maximum price (smallest currency unit) |
 | `-j, --json` | Output as JSON |
 | `--tags <tags>` | Comma-separated tag names to filter by (AND logic) |
 | `--limit <n>` | Max number of items to show |
 | `--offset <n>` | Number of items to skip |
 | `--include-archived` | Include archived subscriptions |
+
+Archived subscriptions are hidden unless `--include-archived` is passed or
+`--status archived` is requested explicitly.
 
 ### Examples
 
@@ -102,8 +125,17 @@ subtrack list --api --currency JPY
 # Show payment method and notes columns
 subtrack list --method --notes
 
+# Show contract dates and vendor columns
+subtrack list --contract --vendor
+
 # Filter by tags
 subtrack list --tags music,video
+
+# Filter by status and price range
+subtrack list --status active --min-price 500 --max-price 5000
+
+# Page through results
+subtrack list --limit 20 --offset 40
 
 # JSON output for scripting
 subtrack list --json
@@ -266,6 +298,7 @@ Shows subscriptions that are due for billing within the specified number of days
 | Option | Description |
 |--------|-------------|
 | `-j, --json` | Output as JSON |
+| `-c, --currency <C>` | Convert all prices to the given currency |
 
 ### Examples
 
@@ -279,17 +312,23 @@ subtrack upcoming 30
 # Bills due today
 subtrack upcoming 0
 
+# Convert all amounts to JPY
+subtrack upcoming 30 --currency JPY
+
 # JSON output
 subtrack upcoming --json
 ```
 
-## `clone`
+## `clone <id>`
 
 Clones an existing subscription. Creates a new subscription pre-filled with all fields from the source, with optional overrides.
 
+| Argument | Description |
+|----------|-------------|
+| `<id>` | Subscription ID to clone (required) |
+
 | Option | Description |
 |--------|-------------|
-| `[id]` | Subscription ID to clone |
 | `--name <name>` | New name (default: `<original> (copy)`) |
 | `--price <price>` | Override price |
 | `--currency <C>` | Override currency |
@@ -309,26 +348,26 @@ subtrack clone 3 --name "Netflix (Secondary)"
 subtrack clone 3 --price 1500 --tags "video,4k"
 ```
 
-## `archive`
+## `archive <id>`
 
 Archives a subscription by setting its status to `archived`. Archived subscriptions are preserved in the database but excluded from all payment calculations and reports. Unlike `cancelled`, archived subscriptions are intended for long-term record-keeping.
 
 | Argument | Description |
 |----------|-------------|
-| `[id]` | Subscription ID to archive |
+| `<id>` | Subscription ID to archive (required) |
 
 ```bash
 # Archive subscription 3
 subtrack archive 3
 ```
 
-## `unarchive`
+## `unarchive <id>`
 
 Unarchives a subscription, restoring its status to `active`.
 
 | Argument | Description |
 |----------|-------------|
-| `[id]` | Subscription ID to unarchive |
+| `<id>` | Subscription ID to unarchive (required) |
 
 ```bash
 # Unarchive subscription 3
@@ -432,10 +471,22 @@ Monthly by tag:
 
 Shows detailed subscription analytics, including a status breakdown (active/paused/cancelled/archived), monthly spending by currency and tag, and budget tracking if a monthly budget has been configured.
 
+| Option | Description |
+|--------|-------------|
+| `-c, --currency <C>` | Convert all prices to target currency |
+| `--period <period>` | Period: `monthly`, `yearly` (default: `monthly`) |
+| `-j, --json` | Output as JSON |
+
 ### Example
 
 ```bash
 subtrack analytics
+
+# Yearly analytics converted to JPY
+subtrack analytics --period yearly --currency JPY
+
+# JSON output
+subtrack analytics --json
 ```
 
 Output:
@@ -489,16 +540,9 @@ Manages tags with the following subcommands:
 
 Lists all tags with their subscription count.
 
-| Option | Description |
-|--------|-------------|
-| `--sort <field>` | Sort by: `name` or `count` (default: `name`) |
-
 ```bash
 # List all tags
 subtrack tag list
-
-# Sort by usage count
-subtrack tag list --sort count
 ```
 
 ### `tag rename <old> <new>`
@@ -693,6 +737,9 @@ Manages subtrack configuration. Configuration is stored in `~/.config/subtrack/c
 | `dateFormat` | Date display format: `iso` or `short` | `iso` |
 | `listShowNotes` | Show notes column in `list` by default | `off` |
 | `listShowMethod` | Show payment method column in `list` by default | `off` |
+| `profiles` | Saved filter profiles (JSON object) | `{}` |
+| `activeProfile` | Currently active filter profile name | — |
+| `templates` | Reusable subscription templates (JSON object) | `{}` |
 | `notifyDays` | Notification look-ahead in days | `7` |
 | `notifyChannels` | Comma-separated channels: `os`, `slack`, `webhook` | `os` |
 | `slackWebhook` | Slack webhook URL for `slack` notifications | — |
@@ -759,8 +806,8 @@ Records an LLM API usage entry. Without flags, prompts for all fields interactiv
 |--------|-------------|
 | `--provider <name>` | Provider: `openai`, `anthropic`, `google-ai`, `mistral`, `groq`, `together`, `deepseek`, `cohere`, or custom |
 | `--model <name>` | Model name (e.g. `gpt-4o`, `claude-3-opus-20240229`) |
-| `--inputTokens <n>` | Input token count |
-| `--outputTokens <n>` | Output token count |
+| `--input-tokens <n>` | Input token count |
+| `--output-tokens <n>` | Output token count |
 | `--date <YYYY-MM-DD>` | Date of usage (default: today) |
 | `--description <text>` | Optional description |
 | `--cost <amount>` | Total cost in USD (e.g. `0.50` for 50 cents; overrides auto-pricing) |
@@ -773,8 +820,8 @@ subtrack usage add
 subtrack usage add \
   --provider openai \
   --model gpt-4o \
-  --inputTokens 500 \
-  --outputTokens 200 \
+  --input-tokens 500 \
+  --output-tokens 200 \
   --date 2026-06-19 \
   --description "Chat completion"
 
@@ -782,8 +829,8 @@ subtrack usage add \
 subtrack usage add \
   --provider openai \
   --model gpt-4o \
-  --inputTokens 500 \
-  --outputTokens 200 \
+  --input-tokens 500 \
+  --output-tokens 200 \
   --cost 0.15
 ```
 
@@ -1084,10 +1131,11 @@ Projects subscription spending over a given number of months. Supports what-if s
 | `--months <n>` | Number of months to forecast (default: 12) |
 | `-c, --currency <C>` | Convert all prices to target currency |
 | `--cancel <names>` | Comma-separated subscription names to exclude |
-| `--add-name <name>` | Hypothetical subscription name to add |
-| `--add-price <price>` | Hypothetical subscription price |
-| `--add-currency <C>` | Hypothetical subscription currency |
-| `--add-cycle <cycle>` | Hypothetical subscription cycle |
+| `--addName <name>` | Hypothetical subscription name to add |
+| `--addPrice <price>` | Hypothetical subscription price |
+| `--addCurrency <C>` | Hypothetical subscription currency |
+| `--addCycle <cycle>` | Hypothetical subscription cycle |
+| `-j, --json` | Output as JSON |
 
 ```bash
 # Basic 12-month forecast
@@ -1100,7 +1148,7 @@ subtrack forecast --months 6 --currency JPY
 subtrack forecast --cancel Netflix
 
 # What if I add a new service?
-subtrack forecast --add-name "New Service" --add-price 1500 --add-currency JPY --add-cycle monthly
+subtrack forecast --addName "New Service" --addPrice 1500 --addCurrency JPY --addCycle monthly
 ```
 
 ## `history`
@@ -1210,6 +1258,7 @@ Displays a monthly calendar with billing days marked. Shows which subscriptions 
 |--------|-------------|
 | `--month <n>` | Month (1–12, default: current) |
 | `--year <yyyy>` | Year (default: current) |
+| `-c, --currency <C>` | Convert all prices to target currency |
 | `-j, --json` | Output as JSON |
 
 ```bash
@@ -1218,6 +1267,9 @@ subtrack calendar
 
 # Show a specific month
 subtrack calendar --month 12 --year 2026
+
+# Convert amounts to JPY
+subtrack calendar --currency JPY
 
 # JSON output
 subtrack calendar --json
@@ -1369,19 +1421,21 @@ One-command database cleanup: runs integrity check, VACUUM, prunes old audit ent
 
 | Option | Description |
 |--------|-------------|
-| `--vacuum` | Run VACUUM (default: true) |
+| `--vacuum` | Run VACUUM (default: `true`) |
 | `--audit-days <n>` | Prune audit entries older than N days (default: 90) |
 | `-j, --json` | Output as JSON |
+
+VACUUM runs by default and cannot be turned off — use `subtrack maintenance` if you only want an integrity check.
 
 ```bash
 # Full cleanup with defaults
 subtrack cleanup
 
-# Skip VACUUM, only prune audit/tags
-subtrack cleanup --no-vacuum
-
 # Keep 30 days of audit history
 subtrack cleanup --audit-days 30
+
+# JSON output
+subtrack cleanup --json
 ```
 
 ## `stats`
@@ -1517,13 +1571,28 @@ subtrack report --json
 
 The monthly chart requires a single currency — use `--currency` to convert. Cancelled subscriptions are counted only until their contract end date. The report compares yearly spending against `yearlyBudget` when configured.
 
-## `pause` and `resume`
+## `pause [ids...]`
 
-Pause or resume one or more subscriptions by ID. Both commands prompt for confirmation unless `--force` is supplied. `resume` accepts paused or cancelled subscriptions.
+Pauses one or more subscriptions by ID, setting their status to `paused`. Paused subscriptions are excluded from payment totals, analytics, and upcoming bills.
+
+| Option | Description |
+|--------|-------------|
+| `-f, --force` | Skip the confirmation prompt |
 
 ```bash
 subtrack pause 3
 subtrack pause 3 5 --force
+```
+
+## `resume [ids...]`
+
+Resumes one or more paused or cancelled subscriptions by ID, restoring their status to `active`. `resume` accepts paused or cancelled subscriptions.
+
+| Option | Description |
+|--------|-------------|
+| `-f, --force` | Skip the confirmation prompt |
+
+```bash
 subtrack resume 3 --force
 ```
 
@@ -1562,18 +1631,31 @@ subtrack review --billDays 30 --contractDays 60 --json
 
 ## `yearly`
 
-Shows annual spending for a year, optionally converted to one currency.
+Shows annual spending for a year, optionally converted to one currency. A thin alias of `subtrack report`.
+
+| Option | Description |
+|--------|-------------|
+| `--year <yyyy>` | Target year (default: current year) |
+| `-c, --currency <C>` | Convert all prices to target currency |
+| `-j, --json` | Output as JSON |
 
 ```bash
-subtrack yearly 2026
-subtrack yearly 2026 --currency JPY --json
+subtrack yearly
+subtrack yearly --year 2026
+subtrack yearly --year 2026 --currency JPY --json
 ```
 
 ## `check`
 
-Checks subscription data integrity. `--strict` exits with code 1 when problems are found.
+Checks subscription data integrity (duplicate IDs, orphaned tags, invalid prices/cycles, missing links). `--strict` exits with code 1 when problems are found.
+
+| Option | Description |
+|--------|-------------|
+| `--strict` | Exit with code 1 when problems are found |
+| `-j, --json` | Output as JSON |
 
 ```bash
+subtrack check
 subtrack check --strict
 subtrack check --json
 ```
@@ -1581,6 +1663,14 @@ subtrack check --json
 ## `changes`
 
 Shows audit-log changes to subscriptions. Filter by subscription ID or date range.
+
+| Option | Description |
+|--------|-------------|
+| `--id <n>` | Filter by subscription ID |
+| `--from <YYYY-MM-DD>` | Start date (inclusive) |
+| `--to <YYYY-MM-DD>` | End date (inclusive) |
+| `--limit <n>` | Max entries to show |
+| `-j, --json` | Output as JSON |
 
 ```bash
 subtrack changes --from 2026-01-01 --to 2026-12-31
@@ -1591,6 +1681,16 @@ subtrack changes --id 3 --json
 
 Imports subscription candidates from a receipt file. Use `--dryRun` to inspect without writing, or `--review` to review candidates interactively.
 
+| Argument | Description |
+|----------|-------------|
+| `<file>` | Receipt file path (required) |
+
+| Option | Description |
+|--------|-------------|
+| `--dryRun` | Parse without writing candidates |
+| `--review` | Review candidates interactively before writing |
+| `-j, --json` | Output as JSON |
+
 ```bash
 subtrack receipt receipt.txt --dryRun
 subtrack receipt receipt.txt --review
@@ -1598,12 +1698,88 @@ subtrack receipt receipt.txt --review
 
 ## `template`
 
-Manages reusable subscription templates. Templates can be listed, added, edited, deleted, or used to create a subscription.
+Manages reusable subscription templates. Templates are stored in `config.json` and can be listed, added, edited, deleted, or used to create a subscription.
+
+| Subcommand | Description |
+|------------|-------------|
+| `list` | List all templates |
+| `add <name>` | Create a new template |
+| `edit <name>` | Update an existing template |
+| `delete <name>` | Delete a template |
+| `use <name>` | Create a subscription from a template |
+
+### `template add <name>` / `template edit <name>`
+
+| Option | Description |
+|--------|-------------|
+| `<name>` | Template name (required) |
+| `--price <n>` | Price in smallest currency unit |
+| `--currency <C>` | Currency code |
+| `--cycle <cycle>` | Billing cycle |
+| `--tags <tags>` | Comma-separated tags |
+| `--billingDay <n>` | Billing day of month (1–31) |
+| `--notes <text>` | Notes |
+| `--paymentMethod <method>` | Payment method |
+| `--vendorName <name>` | Vendor name |
+| `--vendorUrl <url>` | Vendor URL |
+| `--planTier <tier>` | Plan tier |
+| `--autoRenewal` | Enable automatic renewal |
+
+### `template use <name>`
+
+| Option | Description |
+|--------|-------------|
+| `<name>` | Template name (required) |
+| `--price <n>` | Override price |
+| `--currency <C>` | Override currency |
+| `--cycle <cycle>` | Override billing cycle |
+| `--tags <tags>` | Override tags (comma-separated) |
 
 ```bash
 subtrack template add spotify --price 980 --currency JPY --cycle monthly --tags music
 subtrack template list
 subtrack template use spotify
+subtrack template use spotify --price 1080
 subtrack template edit spotify --price 1080
 subtrack template delete spotify
+```
+
+## `suggest`
+
+Manages subscription suggestions — candidates detected by the scanner (for example AI tool usage that looks like a paid subscription) or imported from a receipt.
+
+| Subcommand | Description |
+|------------|-------------|
+| `list` | List pending suggestions |
+| `view <id>` | Show full details of a suggestion |
+| `add <id>` | Add a suggestion as a subscription (non-interactive) |
+| `dismiss [id]` | Dismiss one suggestion, or all with `--all` |
+
+### `suggest list`
+
+| Option | Description |
+|--------|-------------|
+| `--all` | Show all suggestions (including dismissed/added) |
+| `-j, --json` | Output as JSON |
+
+### `suggest dismiss [id]`
+
+| Option | Description |
+|--------|-------------|
+| `[id]` | Suggestion ID (interactive prompt when omitted) |
+| `--all` | Dismiss all pending suggestions |
+
+```bash
+# List pending suggestions
+subtrack suggest list
+
+# Inspect one suggestion
+subtrack suggest view 3
+
+# Accept a suggestion
+subtrack suggest add 3
+
+# Dismiss one, or all
+subtrack suggest dismiss 3
+subtrack suggest dismiss --all
 ```

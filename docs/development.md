@@ -82,44 +82,104 @@ subtrack/
 │   └── subtrack/              # CLI tool (TypeScript/ESM)
 │       ├── src/
 │       │   ├── index.ts            # Entry point, CLI bootstrap
-│       │   ├── cli/                # Self-contained CLI framework (define/parser/router/help)
-│       │   ├── menu.ts             # Interactive main menu (launched by bare `subtrack`)
-│       │   ├── commands/           # Command definitions (`src/cli/types.ts` `define`)
+│       │   ├── launcher.ts         # Bare `subtrack` → interactive menu
+│       │   ├── pre-command.ts      # Pre-command hooks (notification banner)
+│       │   ├── cli/                # Self-contained CLI framework
+│       │   │   ├── types.ts           # `define()` and command types
+│       │   │   ├── parser.ts          # Tokenizer + argument resolution
+│       │   │   ├── router.ts          # Command/subcommand resolution
+│       │   │   ├── help.ts            # Usage/help rendering
+│       │   │   └── index.ts           # `cli()` entry, banner, error handling
+│       │   ├── menu/               # Interactive main menu (bare `subtrack`)
+│       │   │   ├── index.ts           # Menu router
+│       │   │   ├── header.ts          # Header/banner rendering
+│       │   │   ├── views.ts           # Read-only views
+│       │   │   ├── edits.ts           # Edit flows
+│       │   │   ├── manage.ts          # Lifecycle actions
+│       │   │   ├── data.ts            # Import/export/backup flows
+│       │   │   ├── config.ts          # Config menu
+│       │   │   └── shared.ts          # Shared menu helpers
+│       │   ├── commands/           # Command definitions (`define` from `src/cli/types.ts`)
 │       │   │   ├── index.ts            # Barrel, subCommands map
-│       │   │   ├── core.ts             # list, add, edit, delete, clone, archive, unarchive, search
+│       │   │   ├── lazy.ts             # Lazy-loaded command groups (startup perf)
+│       │   │   ├── core.ts             # list, add, edit, delete, cancel, clone,
+│       │   │   │                       # archive, unarchive, search
 │       │   │   ├── tag.ts              # tags, tag subcommands (list/rename/delete/prune/merge)
 │       │   │   ├── trial.ts            # trial subcommands (add/list/expiring/delete)
 │       │   │   ├── bulk.ts             # bulk subcommands (status/delete/tag)
 │       │   │   ├── io.ts               # export, import
 │       │   │   ├── backup.ts           # backup, restore
 │       │   │   ├── config.ts           # config subcommands (list/get/set/reset)
-│       │   │   ├── usage.ts            # usage subcommands (add/list/delete/import/refresh/total)
+│       │   │   ├── usage.ts            # usage subcommands (add/list/edit/delete/import/refresh/total)
 │       │   │   ├── report.ts           # summary, payment, upcoming, analytics, compare,
 │       │   │   │                       # calendar, forecast, history, notify, timeline,
-│       │   │   │                       # optimize, stats
-│       │   │   └── misc.ts             # mcp, profile, audit, maintenance, cleanup, currency
+│       │   │   │                       # optimize, stats, budget, report
+│       │   │   ├── features.ts         # pause, resume, renew, review, yearly, check,
+│       │   │   │                       # changes, receipt, template
+│       │   │   ├── suggest.ts          # suggest subcommands (list/view/add/dismiss)
+│       │   │   └── misc.ts             # mcp, profile, audit, maintenance, cleanup,
+│       │   │                           # currency, dedupe
 │       │   ├── subscription/      # Subscription command handlers
 │       │   │   ├── core.ts            # handleList, handleDelete, handleClone, handleArchive,
 │       │   │   │                       # handleUnarchive, handleTags
 │       │   │   ├── add.ts             # handleAdd
-│       │   │   └── edit.ts            # handleEdit
+│       │   │   ├── edit.ts            # handleEdit
+│       │   │   └── delete.ts          # handleDelete
 │       │   ├── db/                # Database layer (SQLite CRUD via node:sqlite)
 │       │   │   ├── connection.ts      # DB connection, save, restore, backup helpers
 │       │   │   ├── schema.ts          # Table creation & migrations
+│       │   │   ├── integrity.ts       # Integrity checks
 │       │   │   ├── subscriptions.ts   # Subscription CRUD
 │       │   │   ├── tags.ts            # Tag CRUD
 │       │   │   ├── usage.ts           # LLM usage CRUD
 │       │   │   ├── trials.ts          # Trial CRUD
+│       │   │   ├── suggestions.ts     # Suggestion CRUD
 │       │   │   ├── price-history.ts   # Price change history
 │       │   │   └── audit.ts           # Audit log CRUD
+│       │   ├── domain/            # Framework-free business logic
+│       │   │   └── billing.ts         # Billing cycle / next-billing-date math
+│       │   ├── application/       # Ports & repository interfaces
+│       │   │   ├── index.ts
+│       │   │   ├── ports.ts
+│       │   │   └── repositories.ts
+│       │   ├── presentation/      # Output formatting adapters
+│       │   │   └── output.ts
+│       │   ├── prompts/           # Interactive prompt primitives
+│       │   │   ├── index.ts           # Barrel
+│       │   │   ├── core.ts            # Shared readline helpers
+│       │   │   ├── input.ts           # Text input + validation
+│       │   │   ├── select.ts          # Single/multi select
+│       │   │   ├── confirm.ts         # Yes/no confirmation
+│       │   │   ├── choices.ts         # Choice lists
+│       │   │   ├── keys.ts            # Keypress handling
+│       │   │   ├── search.ts          # Incremental search prompt
+│       │   │   ├── renderer.ts        # Prompt rendering
+│       │   │   └── ansi.ts            # Prompt-local ANSI helpers
+│       │   ├── notifications/     # Notification banner
+│       │   │   └── banner.ts
+│       │   ├── suggest/           # Suggestion detection
+│       │   │   ├── suggest.ts
+│       │   │   ├── matcher.ts
+│       │   │   ├── interactor.ts
+│       │   │   ├── types.ts
+│       │   │   └── parser/
+│       │   ├── mcp/               # MCP server implementation
+│       │   │   ├── index.ts           # Barrel
+│       │   │   ├── server.ts          # MCP server setup & transport
+│       │   │   ├── tools.ts           # Tool definitions & schemas
+│       │   │   ├── handlers.ts        # Tool call handlers
+│       │   │   ├── security.ts        # Input validation & sanitization
+│       │   │   └── types.ts           # MCP type definitions
 │       │   ├── display.ts         # Table rendering, price formatting
 │       │   ├── display-constants.ts # Table styling constants
-│       │   ├── prompts.ts         # Input validation, prompt helpers
+│       │   ├── prompts.ts         # Validation helpers re-exported from `src/prompts/`
 │       │   ├── types.ts           # TypeScript type definitions
 │       │   ├── payment.ts         # Payment totals & summary statistics
 │       │   ├── upcoming.ts        # Upcoming bills calculator
 │       │   ├── analytics.ts       # Subscription analytics & budget tracking
+│       │   ├── budget.ts          # Budget vs actual comparison
 │       │   ├── compare.ts         # Period-over-period spending comparison
+│       │   ├── compare-totals.ts  # Shared period comparison totals
 │       │   ├── forecast.ts        # Spending forecast with what-if scenarios
 │       │   ├── timeline.ts        # Monthly spending timeline & bar chart
 │       │   ├── optimize.ts        # Cost optimization suggestions
@@ -132,19 +192,33 @@ subtrack/
 │       │   ├── trial.ts           # Trial management handlers
 │       │   ├── bulk.ts            # Bulk operation handlers
 │       │   ├── config.ts          # Configuration management (JSON file)
-│       │   ├── export.ts          # CSV / JSON / Markdown export formatters
+│       │   ├── export.ts          # CSV / JSON / Markdown / Excel / ICS export formatters
 │       │   ├── import-csv.ts      # CSV parser & import handler
 │       │   ├── backup.ts          # Backup & restore handlers
 │       │   ├── fx.ts              # FX rate API & price conversion
 │       │   ├── pricing.ts         # LiteLLM pricing cache & cost calculation
 │       │   ├── price.ts           # Price formatting helpers
-│       │   ├── usage.ts           # LLM API usage list & delete
+│       │   ├── report.ts          # Yearly report
+│       │   ├── review.ts          # Upcoming bills / contracts / trials review
+│       │   ├── yearly.ts          # Annual spending view
+│       │   ├── cancel.ts          # Guided cancellation
+│       │   ├── dedupe.ts          # Duplicate detection & merge
+│       │   ├── receipt.ts         # Receipt parsing
+│       │   ├── templates.ts       # Subscription templates
+│       │   ├── features.ts        # Feature command handlers
+│       │   ├── subscription-actions.ts # Pause / resume / renew
+│       │   ├── validation.ts      # Shared input validation
+│       │   ├── error.ts           # Error helpers
+│       │   ├── diagnostics.ts     # Diagnostic reporting
+│       │   ├── startup-profile.ts # Optional startup profiling
 │       │   ├── usage-add.ts       # LLM usage add (interactive & flags)
 │       │   ├── usage-edit.ts      # LLM usage field updates (flags)
 │       │   ├── usage-import.ts    # LLM usage import from JSONL/JSON logs
 │       │   ├── usage-refresh.ts   # Auto-scanner for AI tool usage data
 │       │   ├── usage-total.ts     # Aggregated usage cost/token summary
+│       │   ├── usage.ts           # LLM API usage list & delete
 │       │   ├── scanner.ts         # Scanner framework for AI tool log parsing
+│       │   ├── scanner-support.ts # Shared scanner helpers
 │       │   ├── scanner-types.ts   # Scanner type definitions
 │       │   ├── claude-scanner.ts  # Claude Code log scanner
 │       │   ├── codex-scanner.ts   # Codex CLI log scanner
@@ -153,18 +227,12 @@ subtrack/
 │       │   ├── opencode-scanner.ts # OpenCode DB scanner
 │       │   ├── windsurf-scanner.ts # Windsurf editor scanner
 │       │   ├── audit.ts           # Audit log command handler
+│       │   ├── audit-log.ts       # Audit log writer
 │       │   ├── maintenance.ts     # Database maintenance (VACUUM, integrity check)
 │       │   ├── cleanup.ts         # One-command database cleanup
 │       │   ├── stats.ts           # Database statistics
 │       │   ├── currency.ts        # List supported currencies
 │       │   ├── mcp.ts             # MCP server entry (lazy-loads mcp/)
-│       │   ├── mcp/               # MCP server implementation
-│       │   │   ├── index.ts           # Barrel
-│       │   │   ├── server.ts          # MCP server setup & transport
-│       │   │   ├── tools.ts           # Tool definitions & schemas
-│       │   │   ├── handlers.ts        # Tool call handlers
-│       │   │   ├── security.ts        # Input validation & sanitization
-│       │   │   └── types.ts           # MCP type definitions
 │       │   └── __tests__/         # Test files (vitest)
 │       └── dist/                  # Built output (dist/index.mjs)
 ├── docs/                      # Documentation site (VitePress)

@@ -43,8 +43,12 @@ Read the full documentation at [nazozokc.github.io/subtrack](https://nazozokc.gi
 - **Subscription lifecycle** — pause, resume, and renew subscriptions while preserving price history
 - **Renewal review** — review upcoming bills, contract expirations, and trials with `subtrack review`
 - **Reusable templates** — create subscriptions from saved templates with `subtrack template`
+- **Contract & vendor tracking** — contract dates, vendor URLs, plan tiers, discounts, and auto-renewal flags
 - **Audit and integrity tools** — inspect changes with `subtrack changes` and validate data with `subtrack check`
 - **Yearly report** — spending overview, monthly chart, price changes, and budget comparison via `subtrack report`
+- **Interactive menu** — run bare `subtrack` for a guided, non-flag interface
+- **MCP server** — expose 20 tools to AI assistants via `subtrack mcp`
+- **Script friendly** — clean output when piped, `-j, --json` everywhere, exit codes for CI
 - **SQLite** storage — portable, zero-config, lives in `~/.config/subtrack/subtrack.db`
 - **Input validation** — name length, price bounds, tag limits
 
@@ -129,8 +133,8 @@ subtrack analytics
 subtrack config list
 subtrack config set defaultCurrency JPY
 
-# Track LLM API usage
-subtrack usage add --provider openai --model gpt-4o --inputTokens 1000 --outputTokens 500
+# Track LLM API usage (note: kebab-case flags)
+subtrack usage add --provider openai --model gpt-4o --input-tokens 1000 --output-tokens 500
 
 # Review upcoming bills, contracts, and trials
 subtrack review
@@ -141,7 +145,7 @@ subtrack resume 1 --force
 subtrack renew 1 --price 1200
 
 # Show annual spending and audit changes
-subtrack yearly 2026
+subtrack yearly --year 2026
 subtrack changes --from 2026-01-01
 
 # Check data integrity
@@ -200,6 +204,27 @@ npx subtrack restore
 npx subtrack usage add --provider openai --model gpt-4o
 ```
 
+### Command index
+
+<details>
+<summary><strong>All 50 commands</strong></summary>
+
+| Group | Commands |
+| ----- | -------- |
+| Core CRUD | `list`, `add`, `edit`, `delete`, `clone`, `search` |
+| Lifecycle | `pause`, `resume`, `renew`, `cancel`, `archive`, `unarchive`, `review` |
+| Totals & reports | `payment`, `summary`, `analytics`, `yearly`, `report`, `budget`, `upcoming`, `compare`, `forecast`, `timeline`, `calendar`, `optimize`, `history` |
+| Organization | `tags`, `tag list\|rename\|delete\|prune\|merge`, `template list\|add\|edit\|delete\|use`, `profile save\|switch\|list\|show\|delete`, `bulk status\|delete\|tag` |
+| Data in/out | `export csv\|json\|md\|excel\|ics`, `import <file>`, `backup`, `restore` |
+| LLM API usage | `usage add\|list\|edit\|delete\|import\|refresh\|total` |
+| Maintenance | `check`, `changes`, `dedupe`, `stats`, `currency`, `maintenance`, `cleanup`, `audit list\|prune` |
+| Notifications | `notify`, `trial add\|list\|expiring\|delete` |
+| Suggestions | `suggest list\|view\|add\|dismiss`, `receipt <file>` |
+| AI integration | `mcp` |
+
+Run `subtrack` with no arguments to open the interactive menu.
+
+</details>
 
 ### Commands
 
@@ -211,9 +236,21 @@ currency by default. Each group shows a subtotal row.
 | Option                | Description                                                   |
 | --------------------- | ------------------------------------------------------------- |
 | `-c, --currency <C>`  | Convert all prices to the given currency using live exchange rates |
-| `--sort <field>`      | Sort by field: `name`, `price`, `currency`, `cycle`           |
+| `--sort <field>`      | Sort by field: `name`, `price`, `currency`, `cycle`, `status`, `id` |
 | `-d, --desc`          | Sort descending                                               |
 | `-a, --api`           | Include LLM API usage cost for the current month              |
+| `-n, --notes`         | Show notes column                                             |
+| `-m, --method`        | Show payment method column                                    |
+| `--contract`          | Show contract dates column                                    |
+| `--vendor`            | Show vendor column                                            |
+| `--status <status>`   | Filter by status: `active`, `paused`, `cancelled`, `archived` |
+| `--min-price <n>`     | Filter by minimum price                                       |
+| `--max-price <n>`     | Filter by maximum price                                       |
+| `--tags <tags>`       | Filter by comma-separated tags (AND logic)                     |
+| `--limit <n>`         | Max number of items to show                                   |
+| `--offset <n>`        | Number of items to skip                                       |
+| `--include-archived`  | Include archived subscriptions                                |
+| `-j, --json`          | Output as JSON                                                |
 
 When `--currency` is used, all prices are converted to the target currency
 (fetched from [open.er-api.com](https://open.er-api.com)) and displayed as a
@@ -236,12 +273,18 @@ Adds a new subscription. Without flags, prompts for all fields interactively.
 All flags are optional. Providing all flags skips prompts entirely (useful for
 scripts). Partial flags still prompt for missing fields.
 
-#### `delete`
+#### `delete [ids...]`
 
 Shows an interactive checkbox list of all subscriptions. Select one or more
 to delete. Confirmation is required before deletion.
 
-> **Note:** The `delete` command is always interactive — no non-interactive mode.
+Subscription IDs can also be passed directly for non-interactive deletion.
+
+```bash
+subtrack delete
+subtrack delete 3
+subtrack delete 2 5 7
+```
 
 #### `edit [id]`
 
@@ -257,6 +300,15 @@ shows all subscriptions to pick from.
 | `--status <status>`     | New status: active, paused, cancelled |
 | `--billingDay <day>`    | New billing day of month (1-31)      |
 | `--tags <tags>`         | New comma-separated tags             |
+| `--paymentMethod <m>`   | New payment method                   |
+| `--vendorName <name>`   | New vendor name                      |
+| `--vendorUrl <url>`     | New vendor URL                       |
+| `--planTier <tier>`     | New plan tier                        |
+| `--discountAmount <n>`  | New discount amount                  |
+| `--discountType <type>` | New discount type: `percentage` or `fixed` |
+| `--contractStart <date>`| New contract start date (`YYYY-MM-DD`) |
+| `--contractEnd <date>`  | New contract end date (`YYYY-MM-DD`) |
+| `--autoRenewal <bool>`  | Auto renew: `true` or `false`        |
 
 Without flags, prompts for which fields to change. With flags, only the
 specified fields are updated (non-interactive).
@@ -278,6 +330,9 @@ billing cycle.
 | Option              | Description                                       |
 | ------------------- | ------------------------------------------------- |
 | `-c, --currency <C>` | Convert all prices to the given currency using live exchange rates |
+| `-a, --api`         | Include LLM API usage costs in the total          |
+| `-m, --method`      | Group by payment method                           |
+| `-j, --json`        | Output as JSON                                    |
 
 When `--currency` is used, the total is displayed as a single amount in the
 target currency. Without it, totals are grouped by currency.
@@ -305,7 +360,7 @@ Filters and displays subscriptions that have **all** specified tags (AND logic).
 subtrack tags music video
 ```
 
-#### `tag list|rename|delete|prune`
+#### `tag list|rename|delete|prune|merge`
 
 Manages tags stored in the database.
 
@@ -315,6 +370,7 @@ Manages tags stored in the database.
 | `rename`   | Rename a tag (merges if new name already exists) |
 | `delete`   | Delete a tag and its associations                |
 | `prune`    | Remove orphaned tags (no associated subscriptions)|
+| `merge`    | Merge a source tag into a target tag            |
 
 ```bash
 # List all tags
@@ -328,6 +384,9 @@ subtrack tag delete unused-tag
 
 # Prune orphaned tags
 subtrack tag prune
+
+# Merge one tag into another
+subtrack tag merge old-name new-name
 ```
 
 #### `export <format>`
@@ -338,9 +397,10 @@ Exports subscriptions in the specified format.
 | -------------------- | ------------------------------------------------- |
 | `-c, --currency <C>` | Convert all prices to target currency             |
 | `--tags <tags>`      | Filter by comma-separated tags                    |
+| `--status <status>`  | Filter by status (comma-separated)                |
 | `-o, --output <file>` | Write to file instead of stdout                  |
 
-Supported formats: `csv`, `json`, `md`.
+Supported formats: `csv`, `json`, `md`, `excel`, `ics`.
 
 ```bash
 # Export as CSV
@@ -352,6 +412,10 @@ subtrack export json --currency JPY
 # Export as Markdown filtered by tag
 subtrack export md --tags video
 
+# Export as Excel / iCalendar
+subtrack export excel
+subtrack export ics
+
 # Export to file
 subtrack export csv --output subscriptions.csv
 ```
@@ -361,9 +425,10 @@ subtrack export csv --output subscriptions.csv
 Imports subscriptions from a CSV file. The CSV must have the header:
 `name,cycle,tags,price,currency`.
 
-| Option      | Description                                    |
-| ----------- | ---------------------------------------------- |
-| `--dry-run` | Validate the CSV without importing             |
+| Option          | Description                                        |
+| --------------- | -------------------------------------------------- |
+| `--dry-run`     | Validate the CSV without importing                 |
+| `--deduplicate` | Skip or update existing subscriptions with the same name |
 
 ```bash
 # Import from CSV
@@ -432,6 +497,11 @@ subtrack restore backup.db.gz --force
 Shows subscriptions with upcoming bills within the specified number of days.
 Filters out cancelled subscriptions.
 
+| Option              | Description                                       |
+| ------------------- | ------------------------------------------------- |
+| `-c, --currency <C>` | Convert all prices to target currency             |
+| `-j, --json`        | Output as JSON                                    |
+
 ```bash
 # Show bills due in the next 7 days (default)
 subtrack upcoming
@@ -445,8 +515,15 @@ subtrack upcoming 30
 Shows detailed subscription analytics: status breakdown, monthly spending by
 currency, budget comparison (if configured), and monthly spending by tag.
 
+| Option | Description |
+| ------ | ----------- |
+| `-c, --currency <C>` | Convert all prices to target currency |
+| `--period <monthly\|yearly>` | Comparison period (default: `monthly`) |
+| `-j, --json` | Output as JSON |
+
 ```bash
 subtrack analytics
+subtrack analytics --period yearly --currency JPY
 ```
 
 #### `config list|get|set|reset`
@@ -460,7 +537,12 @@ Manages subtrack configuration stored in `~/.config/subtrack/config.json`.
 | `set`      | Set a configuration value                        |
 | `reset`    | Reset configuration to defaults                  |
 
-Available config keys: `defaultCurrency`, `monthlyBudget`, `theme`.
+Available config keys include: `defaultCurrency`, `monthlyBudget`,
+`yearlyBudget`, `budgets`, `theme`, `table*` color keys, `dateFormat`,
+`listShowNotes`, `listShowMethod`, `notifyDays`, `notifyChannels`,
+`slackWebhook`, `webhookUrl`, `profiles`, `activeProfile`, `templates`.
+See the [configuration guide](https://nazozokc.github.io/subtrack/configuration)
+for the full table.
 
 ```bash
 # List all config
@@ -479,31 +561,39 @@ subtrack config set monthlyBudget 50000
 subtrack config reset
 ```
 
-#### `usage add|list|delete|import|refresh`
+#### `usage add|list|edit|delete|import|refresh|total`
 
 Tracks LLM API usage costs. Automatically calculates costs using LiteLLM
 pricing data.
+
+> **Note:** `usage` subcommands use kebab-case flags — `--input-tokens` /
+> `--output-tokens`, not `--inputTokens`.
 
 | Subcommand | Description                                                              |
 | ---------- | ------------------------------------------------------------------------ |
 | `add`      | Add an LLM API usage entry                                               |
 | `list`     | List usage entries (filterable by provider/date)                         |
+| `edit`     | Update fields of an existing entry                                       |
 | `delete`   | Delete usage entries (interactive or by ID)                              |
 | `import`   | Import LLM API usage from JSONL/JSON response log files                  |
 | `refresh`  | Auto-scan known sources (OpenCode DB, Claude Code, etc.) and import data |
+| `total`    | Show aggregated costs for a period                                       |
 
 ```bash
 # Add a usage entry (auto-calculated cost)
-subtrack usage add --provider openai --model gpt-4o --inputTokens 1000 --outputTokens 500
+subtrack usage add --provider openai --model gpt-4o --input-tokens 1000 --output-tokens 500
 
 # Add with manual cost override
-subtrack usage add --provider openai --model custom-model --inputTokens 1000 --outputTokens 500 --cost 0.50
+subtrack usage add --provider openai --model custom-model --input-tokens 1000 --output-tokens 500 --cost 0.50
 
 # List recent usage
 subtrack usage list
 
 # List usage filtered by provider and date range
 subtrack usage list --provider anthropic --from 2026-01-01 --to 2026-06-22
+
+# Update an entry
+subtrack usage edit 42 --cost 0.75
 
 # Delete a specific usage entry
 subtrack usage delete 42
@@ -519,6 +609,9 @@ subtrack usage refresh --from 2026-01-01 --to 2026-06-22
 
 # Import usage from JSONL log file
 subtrack usage import usage_log.jsonl
+
+# Aggregated totals
+subtrack usage total --period yearly
 ```
 
 #### `budget`
@@ -640,6 +733,7 @@ pnpm test           # vitest run
 pnpm test:watch     # vitest
 
 # Lint
+pnpm lint:types     # tsc --noEmit
 pnpm lint:typos     # typos check
 ```
 
@@ -647,12 +741,14 @@ pnpm lint:typos     # typos check
 
 | Category        | Choice                        |
 | --------------- | ----------------------------- |
-| Runtime         | Node.js                       |
+| Runtime         | Node.js (>= 22.5)             |
 | Language        | TypeScript (strict mode, ESM) |
+| Runtime deps    | **None** — zero third-party packages |
 | CLI framework   | Self-contained (src/cli/)     |
 | Interactive UI  | Self-contained prompts (src/prompts/, node:readline) |
-| Logging/Tables/Colors | Self-contained modules (src/consola.ts, src/table.ts, src/color.ts) |
-| Spreadsheets    | Self-contained XLSX generator (src/xlsx.ts) |
+| Interactive menu | Self-contained (src/menu/)  |
+| Logging/Tables/Colors | `@subtrack/lib` (src/logger.ts, src/table.ts, src/ansi.ts) |
+| Spreadsheets    | `@subtrack/lib/xlsx` (self-contained XLSX generator) |
 | OS notifications | Native commands (osascript / notify-send) |
 | Database        | node:sqlite (built-in)        |
 | Exchange rates  | open.er-api.com               |
