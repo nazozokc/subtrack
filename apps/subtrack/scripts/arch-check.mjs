@@ -20,7 +20,7 @@
  */
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
-import { dirname, relative, resolve } from "node:path"
+import { dirname, relative, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -242,6 +242,9 @@ function resolveModule(spec, fromDir) {
   return null
 }
 
+/** Report paths with forward slashes so rules and the baseline are portable. */
+const toPosix = (p) => (sep === "/" ? p : p.split(sep).join("/"))
+
 function statSyncSafe(p) {
   try {
     return statSync(p).isFile()
@@ -253,7 +256,10 @@ function statSyncSafe(p) {
 /** @type {Map<string, {spec: string, line: number}[]>} */
 const graph = new Map()
 for (const file of listTsFiles(srcRoot)) {
-  const rel = relative(srcRoot, file)
+  // Every comparison below is against a forward-slash path ("db/connection.ts"),
+  // and `relative()` hands back backslashes on Windows. Normalising here keeps
+  // the layer rules — and the baseline file — identical on every platform.
+  const rel = toPosix(relative(srcRoot, file))
   graph.set(rel, scanImports(readFileSync(file, "utf8")))
 }
 
