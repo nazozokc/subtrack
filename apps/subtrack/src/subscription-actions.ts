@@ -4,12 +4,12 @@ import {
 import { consola } from "@subtrack/lib/logger"
 import { fail } from "./error.ts"
 import { logAudit } from "./audit-log.ts"
-import { getSubscription, getSubscriptions, updateSubscription, writePriceHistory } from "./db.ts"
+import { subscriptionRepository, priceHistoryRepository, withBatch } from "./application/index.ts"
 import type { AddSharedArgs, SharedArgs, Status } from "./types.ts"
 
 async function selectIds(ids: number[] | undefined): Promise<number[]> {
   if (ids?.length) return ids
-  const choices = getSubscriptions().map((s) => ({ name: `#${s.id} ${s.name} (${s.status})`, value: s.id }))
+  const choices = subscriptionRepository.list().map((s) => ({ name: `#${s.id} ${s.name} (${s.status})`, value: s.id }))
   if (!choices.length) return []
   return [await select({ message: "select subscription", choices, pageSize: 15 })]
 }
@@ -21,12 +21,12 @@ export async function handleResume(ids?: number[], force = false): Promise<void>
 
 async function changeStatus(ids: number[] | undefined, target: Status, force: boolean): Promise<void> {
   const selected = await selectIds(ids)
-  const subs = selected.map(getSubscription).filter((s): s is SharedArgs => !!s)
+  const subs = selected.map((id) => subscriptionRepository.get(id)).filter((s): s is SharedArgs => !!s)
   const pending = subs.filter((s) => s.status !== target && s.status !== "archived")
   if (!pending.length) { consola.info("No subscriptions need changing"); return }
   if (!force && !(await confirm({ message: `Change ${pending.length} subscription(s) to ${target}?`, default: false }))) { consola.info("Cancelled"); return }
   for (const sub of pending) {
-    if (!updateSubscription(sub.id, { status: target })) {
+    if (!subscriptionRepository.update(sub.id, { status: target })) {
       fail(`Subscription with id ${sub.id} not found`)
       return
     }
@@ -37,7 +37,7 @@ async function changeStatus(ids: number[] | undefined, target: Status, force: bo
 
 /** Renew a subscription and record any price change. */
 export async function handleRenew(id: number, flags: { price?: string; currency?: string; cycle?: string; contractEnd?: string; planTier?: string; autoRenewal?: boolean }): Promise<void> {
-  const sub = getSubscription(id)
+  const sub = subscriptionRepository.get(id)
   if (!sub) { fail(`Subscription with id ${id} not found`); return }
   const fields: Partial<AddSharedArgs> = { status: "active" }
   if (flags.price !== undefined) {
@@ -89,11 +89,19 @@ export async function handleRenew(id: number, flags: { price?: string; currency?
     }
   }
   if (flags.autoRenewal !== undefined) fields.autoRenewal = flags.autoRenewal
-  if (!updateSubscription(id, fields)) {
+  if (!subscriptionRepository.update(id, fields)) {
     fail(`Subscription with id ${id} not found`)
     return
   }
-  writePriceHistory(id, sub.price, fields.price ?? sub.price, sub.currency, fields.currency ?? sub.currency)
+  withBatch(() =>
+    priceHistoryRepository.record(
+      id,
+      sub.price,
+      fields.price ?? sub.price,
+      sub.currency,
+      fields.currency ?? sub.currency,
+    ),
+  )
   logAudit("subscription.renew", { targetType: "subscription", targetId: id, details: `${sub.name} renewed` })
   consola.success(`Renewed: ${sub.name}`)
 }

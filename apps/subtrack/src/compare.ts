@@ -4,7 +4,7 @@ import { CliTable3 } from "@subtrack/lib/table"
 import type { Currency, CompareOptions } from "./types.ts"
 import { periodFactor, getPeriodDateRange, getPreviousPeriodDateRange, SHORT_MONTH_NAMES } from "@subtrack/lib/date"
 import type { NamedCycle } from "@subtrack/lib/date"
-import { getNonCancelledSubscriptions, getLlmUsageTotal, getAllPriceChanges } from "./db.ts"
+import { subscriptionRepository, usageRepository, priceHistoryRepository } from "./application/index.ts"
 import { formatPrice, roundCurrency } from "./price.ts"
 import { fetchFxRates, convertPrice } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
@@ -110,7 +110,7 @@ export async function showCompare(
   period: NamedCycle = "monthly",
   options: { currency?: string; api?: boolean } = {},
 ): Promise<void> {
-  const subs = getNonCancelledSubscriptions()
+  const subs = subscriptionRepository.listActive()
 
   const currentRange = getPeriodDateRange(period)
   const previousRange = getPreviousPeriodDateRange(period)
@@ -142,7 +142,7 @@ export async function showCompare(
   const currentTotals = calcSubTotal(activeSubs, rates, targetCurrency)
 
   // Previous period — estimate from price history when available
-  const priceChanges = getAllPriceChanges()
+  const priceChanges = priceHistoryRepository.listRecent()
   const priceBefore: Record<number, { price: number; currency: string }> = {}
   for (const change of priceChanges) {
     if (change.oldPrice !== null && !priceBefore[change.subscriptionId]) {
@@ -190,8 +190,8 @@ export async function showCompare(
   if (options.api) {
     rows.push({ label: "", current: "", previous: "", change: "", isDivider: true })
 
-    const curApi = getLlmUsageTotal(currentRange.from, currentRange.to)
-    const prevApi = getLlmUsageTotal(previousRange.from, previousRange.to)
+    const curApi = usageRepository.totalCost(currentRange.from, currentRange.to)
+    const prevApi = usageRepository.totalCost(previousRange.from, previousRange.to)
 
     // API cost is stored in USD cents — convert to dollars (major units)
     const curApiUsd = curApi / 100
@@ -248,7 +248,7 @@ export async function handleCompare(
     return
   }
   if (options.json) {
-    const subs = getNonCancelledSubscriptions()
+    const subs = subscriptionRepository.listActive()
     if (subs.length === 0) {
       process.stdout.write(JSON.stringify({ period, current: {}, previous: {}, change: {} }, null, 2) + "\n")
       return

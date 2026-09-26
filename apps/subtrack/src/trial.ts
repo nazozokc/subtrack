@@ -4,7 +4,7 @@ import { fail } from "./error.ts"
 import pc from "@subtrack/lib/ansi"
 import { CliTable3 } from "@subtrack/lib/table"
 import type { TrialEntry, AddTrialArgs, TrialAddFlags } from "./types.ts"
-import { writeTrial, getTrials, getTrial, deleteTrial, getTrialsExpiringSoon } from "./db.ts"
+import { trialRepository } from "./application/index.ts"
 import { formatPrice } from "./price.ts"
 import {
   TABLE_CHARS,
@@ -126,7 +126,7 @@ export async function handleTrialAdd(flags: TrialAddFlags): Promise<void> {
   const result = await resolveTrialAddOptions(flags)
   if (!result) return
   try {
-    writeTrial(result)
+    trialRepository.add(result)
     consola.success(`Added trial: ${result.name}`)
   } catch (error) {
     fail(`Failed to add trial: ${String(error)}`)
@@ -134,7 +134,7 @@ export async function handleTrialAdd(flags: TrialAddFlags): Promise<void> {
 }
 
 export function handleTrialList(options: { json?: boolean } = {}): void {
-  const trials = getTrials()
+  const trials = trialRepository.list()
   if (trials.length === 0) {
     if (options.json) {
       process.stdout.write(JSON.stringify({ trials: [] }, null, 2) + "\n")
@@ -163,7 +163,7 @@ export function handleTrialList(options: { json?: boolean } = {}): void {
 }
 
 export function handleTrialExpiring(days: number = 7, options: { json?: boolean } = {}): void {
-  const trials = getTrialsExpiringSoon(days)
+  const trials = trialRepository.listExpiringSoon(days)
   if (trials.length === 0) {
     if (options.json) {
       process.stdout.write(JSON.stringify({ trials: [], days }, null, 2) + "\n")
@@ -195,18 +195,18 @@ export function handleTrialExpiring(days: number = 7, options: { json?: boolean 
 export async function handleTrialDelete(ids?: number[]): Promise<void> {
   if (ids && ids.length > 0) {
     for (const id of ids) {
-      const trial = getTrial(id)
+      const trial = trialRepository.get(id)
       if (!trial) {
         fail(`Trial with id ${id} not found`)
         continue
       }
-      deleteTrial(id)
+      trialRepository.remove(id)
       consola.success(`Deleted trial: ${trial.name}`)
     }
     return
   }
 
-  const all = getTrials()
+  const all = trialRepository.list()
   if (all.length === 0) {
     consola.info("No trials found")
     return
@@ -233,7 +233,7 @@ export async function handleTrialDelete(ids?: number[]): Promise<void> {
   if (!ok) { consola.info("Cancelled"); return }
 
   for (const t of selected) {
-    deleteTrial(t.id)
+    trialRepository.remove(t.id)
     consola.success(`Deleted trial: ${t.name}`)
   }
 }

@@ -3,7 +3,7 @@ import { consola } from "@subtrack/lib/logger"
 import pc from "@subtrack/lib/ansi"
 import { loadConfig } from "./config.ts"
 import { logAudit } from "./audit-log.ts"
-import { deleteTrial, getSubscriptions, getTrialsExpiringSoon, updateSubscription, writeSubscription } from "./db.ts"
+import { subscriptionRepository, trialRepository, withBatch } from "./application/index.ts"
 import { handlePause, handleRenew, handleResume } from "./subscription-actions.ts"
 import { calcUpcoming } from "./upcoming.ts"
 import type { AddSharedArgs, SharedArgs, TrialEntry } from "./types.ts"
@@ -26,14 +26,14 @@ function collectItems(options: ReviewOptions): ReviewItem[] {
   const end = (days: number) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10)
   const items: ReviewItem[] = []
   const upcoming = new Map(calcUpcoming(billDays).map((entry) => [entry.sub.id, entry]))
-  for (const sub of getSubscriptions({ status: "active" })) {
+  for (const sub of subscriptionRepository.list({ status: "active" })) {
     const reasons: string[] = []
     const bill = upcoming.get(sub.id)
     if (bill) reasons.push(`bill due ${bill.nextDate.toISOString().slice(0, 10)}`)
     if (sub.contractEnd && sub.contractEnd <= end(contractDays)) reasons.push(`contract ends ${sub.contractEnd}`)
     if (reasons.length) items.push({ kind: "subscription", id: sub.id, name: sub.name, reason: reasons.join(", "), sub })
   }
-  for (const trial of getTrialsExpiringSoon(trialDays)) items.push({ kind: "trial", id: trial.id, name: trial.name, reason: `trial expires ${trial.expiresAt}`, trial })
+  for (const trial of trialRepository.listExpiringSoon(trialDays)) items.push({ kind: "trial", id: trial.id, name: trial.name, reason: `trial expires ${trial.expiresAt}`, trial })
   return items
 }
 
@@ -46,10 +46,16 @@ async function reviewItem(item: ReviewItem): Promise<void> {
   else if (item.sub && action === "renew") await handleRenew(item.sub.id, {})
   else if (item.sub && (action === "cancel" || action === "archive")) {
     const status = action === "cancel" ? "cancelled" : "archived"
-    if (updateSubscription(item.sub.id, { status })) {
+    if (subscriptionRepository.update(item.sub.id, { status })) {
       logAudit(status === "cancelled" ? "subscription.cancel" : "subscription.archive", { targetType: "subscription", targetId: item.sub.id, details: item.sub.name })
     }
   }
-  else if (item.trial && action === "add") { writeSubscription({ name: item.trial.name, price: item.trial.price ?? 0, currency: item.trial.currency ?? loadConfig().defaultCurrency, cycle: (item.trial.cycle ?? "monthly") as AddSharedArgs["cycle"], tags: [], notes: item.trial.notes }); deleteTrial(item.trial.id) }
-  else if (item.trial && action === "dismiss") deleteTrial(item.trial.id)
+  else if (item.trial && action === "add") {
+    const trial = item.trial
+    withBatch(() => {
+      subscriptionRepository.add({ name: trial.name, price: trial.price ?? 0, currency: trial.currency ?? loadConfig().defaultCurrency, cycle: (trial.cycle ?? "monthly") as AddSharedArgs["cycle"], tags: [], notes: trial.notes })
+      trialRepository.remove(trial.id)
+    })
+  }
+  else if (item.trial && action === "dismiss") trialRepository.remove(item.trial.id)
 }

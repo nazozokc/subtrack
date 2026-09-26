@@ -5,13 +5,10 @@ analytics.ts
 audit-log.ts
 audit.ts
 budget.ts
-calendar.ts
 cancel.ts
 compare-totals.ts
-compare.ts
 dedupe.ts
 export.ts
-forecast.ts
 history.ts
 menu/header.ts
 menu/shared.ts
@@ -20,10 +17,8 @@ notifications/banner.ts
 payment.ts
 receipt.ts
 report.ts
-review.ts
 search.ts
 stats.ts
-subscription-actions.ts
 subscription/add.ts
 subscription/core.ts
 subscription/edit.ts
@@ -33,6 +28,5 @@ suggest/suggest.ts
 tag.ts
 templates.ts
 timeline.ts
-trial.ts
 upcoming.ts
 usage-total.ts

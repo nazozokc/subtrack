@@ -74,10 +74,7 @@ const unitOfWork: UnitOfWork = { batch: withBatch }
 
 export const subscriptionRepository: SubscriptionRepository = {
   list: (options) => getSubscriptions(options),
-  listActive: () => {
-    markDirty()
-    return getNonCancelledSubscriptions()
-  },
+  listActive: () => getNonCancelledSubscriptions(),
   get: getSubscription,
   findByName: findSubscriptionByName,
   withTags: mapTags,

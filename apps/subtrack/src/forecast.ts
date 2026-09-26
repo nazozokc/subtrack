@@ -7,7 +7,7 @@ import type { Cycle } from "./types.ts"
 import { TABLE_CHARS, getTableStyle, sectionTitle, calcColumnWidths, zebraRow } from "./display-constants.ts"
 import type { ColumnConfig } from "./display-constants.ts"
 import { periodFactor, formatCycle } from "@subtrack/lib/date"
-import { getNonCancelledSubscriptions } from "./db.ts"
+import { subscriptionRepository } from "./application/index.ts"
 import { formatPrice, roundCurrency } from "./price.ts"
 import { fetchFxRates, convertPrice, tryConvert } from "./fx.ts"
 import type { FxRates } from "./fx.ts"
@@ -71,7 +71,7 @@ export async function handleForecast(
     if (monthsStr.trim()) months = Number(monthsStr)
 
     // Ask for cancellations
-    const allSubs = getNonCancelledSubscriptions()
+    const allSubs = subscriptionRepository.listActive()
     if (allSubs.length > 0) {
       const toCancel = await checkbox({
         message: "Select subscriptions to exclude (optional)",
@@ -129,7 +129,7 @@ export async function handleForecast(
   }
 
   // Calculate entries
-  const subs = getNonCancelledSubscriptions()
+  const subs = subscriptionRepository.listActive()
 
   const entries: ForecastEntry[] = subs
     .filter((s) => !cancelNames.includes(s.name))
