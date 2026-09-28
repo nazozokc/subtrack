@@ -2,6 +2,7 @@
 import { cli } from "./cli/index.ts"
 import { define } from "./cli/types.ts"
 import { tokenize } from "./cli/parser.ts"
+import { shouldSuppressUsage } from "./cli/usage.ts"
 import type { Command } from "./cli/types.ts"
 import { consola } from "@subtrack/lib/logger"
 import { createRequire } from "node:module"
@@ -75,9 +76,9 @@ try {
     name: "subtrack",
     version: pkg.version,
     subCommands,
-    // MCP speaks JSON-RPC on stdout — suppress the header/usage banner so the
-    // protocol stream stays pure.
-    usageSilent: args[0] === "mcp",
+    // MCP speaks JSON-RPC on stdout and `--json` emits a single JSON document —
+    // suppress the header/usage banner so both streams stay machine-parseable.
+    usageSilent: shouldSuppressUsage(args),
   })
   reportStartup("cli complete")
 } catch (error) {
