@@ -1,0 +1,176 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "subtrack",
+  "title": "Subtrack",
+  "description": "Track subscriptions, upcoming renewals, and monthly spend without leaving Raycast",
+  "icon": "icon.png",
+  "author": "nazozokc",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "subscription",
+    "billing",
+    "finance",
+    "spending",
+    "budget"
+  ],
+  "platforms": [
+    "macOS",
+    "Windows"
+  ],
+  "categories": [
+    "Finance"
+  ],
+  "commands": [
+    {
+      "name": "subscriptions",
+      "title": "Subscriptions",
+      "description": "Browse and filter every subscription you pay for",
+      "mode": "view"
+    },
+    {
+      "name": "upcoming",
+      "title": "Upcoming Renewals",
+      "description": "See what is about to be charged, and when",
+      "mode": "view",
+      "arguments": [
+        {
+          "name": "days",
+          "type": "text",
+          "placeholder": "Days ahead (default 30)",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "summary",
+      "title": "Monthly Spend",
+      "description": "Total monthly cost broken down by currency and tag",
+      "mode": "view"
+    },
+    {
+      "name": "budget",
+      "title": "Budget",
+      "description": "Compare spending against your configured budget",
+      "mode": "view"
+    },
+    {
+      "name": "add-subscription",
+      "title": "Add Subscription",
+      "description": "Record a new subscription",
+      "mode": "view"
+    },
+    {
+      "name": "edit-subscription",
+      "title": "Edit Subscription",
+      "description": "Change the details of an existing subscription",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "binaryPath",
+      "type": "textfield",
+      "title": "subtrack binary",
+      "description": "Path to the subtrack executable. Leave empty to search your PATH.",
+      "required": false,
+      "placeholder": "subtrack"
+    },
+    {
+      "name": "dbDir",
+      "type": "directory",
+      "title": "Database directory",
+      "description": "Overrides where subtrack reads its database. Leave empty to use the default.",
+      "required": false
+    },
+    {
+      "name": "defaultCurrency",
+      "type": "dropdown",
+      "title": "Display currency",
+      "description": "Convert all prices to this currency. Leave unset to keep original currencies.",
+      "required": false,
+      "data": [
+        {
+          "title": "Original (no conversion)",
+          "value": ""
+        },
+        {
+          "title": "USD",
+          "value": "USD"
+        },
+        {
+          "title": "EUR",
+          "value": "EUR"
+        },
+        {
+          "title": "GBP",
+          "value": "GBP"
+        },
+        {
+          "title": "JPY",
+          "value": "JPY"
+        },
+        {
+          "title": "KRW",
+          "value": "KRW"
+        },
+        {
+          "title": "AUD",
+          "value": "AUD"
+        },
+        {
+          "title": "CAD",
+          "value": "CAD"
+        },
+        {
+          "title": "CNY",
+          "value": "CNY"
+        },
+        {
+          "title": "SGD",
+          "value": "SGD"
+        },
+        {
+          "title": "HKD",
+          "value": "HKD"
+        }
+      ]
+    }
+  ],
+  "ai": {
+    "mcp": {
+      "type": "stdio",
+      "command": "subtrack",
+      "args": [
+        "mcp"
+      ]
+    },
+    "instructions": "subtrack tracks the user's subscriptions and recurring spending. Read with list_subscriptions, get_summary, get_upcoming, or get_budget before changing anything. Amounts are in major currency units (11.99 means $11.99, not cents). Confirm with the user before any tool that adds, edits, or deletes a subscription."
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "lint": "eslint . && prettier --check \"**/*.{ts,tsx,json,md}\"",
+    "lint:fix": "eslint . --fix && prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "lint:manifest": "ray lint --relaxed",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm run lint && npm run build",
+    "publish": "ray publish"
+  },
+  "dependencies": {
+    "@raycast/api": "^1.104.25",
+    "@raycast/utils": "^1.19.1"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.2.0",
+    "@types/node": "^22.19.0",
+    "@types/react": "^19.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "react": "^19.0.0",
+    "typescript": "^5.9.0"
+  }
+}
