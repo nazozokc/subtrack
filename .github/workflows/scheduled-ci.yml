@@ -30,7 +30,7 @@ jobs:
       - run: pnpm build
 
       - name: Type check
-        working-directory: ./apps/subtrack
+        working-directory: ./packages/subtrack
         run: pnpm lint:types
 
       - run: pnpm test

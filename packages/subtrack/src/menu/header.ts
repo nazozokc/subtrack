@@ -20,7 +20,7 @@ import { divider } from "../display-constants.ts"
 const require = createRequire(import.meta.url)
 
 /**
- * Resolve apps/subtrack/package.json from the menu module. The menu sits one
+ * Resolve packages/subtrack/package.json from the menu module. The menu sits one
  * directory deeper than the package root: under src/ it is src/menu/, while
  * the built output places the chunk next to dist/index.mjs (no extra level).
  */

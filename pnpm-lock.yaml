@@ -16,7 +16,7 @@ importers:
 
   .: {}
 
-  apps/subtrack:
+  packages/subtrack:
     devDependencies:
       '@secretlint/secretlint-rule-preset-recommend':
         specifier: ^13.0.5

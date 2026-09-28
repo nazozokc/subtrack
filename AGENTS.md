@@ -20,7 +20,7 @@ You are a subtrack agent. Your primary responsibilities in this repository are:
 
 ```
 .
-├── apps/
+├── packages/
 │   └── subtrack/      # CLI tool (Node.js/TypeScript, published as npm package)
 │       ├── src/       # Source code
 │       ├── dist/      # Build output (dist/index.mjs)
@@ -32,7 +32,7 @@ You are a subtrack agent. Your primary responsibilities in this repository are:
 └── pnpm-workspace.yaml
 ```
 
-**Key**: All application code lives under `apps/subtrack/`. The monorepo root has no dependencies of its own.
+**Key**: All application code lives under `packages/subtrack/`. The monorepo root has no dependencies of its own.
 
 ## Design Tenets
 

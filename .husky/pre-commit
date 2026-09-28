@@ -1,2 +1,2 @@
-cd apps/subtrack
+cd packages/subtrack
 npx --no-install lint-staged

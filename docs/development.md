@@ -78,7 +78,7 @@ subtrack/
 │       ├── format.ts           # File size formatting, byte helpers
 │       ├── date.ts             # Date formatting & billing cycle helpers
 │       └── crypto.ts           # AES-256-GCM encryption helpers
-├── apps/
+├── packages/
 │   └── subtrack/              # CLI tool (TypeScript/ESM)
 │       ├── src/
 │       │   ├── index.ts            # Entry point, CLI bootstrap
