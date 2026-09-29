@@ -113,7 +113,7 @@ export default function Upcoming({
             shortcut={Keyboard.Shortcut.Common.Refresh}
             onAction={() => void load()}
           />
-          <ActionPanel.Submenu title="Time Window" icon={Icon.Calendar}>
+          <ActionPanel.Submenu title="Time Window…" icon={Icon.Calendar}>
             {WINDOWS.map((w) => (
               <Action
                 key={w}

@@ -29,7 +29,7 @@ const CYCLES = [
 const STATUSES = [
   { title: "Active", value: "active" },
   { title: "Paused", value: "paused" },
-  { title: "Cancelled", value: "cancelled" },
+  { title: "Canceled", value: "cancelled" },
 ];
 
 type TextFieldName =

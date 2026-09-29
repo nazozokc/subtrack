@@ -131,7 +131,7 @@ export default function Summary(): JSX.Element {
             }}
           />
           <ActionPanel.Submenu
-            title="Change Period"
+            title="Change Period…"
             icon={Icon.Calendar}
             shortcut={{
               macOS: { modifiers: ["cmd", "shift"], key: "p" },
