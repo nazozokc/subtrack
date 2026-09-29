@@ -155,14 +155,13 @@
     "dev": "ray develop",
     "lint": "eslint . && prettier --check \"**/*.{ts,tsx,json,md}\"",
     "lint:fix": "eslint . --fix && prettier --write \"**/*.{ts,tsx,json,md}\"",
-    "lint:manifest": "ray lint --relaxed",
+    "lint:manifest": "ray lint",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run typecheck && npm run lint && npm run build",
+    "verify": "npm run typecheck && npm run lint && npm run lint:manifest && npm run build",
     "publish": "ray publish"
   },
   "dependencies": {
-    "@raycast/api": "^1.104.25",
-    "@raycast/utils": "^1.19.1"
+    "@raycast/api": "^2.5.0"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^2.2.0",

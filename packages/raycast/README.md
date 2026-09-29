@@ -44,14 +44,13 @@ pnpm workspace, so `npm` is used here while the rest of the repo uses `pnpm`.
 
 ```bash
 npm install
-npm run verify   # typecheck + lint + build
+npm run verify   # typecheck + lint + manifest validation + build
 npm run dev      # load into Raycast (macOS only)
 ```
 
-`npm run lint` covers ESLint and Prettier. Manifest validation lives in
-`npm run lint:manifest`, which additionally checks the `author` field against
-raycast.com — replace `author` in `package.json` with your own Raycast username
-before `npm run publish`.
+`npm run lint` covers ESLint and Prettier. `npm run lint:manifest` runs `ray lint`,
+which validates the manifest schema, the icons, and the `author` handle against
+raycast.com. Both are part of `npm run verify`.
 
 ## Ask Subtrack
 
