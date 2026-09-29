@@ -78,14 +78,21 @@ export type PaymentData = {
   subscriptions: PaymentRow[];
 };
 
-export type BudgetData = {
-  set: boolean;
-  period: string;
-  budgetName: string | null;
-  currency?: Currency | null;
-  total?: number;
-  limit?: number | null;
-  amount?: number | null;
-  over?: boolean;
-  [key: string]: unknown;
-};
+/**
+ * `budget --json` omits every amount when no budget is configured, so the two
+ * shapes are modelled separately. The CLI resolves `spending`, `remaining`, and
+ * `over` itself; `currency` follows `--currency` and matches `budgetCurrency`.
+ */
+export type BudgetData =
+  | { set: false; period: string; budgetName: string | null }
+  | {
+      set: true;
+      period: string;
+      budgetName: string | null;
+      budget: number;
+      budgetCurrency: Currency;
+      spending: number;
+      currency: Currency;
+      remaining: number;
+      over: boolean;
+    };
