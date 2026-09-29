@@ -1,0 +1,7 @@
+# Regenerated from the manifest on every `ray build`; formatting it is pointless.
+raycast-env.d.ts
+
+# Build output and dependencies.
+dist/
+node_modules/
+package-lock.json
