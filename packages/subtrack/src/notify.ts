@@ -14,6 +14,29 @@ export type NotifyOptions = {
 }
 
 const WEBHOOK_TIMEOUT_MS = 10_000
+const NOTIFY_COMMAND_TIMEOUT_MS = 10_000
+
+/**
+ * A webhook target must be https at the moment it is used, not only when it was
+ * written. `config.json` is a plain file the user can edit, sync from a dotfiles
+ * repo, or restore from a backup, and the payload carries subscription names,
+ * prices, and renewal dates — data that should never leave over plaintext or
+ * be aimed at an internal host.
+ */
+function requireHttps(url: string | undefined, field: string): string | null {
+  if (!url) return null
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  if (parsed.protocol !== "https:") {
+    consola.warn(`${field} must be an https:// URL — notification skipped`)
+    return null
+  }
+  return parsed.toString()
+}
 
 /** POST JSON to a webhook with a hard timeout so a hung endpoint cannot hang the CLI. */
 async function postJson(url: string, payload: unknown): Promise<Response> {
@@ -28,6 +51,21 @@ async function postJson(url: string, payload: unknown): Promise<Response> {
     })
   } finally {
     clearTimeout(timer)
+  }
+}
+
+/**
+ * Drain and discard a response body.
+ *
+ * An unconsumed body keeps the connection checked out of the pool. `notify` is
+ * wired to run on a schedule, so leaking one socket per run adds up.
+ */
+async function discardBody(res: Response): Promise<void> {
+  try {
+    await res.arrayBuffer()
+  } catch {
+    // A body that cannot be read is not worth reporting; the status was the
+    // part the caller cared about.
   }
 }
 
@@ -116,19 +154,23 @@ function sendOsNotification(
 
   const title = `subtrack: ${count} upcoming bill${count > 1 ? "s" : ""} in ${days} day${days > 1 ? "s" : ""}`
 
+  // `timeout` because spawnSync blocks: a hung osascript / MessageBox would
+  // wedge the whole process with no output and no way to interrupt it.
+  const spawnOpts = { timeout: NOTIFY_COMMAND_TIMEOUT_MS, stdio: "ignore" } as const
+
   if (process.platform === "darwin") {
     spawnSync("osascript", [
       "-e",
       `display notification "${asEscape(message)}" with title "${asEscape(title)}" sound name "default"`,
-    ])
+    ], spawnOpts)
   } else if (process.platform === "win32") {
     spawnSync("powershell.exe", [
       "-NoProfile",
       "-Command",
       `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${message.replace(/'/g, "''")}', '${title.replace(/'/g, "''")}')`,
-    ])
+    ], spawnOpts)
   } else {
-    spawnSync("notify-send", [title, message, "-t", "10000"])
+    spawnSync("notify-send", [title, message, "-t", "10000"], spawnOpts)
   }
 }
 
@@ -139,7 +181,9 @@ async function sendSlackNotification(
   days: number,
   webhookUrl?: string,
 ): Promise<void> {
-  if (!webhookUrl) {
+  const target = requireHttps(webhookUrl, "slackWebhook")
+  if (!target) {
+    if (webhookUrl) return // already warned: present but not https
     consola.warn("Slack notification configured but no slackWebhook set. Use: subtrack config set slackWebhook https://hooks.slack.com/services/...")
     return
   }
@@ -150,10 +194,11 @@ async function sendSlackNotification(
   }))
 
   try {
-    const response = await postJson(webhookUrl, {
+    const response = await postJson(target, {
       text: `subtrack: *${entries.length} upcoming bill${entries.length > 1 ? "s" : ""}* in ${days} day${days > 1 ? "s" : ""}`,
       attachments,
     })
+    await discardBody(response)
     if (response.ok) {
       consola.success("Slack notification sent")
     } else {
@@ -171,13 +216,15 @@ async function sendWebhookNotification(
   days: number,
   webhookUrl?: string,
 ): Promise<void> {
-  if (!webhookUrl) {
+  const target = requireHttps(webhookUrl, "webhookUrl")
+  if (!target) {
+    if (webhookUrl) return // already warned: present but not https
     consola.warn("Webhook configured but no webhookUrl set. Use: subtrack config set webhookUrl https://example.com/hook")
     return
   }
 
   try {
-    const response = await postJson(webhookUrl, {
+    const response = await postJson(target, {
       event: "upcoming_bills",
       days,
       count: entries.length,
@@ -188,6 +235,7 @@ async function sendWebhookNotification(
         cycle: e.sub.cycle,
       })),
     })
+    await discardBody(response)
     if (response.ok) {
       consola.success("Webhook notification sent")
     } else {

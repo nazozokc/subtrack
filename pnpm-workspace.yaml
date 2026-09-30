@@ -13,9 +13,16 @@ allowBuilds:
 # pass pnpm audit --audit-level=high (via secretlint / vitepress / vitest)
 #
 # Force vite and esbuild to patched versions (via vitepress)
+#
+# These are lower bounds pinned to the *patched* release of each advisory, not
+# "some version that happens to be old enough". A lower bound below the patched
+# version leaves pnpm free to keep a vulnerable resolution already in the
+# lockfile, because the existing entry still satisfies the range.
 overrides:
   brace-expansion: ">=5.0.9"
-  js-yaml: ">=5.2.2"
+  # GHSA-r3ph-w7gj-g6xm: maxTotalMergeKeys does not bound CPU for empty merge
+  # sources. Fixed in 5.4.1.
+  js-yaml: ">=5.4.1"
   nanoid: ">=3.3.18"
   postcss: ">=8.5.18"
   vite: ">=6.4.3 <8"

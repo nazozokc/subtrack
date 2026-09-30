@@ -20,6 +20,18 @@ import type {
 
 const run = promisify(execFile);
 
+/**
+ * Hard ceiling on a single CLI invocation.
+ *
+ * Raycast keeps the view open until the promise settles, so without this a
+ * subtrack process blocked on a stale database lock would leave the command
+ * spinning forever with no error and no way out.
+ */
+const TIMEOUT_MS = 30_000;
+
+/** Generous for a JSON dump of any realistic subscription table, small enough to bound memory. */
+const MAX_BUFFER = 16 * 1024 * 1024;
+
 type Preferences = {
   binaryPath: string;
   dbDir: string;
@@ -69,11 +81,24 @@ function currency(): string | undefined {
 // have to embed a control character.
 const ESC = String.fromCharCode(27);
 
+/**
+ * Every C0 control, DEL, and the C1 range.
+ *
+ * The CLI strips SGR sequences but not the rest: a subscription named
+ * `^[[2J` (clear screen) or `^[]0;title^G` (set terminal title) reaches the UI
+ * verbatim, and the Raycast list is not a terminal but a React text node that
+ * will happily render the control bytes. Removing all of them is cheap and
+ * leaves nothing for a future code path to forget about.
+ */
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g;
+
 function clean(text: string): string {
   return text
     .split(ESC)
     .map((chunk) => chunk.replace(/^\[[0-9;]*m/, ""))
     .join("")
+    .replace(CONTROL_CHARS, " ")
     .trim();
 }
 
@@ -105,8 +130,17 @@ function toError(error: unknown): SubtrackError {
   const err = error as NodeJS.ErrnoException & {
     code?: string;
     stdout?: string;
+    killed?: boolean;
+    signal?: NodeJS.Signals;
   };
   if (err.code === "ENOENT" || err.code === "EACCES") return explain(err);
+  // execFile reports a timeout as a kill rather than an exit code.
+  if (err.killed === true) {
+    return new SubtrackError(
+      `The subtrack CLI did not finish within ${TIMEOUT_MS / 1000} seconds and was stopped.`,
+      "A lock file left by a crashed run can do this. Check `subtrack diagnostics`, then try again.",
+    );
+  }
   // subtrack reports failures through the logger and a non-zero exit code, so
   // stdout carries the message even though the promise rejected.
   const reported = clean(err.stdout ?? "");
@@ -114,12 +148,34 @@ function toError(error: unknown): SubtrackError {
   return new SubtrackError(last ?? err.message);
 }
 
+/**
+ * Build a single `--key=value` argument.
+ *
+ * `execFile` gives us no shell, which stops word splitting — but the CLI still
+ * runs every argv element through its own tokenizer, and that tokenizer treats
+ * any element starting with `-` as a new flag. Passing the value as its own
+ * argv slot therefore lets user-typed text become a flag: a subscription named
+ * `--force` sent as `["--name", "--force"]` is re-read by subtrack as the
+ * `--force` flag, and `--name` is left valueless. A lone `--` is worse, since it
+ * terminates option parsing and silently drops every argument after it.
+ *
+ * The inline `--key=value` form binds the value to the key before tokenizing
+ * (subtrack's `parser.ts` splits on the first `=` at index 3 or later), so the
+ * value can never be reinterpreted no matter what it contains. The `String()`
+ * coercion also guarantees a string, since a stray number would otherwise be
+ * rejected by `execFile` with an opaque error.
+ */
+function flag(key: string, value: string): string {
+  return `--${key}=${String(value)}`;
+}
+
 /** Run a read command and parse its JSON stdout. */
 async function readJson<T>(args: string[]): Promise<T> {
   try {
     const { stdout } = await run(binary(), [...args, "--json"], {
       env: env(),
-      maxBuffer: 64 * 1024 * 1024,
+      maxBuffer: MAX_BUFFER,
+      timeout: TIMEOUT_MS,
     });
     return JSON.parse(stdout) as T;
   } catch (error) {
@@ -130,7 +186,11 @@ async function readJson<T>(args: string[]): Promise<T> {
 /** Run a mutating command. These have no JSON output, so only the exit matters. */
 async function mutate(args: string[]): Promise<void> {
   try {
-    await run(binary(), args, { env: env(), maxBuffer: 8 * 1024 * 1024 });
+    await run(binary(), args, {
+      env: env(),
+      maxBuffer: MAX_BUFFER,
+      timeout: TIMEOUT_MS,
+    });
   } catch (error) {
     throw toError(error);
   }
@@ -154,24 +214,29 @@ export async function listSubscriptions(
   filter: ListFilter = {},
 ): Promise<Subscription[]> {
   const args = ["list"];
+  // Every value goes through `flag()`: `--tags` and `--sort` are populated from
+  // subscription data, and a tag literally named `--desc` would otherwise be
+  // re-read by the CLI's tokenizer as a boolean flag.
   const c = currency();
-  if (c !== undefined) args.push("--currency", c);
-  if (filter.status !== undefined) args.push("--status", filter.status);
-  if (filter.tags !== undefined) args.push("--tags", filter.tags);
-  if (filter.minPrice !== undefined) args.push("--min-price", filter.minPrice);
-  if (filter.maxPrice !== undefined) args.push("--max-price", filter.maxPrice);
-  if (filter.sort !== undefined) args.push("--sort", filter.sort);
+  if (c !== undefined) args.push(flag("currency", c));
+  if (filter.status !== undefined) args.push(flag("status", filter.status));
+  if (filter.tags !== undefined) args.push(flag("tags", filter.tags));
+  if (filter.minPrice !== undefined)
+    args.push(flag("min-price", filter.minPrice));
+  if (filter.maxPrice !== undefined)
+    args.push(flag("max-price", filter.maxPrice));
+  if (filter.sort !== undefined) args.push(flag("sort", filter.sort));
   if (filter.desc === true) args.push("--desc");
   if (filter.includeArchived === true) args.push("--include-archived");
-  if (filter.limit !== undefined) args.push("--limit", filter.limit);
-  if (filter.offset !== undefined) args.push("--offset", filter.offset);
+  if (filter.limit !== undefined) args.push(flag("limit", filter.limit));
+  if (filter.offset !== undefined) args.push(flag("offset", filter.offset));
   return readJson<Subscription[]>(args);
 }
 
 export function upcoming(days?: number): Promise<UpcomingEntry[]> {
   const args = days === undefined ? ["upcoming"] : ["upcoming", String(days)];
   const c = currency();
-  if (c !== undefined) args.push("--currency", c);
+  if (c !== undefined) args.push(flag("currency", c));
   return readJson<UpcomingEntry[]>(args);
 }
 
@@ -183,14 +248,14 @@ export function summary(): Promise<SummaryData> {
 export function payment(period = "monthly"): Promise<PaymentData> {
   const args = ["payment", period];
   const c = currency();
-  if (c !== undefined) args.push("--currency", c);
+  if (c !== undefined) args.push(flag("currency", c));
   return readJson<PaymentData>(args);
 }
 
 export function budget(period = "monthly"): Promise<BudgetData> {
-  const args = ["budget", "--period", period];
+  const args = ["budget", flag("period", period)];
   const c = currency();
-  if (c !== undefined) args.push("--currency", c);
+  if (c !== undefined) args.push(flag("currency", c));
   return readJson<BudgetData>(args);
 }
 
@@ -261,11 +326,11 @@ function withValues(
 ): string[] {
   for (const key of REQUIRED_FIELDS) {
     const value = input[key];
-    if (value !== undefined && value !== "") args.push(`--${key}`, value);
+    if (value !== undefined && value !== "") args.push(flag(key, value));
   }
   for (const key of OPTIONAL_FIELDS) {
     const value = input[key];
-    if (value !== undefined && value !== "") args.push(`--${key}`, value);
+    if (value !== undefined && value !== "") args.push(flag(key, value));
   }
   return args;
 }

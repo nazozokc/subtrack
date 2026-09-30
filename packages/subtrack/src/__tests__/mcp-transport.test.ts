@@ -170,6 +170,28 @@ describe("MCP stdio transport — NDJSON flow", () => {
   })
 })
 
+describe("MCP stdio transport — reflection bounds", () => {
+  test("an unknown method name is echoed back truncated, not in full", async () => {
+    // `params.method` is attacker-controlled and only checked for `typeof`, so
+    // the METHOD_NOT_FOUND response must not reflect an unbounded string.
+    const huge = "z".repeat(5000)
+    const msg = JSON.stringify({ jsonrpc: "2.0", id: 2, method: huge })
+    const out = await runToEnd(`${INIT_MSG}\n${msg}\n`)
+    const lines = out.trim().split("\n")
+    const err = JSON.parse(lines[1]!) as { error: { code: number; message: string } }
+    expect(err.error.code).toBe(-32601)
+    expect(err.error.message.length).toBeLessThan(120)
+    expect(err.error.message).toMatch(/Method not found: z+\u2026$/)
+  })
+
+  test("a short unknown method name is echoed in full", async () => {
+    const msg = JSON.stringify({ jsonrpc: "2.0", id: 3, method: "nope" })
+    const out = await runToEnd(`${INIT_MSG}\n${msg}\n`)
+    const err = JSON.parse(out.trim().split("\n")[1]!) as { error: { message: string } }
+    expect(err.error.message).toBe("Method not found: nope")
+  })
+})
+
 describe("MCP stdio transport — oversize handling", () => {
   test("oversized NDJSON line is rejected before parse without hanging", async () => {
     const hugeLine = `{"jsonrpc":"2.0","id":1,"method":"tools/list","padding":"${"x".repeat(MAX_REQUEST_SIZE + 100)}"}\n`

@@ -109,10 +109,41 @@ export function validateBillingDay(v: string): string | true {
   return true
 }
 
+/**
+ * Reject C0 controls, DEL, and the C1 range in user-supplied free text.
+ *
+ * These fields are stored verbatim and then echoed by `subtrack list`,
+ * `export`, `notify`, the MCP tools, and the Raycast extension. A name holding
+ * `ESC [ 2 J` repaints the user's terminal, `ESC ] 0 ; ... BEL` renames the
+ * window, and a bare newline or tab lets a value forge extra columns in table
+ * output. None of these characters carry meaning in a subscription name, note,
+ * or tag, so the check costs nothing real.
+ *
+ * `multiline` keeps tab / newline / carriage return for the one field that is
+ * genuinely multi-line (notes); every other field is single-line and rejects
+ * them, which is what stops the column-forging variant.
+ */
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS_SINGLE = /[\u0000-\u001F\u007F-\u009F]/
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS_MULTILINE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/
+
+/** Error string for a control-character hit, or null when the value is clean. */
+function controlCharError(
+  v: string,
+  field: string,
+  multiline = false,
+): string | null {
+  const match = v.match(multiline ? CONTROL_CHARS_MULTILINE : CONTROL_CHARS_SINGLE)
+  if (!match) return null
+  const code = match[0].codePointAt(0) ?? 0
+  return `${field} cannot contain control characters (found \\u${code.toString(16).padStart(4, "0")})`
+}
+
 export function validateName(v: string): string | true {
   if (!v.trim()) return "Name cannot be empty"
   if (v.length > 100) return "Name too long (max 100 chars)"
-  return true
+  return controlCharError(v, "Name") ?? true
 }
 
 export function validatePrice(v: string): string | true {
@@ -126,12 +157,13 @@ export function validatePrice(v: string): string | true {
 
 export function validateNotes(v: string): string | true {
   if (v.length > 500) return "Notes too long (max 500 chars)"
-  return true
+  // Notes are the one genuinely multi-line field, so tab/newline/CR stay.
+  return controlCharError(v, "Notes", true) ?? true
 }
 
 export function validatePaymentMethod(v: string): string | true {
   if (v.length > 50) return "Payment method too long (max 50 chars)"
-  return true
+  return controlCharError(v, "Payment method") ?? true
 }
 
 /** Validate a calendar date without allowing JavaScript's date rollover. */
@@ -149,7 +181,7 @@ export function validateDateString(v: string): string | true {
 
 export function validateVendorName(v: string): string | true {
   if (v.length > 100) return "Vendor name too long (max 100 chars)"
-  return true
+  return controlCharError(v, "Vendor name") ?? true
 }
 
 export function validateVendorUrl(v: string): string | true {
@@ -170,7 +202,7 @@ export function validateVendorUrl(v: string): string | true {
 
 export function validatePlanTier(v: string): string | true {
   if (v.length > 100) return "Plan tier too long (max 100 chars)"
-  return true
+  return controlCharError(v, "Plan tier") ?? true
 }
 
 export function validateDiscountValue(v: string): string | true {
@@ -195,7 +227,7 @@ export function validateAutoRenewal(v: string): string | true {
 export function validateTrialName(v: string): string | true {
   if (!v.trim()) return "Name cannot be empty"
   if (v.length > 100) return "Name too long (max 100 chars)"
-  return true
+  return controlCharError(v, "Name") ?? true
 }
 
 export function validateExpiresAt(v: string): string | true {
@@ -211,6 +243,8 @@ export function validateTags(v: string): string | true {
   if (tags.length > 10) return "Maximum 10 tags allowed"
   for (const tag of tags) {
     if (tag.length > 50) return `Tag too long: "${tag}" (max 50 chars)`
+    const err = controlCharError(tag, "Tag")
+    if (err) return err
   }
   return true
 }
@@ -235,5 +269,5 @@ export function validateDate(v: string): string | true {
 export function validateModelName(v: string): string | true {
   if (!v.trim()) return "Model name cannot be empty"
   if (v.length > 200) return "Model name too long (max 200 chars)"
-  return true
+  return controlCharError(v, "Model name") ?? true
 }

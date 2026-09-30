@@ -251,3 +251,29 @@ test("dateFormat and listShow keys validate values", async () => {
   handleConfigSet("listShowMethod", "yes")
   expect(errorMessages.some((m) => m.includes("must be 'on' or 'off'"))).toBe(true)
 })
+
+/**
+ * `config.json` and the config encryption key sit next to the database. Before
+ * this was routed through the shared `validateAppDir` rule, `config.ts` read
+ * `SUBSC_CLI_DB_DIR` raw while `getDbDir()` validated it — so a value the
+ * database layer would have rejected (`/etc`) still decided where the key was
+ * written.
+ */
+test("config path refuses a SUBSC_CLI_DB_DIR the database layer rejects", async () => {
+  if (process.platform === "win32") return
+  const { getConfigPath } = await import("../config.ts")
+  const saved = process.env.SUBSC_CLI_DB_DIR
+  try {
+    for (const dir of ["/etc", "/etc/subtrack", "/proc/self", "/tmp"]) {
+      process.env.SUBSC_CLI_DB_DIR = dir
+      expect(() => getConfigPath()).toThrow(/SUBSC_CLI_DB_DIR/)
+    }
+  } finally {
+    process.env.SUBSC_CLI_DB_DIR = saved
+  }
+})
+
+test("config path accepts an ordinary SUBSC_CLI_DB_DIR", async () => {
+  const { getConfigPath } = await import("../config.ts")
+  expect(getConfigPath()).toBe(join(process.env.SUBSC_CLI_DB_DIR as string, "config.json"))
+})

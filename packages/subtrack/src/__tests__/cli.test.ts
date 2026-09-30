@@ -518,3 +518,93 @@ describe("cli", () => {
     }
   })
 })
+// ── add/edit flag contract ───────────────────────────────
+
+/**
+ * The Raycast extension and the MCP tools both send `notes` on add/edit, and
+ * the handlers (`handleAdd` / `handleEdit`) already read `flags.notes`. The
+ * command definitions simply never declared the flag, so the parser rejected
+ * `--notes` as unknown and the field was unreachable from the command line.
+ * These assertions pin the flag surface the callers depend on.
+ */
+describe("add/edit declare every field the extension and MCP tools send", () => {
+  test("addCommand declares all required and optional fields", async () => {
+    const { addCommand } = await import("../commands/core.ts")
+    for (const key of [
+      "name", "price", "currency", "cycle", "tags", "status",
+      "notes", "billingDay", "paymentMethod", "vendorName", "vendorUrl",
+      "planTier", "discountAmount", "discountType", "contractStart",
+      "contractEnd", "autoRenewal",
+    ]) {
+      expect(addCommand.args, `add is missing --${key}`).toHaveProperty(key)
+    }
+  })
+
+  test("editCommand declares all required and optional fields", async () => {
+    const { editCommand } = await import("../commands/core.ts")
+    for (const key of [
+      "name", "price", "currency", "cycle", "tags", "status",
+      "notes", "billingDay", "paymentMethod", "vendorName", "vendorUrl",
+      "planTier", "discountAmount", "discountType", "contractStart",
+      "contractEnd", "autoRenewal",
+    ]) {
+      expect(editCommand.args, `edit is missing --${key}`).toHaveProperty(key)
+    }
+  })
+
+  test("--notes is accepted in both the inline and spaced forms", async () => {
+    const { addCommand } = await import("../commands/core.ts")
+    const inline = resolveArgs(["--notes=hello world"], addCommand.args, { strict: true })
+    expect(inline.error).toBeUndefined()
+    expect(inline.values.notes).toBe("hello world")
+
+    const spaced = resolveArgs(["--notes", "hello world"], addCommand.args, { strict: true })
+    expect(spaced.error).toBeUndefined()
+    expect(spaced.values.notes).toBe("hello world")
+  })
+})
+
+/**
+ * The extension passes every value as `--key=value` in a single argv element.
+ * That is the only shape in which a value starting with `-` cannot be
+ * re-tokenized as a flag — `subtrack add --name --force` really does set
+ * `--force` and leave `--name` valueless.
+ */
+describe("inline --key=value binds values that look like flags", () => {
+  const args = {
+    name: { type: "string" as const },
+    notes: { type: "string" as const },
+    force: { type: "boolean" as const },
+  }
+
+  test("a value that looks like a flag stays a value", () => {
+    const r = resolveArgs(["--name=--force"], args, { strict: true })
+    expect(r.error).toBeUndefined()
+    expect(r.values.name).toBe("--force")
+    expect(r.values.force).toBeUndefined()
+  })
+
+  test("a bare -- stays a value instead of terminating option parsing", () => {
+    const r = resolveArgs(["--name=--", "--notes=after"], args, { strict: true })
+    expect(r.error).toBeUndefined()
+    expect(r.values.name).toBe("--")
+    expect(r.values.notes).toBe("after")
+  })
+
+  test("only the first = splits, so values may contain =", () => {
+    const r = resolveArgs(["--notes=a=b=c"], args, { strict: true })
+    expect(r.values.notes).toBe("a=b=c")
+  })
+
+  test("values may contain newlines and tabs", () => {
+    const r = resolveArgs(["--notes=line1\nline2\ttab"], args, { strict: true })
+    expect(r.values.notes).toBe("line1\nline2\ttab")
+  })
+
+  test("the spaced form does NOT protect against flag-shaped values", () => {
+    // Documents the reason the extension must use the inline form.
+    const r = resolveArgs(["--name", "--force"], args, { strict: true })
+    expect(r.values.name).toBeUndefined()
+    expect(r.values.force).toBe(true)
+  })
+})

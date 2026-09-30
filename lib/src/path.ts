@@ -1,10 +1,57 @@
-import { resolve, normalize, isAbsolute, dirname, sep } from "node:path"
+import { resolve, normalize, isAbsolute, dirname, sep, parse } from "node:path"
 import { realpathSync, existsSync } from "node:fs"
 import os from "node:os"
 
 /** Default trusted base directories: home and temp. */
 function defaultBases(): string[] {
   return [os.homedir(), os.tmpdir()]
+}
+
+/**
+ * Directories subtrack refuses to treat as its data directory.
+ *
+ * The bare names are rejected outright. `/etc`, `/proc`, `/sys` and `/dev` are
+ * also rejected with descendants, because a subdirectory of those is still
+ * system-owned state and nothing legitimate writes there.
+ *
+ * `/tmp` is deliberately *not* covered by the descendant rule: it is sticky, so
+ * a `mkdir`-created `/tmp/subtrack` can only be removed by its owner, and
+ * `SUBSC_CLI_DB_DIR=/tmp/subtrack` is a reasonable thing to ask for.
+ */
+const FORBIDDEN_DIRS = ["/etc", "/dev", "/proc", "/sys", "/tmp"] as const
+const FORBIDDEN_DIR_TREES = ["/etc", "/dev", "/proc", "/sys"] as const
+
+/**
+ * Validate a directory that subtrack is about to own (database, config, keys).
+ *
+ * `label` names the setting in the error message so the user knows which knob
+ * to change. Returns the normalized path so callers can use it directly.
+ *
+ * @throws if the path is empty, too long, the filesystem root, a system
+ *         directory, or inside a system directory tree.
+ */
+export function validateAppDir(dir: string, label: string): string {
+  if (!dir || typeof dir !== "string") {
+    throw new Error(`${label} must be a non-empty string`)
+  }
+  if (dir.length > 4096) {
+    throw new Error(`${label} path too long`)
+  }
+  const normalized = normalize(resolve(dir))
+  // `path.resolve("/")` is a drive root like "D:\" on Windows, so compare
+  // against the parsed root rather than a literal "/".
+  if (normalized === parse(normalized).root) {
+    throw new Error(`${label} cannot be the filesystem root: ${normalized} (a system directory)`)
+  }
+  if (FORBIDDEN_DIRS.includes(normalized as (typeof FORBIDDEN_DIRS)[number])) {
+    throw new Error(`${label} cannot be a system directory: ${normalized}`)
+  }
+  for (const tree of FORBIDDEN_DIR_TREES) {
+    if (normalized === tree || normalized.startsWith(`${tree}${sep}`)) {
+      throw new Error(`${label} cannot be inside a system directory: ${normalized}`)
+    }
+  }
+  return normalized
 }
 
 /**

@@ -81,7 +81,12 @@ export function validateToolCall(
   name: string,
   args: Record<string, unknown> | undefined,
 ): string | null {
-  const rawSize = JSON.stringify(args ?? {}).length
+  // `Buffer.byteLength`, not `.length`: the latter counts UTF-16 code units, so
+  // a payload of astral-plane characters (2 units, 4 UTF-8 bytes each) reports
+  // exactly half its real size and slips past the cap. This gate is
+  // defense-in-depth behind the wire-level check in transport.ts, which is
+  // measured in bytes — but a control that under-reports is worse than none.
+  const rawSize = Buffer.byteLength(JSON.stringify(args ?? {}), "utf8")
   if (rawSize > MAX_REQUEST_SIZE) {
     return `Request too large (${rawSize} bytes, max ${MAX_REQUEST_SIZE})`
   }

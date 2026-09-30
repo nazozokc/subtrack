@@ -74,6 +74,26 @@ test("getDbDir rejects system directories", () => {
   process.env.SUBSC_CLI_DB_DIR = mainDir
 })
 
+test("getDbDir rejects paths inside a system directory tree", () => {
+  // The exact-match check alone let `/etc/subtrack` through, which is still
+  // system-owned state and nothing legitimate writes there.
+  const inside = process.platform === "win32" ? [] : ["/etc/subtrack", "/proc/self", "/sys/kernel"]
+  for (const dir of inside) {
+    process.env.SUBSC_CLI_DB_DIR = dir
+    expect(() => conn.getDbDir()).toThrow(/system directory/)
+  }
+  process.env.SUBSC_CLI_DB_DIR = mainDir
+})
+
+test("getDbDir still allows a subdirectory of /tmp", () => {
+  // /tmp is sticky, so a mkdir-created subdirectory there is owner-protected
+  // and `SUBSC_CLI_DB_DIR=/tmp/subtrack` is a reasonable thing to ask for.
+  if (process.platform === "win32") return
+  process.env.SUBSC_CLI_DB_DIR = "/tmp/subtrack"
+  expect(() => conn.getDbDir()).not.toThrow()
+  process.env.SUBSC_CLI_DB_DIR = mainDir
+})
+
 test("getDbDir rejects empty env value", () => {
   process.env.SUBSC_CLI_DB_DIR = ""
   expect(() => conn.getDbDir()).toThrow(/non-empty string/)

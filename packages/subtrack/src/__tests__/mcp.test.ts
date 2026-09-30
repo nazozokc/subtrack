@@ -226,6 +226,25 @@ describe("MCP input validation", () => {
     expect(validateArgs({ names: "false" }, INPUT_VALIDATIONS.search_subscriptions!)).toMatch(/boolean/i)
   })
 
+  test("validateToolCall measures size in bytes, not UTF-16 code units", async () => {
+    const { validateToolCall, MAX_REQUEST_SIZE } = await import("../mcp/security.ts")
+    // A single astral-plane character is 2 UTF-16 code units but 4 UTF-8 bytes.
+    // Measuring with `.length` would report half the real size, so a payload
+    // built from these slips past the cap.
+    const astral = "\u{1F600}"
+    // Sized so the UTF-16 length lands at ~75% of the cap while the real byte
+    // count is ~1.5x it: a check written against `.length` would wave it through.
+    const args = { note: astral.repeat(Math.floor((MAX_REQUEST_SIZE * 0.75 - 16) / 2)) }
+    expect(JSON.stringify(args).length).toBeLessThan(MAX_REQUEST_SIZE)
+    expect(Buffer.byteLength(JSON.stringify(args), "utf8")).toBeGreaterThan(MAX_REQUEST_SIZE)
+    expect(validateToolCall("get_summary", args)).toMatch(/too large/)
+  })
+
+  test("validateToolCall still accepts a small payload", async () => {
+    const { validateToolCall } = await import("../mcp/security.ts")
+    expect(validateToolCall("get_summary", { anything: "small" })).toBeNull()
+  })
+
   test("every registered tool has an input validation schema", async () => {
     const { INPUT_VALIDATIONS } = await import("../mcp/security.ts")
     const { TOOLS } = await import("../mcp/tools.ts")

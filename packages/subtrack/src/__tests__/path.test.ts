@@ -2,7 +2,7 @@ import { test, expect, describe, afterAll } from "vitest"
 import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync, existsSync, rmSync, realpathSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { resolveSafePath, resolveSafeOutputPath } from "@subtrack/lib/path"
+import { resolveSafePath, resolveSafeOutputPath, validateAppDir } from "@subtrack/lib/path"
 
 /**
  * Path-safety helpers must accept files directly inside a trusted base
@@ -70,5 +70,62 @@ describe("resolveSafePath", () => {
     } finally {
       rmSync(outside, { recursive: true, force: true })
     }
+  })
+})
+/**
+ * `validateAppDir` is the single rule that decides where the database, the
+ * config, and the config encryption key may live. It lives in `@subtrack/lib`
+ * precisely so `config.ts` and `db/connection.ts` cannot disagree.
+ */
+describe("validateAppDir", () => {
+  test("accepts and normalizes an ordinary path", () => {
+    if (process.platform === "win32") return
+    expect(validateAppDir("/home/user/.config/subtrack", "DIR")).toBe(
+      "/home/user/.config/subtrack",
+    )
+  })
+
+  test("resolves `..` before checking", () => {
+    if (process.platform === "win32") return
+    expect(validateAppDir("/home/user/.config/../.config/subtrack", "DIR")).toBe(
+      "/home/user/.config/subtrack",
+    )
+  })
+
+  test("rejects an empty value", () => {
+    expect(() => validateAppDir("", "DIR")).toThrow(/non-empty string/)
+  })
+
+  test("rejects an over-long path", () => {
+    expect(() => validateAppDir("/a".repeat(3000), "DIR")).toThrow(/too long/)
+  })
+
+  test("rejects the filesystem root", () => {
+    if (process.platform === "win32") return
+    expect(() => validateAppDir("/", "DIR")).toThrow(/system directory/)
+  })
+
+  test("rejects bare system directories", () => {
+    if (process.platform === "win32") return
+    for (const dir of ["/etc", "/dev", "/proc", "/sys", "/tmp"]) {
+      expect(() => validateAppDir(dir, "DIR")).toThrow(/system directory/)
+    }
+  })
+
+  test("rejects descendants of system directory trees", () => {
+    if (process.platform === "win32") return
+    for (const dir of ["/etc/subtrack", "/proc/self", "/sys/kernel", "/dev/shm"]) {
+      expect(() => validateAppDir(dir, "DIR")).toThrow(/system directory/)
+    }
+  })
+
+  test("still allows a subdirectory of /tmp", () => {
+    if (process.platform === "win32") return
+    expect(validateAppDir("/tmp/subtrack", "DIR")).toBe("/tmp/subtrack")
+  })
+
+  test("names the offending setting in the message", () => {
+    if (process.platform === "win32") return
+    expect(() => validateAppDir("/etc", "SUBSC_CLI_DB_DIR")).toThrow(/SUBSC_CLI_DB_DIR/)
   })
 })

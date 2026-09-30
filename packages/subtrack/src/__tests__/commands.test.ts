@@ -1987,6 +1987,95 @@ test("handleRestore restores from valid backup file", async () => {
   if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
 })
 
+/**
+ * `verifyBackupHash` used to return `true` when the `.sha256` sidecar was
+ * absent, so deleting the sidecar alongside a tampered backup made the
+ * integrity check pass silently. `restore` must now surface "cannot be
+ * verified" and ask before overwriting the current database.
+ */
+test("handleRestore asks before restoring a backup with no integrity sidecar", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync, readFileSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+  const { DatabaseSync: DatabaseSync2 } = await import("node:sqlite")
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  try {
+    const srcDbPath = join(tmpDir, "src.db")
+    const backupDb = new DatabaseSync2(srcDbPath)
+    backupDb.exec("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
+    backupDb.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
+    backupDb.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id), FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE, FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE)")
+    backupDb.exec("CREATE TABLE llm_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, model TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, cost REAL NOT NULL, date TEXT NOT NULL, description TEXT)")
+    backupDb.exec("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('Sidecarless', 42, 'EUR', 'monthly')")
+    backupDb.close()
+
+    const backupPath = join(tmpDir, "no_sidecar.db")
+    writeFileSync(backupPath, readFileSync(srcDbPath))
+    expect(existsSync(`${backupPath}.sha256`)).toBe(false)
+
+    const db = await import("../db.ts")
+    db.writeSubscription({ name: "KeepMe", price: 1, currency: "USD", cycle: "monthly", tags: [] })
+
+    // Accept the standard "Restore X?" prompt, then decline the
+    // "integrity cannot be verified" prompt.
+    vi.mocked(confirm).mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+
+    const { handleRestore } = await import("../backup.ts")
+    await handleRestore(backupPath)
+
+    expect(
+      warnMessages.some((m) => m.includes("integrity cannot be verified")),
+      `expected an unverified-integrity warning, got: ${JSON.stringify(warnMessages)}`,
+    ).toBe(true)
+    // The current data must be untouched.
+    expect(db.getSubscriptions().map((x) => x.name)).toContain("KeepMe")
+  } finally {
+    if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+  }
+})
+
+test("handleRestore asks before restoring a backup whose hash does not match", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync, readFileSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+  const { DatabaseSync: DatabaseSync2 } = await import("node:sqlite")
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  try {
+    const srcDbPath = join(tmpDir, "src.db")
+    const backupDb = new DatabaseSync2(srcDbPath)
+    backupDb.exec("CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price INTEGER NOT NULL, currency TEXT NOT NULL, cycle TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', billing_day INTEGER, created_at TEXT NOT NULL DEFAULT (date('now')), notes TEXT)")
+    backupDb.exec("CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)")
+    backupDb.exec("CREATE TABLE subscription_tags (subscription_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (subscription_id, tag_id), FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE, FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE)")
+    backupDb.exec("CREATE TABLE llm_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, model TEXT NOT NULL, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, cost REAL NOT NULL, date TEXT NOT NULL, description TEXT)")
+    backupDb.exec("INSERT INTO subscriptions (name, price, currency, cycle) VALUES ('Tampered', 7, 'EUR', 'monthly')")
+    backupDb.close()
+
+    const backupPath = join(tmpDir, "tampered.db")
+    writeFileSync(backupPath, readFileSync(srcDbPath))
+
+    const db = await import("../db.ts")
+    db.writeBackupHash(backupPath)
+    // Now corrupt the data but leave the original sidecar in place.
+    writeFileSync(backupPath, Buffer.concat([readFileSync(backupPath), Buffer.from("junk")]))
+    expect(db.verifyBackupHash(backupPath)).toEqual({ status: "mismatch" })
+
+    // Accept the standard "Restore X?" prompt, then decline the mismatch prompt.
+    vi.mocked(confirm).mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+
+    const { handleRestore } = await import("../backup.ts")
+    await handleRestore(backupPath)
+
+    expect(
+      warnMessages.some((m) => m.includes("SHA256 mismatch")),
+      `expected a mismatch warning, got: ${JSON.stringify(warnMessages)}`,
+    ).toBe(true)
+  } finally {
+    if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+  }
+})
+
 test("handleRestore with non-existent file reports it as not found", async () => {
   const { handleRestore } = await import("../backup.ts")
   await handleRestore("/nonexistent/file.db.gz")
