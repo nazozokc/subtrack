@@ -64,7 +64,7 @@ function currency(): string | undefined {
   return value === "" ? undefined : value;
 }
 
-// A stray colourised line would otherwise leak control bytes into the UI.
+// A stray colorized line would otherwise leak control bytes into the UI.
 // Splitting on ESC and stripping the SGR parameters avoids a regex that would
 // have to embed a control character.
 const ESC = String.fromCharCode(27);
@@ -166,10 +166,6 @@ export async function listSubscriptions(
   if (filter.limit !== undefined) args.push("--limit", filter.limit);
   if (filter.offset !== undefined) args.push("--offset", filter.offset);
   return readJson<Subscription[]>(args);
-}
-
-export function searchSubscriptions(query: string): Promise<Subscription[]> {
-  return readJson<Subscription[]>(["search", query]);
 }
 
 export function upcoming(days?: number): Promise<UpcomingEntry[]> {

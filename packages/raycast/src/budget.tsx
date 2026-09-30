@@ -9,14 +9,17 @@ import type { BudgetData } from "./lib/types";
 const PERIODS = [
   { title: "Monthly", value: "monthly" },
   { title: "Yearly", value: "yearly" },
-];
+] as const;
 
-function number(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
+/** Config keys the CLI itself advertises for each period. */
+const SET_COMMANDS = {
+  monthly: "subtrack config set monthlyBudget 50",
+  yearly: "subtrack config set yearlyBudget 600",
+} as const;
 
 export default function Budget(): JSX.Element {
-  const [period, setPeriod] = useState("monthly");
+  const [period, setPeriod] =
+    useState<(typeof PERIODS)[number]["value"]>("monthly");
   const [data, setData] = useState<BudgetData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -70,7 +73,7 @@ export default function Budget(): JSX.Element {
           await showHUD("Refreshed");
         }}
       />
-      <ActionPanel.Submenu title="Change Period" icon={Icon.Calendar}>
+      <ActionPanel.Submenu title="Change Period…" icon={Icon.Calendar}>
         {PERIODS.map((p) => (
           <Action
             key={p.value}
@@ -94,7 +97,7 @@ export default function Budget(): JSX.Element {
           "Set one in your terminal:",
           "",
           "```",
-          "subtrack config budget set --amount 50",
+          SET_COMMANDS[period],
           "```",
         ].join("\n")}
         actions={actions}
@@ -102,17 +105,12 @@ export default function Budget(): JSX.Element {
     );
   }
 
-  const currency = data.currency ?? "USD";
-  // The CLI has used several key names for these over time; accept whichever
-  // the installed version emits rather than pinning one.
-  const spent =
-    number(data.total) ?? number(data.spent) ?? number(data.amount) ?? 0;
-  const limit =
-    number(data.limit) ?? number(data.budget) ?? number(data.budgetAmount);
-  const remaining = limit === null ? null : limit - spent;
-  const used =
-    limit === null || limit === 0 ? null : Math.min((spent / limit) * 100, 100);
-  const over = data.over ?? (limit !== null && spent > limit);
+  // The CLI already reports `spending`, `remaining`, and `over` for the
+  // resolved budget, so nothing here has to be recomputed.
+  const currency = data.currency;
+  const limit = data.budget;
+  const remaining = data.remaining;
+  const used = limit <= 0 ? null : Math.min((data.spending / limit) * 100, 100);
 
   const barWidth = 30;
   const filled = used === null ? 0 : Math.round((used / 100) * barWidth);
@@ -123,22 +121,16 @@ export default function Budget(): JSX.Element {
       markdown={[
         "# Budget",
         "",
-        over ? "## ⚠️ Over budget" : "## On track",
+        data.over ? "## ⚠️ Over budget" : "## On track",
         "",
-        `${formatPrice(spent, currency)} of ${limit === null ? "no limit" : formatPrice(limit, currency)}`,
+        `${formatPrice(data.spending, currency)} of ${limit <= 0 ? "no limit" : formatPrice(limit, currency)}`,
         "",
-        limit === null ? "" : `\n${bar}\n`,
-        limit === null
-          ? ""
-          : used === null
-            ? ""
-            : `**${used.toFixed(0)}% used**`,
+        limit <= 0 ? "" : `\n${bar}\n`,
+        used === null ? "" : `**${used.toFixed(0)}% used**`,
         "",
-        remaining === null
-          ? ""
-          : remaining >= 0
-            ? `${formatPrice(remaining, currency)} left`
-            : `${formatPrice(-remaining, currency)} over`,
+        remaining >= 0
+          ? `${formatPrice(remaining, currency)} left`
+          : `${formatPrice(-remaining, currency)} over`,
         "",
         `Period: ${periodLabel}${data.budgetName ? ` · ${data.budgetName}` : ""}`,
       ]

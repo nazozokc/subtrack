@@ -5,19 +5,13 @@
 import { Icon } from "@raycast/api";
 import type { Status, Subscription } from "./types";
 
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: "$",
-  EUR: "€",
-  GBP: "£",
-  JPY: "¥",
-  KRW: "₩",
-};
-
 export function formatPrice(amount: number, currency: string): string {
   // JPY and KRW are conventionally written without minor units.
   const fractionDigits = currency === "JPY" || currency === "KRW" ? 0 : 2;
   try {
-    return new Intl.NumberFormat("en-US", {
+    // No explicit locale: Raycast does not support localization, so the
+    // numbers follow the system locale rather than a pinned one.
+    return new Intl.NumberFormat(undefined, {
       style: "currency",
       currency,
       minimumFractionDigits: fractionDigits,
@@ -27,10 +21,6 @@ export function formatPrice(amount: number, currency: string): string {
     // An unknown currency code must not blank out the price.
     return `${amount.toFixed(fractionDigits)} ${currency}`;
   }
-}
-
-export function currencySymbol(currency: string): string {
-  return CURRENCY_SYMBOLS[currency] ?? "";
 }
 
 /** "3 days" / "today" — reads better in a list than a bare date. */
@@ -53,7 +43,7 @@ export function relativeDays(isoDate: string, today = new Date()): string {
 export function formatDate(isoDate: string): string {
   const date = new Date(`${isoDate}T00:00:00`);
   if (Number.isNaN(date.getTime())) return isoDate;
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -67,7 +57,7 @@ export function statusLabel(status: Status): string {
     case "paused":
       return "Paused";
     case "cancelled":
-      return "Cancelled";
+      return "Canceled";
     case "archived":
       return "Archived";
   }
@@ -75,7 +65,7 @@ export function statusLabel(status: Status): string {
 
 /**
  * Raycast's `List.Item` icon takes a built-in `Icon` value and has no tint, so
- * status reads from the accompanying accessory text rather than colour.
+ * status reads from the accompanying accessory text rather than color.
  */
 const STATUS_ICON: Record<Status, Icon> = {
   active: Icon.CheckCircle,
@@ -97,11 +87,6 @@ export function cycleLabel(cycle: string): string {
     default:
       return cycle.charAt(0).toUpperCase() + cycle.slice(1);
   }
-}
-
-/** `/` is the CLI's tag separator, so escape it rather than splitting wrongly. */
-export function formatTags(tags: string[]): string {
-  return tags.map((t) => t.replace(/\//g, "\\/")).join(",");
 }
 
 /** Turn a possibly-null field into a Detail row, dropping the ones that are empty. */

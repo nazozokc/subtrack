@@ -19,7 +19,7 @@ const STATUSES = [
   { title: "All", value: "" },
   { title: "Active", value: "active" },
   { title: "Paused", value: "paused" },
-  { title: "Cancelled", value: "cancelled" },
+  { title: "Canceled", value: "cancelled" },
   { title: "Archived", value: "archived" },
 ];
 
@@ -149,7 +149,7 @@ export default function Subscriptions(): JSX.Element {
       }
       actions={
         <ActionPanel>
-          <ActionPanel.Submenu title="Filters" icon={Icon.Filter}>
+          <ActionPanel.Submenu title="Filters…" icon={Icon.Filter}>
             {SORTS.map((s) => (
               <Action
                 key={s.value}
@@ -182,7 +182,7 @@ export default function Subscriptions(): JSX.Element {
             />
           </ActionPanel.Submenu>
 
-          <ActionPanel.Submenu title="Tag" icon={Icon.Tag}>
+          <ActionPanel.Submenu title="Tag…" icon={Icon.Tag}>
             <Action
               title="All Tags"
               icon={tag === "" ? Icon.Check : Icon.Circle}
