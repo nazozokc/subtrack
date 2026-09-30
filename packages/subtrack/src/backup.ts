@@ -157,11 +157,28 @@ async function restoreFromFile(filePath: string, force: boolean): Promise<void> 
     }
   }
 
-  if (!verifyBackupHash(filePath)) {
+  const integrity = verifyBackupHash(filePath)
+  if (integrity.status === "mismatch") {
     consola.warn("Backup integrity check failed (SHA256 mismatch)")
     if (!force) {
       const ok = await confirm({
         message: "SHA256 mismatch — restore anyway?",
+        default: false,
+      })
+      if (!ok) { consola.info("Cancelled"); return }
+    }
+  } else if (integrity.status === "unverified") {
+    // Treating "no sidecar" as a pass let anyone who can replace a backup file
+    // remove the sidecar and restore tampered data with no warning at all. The
+    // data is not known-bad, so this stays a confirmation rather than a refusal.
+    consola.warn(
+      integrity.reason === "no-sidecar"
+        ? `No integrity hash found for "${path.basename(filePath)}" — integrity cannot be verified.`
+        : `Integrity hash for "${path.basename(filePath)}" is unreadable — integrity cannot be verified.`,
+    )
+    if (!force) {
+      const ok = await confirm({
+        message: "Backup integrity cannot be verified — restore anyway?",
         default: false,
       })
       if (!ok) { consola.info("Cancelled"); return }

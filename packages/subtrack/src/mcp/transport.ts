@@ -133,8 +133,14 @@ export function startTransport(stdin: Readable, stdout: Writable): Promise<void>
           handleToolCall(id, m)
           break
         default:
+          // `m.method` is attacker-controlled and only checked for `typeof`, so
+          // echo a bounded slice rather than the whole string back to the client.
           sendMessage(
-            sendError(id, JSONRPC_ERROR.METHOD_NOT_FOUND, `Method not found: ${m.method}`),
+            sendError(
+              id,
+              JSONRPC_ERROR.METHOD_NOT_FOUND,
+              `Method not found: ${m.method.length > 64 ? `${m.method.slice(0, 64)}…` : m.method}`,
+            ),
           )
       }
     }

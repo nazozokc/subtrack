@@ -1324,17 +1324,17 @@ test("writeBackupHash and verifyBackupHash round-trip", async () => {
     expect(hashContent).toMatch(/^[a-f0-9]{64}$/)
 
     // Verification should pass
-    expect(db.verifyBackupHash(backupPath)).toBe(true)
+    expect(db.verifyBackupHash(backupPath)).toEqual({ status: "verified" })
 
     // Tamper with the backup — verification should fail
     writeFileSync(backupPath, "tampered content")
-    expect(db.verifyBackupHash(backupPath)).toBe(false)
+    expect(db.verifyBackupHash(backupPath)).toEqual({ status: "mismatch" })
   } finally {
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
   }
 })
 
-test("verifyBackupHash returns true when no sidecar file (backward compat)", async () => {
+test("verifyBackupHash reports unverified (not verified) when no sidecar exists", async () => {
   const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
   const { join } = await import("node:path")
   const { tmpdir } = await import("node:os")
@@ -1345,8 +1345,31 @@ test("verifyBackupHash returns true when no sidecar file (backward compat)", asy
     writeFileSync(backupPath, "some content")
 
     const db = await import("../db.ts")
-    // No .sha256 file — should return true (skip verification)
-    expect(db.verifyBackupHash(backupPath)).toBe(true)
+    // No .sha256 file. This must NOT read as "verified": a missing sidecar is
+    // exactly what an attacker leaves behind when swapping in a tampered
+    // backup, so the caller has to be told verification did not happen.
+    expect(db.verifyBackupHash(backupPath)).toEqual({ status: "unverified", reason: "no-sidecar" })
+  } finally {
+    if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
+  }
+})
+
+test("verifyBackupHash reports unverified for a malformed sidecar", async () => {
+  const { mkdtempSync, writeFileSync, existsSync, rmSync } = await import("node:fs")
+  const { join } = await import("node:path")
+  const { tmpdir } = await import("node:os")
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "subtrack-test-"))
+  try {
+    const backupPath = join(tmpDir, "backup.db")
+    writeFileSync(backupPath, "some content")
+    writeFileSync(`${backupPath}.sha256`, "not-a-hash\n")
+
+    const db = await import("../db.ts")
+    expect(db.verifyBackupHash(backupPath)).toEqual({
+      status: "unverified",
+      reason: "unreadable-sidecar",
+    })
   } finally {
     if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true })
   }

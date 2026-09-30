@@ -1,8 +1,9 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs"
+import { readFileSync, writeFileSync, mkdirSync, chmodSync, existsSync, unlinkSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
 import { consola } from "@subtrack/lib/logger"
 import { safeJsonParse } from "@subtrack/lib/json"
+import { validateAppDir } from "@subtrack/lib/path"
 import { encryptBuffer, decryptBuffer, hasEncryptionKey } from "@subtrack/lib/crypto"
 import { logAudit } from "./audit-log.ts"
 import { fail } from "./error.ts"
@@ -38,8 +39,18 @@ const DEFAULT_CONFIG: SubtrackConfig = {
   notifyDays: 7,
 }
 
+/**
+ * Where `config.json` and the config encryption key live.
+ *
+ * This used to read `SUBSC_CLI_DB_DIR` raw, while `getDbDir()` validated the
+ * same variable. That split let a value the database layer would have rejected
+ * (`SUBSC_CLI_DB_DIR=/etc`) still decide where the config and — more
+ * importantly — `config.key` were written. `validateAppDir` is the shared rule,
+ * so config and database can no longer disagree about what is acceptable.
+ */
 function getConfigDir(): string {
-  return process.env.SUBSC_CLI_DB_DIR ?? path.join(homedir(), ".config", "subtrack")
+  const dir = process.env.SUBSC_CLI_DB_DIR ?? path.join(homedir(), ".config", "subtrack")
+  return validateAppDir(dir, "SUBSC_CLI_DB_DIR")
 }
 
 export function getConfigPath(): string {
@@ -239,6 +250,14 @@ export function saveConfig(config: SubtrackConfig): void {
   const dir = path.dirname(configPath)
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
+    // `mode` is masked by the umask, so a brand-new directory could land at
+    // 0755 — and this one holds the config encryption key. Only on creation, so
+    // a directory the user already tightened is left alone.
+    try {
+      chmodSync(dir, 0o700)
+    } catch {
+      // Best effort; config.json itself is still written 0600 below.
+    }
   }
   writeFileSync(configPath, serializeConfig(config), { mode: 0o600 })
   _config = config

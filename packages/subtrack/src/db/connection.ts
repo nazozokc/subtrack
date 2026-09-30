@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite"
 import type { SQLInputValue } from "node:sqlite"
 import {
-  mkdirSync, existsSync, readFileSync, writeFileSync,
+  mkdirSync, chmodSync, existsSync, readFileSync, writeFileSync,
   readdirSync, statSync, openSync, writeSync, closeSync,
   unlinkSync, renameSync,
   constants,
@@ -12,6 +12,7 @@ import path from "node:path"
 import { homedir } from "node:os"
 import { consola } from "@subtrack/lib/logger"
 import { encryptBuffer, decryptBuffer, isEncrypted } from "@subtrack/lib/crypto"
+import { validateAppDir } from "@subtrack/lib/path"
 import type { BackupFileInfo } from "../types.ts"
 import { runMigrations, SCHEMA_VERSION } from "./schema.ts"
 import { writeDbHash, verifyDbHash, removeDbHash } from "./integrity.ts"
@@ -138,24 +139,12 @@ function gunzipLimited(data: Buffer): Buffer {
 }
 
 // ── Directory validation ──────────────────────────────────
+// The rules live in `@subtrack/lib/path` so that `config.ts` can apply exactly
+// the same validation to the config/key directory without importing this layer.
 
-/** Validate that SUBSC_CLI_DB_DIR is safe to use. */
-function validateDbDir(dir: string): void {
-  if (!dir || typeof dir !== "string") {
-    throw new Error("SUBSC_CLI_DB_DIR must be a non-empty string")
-  }
-  if (dir.length > 4096) {
-    throw new Error("SUBSC_CLI_DB_DIR path too long")
-  }
-  const normalized = path.resolve(dir)
-  // Prevent pointing to sensitive system directories
-  // (on Windows, path.resolve("/") is a drive root like "D:\", so compare
-  // against the filesystem root instead of a literal "/")
-  const root = path.parse(normalized).root
-  const forbidden = ["/etc", "/dev", "/proc", "/sys", "/tmp"]
-  if (normalized === root || forbidden.includes(normalized)) {
-    throw new Error(`SUBSC_CLI_DB_DIR cannot be a system directory: ${normalized}`)
-  }
+/** Validate that SUBSC_CLI_DB_DIR is safe to use, and return it normalized. */
+function validateDbDir(dir: string): string {
+  return validateAppDir(dir, "SUBSC_CLI_DB_DIR")
 }
 
 // ── File locking ──────────────────────────────────────────
@@ -266,10 +255,9 @@ process.on("exit", () => {
 
 export function getDbDir(): string {
   const dir = process.env.SUBSC_CLI_DB_DIR ?? path.join(homedir(), ".config", "subtrack")
-  validateDbDir(dir)
   // Normalize separators so downstream path.join() produces consistent
   // paths on all platforms (e.g. "/tmp/x" on Windows becomes "\tmp\x")
-  return path.normalize(dir)
+  return validateDbDir(dir)
 }
 
 export function getDefaultBackupDir(): string {
@@ -296,7 +284,23 @@ function getSaveDbPath(): string {
 /** Ensure the DB directory exists (needed before writing backing files). */
 function ensureDbDir(): string {
   const dbdir = getDbDir()
-  mkdirSync(dbdir, { recursive: true, mode: 0o700 })
+  // `mkdirSync` returns the first path it created, or undefined when the
+  // directory already existed — which is exactly the signal for "we own this
+  // directory's initial permissions".
+  const created = mkdirSync(dbdir, { recursive: true, mode: 0o700 })
+  if (created !== undefined) {
+    // `mode` is masked by the process umask, so a permissive umask (0022) would
+    // leave a brand-new directory at 0755 — world-readable, world-listable, and
+    // holding every subscription the user pays for. Re-assert the mode. Only
+    // on creation: a directory the user already set to something else is their
+    // deliberate choice, and tightening it on every run would be surprising.
+    try {
+      chmodSync(dbdir, 0o700)
+    } catch {
+      // A read-only or otherwise unmodifiable directory will fail loudly on the
+      // first write; there is nothing useful to do about it here.
+    }
+  }
   return dbdir
 }
 
@@ -586,16 +590,34 @@ export function writeBackupHash(backupPath: string): void {
   writeFileSync(getBackupHashPath(backupPath), hash + "\n", { mode: 0o600 })
 }
 
-export function verifyBackupHash(backupPath: string): boolean {
+/**
+ * Outcome of checking a backup's SHA256 sidecar.
+ *
+ * `unverified` is deliberately distinct from `mismatch`: it means there was
+ * nothing to check against, not that the data is known-bad. Collapsing the two
+ * into a boolean made "no sidecar" silently pass, which is exactly the case an
+ * attacker produces by deleting the sidecar alongside a tampered backup.
+ */
+export type BackupIntegrity =
+  | { status: "verified" }
+  | { status: "unverified"; reason: "no-sidecar" | "unreadable-sidecar" }
+  | { status: "mismatch" }
+
+export function verifyBackupHash(backupPath: string): BackupIntegrity {
   const hashPath = getBackupHashPath(backupPath)
-  if (!existsSync(hashPath)) {
-    consola.warn(
-      `No integrity hash found for "${path.basename(backupPath)}" — integrity cannot be verified.`,
-    )
-    return true // backward compat: skip if no sidecar
+  if (!existsSync(hashPath)) return { status: "unverified", reason: "no-sidecar" }
+
+  let expected: string
+  try {
+    expected = readFileSync(hashPath, "utf-8").trim()
+  } catch {
+    return { status: "unverified", reason: "unreadable-sidecar" }
   }
-  const expected = readFileSync(hashPath, "utf-8").trim()
+  if (!/^[0-9a-f]{64}$/i.test(expected)) {
+    return { status: "unverified", reason: "unreadable-sidecar" }
+  }
+
   const content = readFileSync(backupPath)
   const actual = createHash("sha256").update(content).digest("hex")
-  return expected === actual
+  return expected.toLowerCase() === actual ? { status: "verified" } : { status: "mismatch" }
 }
