@@ -1,0 +1,8 @@
+subtrack (subtrack v{VERSION})
+
+[1mPotential duplicates (threshold: 0.8):[22m
+
+  [1m#1 Netflix[22m  $15.99/monthly
+  [1m#9 Netflix[22m  $19.99/monthly  [36m100%[39m
+
+[36mℹ[39m Merge with: subtrack dedupe merge <keepId> <removeId>

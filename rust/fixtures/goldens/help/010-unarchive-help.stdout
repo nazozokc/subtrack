@@ -1,0 +1,14 @@
+subtrack (subtrack v{VERSION})
+
+Unarchive a subscription (set status back to active)
+
+USAGE:
+  subtrack unarchive <OPTIONS> <id>
+
+ARGUMENTS:
+  id           Subscription ID to unarchive
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+

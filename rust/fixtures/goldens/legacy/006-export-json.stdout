@@ -1,0 +1,97 @@
+subtrack (subtrack v{VERSION})
+
+[
+  {
+    "id": 1,
+    "name": "Netflix",
+    "price": 15.99,
+    "currency": "USD",
+    "cycle": "monthly",
+    "status": "active",
+    "billingDay": 15,
+    "createdAt": "{DATE}",
+    "notes": null,
+    "paymentMethod": null,
+    "contractStart": null,
+    "contractEnd": null,
+    "autoRenewal": true,
+    "vendorName": null,
+    "vendorUrl": null,
+    "planTier": null,
+    "discountAmount": null,
+    "discountType": null,
+    "tags": [
+      "video"
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Spotify",
+    "price": 5.99,
+    "currency": "USD",
+    "cycle": "monthly",
+    "status": "active",
+    "billingDay": 1,
+    "createdAt": "{DATE}",
+    "notes": null,
+    "paymentMethod": null,
+    "contractStart": null,
+    "contractEnd": null,
+    "autoRenewal": true,
+    "vendorName": null,
+    "vendorUrl": null,
+    "planTier": null,
+    "discountAmount": null,
+    "discountType": null,
+    "tags": [
+      "music"
+    ]
+  },
+  {
+    "id": 3,
+    "name": "Local Gym",
+    "price": 12000,
+    "currency": "JPY",
+    "cycle": "monthly",
+    "status": "paused",
+    "billingDay": 5,
+    "createdAt": "{DATE}",
+    "notes": null,
+    "paymentMethod": null,
+    "contractStart": null,
+    "contractEnd": null,
+    "autoRenewal": true,
+    "vendorName": null,
+    "vendorUrl": null,
+    "planTier": null,
+    "discountAmount": null,
+    "discountType": null,
+    "tags": [
+      "health"
+    ]
+  },
+  {
+    "id": 4,
+    "name": "Old Magazine",
+    "price": 9.99,
+    "currency": "EUR",
+    "cycle": "quarterly",
+    "status": "cancelled",
+    "billingDay": 3,
+    "createdAt": "{DATE}",
+    "notes": null,
+    "paymentMethod": null,
+    "contractStart": null,
+    "contractEnd": null,
+    "autoRenewal": true,
+    "vendorName": null,
+    "vendorUrl": null,
+    "planTier": null,
+    "discountAmount": null,
+    "discountType": null,
+    "tags": [
+      "reading"
+    ]
+  }
+]
+

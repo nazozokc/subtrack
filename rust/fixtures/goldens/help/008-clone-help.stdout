@@ -1,0 +1,19 @@
+subtrack (subtrack v{VERSION})
+
+Clone an existing subscription
+
+USAGE:
+  subtrack clone <OPTIONS> <id>
+
+ARGUMENTS:
+  id           Subscription ID to clone
+
+OPTIONS:
+  -h, --help                     Display this help message
+  -v, --version                  Display this version
+  --name <name>                  New name (default: '<original> (copy)')
+  --price <price>                Override price
+  --currency <currency>          Override currency
+  --cycle <cycle>                Override cycle
+  --tags <tags>                  Override tags (comma-separated)
+

@@ -1,0 +1,4 @@
+subtrack (subtrack v{VERSION})
+
+[32m✔[39m Integrity check: passed
+[36mℹ[39m VACUUM complete: no space reclaimed (database already optimized)

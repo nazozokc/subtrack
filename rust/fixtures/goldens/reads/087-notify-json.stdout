@@ -1,0 +1,88 @@
+{
+  "days": 14,
+  "count": 8,
+  "entries": [
+    {
+      "name": "Weekly Paper",
+      "price": 2.5,
+      "currency": "USD",
+      "cycle": "weekly",
+      "nextDate": "{DATE}",
+      "tags": [
+        "news"
+      ]
+    },
+    {
+      "name": "Discord Nitro",
+      "price": 9.99,
+      "currency": "USD",
+      "cycle": "yearly",
+      "nextDate": "{DATE}",
+      "tags": [
+        "video"
+      ]
+    },
+    {
+      "name": "GitHub Pro",
+      "price": 4,
+      "currency": "USD",
+      "cycle": "monthly",
+      "nextDate": "{DATE}",
+      "tags": [
+        "dev"
+      ]
+    },
+    {
+      "name": "Domain Renewal",
+      "price": 1500,
+      "currency": "JPY",
+      "cycle": "semi-annual",
+      "nextDate": "{DATE}",
+      "tags": [
+        "dev"
+      ]
+    },
+    {
+      "name": "Netflix",
+      "price": 15.99,
+      "currency": "USD",
+      "cycle": "monthly",
+      "nextDate": "{DATE}",
+      "tags": [
+        "video",
+        "4k"
+      ]
+    },
+    {
+      "name": "Bus Pass",
+      "price": 20,
+      "currency": "USD",
+      "cycle": "bi-weekly",
+      "nextDate": "{DATE}",
+      "tags": [
+        "transport"
+      ]
+    },
+    {
+      "name": "Adobe Creative Cloud",
+      "price": 5999,
+      "currency": "JPY",
+      "cycle": "yearly",
+      "nextDate": "{DATE}",
+      "tags": [
+        "design",
+        "work"
+      ]
+    },
+    {
+      "name": "Netflix",
+      "price": 19.99,
+      "currency": "USD",
+      "cycle": "monthly",
+      "nextDate": "{DATE}",
+      "tags": [
+        "video"
+      ]
+    }
+  ]
+}

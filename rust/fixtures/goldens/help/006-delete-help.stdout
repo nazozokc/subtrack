@@ -1,0 +1,14 @@
+subtrack (subtrack v{VERSION})
+
+Delete subscriptions
+
+USAGE:
+  subtrack delete <OPTIONS> [<id> ...]
+
+ARGUMENTS:
+  id           Subscription ID(s) to delete (omit for interactive selection)
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+

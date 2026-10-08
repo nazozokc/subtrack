@@ -1,0 +1,4 @@
+{"id":"gen-openrouter-0001","model":"openai/gpt-4o","created":1759372800,"usage":{"prompt_tokens":1200,"completion_tokens":450,"cost":0.0135}}
+{"id":"gen-openrouter-0002","model":"anthropic/claude-3-5-sonnet-20241022","created":1759459200,"usage":{"prompt_tokens":3000,"completion_tokens":900,"cost":0.0465}}
+not valid json line
+{"id":"gen-openrouter-0003","model":"google/gemini-2.0-flash","created":1759545600,"usage":{"prompt_tokens":5000,"completion_tokens":1500,"cost":0.0024}}

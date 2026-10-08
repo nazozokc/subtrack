@@ -1,0 +1,18 @@
+subtrack (subtrack v{VERSION})
+
+Show payment totals
+
+USAGE:
+  subtrack payment <OPTIONS> [<period>]
+
+ARGUMENTS:
+  period           Billing period (default: monthly)
+
+OPTIONS:
+  -h, --help                         Display this help message
+  -v, --version                      Display this version
+  -c, --currency <currency>          Convert all prices to target currency
+  -a, --api                          Include LLM API usage costs
+  -m, --method                       Group by payment method
+  -j, --json                         Output as JSON
+

@@ -1,0 +1,16 @@
+subtrack (subtrack v{VERSION})
+
+Import subscriptions from CSV
+
+USAGE:
+  subtrack import <OPTIONS> <file>
+
+ARGUMENTS:
+  file           CSV file to import
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+  --dry-run              Validate without importing
+  --deduplicate          Skip rows whose name already exists
+

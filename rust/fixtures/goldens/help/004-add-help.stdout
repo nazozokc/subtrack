@@ -1,0 +1,27 @@
+subtrack (subtrack v{VERSION})
+
+Add a subscription
+
+USAGE:
+  subtrack add <OPTIONS>
+
+OPTIONS:
+  -h, --help                                 Display this help message
+  -v, --version                              Display this version
+  --name <name>                              Subscription name
+  --price <price>                            Monthly payment amount
+  --currency <currency>                      Currency
+  --cycle <cycle>                            Billing cycle
+  --tags <tags>                              Comma-separated tags
+  --billingDay <billingDay>                  Billing day of month (1-31)
+  --status <status>                          Status: active, paused, cancelled (default: active)
+  --paymentMethod <paymentMethod>            Payment method (e.g. credit_card, paypal)
+  --vendorName <vendorName>                  Vendor name
+  --vendorUrl <vendorUrl>                    Vendor URL
+  --planTier <planTier>                      Plan tier (e.g. Pro, Family)
+  --discountAmount <discountAmount>          Discount amount (non-negative number)
+  --discountType <discountType>              Discount type: percentage or fixed
+  --contractStart <contractStart>            Contract start date (YYYY-MM-DD)
+  --contractEnd <contractEnd>                Contract end date (YYYY-MM-DD)
+  --autoRenewal <autoRenewal>                Auto renew: true or false (default: true)
+

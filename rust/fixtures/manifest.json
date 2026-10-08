@@ -1,0 +1,71 @@
+{
+  "purpose": "Golden outputs of the TypeScript reference implementation of subtrack, replayed by the Rust port.",
+  "reference": {
+    "package": "subtrack",
+    "version": "10.0.0",
+    "source": "packages/subtrack (TypeScript)",
+    "commandCount": 50
+  },
+  "capturedAt": "2026-10-08T13:38:59.372Z",
+  "capturedOnDate": "2026-10-08",
+  "env": {
+    "tz": "UTC",
+    "locale": "C.utf8",
+    "term": "xterm-256color",
+    "home": "per-case fake HOME under the case temp root",
+    "dbDir": "per-case fake SUBSC_CLI_DB_DIR under the case temp root",
+    "inherited": "PATH only",
+    "runRoot": "os.tmpdir() — path-safety bases (home+tmp) must include the case root"
+  },
+  "dateInjection": {
+    "env": "SUBTRACK_TODAY",
+    "value": "2026-10-08",
+    "note": "Seed dates and today-relative outputs were computed on capturedOnDate (UTC). The Rust test harness sets SUBTRACK_TODAY so its 'today' matches."
+  },
+  "fxMock": {
+    "preload": "capture/fxmock.mjs",
+    "rates": "inputs/fx-rates.json",
+    "intercepted": "https://open.er-api.com/v6/latest/USD → 200; all other URLs → 404"
+  },
+  "normalizations": [
+    "{WORK}   — per-case temp root (db/, cwd/, home/ live beneath it)",
+    "{FIXTURES} — rust/fixtures directory",
+    "{REPO}   — repository root",
+    "{VERSION} — package version (10.0.0), boundary-safe",
+    "{DATETIME} — YYYY-MM-DD[ T]HH:MM:SS[.sss][Z|±HH:MM] (sqlite datetime etc.)",
+    "{DATE}   — YYYY-MM-DD (applied after DATETIME)",
+    "{STAMP}  — YYYYMMDD_HHMMSS in generated filenames and file paths (backups)",
+    "Note: year-less short dates (\"Nov 8\") are stored literally — the Rust harness reproduces them via SUBTRACK_TODAY injection."
+  ],
+  "stepSeparator": "<<<step N>>> (1-based) precedes each step's output in multi-step cases",
+  "fileOutputs": "New/changed files in the case cwd are stored as <group>/<id>.files/<path> with mode bytes (text normalized, binary raw), gzip (stored raw; compare after gunzip), or skip (.sha256 sidecars, .xlsx, raw .db — random IVs / implementation-defined bytes).",
+  "excluded": [
+    {
+      "command": "subtrack notify",
+      "reason": "OS/desktop notification side effects (notify-send/osascript) — environment dependent"
+    },
+    {
+      "command": "subtrack notify --days 30",
+      "reason": "OS/desktop notification side effects (notify-send/osascript) — environment dependent"
+    },
+    {
+      "command": "subtrack mcp",
+      "reason": "covered by the dedicated mcp probe case"
+    },
+    {
+      "command": "subtrack dedupe merge <keepId> <removeId>",
+      "reason": "shell pipeline, redirection, or substitution — not capturable as a single argv"
+    }
+  ],
+  "counts": {
+    "seed": 30,
+    "help": 52,
+    "reads": 122,
+    "mutate": 103,
+    "errors": 48,
+    "interactive": 1,
+    "mcp": 1,
+    "legacy": 6,
+    "legacy-plain": 2
+  }
+}

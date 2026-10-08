@@ -1,0 +1,13 @@
+subtrack (subtrack v{VERSION})
+
+Check subscription data integrity
+
+USAGE:
+  subtrack check <OPTIONS>
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+  --strict               Exit with code 1 when problems are found
+  -j, --json             
+

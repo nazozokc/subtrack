@@ -1,0 +1,14 @@
+subtrack (subtrack v{VERSION})
+
+Show annual subscription spending
+
+USAGE:
+  subtrack yearly <OPTIONS>
+
+OPTIONS:
+  -h, --help                         Display this help message
+  -v, --version                      Display this version
+  --year <year>                      
+  -c, --currency <currency>          
+  -j, --json                         
+

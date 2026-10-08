@@ -1,0 +1,3 @@
+subtrack (subtrack v{VERSION})
+
+[31m✖[39m Invalid "bogus". Valid: active, paused, cancelled, archived

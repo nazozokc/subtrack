@@ -1,0 +1,18 @@
+subtrack (subtrack v{VERSION})
+
+Search subscriptions by name, notes, or tags
+
+USAGE:
+  subtrack search <OPTIONS> [<query>]
+
+ARGUMENTS:
+  query           Search query
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+  --names                Search in names only
+  --notes                Search in notes only
+  --tags                 Search in tags only
+  -j, --json             Output as JSON
+

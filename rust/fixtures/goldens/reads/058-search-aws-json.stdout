@@ -1,0 +1,25 @@
+[
+  {
+    "id": 8,
+    "name": "AWS",
+    "price": 50,
+    "currency": "USD",
+    "cycle": "monthly",
+    "status": "active",
+    "billingDay": 1,
+    "createdAt": "{DATE}",
+    "notes": null,
+    "paymentMethod": "credit_card",
+    "contractStart": null,
+    "contractEnd": null,
+    "autoRenewal": true,
+    "vendorName": "Amazon",
+    "vendorUrl": "https://aws.amazon.com",
+    "planTier": "Business",
+    "discountAmount": null,
+    "discountType": null,
+    "tags": [
+      "work"
+    ]
+  }
+]

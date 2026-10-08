@@ -1,0 +1,23 @@
+subtrack (subtrack v{VERSION})
+
+Bulk operations on subscriptions
+
+USAGE:
+  subtrack [COMMANDS] <OPTIONS>
+
+COMMANDS:
+  [bulk] <OPTIONS>         Bulk operations on subscriptions
+  delete <OPTIONS>         Bulk delete subscriptions
+  status <OPTIONS>         Bulk change subscription status
+  tag <OPTIONS>            Bulk add/remove tags
+
+For more info, run any command with the `--help` flag:
+  subtrack bulk --help
+  subtrack bulk delete --help
+  subtrack bulk status --help
+  subtrack bulk tag --help
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+

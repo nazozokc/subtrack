@@ -1,0 +1,35 @@
+{
+  "from": "{DATE}",
+  "to": "{DATE}",
+  "total": 57,
+  "tokens": {
+    "inputTokens": 1700,
+    "outputTokens": 1000
+  },
+  "byProvider": [
+    {
+      "provider": "anthropic",
+      "total": 42
+    },
+    {
+      "provider": "openai",
+      "total": 15
+    }
+  ],
+  "byModel": [
+    {
+      "model": "claude-3-opus-20240229",
+      "provider": "anthropic",
+      "total": 42,
+      "inputTokens": 1200,
+      "outputTokens": 800
+    },
+    {
+      "model": "gpt-4o",
+      "provider": "openai",
+      "total": 15,
+      "inputTokens": 500,
+      "outputTokens": 200
+    }
+  ]
+}

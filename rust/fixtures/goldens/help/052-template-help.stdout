@@ -1,0 +1,27 @@
+subtrack (subtrack v{VERSION})
+
+Manage subscription templates
+
+USAGE:
+  subtrack [COMMANDS] <OPTIONS>
+
+COMMANDS:
+  [template] <OPTIONS>       Manage subscription templates
+  add <OPTIONS>              Add a template
+  delete <OPTIONS>           Delete a template
+  edit <OPTIONS>             Edit a template
+  list <OPTIONS>             List templates
+  use <OPTIONS>              Add a subscription from a template
+
+For more info, run any command with the `--help` flag:
+  subtrack template --help
+  subtrack template add --help
+  subtrack template delete --help
+  subtrack template edit --help
+  subtrack template list --help
+  subtrack template use --help
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+

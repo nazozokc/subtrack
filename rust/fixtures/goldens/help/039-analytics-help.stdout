@@ -1,0 +1,14 @@
+subtrack (subtrack v{VERSION})
+
+Show detailed subscription analytics
+
+USAGE:
+  subtrack analytics <OPTIONS>
+
+OPTIONS:
+  -h, --help                         Display this help message
+  -v, --version                      Display this version
+  -c, --currency <currency>          Convert all prices to target currency
+  --period <period>                  Period: monthly, yearly (default: monthly)
+  -j, --json                         Output as JSON
+

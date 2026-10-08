@@ -1,0 +1,15 @@
+subtrack (subtrack v{VERSION})
+
+Resume paused or cancelled subscriptions
+
+USAGE:
+  subtrack resume <OPTIONS> [<id> ...]
+
+ARGUMENTS:
+  id           
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+  -f, --force            Skip confirmation
+

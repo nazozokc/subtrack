@@ -1,0 +1,15 @@
+subtrack (subtrack v{VERSION})
+
+Show a monthly calendar with billing days marked
+
+USAGE:
+  subtrack calendar <OPTIONS>
+
+OPTIONS:
+  -h, --help                         Display this help message
+  -v, --version                      Display this version
+  --month <month>                    Month (1-12, default: current)
+  --year <year>                      Year (default: current)
+  -c, --currency <currency>          Convert all prices to target currency
+  -j, --json                         Output as JSON
+

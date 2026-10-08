@@ -1,0 +1,7 @@
+[
+  {
+    "code": "duplicate-name",
+    "severity": "warning",
+    "message": "Duplicate subscription name: Netflix, Netflix"
+  }
+]

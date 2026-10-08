@@ -1,0 +1,15 @@
+subtrack (subtrack v{VERSION})
+
+Backup database (gzip compressed)
+
+USAGE:
+  subtrack backup <OPTIONS> [<destination>]
+
+ARGUMENTS:
+  destination           Backup destination directory (default: ~/.config/subtrack/backups/)
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+  -e, --encrypt          Encrypt the backup with your database key
+

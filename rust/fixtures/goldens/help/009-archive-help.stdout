@@ -1,0 +1,14 @@
+subtrack (subtrack v{VERSION})
+
+Archive a subscription (set status to archived)
+
+USAGE:
+  subtrack archive <OPTIONS> <id>
+
+ARGUMENTS:
+  id           Subscription ID to archive
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+

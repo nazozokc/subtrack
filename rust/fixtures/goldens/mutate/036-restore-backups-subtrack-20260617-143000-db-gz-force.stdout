@@ -1,0 +1,3 @@
+subtrack (subtrack v{VERSION})
+
+[31m✖[39m Backup file not found: ~/backups/subtrack_{STAMP}.db.gz

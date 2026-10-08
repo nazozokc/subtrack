@@ -1,0 +1,19 @@
+subtrack (subtrack v{VERSION})
+
+Show spending forecast and what-if scenarios
+
+USAGE:
+  subtrack forecast <OPTIONS>
+
+OPTIONS:
+  -h, --help                           Display this help message
+  -v, --version                        Display this version
+  --months <months>                    Number of months to forecast (default: 12)
+  --cancel <cancel>                    Comma-separated subscription names to exclude
+  --addName <addName>                  Hypothetical subscription name to add
+  --addPrice <addPrice>                Hypothetical subscription price
+  --addCurrency <addCurrency>          Hypothetical subscription currency
+  --addCycle <addCycle>                Hypothetical subscription cycle
+  -c, --currency <currency>            Convert all prices to target currency
+  -j, --json                           Output as JSON
+

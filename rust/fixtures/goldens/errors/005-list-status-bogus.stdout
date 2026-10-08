@@ -1,0 +1,3 @@
+subtrack (subtrack v{VERSION})
+
+[31m✖[39m status must be one of: active, paused, cancelled, archived

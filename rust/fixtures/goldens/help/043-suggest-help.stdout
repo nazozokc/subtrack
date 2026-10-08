@@ -1,0 +1,25 @@
+subtrack (subtrack v{VERSION})
+
+Manage subscription suggestions
+
+USAGE:
+  subtrack [COMMANDS] <OPTIONS>
+
+COMMANDS:
+  [suggest] <OPTIONS>       Manage subscription suggestions
+  add <OPTIONS>             Add a suggestion as a subscription (non-interactive)
+  dismiss <OPTIONS>         Dismiss a suggestion
+  list <OPTIONS>            List pending suggestions
+  view <OPTIONS>            View full details of a suggestion
+
+For more info, run any command with the `--help` flag:
+  subtrack suggest --help
+  subtrack suggest add --help
+  subtrack suggest dismiss --help
+  subtrack suggest list --help
+  subtrack suggest view --help
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+

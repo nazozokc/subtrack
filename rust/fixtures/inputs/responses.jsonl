@@ -1,0 +1,2 @@
+{"id":"gen-responses-0001","model":"openai/gpt-4o-mini","created":1759372800,"usage":{"prompt_tokens":800,"completion_tokens":200,"cost":0.0006}}
+{"id":"gen-responses-0002","model":"mistralai/mistral-large","created":1759459200,"usage":{"prompt_tokens":1500,"completion_tokens":600,"cost":0.0108}}

@@ -1,0 +1,14 @@
+subtrack (subtrack v{VERSION})
+
+Filter subscriptions by tags (AND logic)
+
+USAGE:
+  subtrack tags <OPTIONS> [<names> ...]
+
+ARGUMENTS:
+  names           Tag names
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+

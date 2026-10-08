@@ -1,0 +1,3 @@
+subtrack (subtrack v{VERSION})
+
+[31m✖[39m No fields to update. Provide at least one flag (e.g. usage edit 5 --cost 0.50 --description 'refined prompt')

@@ -1,0 +1,16 @@
+subtrack (subtrack v{VERSION})
+
+Show subscription changes
+
+USAGE:
+  subtrack changes <OPTIONS>
+
+OPTIONS:
+  -h, --help               Display this help message
+  -v, --version            Display this version
+  --id <id>                
+  --from <from>            
+  --to <to>                
+  --limit <limit>          
+  -j, --json               
+

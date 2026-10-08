@@ -1,0 +1,14 @@
+From: billing@example-bank.com
+To: user@example.com
+Subject: Your receipt from Streamly
+Date: Mon, 5 Oct 2026 09:14:22 +0000
+
+Streamly Premium Monthly
+Receipt #: R-2026-1005-4471
+
+Plan: Premium (Monthly)
+Billing period: Oct 5, 2026 - Nov 4, 2026
+Amount charged: USD 12.99
+Payment method: Visa ending in 4242
+
+Thank you for your payment.

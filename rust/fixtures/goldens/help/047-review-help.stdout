@@ -1,0 +1,15 @@
+subtrack (subtrack v{VERSION})
+
+Review upcoming renewals, bills, and trials
+
+USAGE:
+  subtrack review <OPTIONS>
+
+OPTIONS:
+  -h, --help                             Display this help message
+  -v, --version                          Display this version
+  --billDays <billDays>                  
+  --contractDays <contractDays>          
+  --trialDays <trialDays>                
+  -j, --json                             
+

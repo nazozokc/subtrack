@@ -1,0 +1,7 @@
+subtrack (subtrack v{VERSION})
+
+[36mℹ[39m [dry-run] Would import: Figma (15.00 USD, monthly)
+[36mℹ[39m [dry-run] Would import: 1Password (35.88 USD, yearly)
+[36mℹ[39m [dry-run] Would import: Vercel (20.00 USD, monthly)
+[36mℹ[39m [dry-run] Would import: Kagi (10.00 USD, yearly)
+[32m✔[39m Dry-run complete: 4 valid, 0 invalid

@@ -1,0 +1,25 @@
+subtrack (subtrack v{VERSION})
+
+Manage free trials
+
+USAGE:
+  subtrack [COMMANDS] <OPTIONS>
+
+COMMANDS:
+  [trial] <OPTIONS>          Manage free trials
+  add <OPTIONS>              Add a free trial
+  delete <OPTIONS>           Delete free trials
+  expiring <OPTIONS>         Show trials expiring within a number of days
+  list <OPTIONS>             List all free trials
+
+For more info, run any command with the `--help` flag:
+  subtrack trial --help
+  subtrack trial add --help
+  subtrack trial delete --help
+  subtrack trial expiring --help
+  subtrack trial list --help
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+

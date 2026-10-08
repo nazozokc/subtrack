@@ -1,0 +1,63 @@
+[
+  {
+    "id": 10,
+    "name": "Weekly Paper",
+    "price": 2.5,
+    "currency": "USD",
+    "cycle": "weekly",
+    "nextDate": "{DATE}",
+    "amount": 2.5,
+    "tags": [
+      "news"
+    ]
+  },
+  {
+    "id": 13,
+    "name": "Discord Nitro",
+    "price": 9.99,
+    "currency": "USD",
+    "cycle": "yearly",
+    "nextDate": "{DATE}",
+    "amount": 9.99,
+    "tags": [
+      "video"
+    ]
+  },
+  {
+    "id": 4,
+    "name": "GitHub Pro",
+    "price": 4,
+    "currency": "USD",
+    "cycle": "monthly",
+    "nextDate": "{DATE}",
+    "amount": 4,
+    "tags": [
+      "dev"
+    ]
+  },
+  {
+    "id": 12,
+    "name": "Domain Renewal",
+    "price": 1500,
+    "currency": "JPY",
+    "cycle": "semi-annual",
+    "nextDate": "{DATE}",
+    "amount": 1500,
+    "tags": [
+      "dev"
+    ]
+  },
+  {
+    "id": 1,
+    "name": "Netflix",
+    "price": 15.99,
+    "currency": "USD",
+    "cycle": "monthly",
+    "nextDate": "{DATE}",
+    "amount": 15.99,
+    "tags": [
+      "video",
+      "4k"
+    ]
+  }
+]

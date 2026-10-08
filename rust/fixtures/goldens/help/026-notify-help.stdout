@@ -1,0 +1,15 @@
+subtrack (subtrack v{VERSION})
+
+Send desktop notification for upcoming bills
+
+USAGE:
+  subtrack notify <OPTIONS>
+
+OPTIONS:
+  -h, --help                       Display this help message
+  -v, --version                    Display this version
+  --days <days>                    Number of days (default: config notifyDays or 7)
+  -c, --channel <channel>          Notification channel: os, slack, webhook (default: config notifyChannels or os)
+  --dry-run                        Show upcoming bills without sending notification
+  -j, --json                       Output as JSON
+

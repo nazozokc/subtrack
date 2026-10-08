@@ -1,0 +1,27 @@
+subtrack (subtrack v{VERSION})
+
+List all subscriptions
+
+USAGE:
+  subtrack list <OPTIONS>
+
+OPTIONS:
+  -h, --help                         Display this help message
+  -v, --version                      Display this version
+  -c, --currency <currency>          Convert all prices to target currency
+  --sort <sort>                      Sort field: name, price, currency, cycle
+  -d, --desc                         Sort descending
+  -a, --api                          Include LLM API usage for current month
+  -n, --notes                        Show notes column
+  -m, --method                       Show payment method column
+  --contract                         Show contract dates column
+  --vendor                           Show vendor column
+  --status <status>                  Filter by status: active, paused, cancelled, archived
+  --min-price <min-price>            Filter by minimum price
+  --max-price <max-price>            Filter by maximum price
+  -j, --json                         Output as JSON
+  --tags <tags>                      Comma-separated tag names to filter by (AND logic)
+  --limit <limit>                    Max number of items to show
+  --offset <offset>                  Number of items to skip
+  --include-archived                 Include archived subscriptions
+

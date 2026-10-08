@@ -1,0 +1,20 @@
+subtrack (subtrack v{VERSION})
+
+defaultCurrency: USD
+monthlyBudget: 500
+yearlyBudget: 6000
+theme: default
+notifyDays: 14
+notifyChannels: (not set)
+slackWebhook: https://hooks.slack.com/***
+webhookUrl: https://example.com/***
+tableBorderColor: (not set)
+tableHeaderColor: (not set)
+tableZebraColor: (not set)
+accentColor: (not set)
+tableZebra: (not set)
+tableMinWidth: (not set)
+dateFormat: (not set)
+listShowNotes: on
+listShowMethod: on
+budgets: (not set)

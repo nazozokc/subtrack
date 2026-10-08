@@ -1,0 +1,16 @@
+subtrack (subtrack v{VERSION})
+
+Show spending vs budget and detect budget overruns
+
+USAGE:
+  subtrack budget <OPTIONS>
+
+OPTIONS:
+  -h, --help                         Display this help message
+  -v, --version                      Display this version
+  --check                            Exit with code 1 when over budget (for scripts)
+  --period <period>                  Period: monthly, yearly (default: monthly)
+  -c, --currency <currency>          Convert all prices to target currency
+  --name <name>                      Compare against a named budget (config budgets)
+  -j, --json                         Output as JSON
+

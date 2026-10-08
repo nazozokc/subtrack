@@ -1,0 +1,5 @@
+subtrack (subtrack v{VERSION})
+
+[33m⚠[39m Line 3: Failed to parse JSON, skipping
+[36mℹ[39m Found 3 JSON objects in file
+[32m✔[39m Imported: 3 entries added

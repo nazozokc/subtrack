@@ -1,0 +1,29 @@
+subtrack (subtrack v{VERSION})
+
+[1mSubscription Analytics[22m
+
+[1mOverview:[22m
+  Total subscriptions:  [1m11[22m
+  Status breakdown:
+    [32mactive: 10[39m
+    [33mpaused: 1[39m
+    [31mcancelled: 1[39m
+  Most expensive:       [1mLocal Gym[22m (¥12,000/monthly)
+
+[1mMonthly spending:[22m
+  JPY    ¥12,749.92
+  USD    $150.97
+  [2m──────────────────────────────[22m
+  Budget:     [1m$500[22m
+[2m  (Multiple currencies — use --currency to compare against budget)[22m
+
+[1mMonthly by tag:[22m
+  health           ¥12,000/monthly (1 sub)
+  work             ¥499.92 + $50/monthly (2 subs)
+  design           ¥499.92/monthly (1 sub)
+  dev              $4 + ¥250/monthly (2 subs)
+  transport        $43.33/monthly (1 sub)
+  video            $36.81/monthly (3 subs)
+  4k               $15.99/monthly (1 sub)
+  news             $10.83/monthly (1 sub)
+  music            $5.99/monthly (1 sub)

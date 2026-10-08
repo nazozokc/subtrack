@@ -1,0 +1,21 @@
+subtrack (subtrack v{VERSION})
+
+Detect duplicate subscriptions by name similarity
+
+USAGE:
+  subtrack [COMMANDS] <OPTIONS>
+
+COMMANDS:
+  [dedupe] <OPTIONS>       Detect duplicate subscriptions by name similarity
+  merge <OPTIONS>          Merge a duplicate subscription into another
+
+For more info, run any command with the `--help` flag:
+  subtrack dedupe --help
+  subtrack dedupe merge --help
+
+OPTIONS:
+  -h, --help                       Display this help message
+  -v, --version                    Display this version
+  --threshold <threshold>          Similarity threshold 0-1 (default: 0.8)
+  -j, --json                       Output as JSON
+

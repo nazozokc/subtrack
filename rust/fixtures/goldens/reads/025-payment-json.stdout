@@ -1,0 +1,106 @@
+{
+  "period": "monthly",
+  "total": 12900.89,
+  "currency": null,
+  "subscriptions": [
+    {
+      "id": 1,
+      "name": "Netflix",
+      "price": 15.99,
+      "currency": "USD",
+      "cycle": "monthly",
+      "status": "active",
+      "periodPrice": 15.99
+    },
+    {
+      "id": 2,
+      "name": "Spotify",
+      "price": 5.99,
+      "currency": "USD",
+      "cycle": "monthly",
+      "status": "active",
+      "periodPrice": 5.99
+    },
+    {
+      "id": 3,
+      "name": "Adobe Creative Cloud",
+      "price": 5999,
+      "currency": "JPY",
+      "cycle": "yearly",
+      "status": "active",
+      "periodPrice": 499.92
+    },
+    {
+      "id": 4,
+      "name": "GitHub Pro",
+      "price": 4,
+      "currency": "USD",
+      "cycle": "monthly",
+      "status": "active",
+      "periodPrice": 4
+    },
+    {
+      "id": 5,
+      "name": "Local Gym",
+      "price": 12000,
+      "currency": "JPY",
+      "cycle": "monthly",
+      "status": "paused",
+      "periodPrice": 12000
+    },
+    {
+      "id": 8,
+      "name": "AWS",
+      "price": 50,
+      "currency": "USD",
+      "cycle": "monthly",
+      "status": "active",
+      "periodPrice": 50
+    },
+    {
+      "id": 9,
+      "name": "Netflix",
+      "price": 19.99,
+      "currency": "USD",
+      "cycle": "monthly",
+      "status": "active",
+      "periodPrice": 19.99
+    },
+    {
+      "id": 10,
+      "name": "Weekly Paper",
+      "price": 2.5,
+      "currency": "USD",
+      "cycle": "weekly",
+      "status": "active",
+      "periodPrice": 10.83
+    },
+    {
+      "id": 11,
+      "name": "Bus Pass",
+      "price": 20,
+      "currency": "USD",
+      "cycle": "bi-weekly",
+      "status": "active",
+      "periodPrice": 43.33
+    },
+    {
+      "id": 12,
+      "name": "Domain Renewal",
+      "price": 1500,
+      "currency": "JPY",
+      "cycle": "semi-annual",
+      "status": "active",
+      "periodPrice": 250
+    },
+    {
+      "id": 13,
+      "name": "Discord Nitro",
+      "price": 9.99,
+      "currency": "USD",
+      "cycle": "yearly",
+      "status": "active",
+      "periodPrice": 0.83
+    }
+  ]
+}

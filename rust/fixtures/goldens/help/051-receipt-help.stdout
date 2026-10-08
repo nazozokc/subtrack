@@ -1,0 +1,17 @@
+subtrack (subtrack v{VERSION})
+
+Import subscription candidates from a receipt file
+
+USAGE:
+  subtrack receipt <OPTIONS> <file>
+
+ARGUMENTS:
+  file           
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+  --dryRun               
+  --review               
+  -j, --json             
+

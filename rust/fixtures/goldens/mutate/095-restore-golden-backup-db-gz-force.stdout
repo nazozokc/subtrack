@@ -1,0 +1,4 @@
+subtrack (subtrack v{VERSION})
+
+[36mℹ[39m Auto-backup created: {WORK}/db/backups/subtrack_{STAMP}_before_restore.db.enc (encrypted)
+[32m✔[39m Restored 12 subscriptions from: {WORK}/cwd/golden-backup.db.gz

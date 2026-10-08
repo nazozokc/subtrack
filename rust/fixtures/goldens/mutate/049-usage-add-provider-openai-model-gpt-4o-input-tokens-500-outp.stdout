@@ -1,0 +1,3 @@
+subtrack (subtrack v{VERSION})
+
+[31m✖[39m Could not find pricing for "gpt-4o". Provide --cost to set cost manually (e.g. --cost 0.50 for 50 cents).

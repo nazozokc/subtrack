@@ -1,0 +1,25 @@
+subtrack (subtrack v{VERSION})
+
+Manage configuration
+
+USAGE:
+  subtrack [COMMANDS] <OPTIONS>
+
+COMMANDS:
+  [config] <OPTIONS>       Manage configuration
+  get <OPTIONS>            Get a config value
+  list <OPTIONS>           List all config values
+  reset <OPTIONS>          Reset config to defaults
+  set <OPTIONS>            Set a config value
+
+For more info, run any command with the `--help` flag:
+  subtrack config --help
+  subtrack config get --help
+  subtrack config list --help
+  subtrack config reset --help
+  subtrack config set --help
+
+OPTIONS:
+  -h, --help             Display this help message
+  -v, --version          Display this version
+

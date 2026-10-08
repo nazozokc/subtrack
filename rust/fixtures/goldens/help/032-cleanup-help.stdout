@@ -1,0 +1,14 @@
+subtrack (subtrack v{VERSION})
+
+Run all maintenance tasks (integrity check, VACUUM, prune audit/tags)
+
+USAGE:
+  subtrack cleanup <OPTIONS>
+
+OPTIONS:
+  -h, --help                         Display this help message
+  -v, --version                      Display this version
+  --vacuum                           Run VACUUM (default: true)
+  --audit-days <audit-days>          Prune audit entries older than N days (default: 90)
+  -j, --json                         Output as JSON
+

@@ -1,0 +1,3 @@
+subtrack (subtrack v{VERSION})
+
+[32m✔[39m Set budgets = [{"name":"streaming","amount":3000,"currency":"JPY","categories":["video","music"]}]
