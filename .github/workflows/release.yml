@@ -21,7 +21,10 @@ jobs:
 
   publish:
     needs: ci
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    # Disabled during the TypeScript → Rust migration: the npm package no
+    # longer ships dist/index.mjs. Re-enable once the Rust shim (bin → compiled
+    # binary or launcher) is in place.
+    if: false
     runs-on: ubuntu-latest
     permissions:
       attestations: write

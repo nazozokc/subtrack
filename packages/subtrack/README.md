@@ -722,38 +722,24 @@ backup, restore, encryption, and schema details.
 # Install dependencies
 pnpm install
 
-# Run directly (TypeScript)
-pnpm start          # runs tsx src/index.ts
-
-# Build
-pnpm build          # runs tsdown → dist/index.mjs
-
-# Test
-pnpm test           # vitest run
-pnpm test:watch     # vitest
+# Build (docs site)
+pnpm build
 
 # Lint
-pnpm lint:types     # tsc --noEmit
 pnpm lint:typos     # typos check
 ```
+
+> The CLI is being ported from TypeScript to Rust. The reference TypeScript
+> implementation and its golden outputs live on the `rust` branch under
+> `rust/fixtures/` (tag `last-typescript`).
 
 ## Tech Stack
 
 | Category        | Choice                        |
 | --------------- | ----------------------------- |
-| Runtime         | Node.js (>= 22.5)             |
-| Language        | TypeScript (strict mode, ESM) |
-| Runtime deps    | **None** — zero third-party packages |
-| CLI framework   | Self-contained (src/cli/)     |
-| Interactive UI  | Self-contained prompts (src/prompts/, node:readline) |
-| Interactive menu | Self-contained (src/menu/)  |
-| Logging/Tables/Colors | `@subtrack/lib` (src/logger.ts, src/table.ts, src/ansi.ts) |
-| Spreadsheets    | `@subtrack/lib/xlsx` (self-contained XLSX generator) |
-| OS notifications | Native commands (osascript / notify-send) |
-| Database        | node:sqlite (built-in)        |
+| Language        | Rust (port in progress; reference TS impl at tag `last-typescript`) |
+| Database        | SQLite (local file)           |
 | Exchange rates  | open.er-api.com               |
-| Build           | tsdown                        |
-| Test            | vitest                        |
 | Package manager | pnpm                          |
 
 ## Environment Variables

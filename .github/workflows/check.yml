@@ -39,18 +39,6 @@ jobs:
         working-directory: ./packages/subtrack
         run: pnpm lint:dedupe
 
-      - name: Type check
-        working-directory: ./packages/subtrack
-        run: pnpm lint:types
-
-      - name: Enforce layer boundaries
-        working-directory: ./packages/subtrack
-        run: pnpm lint:arch
-
-      - name: Type check (lib)
-        working-directory: ./lib
-        run: pnpm lint:types
-
       - run: pnpm build
 
       - run: pnpm test
@@ -62,10 +50,6 @@ jobs:
         run: |
           npm audit --audit-level=high --verify-provenance 2>/dev/null || \
             echo "⚠ npm provenance verification not supported in this environment (expected on Node >=22 with npm <12)"
-
-      - name: Scan for secrets and credentials
-        working-directory: ./packages/subtrack
-        run: pnpm lint:secrets
 
       - name: Detect Trojan Source (Unicode control characters)
         run: |

@@ -5,7 +5,6 @@ on:
   push:
     branches: [main]
     paths:
-      - "lib/**"
       - "packages/subtrack/**"
       - ".github/workflows/**"
       - "pnpm-workspace.yaml"
@@ -13,7 +12,6 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "lib/**"
       - "packages/subtrack/**"
       - ".github/workflows/**"
       - "pnpm-workspace.yaml"
@@ -62,16 +60,11 @@ jobs:
 
       - run: pnpm test
 
-      - name: Verify CLI runs (built binary)
-        if: runner.os != 'Windows'
-        working-directory: ./packages/subtrack
-        run: node dist/index.mjs --help
-
       - name: Spell check
         if: runner.os == 'Linux' && matrix.node-version == 22
         uses: crate-ci/typos@512fc24f32f44ab01972217aaaf3dc86ec234d53 # v1.50.2
         with:
-          files: packages/subtrack/ lib/
+          files: packages/subtrack/ docs/
           config: typos.toml
 
       - name: Audit dependencies

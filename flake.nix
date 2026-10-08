@@ -41,7 +41,6 @@
                 echo "    pnpm install    install dependencies"
                 echo "    pnpm build      build packages"
                 echo "    pnpm test       run tests"
-                echo "    pnpm start      run CLI (dev mode)"
                 echo "    typos           check typos"
                 echo "    nix fmt         format nix files"
               '';
