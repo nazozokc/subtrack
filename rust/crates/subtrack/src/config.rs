@@ -13,6 +13,8 @@ pub struct Config {
     pub list_show_notes: bool,
     pub list_show_method: bool,
     pub default_currency: String,
+    pub monthly_budget: f64,
+    pub yearly_budget: Option<f64>,
     /// Individual color overrides (empty string when unset).
     pub table_border_color: String,
     pub table_header_color: String,
@@ -31,6 +33,8 @@ impl Default for Config {
             list_show_notes: false,
             list_show_method: false,
             default_currency: "USD".to_string(),
+            monthly_budget: 0.0,
+            yearly_budget: None,
             table_border_color: String::new(),
             table_header_color: String::new(),
             table_zebra_color: String::new(),
@@ -68,6 +72,8 @@ fn read_config() -> Config {
     };
     cfg.theme = get_str("theme").unwrap_or_else(|| cfg.theme.clone());
     cfg.default_currency = get_str("defaultCurrency").unwrap_or(cfg.default_currency);
+    cfg.monthly_budget = get("monthlyBudget").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    cfg.yearly_budget = get("yearlyBudget").and_then(|v| v.as_f64());
     cfg.list_show_notes = get_str("listShowNotes").as_deref() == Some("on");
     cfg.list_show_method = get_str("listShowMethod").as_deref() == Some("on");
     if let Some(v) = get("tableMinWidth").and_then(|v| v.as_i64()) {

@@ -1,5 +1,6 @@
 //! CLI entry — port of `src/index.ts` main + cli bootstrap.
 
+mod analytics;
 mod ansi;
 mod check;
 mod cli;
@@ -22,6 +23,7 @@ mod router;
 mod search;
 mod stats;
 mod summary;
+mod tags;
 mod table;
 mod trial;
 mod upcoming;

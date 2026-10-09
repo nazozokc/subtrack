@@ -648,6 +648,24 @@ pub fn get_trials_expiring_soon(days: i64) -> std::io::Result<Vec<Trial>> {
     Ok(out)
 }
 
+/// Tag name + subscription count (port of `getTagsWithCount`).
+pub fn get_tags_with_count() -> std::io::Result<Vec<(String, i64)>> {
+    let conn = open_db()?;
+    let sql = "SELECT tags.name, (SELECT COUNT(*) FROM subscription_tags \
+               WHERE subscription_tags.tag_id = tags.id) AS count FROM tags ORDER BY name";
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let rows = stmt
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| std::io::Error::other(e.to_string()))?)
+    }
+    Ok(out)
+}
+
 /// Free-text search across name/notes/tags (port of `searchSubscriptions`).
 pub fn search_subscriptions(
     query: &str,

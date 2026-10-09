@@ -93,6 +93,10 @@ pub fn red(s: &str) -> String {
     colored("red", s)
 }
 
+pub fn green(s: &str) -> String {
+    colored("green", s)
+}
+
 pub fn yellow(s: &str) -> String {
     colored("yellow", s)
 }

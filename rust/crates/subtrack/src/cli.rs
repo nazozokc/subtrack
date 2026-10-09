@@ -168,6 +168,9 @@ pub fn run(args: &[String]) -> i32 {
             "trial list" => crate::trial::run_trial_list(),
             "trial expiring" => crate::trial::run_trial_expiring(&parsed),
             "trial" => crate::trial::run_trial_usage(),
+            p if p == "tags" || p.starts_with("tags ") => crate::tags::run_tags(&parsed),
+            "tag list" => crate::tags::run_tag_list(&parsed),
+            "analytics" => crate::analytics::run_analytics(&parsed),
             // entry menu and unported commands — later phases
             _ => 0,
         },
