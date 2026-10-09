@@ -574,7 +574,135 @@ pub fn get_llm_usage(
     Ok(out)
 }
 
-/// Sum input/output tokens for a date range.
+/// A free-trial entry (`price` is in major units, nullable).
+#[derive(Clone, Debug)]
+pub struct Trial {
+    pub id: i64,
+    pub name: String,
+    pub expires_at: String,
+    pub price: Option<f64>,
+    pub currency: Option<String>,
+    pub cycle: Option<String>,
+    pub notes: Option<String>,
+}
+
+/// All trials, oldest expiry first (port of `getTrials`).
+pub fn get_trials() -> std::io::Result<Vec<Trial>> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, expires_at, price, currency, cycle, notes FROM trials \
+             ORDER BY expires_at ASC",
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(Trial {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                expires_at: row.get(2)?,
+                price: row.get(3)?,
+                currency: row.get(4)?,
+                cycle: row.get(5)?,
+                notes: row.get(6)?,
+            })
+        })
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| std::io::Error::other(e.to_string()))?)
+    }
+    Ok(out)
+}
+
+/// Trials expiring within `days` (inclusive of today; expired excluded).
+pub fn get_trials_expiring_soon(days: i64) -> std::io::Result<Vec<Trial>> {
+    let conn = open_db()?;
+    let from = crate::date::today_string();
+    let to = (crate::date::today() + chrono::Duration::days(days))
+        .format("%Y-%m-%d")
+        .to_string();
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, expires_at, price, currency, cycle, notes FROM trials \
+             WHERE expires_at >= ? AND expires_at <= ? ORDER BY expires_at ASC",
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let rows = stmt
+        .query_map(params![from, to], |row| {
+            Ok(Trial {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                expires_at: row.get(2)?,
+                price: row.get(3)?,
+                currency: row.get(4)?,
+                cycle: row.get(5)?,
+                notes: row.get(6)?,
+            })
+        })
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| std::io::Error::other(e.to_string()))?)
+    }
+    Ok(out)
+}
+
+/// Free-text search across name/notes/tags (port of `searchSubscriptions`).
+pub fn search_subscriptions(
+    query: &str,
+    names: bool,
+    notes: bool,
+    tags: bool,
+) -> std::io::Result<Vec<Subscription>> {
+    let conn = open_db()?;
+    let search_all = !names && !notes && !tags;
+    let pattern = format!("%{}%", query);
+    let mut conditions: Vec<&str> = Vec::new();
+    let mut params: Vec<rusqlite::types::Value> = Vec::new();
+    let add = |conditions: &mut Vec<&'static str>, params: &mut Vec<rusqlite::types::Value>, cond: &'static str| {
+        conditions.push(cond);
+        params.push(pattern.clone().into());
+    };
+    if names || search_all {
+        add(&mut conditions, &mut params, "s.name LIKE ?");
+    }
+    if notes || search_all {
+        add(&mut conditions, &mut params, "s.notes LIKE ?");
+    }
+    if tags || search_all {
+        add(
+            &mut conditions,
+            &mut params,
+            "s.id IN (SELECT st.subscription_id FROM subscription_tags st \
+             JOIN tags t ON t.id = st.tag_id WHERE t.name LIKE ?)",
+        );
+    }
+    let where_clause = format!("WHERE {}", conditions.join(" OR "));
+    let cols = SUB_COLUMNS
+        .iter()
+        .map(|c| format!("s.{}", c))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "SELECT DISTINCT {} FROM subscriptions s {} ORDER BY s.name",
+        cols, where_clause
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(params.iter()), |row| {
+            row_to_subscription(&row)
+        })
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| std::io::Error::other(e.to_string()))?)
+    }
+    map_tags(&conn, &mut out)?;
+    Ok(out)
+}
 pub fn get_llm_usage_token_total(from: &str, to: &str) -> std::io::Result<(i64, i64)> {
     let conn = open_db()?;
     conn.query_row(

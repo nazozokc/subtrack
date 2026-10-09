@@ -164,6 +164,10 @@ pub fn run(args: &[String]) -> i32 {
             "usage list" => crate::usage::run_usage_list(&parsed),
             "usage total" => crate::usage::run_usage_total(&parsed),
             "usage refresh" => crate::usage::run_usage_refresh(),
+            "search" => crate::search::run_search(&parsed),
+            "trial list" => crate::trial::run_trial_list(),
+            "trial expiring" => crate::trial::run_trial_expiring(&parsed),
+            "trial" => crate::trial::run_trial_usage(),
             // entry menu and unported commands — later phases
             _ => 0,
         },

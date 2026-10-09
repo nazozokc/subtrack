@@ -19,9 +19,11 @@ mod parser;
 mod payment;
 mod price;
 mod router;
+mod search;
 mod stats;
 mod summary;
 mod table;
+mod trial;
 mod upcoming;
 mod usage;
 
