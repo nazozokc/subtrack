@@ -2,6 +2,7 @@
 
 mod analytics;
 mod ansi;
+mod calendar;
 mod check;
 mod cli;
 mod commands;
