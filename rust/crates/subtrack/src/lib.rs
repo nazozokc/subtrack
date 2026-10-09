@@ -11,6 +11,7 @@ mod date;
 mod db;
 mod display;
 mod export;
+mod forecast;
 mod fx;
 mod help;
 mod json;
