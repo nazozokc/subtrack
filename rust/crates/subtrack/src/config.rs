@@ -23,6 +23,11 @@ pub struct Config {
     pub table_zebra: String,
     /// Raw parsed config object (for `config list`/`get` display).
     pub raw: serde_json::Map<String, serde_json::Value>,
+    pub notify_days: i64,
+    pub notify_channels: Vec<String>,
+    pub slack_webhook: Option<String>,
+    pub webhook_url: Option<String>,
+    pub date_format: String,
 }
 
 impl Default for Config {
@@ -41,6 +46,11 @@ impl Default for Config {
             accent_color: String::new(),
             table_zebra: String::new(),
             raw: serde_json::Map::new(),
+            notify_days: 7,
+            notify_channels: Vec::new(),
+            slack_webhook: None,
+            webhook_url: None,
+            date_format: "iso".to_string(),
         }
     }
 }
@@ -84,6 +94,18 @@ fn read_config() -> Config {
     cfg.table_zebra_color = get_str("tableZebraColor").unwrap_or_default();
     cfg.accent_color = get_str("accentColor").unwrap_or_default();
     cfg.table_zebra = get_str("tableZebra").unwrap_or_default();
+    cfg.notify_days = get("notifyDays").and_then(|v| v.as_i64()).unwrap_or(7);
+    cfg.notify_channels = get("notifyChannels")
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    cfg.slack_webhook = get_str("slackWebhook");
+    cfg.webhook_url = get_str("webhookUrl");
+    cfg.date_format = get_str("dateFormat").unwrap_or_else(|| "iso".to_string());
     cfg.raw = obj.cloned().unwrap_or_default();
     cfg
 }
