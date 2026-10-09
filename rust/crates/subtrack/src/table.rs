@@ -721,10 +721,7 @@ impl TableBuilder {
 
         // Full-width span row: single cell stretched across all columns,
         // separator characters included in the pad width (no padding).
-        if is_span_row(
-            &cell_lines[y].iter().map(|l| l[0].clone()).collect::<Vec<_>>(),
-            col_count,
-        ) {
+        if cell_lines[y].len() == 1 && col_count > 1 {
             let colorize = |s: String| -> String {
                 if !self.style.border[0].is_empty() {
                     format!("{}{}{}", self.style.border[0], s, self.style.border[1])
