@@ -97,3 +97,23 @@ pub fn fetch_converted_subs(
     let rates = embedded_rates();
     Some(try_convert_subs(subs, target_currency, &rates))
 }
+
+/// Embedded-rate equivalent of `fetchFxRates()` (never fails).
+pub fn fetch_rates() -> FxRates {
+    embedded_rates()
+}
+
+/// Port of `convertAmounts`: convert each `(amount, currency)` to target,
+/// returning `None` for entries with a missing rate.
+pub fn convert_amounts(
+    amounts: &[(f64, String)],
+    target_currency: &str,
+    rates: &FxRates,
+) -> (Vec<Option<f64>>, bool) {
+    let converted: Vec<Option<f64>> = amounts
+        .iter()
+        .map(|(amount, currency)| try_convert(*amount, currency, target_currency, &rates.rates))
+        .collect();
+    let has_missing = converted.iter().any(|v| v.is_none());
+    (converted, has_missing)
+}

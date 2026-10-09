@@ -74,22 +74,25 @@ fn day_cycle_anchor(anchor_date: NaiveDate, anchor_day: u32) -> NaiveDate {
 
 /// Next occurrence of an every-N-days cycle at or after `from_date`.
 ///
-/// The goldens were captured with the reference's real `new Date()` on
-/// capturedOnDate (an instant strictly after midnight). A `from_date` falling
-/// exactly on a billing date therefore bills the NEXT period (`ceil` of a
-/// fractional day offset), so exact multiples of `days` advance one period.
+/// `strict` mirrors the reference difference between call sites:
+/// - `display.ts` (list) passes an untruncated `new Date()`, i.e. an instant
+///   strictly after midnight, so a `from_date` on a billing date bills the
+///   NEXT period.
+/// - `upcomingWithinDays` truncates `from` to midnight (`setHours(0,0,0,0)`),
+///   so it is inclusive of an exact billing date.
 pub fn next_day_cycle_date(
     anchor_date: NaiveDate,
     anchor_day: u32,
     days: i64,
     from_date: NaiveDate,
+    strict: bool,
 ) -> NaiveDate {
     let anchor = day_cycle_anchor(anchor_date, anchor_day);
     let diff = (from_date - anchor).num_days();
-    let periods = if diff < 0 {
+    let periods = if diff < 0 || (diff == 0 && !strict) {
         0
     } else if diff % days == 0 {
-        diff / days + 1
+        diff / days + if strict { 1 } else { 0 }
     } else {
         (diff + days - 1) / days
     };
@@ -152,6 +155,45 @@ pub fn days_until(target: NaiveDate) -> i64 {
     (target - today()).num_days()
 }
 
+/// Port of `getPeriodDateRange`: [from, to] YYYY-MM-DD for a named period.
+pub fn get_period_date_range(period: &str) -> (String, String) {
+    let now = today();
+    let y = now.year();
+    let m = now.month0() as i32; // 0-based
+    let d = now.day() as i32;
+    let to = format!("{:04}-{:02}-{:02}", y, m + 1, d);
+
+    match period {
+        "monthly" => (format!("{:04}-{:02}-01", y, m + 1), to),
+        "yearly" => (format!("{:04}-01-01", y), to),
+        "weekly" => {
+            let day = now.weekday().num_days_from_sunday() as i32;
+            let diff = if day == 0 { 6 } else { day - 1 };
+            let mon = now - chrono::Duration::days(diff as i64);
+            (
+                format!("{:04}-{:02}-{:02}", mon.year(), mon.month(), mon.day()),
+                to,
+            )
+        }
+        "bi-weekly" => {
+            let two = now - chrono::Duration::days(13);
+            (
+                format!("{:04}-{:02}-{:02}", two.year(), two.month(), two.day()),
+                to,
+            )
+        }
+        "quarterly" => {
+            let qs = (m / 3) * 3;
+            (format!("{:04}-{:02}-01", y, qs + 1), to)
+        }
+        "semi-annual" => {
+            let hs = (m / 6) * 6;
+            (format!("{:04}-{:02}-01", y, hs + 1), to)
+        }
+        _ => (format!("{:04}-{:02}-01", y, m + 1), to),
+    }
+}
+
 // ── next-billing-date helpers (domain/billing.ts) ─────────
 
 pub fn get_billing_day(billing_day: Option<i64>, created_at: &str) -> u32 {
@@ -176,6 +218,26 @@ pub fn next_date_for_cycle(
     cycle: &str,
     from_date: NaiveDate,
 ) -> NaiveDate {
+    next_date_for_cycle_impl(anchor_day, anchor_date, cycle, from_date, true)
+}
+
+/// Inclusive variant used by `upcomingWithinDays` (from truncated to midnight).
+pub fn next_date_for_cycle_inclusive(
+    anchor_day: u32,
+    anchor_date: NaiveDate,
+    cycle: &str,
+    from_date: NaiveDate,
+) -> NaiveDate {
+    next_date_for_cycle_impl(anchor_day, anchor_date, cycle, from_date, false)
+}
+
+fn next_date_for_cycle_impl(
+    anchor_day: u32,
+    anchor_date: NaiveDate,
+    cycle: &str,
+    from_date: NaiveDate,
+    strict: bool,
+) -> NaiveDate {
     if is_day_cycle(cycle) || cycle == "weekly" || cycle == "bi-weekly" {
         let days = match cycle_days(cycle) {
             Some(d) => d,
@@ -187,15 +249,20 @@ pub fn next_date_for_cycle(
                 }
             }
         };
-        return next_day_cycle_date(anchor_date, anchor_day, days, from_date)
+        return next_day_cycle_date(anchor_date, anchor_day, days, from_date, strict)
     }
+    let ge = |candidate: NaiveDate| {
+        if strict {
+            candidate > from_date
+        } else {
+            candidate >= from_date
+        }
+    };
     match cycle {
         "monthly" => {
-            // Strict `>`: a billing day equal to the capture day (which ran at
-            // a real post-midnight instant) bills the next period.
             let candidate =
                 date_with_clamped_day(from_date.year(), from_date.month0(), anchor_day);
-            if candidate > from_date {
+            if ge(candidate) {
                 return candidate;
             }
             date_with_clamped_day(from_date.year(), from_date.month0() + 1, anchor_day)
@@ -203,7 +270,7 @@ pub fn next_date_for_cycle(
         "yearly" => {
             let candidate =
                 date_with_clamped_day(from_date.year(), anchor_date.month0(), anchor_day);
-            if candidate > from_date {
+            if ge(candidate) {
                 return candidate;
             }
             date_with_clamped_day(from_date.year() + 1, anchor_date.month0(), anchor_day)
@@ -213,7 +280,7 @@ pub fn next_date_for_cycle(
             let mut k: i64 = 0;
             loop {
                 let candidate = period_date(anchor_date, period_months, k, anchor_day);
-                if candidate > from_date {
+                if ge(candidate) {
                     return candidate;
                 }
                 k += 1
@@ -232,4 +299,15 @@ pub fn calculate_next_billing(
     let anchor_date = to_date(created_at).unwrap_or(from_date);
     let day = get_billing_day(billing_day, created_at);
     next_date_for_cycle(day, anchor_date, cycle, from_date)
+}
+
+pub fn calculate_next_billing_inclusive(
+    billing_day: Option<i64>,
+    created_at: &str,
+    cycle: &str,
+    from_date: NaiveDate,
+) -> NaiveDate {
+    let anchor_date = to_date(created_at).unwrap_or(from_date);
+    let day = get_billing_day(billing_day, created_at);
+    next_date_for_cycle_inclusive(day, anchor_date, cycle, from_date)
 }

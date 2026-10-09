@@ -154,6 +154,8 @@ pub fn run(args: &[String]) -> i32 {
             "summary" => crate::summary::run_summary(&parsed),
             "stats" => crate::stats::run_stats(&parsed),
             "export" => crate::export::run_export(&parsed, resolved.depth),
+            "upcoming" => crate::upcoming::run_upcoming(&parsed),
+            "payment" => crate::payment::run_payment(&parsed),
             // entry menu and unported commands — later phases
             _ => 0,
         },
