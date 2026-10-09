@@ -1,0 +1,235 @@
+//! Date helpers — port of `@subtrack/lib/date.ts` + `domain/billing.ts`
+//! next-billing logic, backed by chrono NaiveDate (UTC/local fixed).
+
+use chrono::{Datelike, Local, NaiveDate};
+
+pub const SHORT_MONTH_NAMES: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/// Today as a NaiveDate. When SUBTRACK_TODAY=YYYY-MM-DD is set (Rust-only
+/// harness env), that value is used instead of the real clock.
+pub fn today() -> NaiveDate {
+    if let Ok(v) = std::env::var("SUBTRACK_TODAY") {
+        if let Ok(d) = NaiveDate::parse_from_str(&v, "%Y-%m-%d") {
+            return d;
+        }
+    }
+    Local::now().date_naive()
+}
+
+/// Today's date as YYYY-MM-DD string (mirror of date.ts `today()`).
+pub fn today_string() -> String {
+    today().format("%Y-%m-%d").to_string()
+}
+
+/// Parse YYYY-MM-DD to a local Date (mirror of `toDate`).
+pub fn to_date(date_str: &str) -> Option<NaiveDate> {
+    NaiveDate::parse_from_str(date_str, "%Y-%m-%d").ok()
+}
+
+/// Format a Date as YYYY-MM-DD (mirror of `formatDate`).
+pub fn format_date(d: NaiveDate) -> String {
+    d.format("%Y-%m-%d").to_string()
+}
+
+/// Format a Date as a short display string, e.g. "Jan 5".
+pub fn format_short_date(d: NaiveDate) -> String {
+    format!("{} {}", SHORT_MONTH_NAMES[(d.month0()) as usize], d.day())
+}
+
+/// Days in a month. `month` is 1-12 (human convention).
+pub fn days_in_month(year: i32, month: u32) -> u32 {
+    let (y, m) = if month == 12 { (year + 1, 1) } else { (year, month + 1) };
+    let first_next = NaiveDate::from_ymd_opt(y, m, 1).unwrap();
+    (first_next - chrono::Duration::days(1)).day()
+}
+
+/// Clamp a day to the length of the given month. `month` is 1-12.
+pub fn clamp_day(day: u32, year: i32, month: u32) -> u32 {
+    day.min(days_in_month(year, month))
+}
+
+/// Build a Date with the given day clamped to the month length.
+/// `month` is 0-based (JS convention).
+pub fn date_with_clamped_day(year: i32, month: u32, day: u32) -> NaiveDate {
+    NaiveDate::from_ymd_opt(year, month + 1, clamp_day(day, year, month + 1)).unwrap()
+}
+
+/// Whole local-calendar days between two dates.
+pub fn whole_days_between(from: NaiveDate, to: NaiveDate) -> i64 {
+    (to - from).num_days()
+}
+
+/// Date `k` billing-periods after the anchor, advanced by calendar days.
+pub fn add_day_periods(anchor: NaiveDate, days: i64, k: i64) -> NaiveDate {
+    anchor + chrono::Duration::days(k * days)
+}
+
+/// Anchor date of an every-N-days cycle: the billing day of the createdAt
+/// month (day clamped to the month length).
+fn day_cycle_anchor(anchor_date: NaiveDate, anchor_day: u32) -> NaiveDate {
+    date_with_clamped_day(anchor_date.year(), anchor_date.month0(), anchor_day)
+}
+
+/// Next occurrence of an every-N-days cycle at or after `from_date`.
+///
+/// The goldens were captured with the reference's real `new Date()` on
+/// capturedOnDate (an instant strictly after midnight). A `from_date` falling
+/// exactly on a billing date therefore bills the NEXT period (`ceil` of a
+/// fractional day offset), so exact multiples of `days` advance one period.
+pub fn next_day_cycle_date(
+    anchor_date: NaiveDate,
+    anchor_day: u32,
+    days: i64,
+    from_date: NaiveDate,
+) -> NaiveDate {
+    let anchor = day_cycle_anchor(anchor_date, anchor_day);
+    let diff = (from_date - anchor).num_days();
+    let periods = if diff < 0 {
+        0
+    } else if diff % days == 0 {
+        diff / days + 1
+    } else {
+        (diff + days - 1) / days
+    };
+    add_day_periods(anchor, days, periods)
+}
+
+/// Named billing cycle presets.
+pub fn occurrences_per_year(cycle: &str) -> f64 {
+    if let Some(days) = cycle_days(cycle) {
+        return 365.0 / days as f64;
+    }
+    match cycle {
+        "weekly" => 52.0,
+        "bi-weekly" => 26.0,
+        "monthly" => 12.0,
+        "quarterly" => 4.0,
+        "semi-annual" => 2.0,
+        "yearly" => 1.0,
+        _ => 12.0,
+    }
+}
+
+/// Days of a day-based cycle ("3d" → 3), or None.
+pub fn cycle_days(cycle: &str) -> Option<i64> {
+    if let Some(rest) = cycle.strip_suffix('d') {
+        if let Ok(n) = rest.parse::<i64>() {
+            if (1..=365).contains(&n) {
+                return Some(n)
+            }
+        }
+    }
+    None
+}
+
+pub fn is_day_cycle(cycle: &str) -> bool {
+    cycle_days(cycle).is_some()
+}
+
+/// Human-readable cycle label: "every 3 days", or the preset name.
+pub fn format_cycle(cycle: &str) -> String {
+    if let Some(days) = cycle_days(cycle) {
+        if days == 1 {
+            format!("every {} day", days)
+        } else {
+            format!("every {} days", days)
+        }
+    } else {
+        cycle.to_string()
+    }
+}
+
+/// Multiplier to convert a price from one cycle to another.
+pub fn period_factor(from: &str, to: &str) -> f64 {
+    occurrences_per_year(from) / occurrences_per_year(to)
+}
+
+/// Days until a target date relative to today. Returns 0 for today,
+/// negative for past dates (mirror of `daysUntil`).
+pub fn days_until(target: NaiveDate) -> i64 {
+    (target - today()).num_days()
+}
+
+// ── next-billing-date helpers (domain/billing.ts) ─────────
+
+pub fn get_billing_day(billing_day: Option<i64>, created_at: &str) -> u32 {
+    if let Some(d) = billing_day {
+        return d as u32;
+    }
+    to_date(created_at).map(|d| d.day()).unwrap_or(1)
+}
+
+/// Date of the k-th period occurrence anchored on `anchor_date`,
+/// billed on `day` (clamped to the month length).
+fn period_date(anchor_date: NaiveDate, period_months: i64, k: i64, day: u32) -> NaiveDate {
+    let month_index = anchor_date.month0() as i64 + k * period_months;
+    let year = anchor_date.year() + (month_index.div_euclid(12)) as i32;
+    let month = month_index.rem_euclid(12);
+    date_with_clamped_day(year, month as u32, day)
+}
+
+pub fn next_date_for_cycle(
+    anchor_day: u32,
+    anchor_date: NaiveDate,
+    cycle: &str,
+    from_date: NaiveDate,
+) -> NaiveDate {
+    if is_day_cycle(cycle) || cycle == "weekly" || cycle == "bi-weekly" {
+        let days = match cycle_days(cycle) {
+            Some(d) => d,
+            None => {
+                if cycle == "weekly" {
+                    7
+                } else {
+                    14
+                }
+            }
+        };
+        return next_day_cycle_date(anchor_date, anchor_day, days, from_date)
+    }
+    match cycle {
+        "monthly" => {
+            // Strict `>`: a billing day equal to the capture day (which ran at
+            // a real post-midnight instant) bills the next period.
+            let candidate =
+                date_with_clamped_day(from_date.year(), from_date.month0(), anchor_day);
+            if candidate > from_date {
+                return candidate;
+            }
+            date_with_clamped_day(from_date.year(), from_date.month0() + 1, anchor_day)
+        }
+        "yearly" => {
+            let candidate =
+                date_with_clamped_day(from_date.year(), anchor_date.month0(), anchor_day);
+            if candidate > from_date {
+                return candidate;
+            }
+            date_with_clamped_day(from_date.year() + 1, anchor_date.month0(), anchor_day)
+        }
+        "quarterly" | "semi-annual" => {
+            let period_months = if cycle == "quarterly" { 3 } else { 6 };
+            let mut k: i64 = 0;
+            loop {
+                let candidate = period_date(anchor_date, period_months, k, anchor_day);
+                if candidate > from_date {
+                    return candidate;
+                }
+                k += 1
+            }
+        }
+        _ => from_date,
+    }
+}
+
+pub fn calculate_next_billing(
+    billing_day: Option<i64>,
+    created_at: &str,
+    cycle: &str,
+    from_date: NaiveDate,
+) -> NaiveDate {
+    let anchor_date = to_date(created_at).unwrap_or(from_date);
+    let day = get_billing_day(billing_day, created_at);
+    next_date_for_cycle(day, anchor_date, cycle, from_date)
+}
