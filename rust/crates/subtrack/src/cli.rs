@@ -173,6 +173,7 @@ pub fn run(args: &[String]) -> i32 {
             "analytics" => crate::analytics::run_analytics(&parsed),
             "forecast" => crate::forecast::run_forecast(&parsed),
             "optimize" => crate::optimize::run_optimize(&parsed),
+            "compare" => crate::compare::run_compare(&parsed),
             // entry menu and unported commands — later phases
             _ => 0,
         },

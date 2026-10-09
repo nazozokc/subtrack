@@ -529,6 +529,18 @@ pub struct TableBuilder {
     rows: Vec<Vec<String>>,
 }
 
+/// A row with a single cell when the table has multiple columns is treated
+/// as a full-width `colSpan` row (used by compare's divider rows).
+fn is_span_row(row: &[String], col_count: usize) -> bool {
+    row.len() == 1 && col_count > 1
+}
+
+/// Inner width of a full-width span row: sum of column widths plus the
+/// separator characters between columns.
+fn span_inner_width(widths: &[i64]) -> i64 {
+    widths.iter().sum::<i64>() + (widths.len() as i64 - 1)
+}
+
 impl TableBuilder {
     pub fn new(style: TableStyle) -> Self {
         TableBuilder {
@@ -550,6 +562,15 @@ impl TableBuilder {
             .find(|(k, _)| *k == key)
             .map(|(_, v)| *v)
             .unwrap_or(' ')
+    }
+
+    /// Whether `all_rows[y]` (head-relative) is a full-width span row.
+    fn is_span_row_at(&self, y: usize, col_count: usize) -> bool {
+        let rows_index = if self.head.is_empty() { y } else { y - 1 };
+        match self.rows.get(rows_index) {
+            Some(r) => is_span_row(r, col_count),
+            None => false,
+        }
     }
 
     pub fn push(&mut self, row: Vec<String>) {
@@ -619,6 +640,9 @@ impl TableBuilder {
 
         let heights: Vec<usize> = (0..all_rows.len())
             .map(|y| {
+                if is_span_row(all_rows[y], col_count) {
+                    return 1
+                }
                 (0..all_rows[y].len())
                     .map(|x| cell_lines[y][x].len())
                     .max()
@@ -642,6 +666,9 @@ impl TableBuilder {
         let top_row = !bottom && row_index == 0;
         let line_char = if bottom { "bottom" } else if top_row { "top" } else { "mid" };
         let cols = widths.len();
+        // A mid border drawn directly above a full-width span row uses
+        // `┴` junctions (mirror of cli-table3 colSpan row borders).
+        let above_span = !bottom && !top_row && self.is_span_row_at(row_index, cols);
 
         let mut out = String::new();
         for x in 0..cols {
@@ -654,7 +681,13 @@ impl TableBuilder {
             } else if x == 0 {
                 out.push(if top_row { self.char("top-left") } else { self.char("left-mid") })
             } else {
-                out.push(if top_row { self.char("top-mid") } else { self.char("mid-mid") })
+                out.push(if top_row {
+                    self.char("top-mid")
+                } else if above_span {
+                    '\u{2534}'
+                } else {
+                    self.char("mid-mid")
+                })
             }
             out.push_str(&repeat(&self.char(line_char).to_string(), widths[x].max(0) as usize))
         }
@@ -685,6 +718,31 @@ impl TableBuilder {
         let is_head = y == 0 && !self.head.is_empty();
 
         let mut out = String::new();
+
+        // Full-width span row: single cell stretched across all columns,
+        // separator characters included in the pad width (no padding).
+        if is_span_row(
+            &cell_lines[y].iter().map(|l| l[0].clone()).collect::<Vec<_>>(),
+            col_count,
+        ) {
+            let colorize = |s: String| -> String {
+                if !self.style.border[0].is_empty() {
+                    format!("{}{}{}", self.style.border[0], s, self.style.border[1])
+                } else {
+                    s
+                }
+            };
+            let line = cell_lines[y][0].get(line_num).cloned().unwrap_or_default();
+            let span_width = span_inner_width(widths);
+            let content = pad(&line, span_width - padding_left - padding_right, ' ', "left");
+            out.push_str(&colorize(self.char("left").to_string()));
+            out.push_str(&" ".repeat(padding_left as usize));
+            out.push_str(&content);
+            out.push_str(&" ".repeat(padding_right as usize));
+            out.push_str(&colorize(self.char("right").to_string()));
+            return out
+        }
+
         for x in 0..col_count {
             let content_width = widths[x] - padding_left - padding_right;
             let lines = cell_lines[y].get(x).cloned().unwrap_or_default();

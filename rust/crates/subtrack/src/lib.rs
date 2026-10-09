@@ -5,6 +5,7 @@ mod ansi;
 mod check;
 mod cli;
 mod commands;
+mod compare;
 mod config;
 mod crypto;
 mod date;
