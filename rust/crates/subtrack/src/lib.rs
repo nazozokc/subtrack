@@ -23,6 +23,7 @@ mod stats;
 mod summary;
 mod table;
 mod upcoming;
+mod usage;
 
 use std::sync::atomic::{AtomicI32, Ordering};
 

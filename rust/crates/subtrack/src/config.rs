@@ -19,6 +19,8 @@ pub struct Config {
     pub table_zebra_color: String,
     pub accent_color: String,
     pub table_zebra: String,
+    /// Raw parsed config object (for `config list`/`get` display).
+    pub raw: serde_json::Map<String, serde_json::Value>,
 }
 
 impl Default for Config {
@@ -34,6 +36,7 @@ impl Default for Config {
             table_zebra_color: String::new(),
             accent_color: String::new(),
             table_zebra: String::new(),
+            raw: serde_json::Map::new(),
         }
     }
 }
@@ -75,7 +78,151 @@ fn read_config() -> Config {
     cfg.table_zebra_color = get_str("tableZebraColor").unwrap_or_default();
     cfg.accent_color = get_str("accentColor").unwrap_or_default();
     cfg.table_zebra = get_str("tableZebra").unwrap_or_default();
+    cfg.raw = obj.cloned().unwrap_or_default();
     cfg
+}
+
+/// Order mirrors `CONFIG_KEYS` in config.ts.
+pub const CONFIG_KEYS: [&str; 17] = [
+    "defaultCurrency",
+    "monthlyBudget",
+    "yearlyBudget",
+    "theme",
+    "notifyDays",
+    "notifyChannels",
+    "slackWebhook",
+    "webhookUrl",
+    "tableBorderColor",
+    "tableHeaderColor",
+    "tableZebraColor",
+    "accentColor",
+    "tableZebra",
+    "tableMinWidth",
+    "dateFormat",
+    "listShowNotes",
+    "listShowMethod",
+];
+
+fn mask_secret(value: &str) -> String {
+    let Some(idx) = value.find("://") else {
+        return "(set)".to_string();
+    };
+    let scheme = &value[..idx];
+    let rest = &value[idx + 3..];
+    let (host, path) = match rest.find('/') {
+        Some(p) => (&rest[..p], &rest[p..]),
+        None => (rest, ""),
+    };
+    if host.is_empty() {
+        return "(set)".to_string();
+    }
+    let masked_path = if path.is_empty() || path == "/" { "" } else { "/***" };
+    format!("{}://{}{}", scheme, host, masked_path)
+}
+
+fn stringify(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Null => "(not set)".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn display_value(key: &str, cfg: &Config) -> String {
+    match key {
+        "notifyChannels" => cfg
+            .raw
+            .get("notifyChannels")
+            .and_then(|v| v.as_array())
+            .filter(|a| !a.is_empty())
+            .map(|a| {
+                a.iter()
+                    .map(|v| v.as_str().unwrap_or("").to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            })
+            .unwrap_or_else(|| "(not set)".to_string()),
+        "slackWebhook" => mask_secret(
+            cfg.raw
+                .get("slackWebhook")
+                .and_then(|v| v.as_str())
+                .unwrap_or(""),
+        ),
+        "webhookUrl" => mask_secret(
+            cfg.raw
+                .get("webhookUrl")
+                .and_then(|v| v.as_str())
+                .unwrap_or(""),
+        ),
+        _ => match cfg.raw.get(key) {
+            None | Some(serde_json::Value::Null) => "(not set)".to_string(),
+            Some(serde_json::Value::String(s)) if s.is_empty() => "(not set)".to_string(),
+            Some(v) => stringify(v),
+        },
+    }
+}
+
+fn is_known_key(key: &str) -> bool {
+    CONFIG_KEYS.contains(&key) || key == "budgets"
+}
+
+/// Port of `handleConfigList`.
+pub fn handle_config_list() -> i32 {
+    let cfg = load_config();
+    for key in CONFIG_KEYS {
+        crate::logger::log(&format!("{}: {}", key, display_value(key, &cfg)));
+    }
+    match cfg.raw.get("budgets").and_then(|v| v.as_array()) {
+        Some(arr) if !arr.is_empty() => {
+            for b in arr {
+                let name = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let amount = b
+                    .get("amount")
+                    .map(stringify)
+                    .unwrap_or_else(|| "0".to_string());
+                let currency = b.get("currency").and_then(|v| v.as_str()).unwrap_or("");
+                let period = b
+                    .get("period")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("monthly");
+                let cats = b
+                    .get("categories")
+                    .and_then(|v| v.as_array())
+                    .filter(|a| !a.is_empty())
+                    .map(|a| {
+                        format!(
+                            " (categories: {})",
+                            a.iter()
+                                .map(|v| v.as_str().unwrap_or("").to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    })
+                    .unwrap_or_default();
+                crate::logger::log(&format!(
+                    "budgets: {} = {} {}/{}{}",
+                    name, amount, currency, period, cats
+                ));
+            }
+        }
+        _ => crate::logger::log("budgets: (not set)"),
+    }
+    0
+}
+
+/// Port of `handleConfigGet`.
+pub fn handle_config_get(key: &str) -> i32 {
+    if !is_known_key(key) {
+        crate::logger::fail(&format!(
+            "Unknown config key: \"{}\". Valid: {}",
+            key,
+            CONFIG_KEYS.join(", ")
+        ));
+        return 1;
+    }
+    let cfg = load_config();
+    crate::logger::log(&format!("{}: {}", key, display_value(key, &cfg)));
+    0
 }
 
 /// Resolve the display theme from config (mirror of getDisplayTheme).

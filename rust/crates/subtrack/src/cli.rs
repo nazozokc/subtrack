@@ -147,8 +147,9 @@ pub fn run(args: &[String]) -> i32 {
     }
 
     // ── 9. run ──
+    let path = resolved.path.join(" ");
     let code = match resolved.command {
-        Some(c) => match c.name {
+        Some(_) => match path.as_str() {
             "list" => crate::list::run_list(&parsed),
             "check" => crate::check::run_check(&parsed),
             "summary" => crate::summary::run_summary(&parsed),
@@ -156,6 +157,13 @@ pub fn run(args: &[String]) -> i32 {
             "export" => crate::export::run_export(&parsed, resolved.depth),
             "upcoming" => crate::upcoming::run_upcoming(&parsed),
             "payment" => crate::payment::run_payment(&parsed),
+            "config list" => crate::config::handle_config_list(),
+            "config get" => crate::config::handle_config_get(
+                &parsed.str("key").unwrap_or_default(),
+            ),
+            "usage list" => crate::usage::run_usage_list(&parsed),
+            "usage total" => crate::usage::run_usage_total(&parsed),
+            "usage refresh" => crate::usage::run_usage_refresh(),
             // entry menu and unported commands — later phases
             _ => 0,
         },

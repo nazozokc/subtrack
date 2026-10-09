@@ -502,6 +502,19 @@ pub fn section_title(text: &str, theme: &Theme) -> String {
     }
 }
 
+/// Horizontal divider line (mirror of display-constants `divider`): dimmed
+/// unless the resolved theme emits no colors at all.
+pub fn divider(length: usize, theme: &Theme) -> String {
+    let plain = theme.border.is_none()
+        && theme.header.is_none()
+        && theme.zebra.is_none()
+        && theme.accent.is_none();
+    if plain {
+        return "─".repeat(length)
+    }
+    format!("\x1b[2m{}\x1b[0m", "─".repeat(length))
+}
+
 // ── table ─────────────────────────────────────────────────
 
 pub struct TableBuilder {
@@ -541,6 +554,19 @@ impl TableBuilder {
 
     pub fn push(&mut self, row: Vec<String>) {
         self.rows.push(row)
+    }
+
+    /// Switch the top border to the footer variant (├ ┴ ┤), used by
+    /// `renderUsageTable`'s TOTAL footer (mirror of TABLE_CHARS_FOOTER).
+    pub fn footer_top(&mut self) {
+        for (k, v) in &mut self.chars {
+            match *k {
+                "top-left" => *v = '\u{251c}',
+                "top-mid" => *v = '\u{2534}',
+                "top-right" => *v = '\u{2524}',
+                _ => {}
+            }
+        }
     }
 
     pub fn to_string(&self) -> String {

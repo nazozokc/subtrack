@@ -29,7 +29,7 @@ fn symbol_for(currency: &str) -> Option<&'static str> {
 }
 
 /// Group integer part with "," thousands separators.
-fn group_whole(n: i64) -> String {
+pub fn group_whole(n: i64) -> String {
     let neg = n < 0;
     let abs = n.unsigned_abs();
     let digits = abs.to_string();

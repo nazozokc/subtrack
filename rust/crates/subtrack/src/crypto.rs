@@ -28,6 +28,11 @@ pub fn config_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(home).join(".config").join("subtrack")
 }
 
+/// $HOME (scanner paths are resolved relative to it).
+pub fn home_dir() -> std::path::PathBuf {
+    std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
+}
+
 /// Raw encryption key: from the passphrase via scrypt, else from `.key`.
 pub fn get_or_create_key() -> std::io::Result<Vec<u8>> {
     if let Ok(passphrase) = std::env::var("SUBSC_CLI_DB_PASSPHRASE") {
