@@ -24,6 +24,16 @@ struct Group {
 }
 
 pub fn run_forecast(parsed: &ParsedArgs) -> i32 {
+    // Interactive mode when no options given — non-TTY sessions abort with
+    // exit 0 after the banner (ExitPromptError path in src/index.ts).
+    let interactive = parsed.bool("json") != Some(true)
+        && parsed.str("months").is_none()
+        && parsed.str("cancel").is_none()
+        && parsed.str("addName").is_none();
+    if interactive {
+        return 0;
+    }
+
     // months validation (command layer)
     let months = match parsed.str("months") {
         Some(s) => match s.trim().parse::<i64>() {
