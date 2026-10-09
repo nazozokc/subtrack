@@ -147,16 +147,20 @@ pub fn run(args: &[String]) -> i32 {
     }
 
     // ── 9. run ──
-    match resolved.command {
-        Some(c) if c.name == "list" => {
-            let code = crate::list::run_list(&parsed);
-            if code != 0 {
-                crate::set_exit_code(1);
-            }
-        }
-        _ => {
+    let code = match resolved.command {
+        Some(c) => match c.name {
+            "list" => crate::list::run_list(&parsed),
+            "check" => crate::check::run_check(&parsed),
+            "summary" => crate::summary::run_summary(&parsed),
+            "stats" => crate::stats::run_stats(&parsed),
+            "export" => crate::export::run_export(&parsed, resolved.depth),
             // entry menu and unported commands — later phases
-        }
+            _ => 0,
+        },
+        None => 0,
+    };
+    if code != 0 {
+        crate::set_exit_code(1);
     }
 
     0

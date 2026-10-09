@@ -1,6 +1,7 @@
 //! CLI entry — port of `src/index.ts` main + cli bootstrap.
 
 mod ansi;
+mod check;
 mod cli;
 mod commands;
 mod config;
@@ -8,6 +9,7 @@ mod crypto;
 mod date;
 mod db;
 mod display;
+mod export;
 mod fx;
 mod help;
 mod json;
@@ -16,6 +18,8 @@ mod logger;
 mod parser;
 mod price;
 mod router;
+mod stats;
+mod summary;
 mod table;
 
 use std::sync::atomic::{AtomicI32, Ordering};

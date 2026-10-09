@@ -21,9 +21,15 @@ BIN = os.path.join(RUST, "target", "debug", "subtrack")
 VERSION = "10.0.0"
 
 IN_SCOPE = []
+# Optional group filters: `run_phase_b.py legacy mutate` runs those groups fully.
+WANT = set(sys.argv[1:])
 with open(os.path.join(FIXTURES, "cases.jsonl")) as f:
     for line in f:
         e = json.loads(line)
+        if WANT:
+            if e["group"] in WANT:
+                IN_SCOPE.append(e)
+            continue
         if e["group"] == "reads" and 1 <= int(e["id"][:3]) <= 13:
             IN_SCOPE.append(e)
         if e["group"] == "errors":
@@ -99,10 +105,10 @@ def main():
             case_root, outs = run_case(e, root)
             g = os.path.join(FIXTURES, "goldens", e["group"], e["id"] + ".stdout")
             ge = os.path.join(FIXTURES, "goldens", e["group"], e["id"] + ".stderr")
-            want_out = open(g, "rb").read().decode("utf8")
-            want_err = open(ge, "rb").read().decode("utf8")
-            got_out = normalize(b"".join(o[1] for o in outs).decode("utf8"), case_root)
-            got_err = normalize(b"".join(o[2] for o in outs).decode("utf8"), case_root)
+            want_out = open(g, "rb").read().decode("utf8", "surrogateescape")
+            want_err = open(ge, "rb").read().decode("utf8", "surrogateescape")
+            got_out = normalize(b"".join(o[1] for o in outs).decode("utf8", "surrogateescape"), case_root)
+            got_err = normalize(b"".join(o[2] for o in outs).decode("utf8", "surrogateescape"), case_root)
             got_exit = [o[0] for o in outs]
             ok = got_out == want_out and got_err == want_err and got_exit == e["exits"]
             status = "OK " if ok else "FAIL"

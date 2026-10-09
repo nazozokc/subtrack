@@ -50,7 +50,7 @@ pub fn list_json(list: &[crate::db::Subscription]) -> String {
     format!("[\n{}\n]", items.join(",\n"))
 }
 
-fn sub_json(sub: &crate::db::Subscription) -> String {
+pub fn sub_json(sub: &crate::db::Subscription) -> String {
     let mut fields: Vec<String> = Vec::new();
     let kv = |k: &str, v: String| format!("{}: {}", quote_string(k), v);
 
