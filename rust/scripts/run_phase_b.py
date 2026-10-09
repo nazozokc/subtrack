@@ -30,6 +30,8 @@ with open(os.path.join(FIXTURES, "cases.jsonl")) as f:
             n = int(e["id"][:3])
             if 1 <= n <= 8:
                 IN_SCOPE.append(e)
+        if e["group"] == "help":
+            IN_SCOPE.append(e)
 
 
 def normalize(text, work):
@@ -56,13 +58,14 @@ def run_case(e, root):
     for d in (db_dir, home, cwd):
         os.makedirs(d, mode=0o700, exist_ok=True)
     populated = os.path.join(FIXTURES, "dbs", e["db"])
-    for item in os.listdir(populated):
-        src = os.path.join(populated, item)
-        dst = os.path.join(db_dir, item)
-        if os.path.isdir(src):
-            shutil.copytree(src, dst)
-        else:
-            shutil.copy2(src, dst)
+    if os.path.isdir(populated):
+        for item in os.listdir(populated):
+            src = os.path.join(populated, item)
+            dst = os.path.join(db_dir, item)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy2(src, dst)
     for item in os.listdir(os.path.join(FIXTURES, "inputs")):
         src = os.path.join(FIXTURES, "inputs", item)
         if os.path.isdir(src):

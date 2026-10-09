@@ -2,12 +2,14 @@
 
 mod ansi;
 mod cli;
+mod commands;
 mod config;
 mod crypto;
 mod date;
 mod db;
 mod display;
 mod fx;
+mod help;
 mod json;
 mod list;
 mod logger;
