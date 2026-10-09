@@ -172,6 +172,7 @@ pub fn run(args: &[String]) -> i32 {
             "tag list" => crate::tags::run_tag_list(&parsed),
             "analytics" => crate::analytics::run_analytics(&parsed),
             "forecast" => crate::forecast::run_forecast(&parsed),
+            "optimize" => crate::optimize::run_optimize(&parsed),
             // entry menu and unported commands — later phases
             _ => 0,
         },

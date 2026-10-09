@@ -18,6 +18,7 @@ mod json;
 mod list;
 mod logger;
 mod parser;
+mod optimize;
 mod payment;
 mod price;
 mod router;
