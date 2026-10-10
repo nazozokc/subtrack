@@ -568,15 +568,24 @@ fn report_json(
         ));
         out.push_str(if i + 1 == added.len() { "    }\n" } else { "    },\n" });
     }
-    out.push_str("  ],\n");
-    out.push_str("  \"cancelled\": [\n");
-    for (i, (name, date)) in cancelled.iter().enumerate() {
-        out.push_str("    {\n");
-        out.push_str(&format!("      \"name\": {},\n", quote_string(name)));
-        out.push_str(&format!("      \"date\": {}\n", quote_string(date)));
-        out.push_str(if i + 1 == cancelled.len() { "    }\n" } else { "    },\n" });
+    if added.is_empty() {
+        out.push_str("  ],\n");
+    } else {
+        out.push_str("  ],\n");
     }
-    out.push_str("  ],\n");
+    // match golden format for empty arrays
+    if cancelled.is_empty() {
+        out.push_str("  \"cancelled\": [],\n");
+    } else {
+        out.push_str("  \"cancelled\": [\n");
+        for (i, (name, date)) in cancelled.iter().enumerate() {
+            out.push_str("    {\n");
+            out.push_str(&format!("      \"name\": {},\n", quote_string(name)));
+            out.push_str(&format!("      \"date\": {}\n", quote_string(date)));
+            out.push_str(if i + 1 == cancelled.len() { "    }\n" } else { "    },\n" });
+        }
+        out.push_str("  ],\n");
+    }
     out.push_str("  \"budget\": ");
     match budget_info {
         Some((amount, currency, remaining, over)) => {
