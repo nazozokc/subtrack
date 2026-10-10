@@ -7,6 +7,16 @@ use std::sync::Mutex;
 use std::sync::OnceLock;
 
 #[derive(Clone, Debug)]
+/// A named budget entry from `config.budgets` (port of resolveBudget).
+pub struct BudgetEntry {
+    pub name: String,
+    pub amount: f64,
+    pub currency: Option<String>,
+    pub categories: Vec<String>,
+    pub period: Option<String>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Config {
     pub theme: String,
     pub table_min_width: i64,
@@ -28,6 +38,7 @@ pub struct Config {
     pub slack_webhook: Option<String>,
     pub webhook_url: Option<String>,
     pub date_format: String,
+    pub budgets: Vec<BudgetEntry>,
 }
 
 impl Default for Config {
@@ -51,6 +62,7 @@ impl Default for Config {
             slack_webhook: None,
             webhook_url: None,
             date_format: "iso".to_string(),
+            budgets: Vec::new(),
         }
     }
 }
@@ -106,6 +118,36 @@ fn read_config() -> Config {
     cfg.slack_webhook = get_str("slackWebhook");
     cfg.webhook_url = get_str("webhookUrl");
     cfg.date_format = get_str("dateFormat").unwrap_or_else(|| "iso".to_string());
+    if let Some(arr) = get("budgets").and_then(|v| v.as_array()) {
+        for item in arr {
+            let Some(entry) = item.as_object() else { continue };
+            let name = entry.get("name").and_then(|n| n.as_str()).unwrap_or_default();
+            if name.is_empty() {
+                continue;
+            }
+            cfg.budgets.push(BudgetEntry {
+                name: name.to_string(),
+                amount: entry.get("amount").and_then(|a| a.as_f64()).unwrap_or(0.0),
+                currency: entry
+                    .get("currency")
+                    .and_then(|c| c.as_str())
+                    .map(|s| s.to_string()),
+                categories: entry
+                    .get("categories")
+                    .and_then(|c| c.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                period: entry
+                    .get("period")
+                    .and_then(|p| p.as_str())
+                    .map(|s| s.to_string()),
+            });
+        }
+    }
     cfg.raw = obj.cloned().unwrap_or_default();
     cfg
 }

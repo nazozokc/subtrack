@@ -1,6 +1,7 @@
 //! CLI entry — port of `src/index.ts` main + cli bootstrap.
 
 mod analytics;
+mod budget;
 mod audit;
 mod ansi;
 mod calendar;

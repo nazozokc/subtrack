@@ -175,6 +175,7 @@ pub fn run(args: &[String]) -> i32 {
             "optimize" => crate::optimize::run_optimize(&parsed),
             "audit list" => crate::audit::run_audit(&parsed, resolved.depth, &resolved.path),
             "audit" => crate::audit::run_audit(&parsed, resolved.depth, &resolved.path),
+            "budget" => crate::budget::run_budget(&parsed),
             "profile list" => crate::profile::run_profiles(&parsed),
             "profile show" => crate::profile::run_profiles(&parsed),
             "compare" => crate::compare::run_compare(&parsed),
