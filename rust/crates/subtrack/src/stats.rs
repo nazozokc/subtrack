@@ -179,12 +179,15 @@ fn stats_json(s: &Stats) -> String {
     f.push(kv("totalTrials", s.total_trials.to_string()));
     f.push(kv("totalUsage", s.total_usage.to_string()));
     f.push(kv("dbSizeBytes", s.db_size_bytes.to_string()));
-    let currencies: Vec<String> = s.currencies.iter().map(|c| quote_string(c)).collect();
     let price_range = format!(
-        "{{\n    \"min\": {},\n    \"max\": {},\n    \"currencies\": [{}]\n  }}",
+        "{{\n    \"min\": {},\n    \"max\": {},\n    \"currencies\": [\n{}\n    ]\n  }}",
         number(s.price_min),
         number(s.price_max),
-        currencies.join(", ")
+        s.currencies
+            .iter()
+            .map(|c| format!("      {}", quote_string(c)))
+            .collect::<Vec<_>>()
+            .join(",\n")
     );
     f.push(kv("priceRange", price_range));
     format!("{{\n  {}\n}}", f.join(",\n  "))

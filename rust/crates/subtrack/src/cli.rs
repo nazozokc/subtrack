@@ -176,6 +176,7 @@ pub fn run(args: &[String]) -> i32 {
             "audit list" => crate::audit::run_audit(&parsed, resolved.depth, &resolved.path),
             "audit" => crate::audit::run_audit(&parsed, resolved.depth, &resolved.path),
             "budget" => crate::budget::run_budget(&parsed),
+            "currency" => crate::currency::run_currency(&parsed),
             "profile list" => crate::profile::run_profiles(&parsed),
             "profile show" => crate::profile::run_profiles(&parsed),
             "compare" => crate::compare::run_compare(&parsed),

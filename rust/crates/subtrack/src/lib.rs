@@ -11,6 +11,7 @@ mod commands;
 mod compare;
 mod config;
 mod crypto;
+mod currency;
 mod date;
 mod db;
 mod display;
