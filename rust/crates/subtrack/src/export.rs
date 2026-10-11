@@ -62,10 +62,30 @@ pub fn run_export(parsed: &ParsedArgs, depth: usize) -> i32 {
         "csv" => export_csv(&list),
         "md" => export_md(&list),
         "ics" => export_ics(&list),
-        _ => {
-            // excel not yet ported.
+        "excel" => {
+            let buf = export_excel(&list);
+            if let Some(outpath) = parsed.str("output").or_else(|| parsed.str("o")) {
+                let cwd = std::env::current_dir().unwrap_or_default();
+                let path = cwd.join(outpath);
+                if let Err(e) = std::fs::write(&path, &buf) {
+                    logger::fail(&format!("Failed to write file: {}", e));
+                    return 1;
+                }
+                success(&format!("Exported to: {}", path.display()));
+                return 0;
+            }
+            // Flush the buffered banner first, then emit the raw XLSX bytes
+            // directly (the logger buffer is String-based and cannot hold
+            // arbitrary binary data).
+            crate::flush();
+            use std::io::Write;
+            let stdout = std::io::stdout();
+            let mut h = stdout.lock();
+            let _ = h.write_all(&buf);
+            let _ = h.flush();
             return 0;
-        }
+        },
+        _ => return 0
     };
 
     // `consola.log(content)` — content already ends in "\n" for json.
@@ -243,6 +263,83 @@ fn export_csv(subs: &[Subscription]) -> String {
     format!("\u{FEFF}{}", body)
 }
 
+
+
+fn export_excel(subs: &[Subscription]) -> Vec<u8> {
+    let headers = vec![
+        "ID".to_string(),
+        "Name".to_string(),
+        "Price".to_string(),
+        "Currency".to_string(),
+        "Cycle".to_string(),
+        "Status".to_string(),
+        "Billing Day".to_string(),
+        "Payment Method".to_string(),
+        "Tags".to_string(),
+        "Notes".to_string(),
+        "Created At".to_string(),
+        "Contract Start".to_string(),
+        "Contract End".to_string(),
+        "Auto Renewal".to_string(),
+        "Vendor Name".to_string(),
+        "Vendor URL".to_string(),
+        "Plan Tier".to_string(),
+        "Discount Amount".to_string(),
+        "Discount Type".to_string(),
+    ];
+    // Numeric columns: ID, Price, Billing Day, Discount Amount. Everything
+    // else is a string (matching the TS `(string | number)[][]` rows).
+    let mut rows: Vec<Vec<crate::xlsx::Cell>> = Vec::new();
+    for s in subs {
+        rows.push(vec![
+            crate::xlsx::Cell::Num(s.id.to_string()),
+            crate::xlsx::Cell::Text(s.name.clone()),
+            crate::xlsx::Cell::Num(crate::json::number(s.price)),
+            crate::xlsx::Cell::Text(s.currency.clone()),
+            crate::xlsx::Cell::Text(s.cycle.clone()),
+            crate::xlsx::Cell::Text(s.status.clone()),
+            match s.billing_day {
+                Some(d) => crate::xlsx::Cell::Num(d.to_string()),
+                None => crate::xlsx::Cell::Text(String::new()),
+            },
+            crate::xlsx::Cell::Text(s.payment_method.clone().unwrap_or_default()),
+            crate::xlsx::Cell::Text(s.tags.join(", ")),
+            crate::xlsx::Cell::Text(s.notes.clone().unwrap_or_default()),
+            crate::xlsx::Cell::Text(s.created_at.clone()),
+            crate::xlsx::Cell::Text(s.contract_start.clone().unwrap_or_default()),
+            crate::xlsx::Cell::Text(s.contract_end.clone().unwrap_or_default()),
+            crate::xlsx::Cell::Text(if s.auto_renewal { "Yes".into() } else { "No".into() }),
+            crate::xlsx::Cell::Text(s.vendor_name.clone().unwrap_or_default()),
+            crate::xlsx::Cell::Text(s.vendor_url.clone().unwrap_or_default()),
+            crate::xlsx::Cell::Text(s.plan_tier.clone().unwrap_or_default()),
+            match s.discount_amount {
+                Some(v) => crate::xlsx::Cell::Num(crate::json::number(v)),
+                None => crate::xlsx::Cell::Text(String::new()),
+            },
+            crate::xlsx::Cell::Text(s.discount_type.clone().unwrap_or_default()),
+        ]);
+    }
+
+    let column_widths: Vec<usize> = headers
+        .iter()
+        .enumerate()
+        .map(|(i, header)| {
+            let mut max_length = header.chars().count();
+            for row in &rows {
+                let val = match &row[i] {
+                    crate::xlsx::Cell::Num(v) | crate::xlsx::Cell::Text(v) => v,
+                };
+                let len = val.chars().count();
+                if len > max_length {
+                    max_length = len;
+                }
+            }
+            (max_length + 2).max(10).min(50)
+        })
+        .collect();
+
+    crate::xlsx::generate_xlsx(&headers, &rows, &column_widths, "Subscriptions")
+}
 
 fn ics_escape(v: &str) -> String {
     v.replace('\\', "\\\\").replace(';', "\\;").replace(',', "\\,").replace('\n', "\\n").replace('\r', "\\r")

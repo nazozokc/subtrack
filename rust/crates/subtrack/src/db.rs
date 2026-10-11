@@ -825,11 +825,27 @@ pub fn get_audit_logs(
     from: Option<&str>,
     to: Option<&str>,
 ) -> Vec<AuditEntry> {
+    get_audit_logs_filtered(action, None, limit, offset, from, to)
+}
+
+/// Query audit log entries with optional target_id filter (port of `getAuditLogs`).
+pub fn get_audit_logs_filtered(
+    action: Option<&str>,
+    target_id: Option<i64>,
+    limit: i64,
+    offset: i64,
+    from: Option<&str>,
+    to: Option<&str>,
+) -> Vec<AuditEntry> {
     let mut conditions: Vec<String> = Vec::new();
     let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
     if let Some(a) = action {
         conditions.push("action = ?".to_string());
         params.push(Box::new(a.to_string()));
+    }
+    if let Some(t) = target_id {
+        conditions.push("target_id = ?".to_string());
+        params.push(Box::new(t));
     }
     if let Some(f) = from {
         conditions.push("created_at >= ?".to_string());
@@ -924,5 +940,196 @@ pub fn get_audit_log_count(action: Option<&str>, from: Option<&str>, to: Option<
     match stmt.query_row(bound.as_slice(), |row| row.get::<_, i64>(0)) {
         Ok(n) => n,
         Err(_) => 0,
+    }
+}
+
+/// Price history for one subscription, newest first (port of `getPriceHistory`).
+pub fn get_price_history(subscription_id: i64) -> std::io::Result<Vec<PriceChange>> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT ph.id, ph.subscription_id, ph.old_price, ph.new_price, \
+                    ph.old_currency, ph.new_currency, ph.changed_at, s.name \
+             FROM price_history ph JOIN subscriptions s ON s.id = ph.subscription_id \
+             WHERE ph.subscription_id = ? \
+             ORDER BY ph.changed_at DESC",
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let rows = stmt
+        .query_map(params![subscription_id], |row| {
+            Ok(PriceChange {
+                id: row.get(0)?,
+                subscription_id: row.get(1)?,
+                old_price: row.get(2)?,
+                new_price: row.get(3)?,
+                old_currency: row.get(4)?,
+                new_currency: row.get(5)?,
+                changed_at: row.get(6)?,
+                name: row.get(7)?,
+            })
+        })
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| std::io::Error::other(e.to_string()))?)
+    }
+    Ok(out)
+}
+
+/// All price changes within the last `days` days (port of `getAllPriceChanges(days)`).
+pub fn get_price_changes_recent(days: i64) -> std::io::Result<Vec<PriceChange>> {
+    let cutoff = crate::date::today_string_days_ago(days);
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT ph.id, ph.subscription_id, ph.old_price, ph.new_price, \
+                    ph.old_currency, ph.new_currency, ph.changed_at, s.name \
+             FROM price_history ph JOIN subscriptions s ON s.id = ph.subscription_id \
+             WHERE ph.changed_at >= ? \
+             ORDER BY ph.changed_at DESC",
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let rows = stmt
+        .query_map(params![cutoff], |row| {
+            Ok(PriceChange {
+                id: row.get(0)?,
+                subscription_id: row.get(1)?,
+                old_price: row.get(2)?,
+                new_price: row.get(3)?,
+                old_currency: row.get(4)?,
+                new_currency: row.get(5)?,
+                changed_at: row.get(6)?,
+                name: row.get(7)?,
+            })
+        })
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r.map_err(|e| std::io::Error::other(e.to_string()))?)
+    }
+    Ok(out)
+}
+
+/// A row from the `suggestions` table (port of types.ts `Suggestion`).
+#[derive(Clone, Debug)]
+pub struct Suggestion {
+    pub id: i64,
+    pub name: String,
+    pub price: Option<f64>,
+    pub currency: Option<String>,
+    pub cycle: Option<String>,
+    pub vendor_name: Option<String>,
+    pub vendor_url: Option<String>,
+    pub plan_tier: Option<String>,
+    pub payment_method: Option<String>,
+    pub source: String,
+    pub source_detail: Option<String>,
+    pub email_subject: Option<String>,
+    pub email_from: Option<String>,
+    pub email_date: Option<String>,
+    pub confidence: f64,
+    pub status: String,
+    pub matched_sub_id: Option<i64>,
+    pub created_at: Option<String>,
+}
+
+fn suggestion_from_row(row: &rusqlite::Row) -> rusqlite::Result<Suggestion> {
+    Ok(Suggestion {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        price: row.get(2)?,
+        currency: row.get(3)?,
+        cycle: row.get(4)?,
+        vendor_name: row.get(5)?,
+        vendor_url: row.get(6)?,
+        plan_tier: row.get(7)?,
+        payment_method: row.get(8)?,
+        source: row.get(9)?,
+        source_detail: row.get(10)?,
+        email_subject: row.get(11)?,
+        email_from: row.get(12)?,
+        email_date: row.get(13)?,
+        confidence: row.get(14)?,
+        status: row.get(15)?,
+        matched_sub_id: row.get(16)?,
+        created_at: row.get(17)?,
+    })
+}
+
+const SUGGESTION_SELECT: &str = "SELECT id, name, price, currency, cycle, \
+     vendor_name, vendor_url, plan_tier, payment_method, source, source_detail, \
+     email_subject, email_from, email_date, confidence, status, matched_sub_id, created_at \
+     FROM suggestions";
+
+/// List suggestions, optionally filtered by status (newest first).
+pub fn get_suggestions(status: Option<&str>) -> std::io::Result<Vec<Suggestion>> {
+    let conn = open_db()?;
+    let (sql, out) = match status {
+        Some(s) => {
+            let mut stmt = conn
+                .prepare(&format!("{} WHERE status = ? ORDER BY created_at DESC", SUGGESTION_SELECT))
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            let rows = stmt
+                .query_map(params![s], suggestion_from_row)
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            let mut out = Vec::new();
+            for r in rows {
+                out.push(r.map_err(|e| std::io::Error::other(e.to_string()))?)
+            }
+            (String::new(), out)
+        }
+        None => {
+            let mut stmt = conn
+                .prepare(&format!("{} ORDER BY created_at DESC", SUGGESTION_SELECT))
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            let rows = stmt
+                .query_map([], suggestion_from_row)
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            let mut out = Vec::new();
+            for r in rows {
+                out.push(r.map_err(|e| std::io::Error::other(e.to_string()))?)
+            }
+            (String::new(), out)
+        }
+    };
+    let _ = sql;
+    Ok(out)
+}
+
+/// Fetch a single suggestion by id.
+pub fn get_suggestion(id: i64) -> std::io::Result<Option<Suggestion>> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare(&format!("{} WHERE id = ?", SUGGESTION_SELECT))
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut rows = stmt
+        .query_map(params![id], suggestion_from_row)
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    match rows.next() {
+        Some(r) => Ok(Some(r.map_err(|e| std::io::Error::other(e.to_string()))?)),
+        None => Ok(None),
+    }
+}
+
+/// Fetch a single subscription by id.
+pub fn get_subscription_by_id(id: i64) -> std::io::Result<Option<Subscription>> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT {} FROM subscriptions WHERE id = ? LIMIT 1",
+            SUB_COLUMNS.join(", ")
+        ))
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut rows = stmt
+        .query_map(params![id], row_to_subscription)
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    match rows.next() {
+        Some(r) => {
+            let mut sub = r.map_err(|e| std::io::Error::other(e.to_string()))?;
+            map_tags(&conn, std::slice::from_mut(&mut sub))
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            Ok(Some(sub))
+        }
+        None => Ok(None),
     }
 }

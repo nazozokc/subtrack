@@ -107,8 +107,20 @@ def main():
             ge = os.path.join(FIXTURES, "goldens", e["group"], e["id"] + ".stderr")
             want_out = open(g, "rb").read().decode("utf8", "surrogateescape")
             want_err = open(ge, "rb").read().decode("utf8", "surrogateescape")
-            got_out = normalize(b"".join(o[1] for o in outs).decode("utf8", "surrogateescape"), case_root)
-            got_err = normalize(b"".join(o[2] for o in outs).decode("utf8", "surrogateescape"), case_root)
+            # Binary stdout (e.g. XLSX) is captured raw and must not be
+            # text-normalized — the substitution regexes would rewrite
+            # version strings inside the payload and corrupt the comparison.
+            if e.get("binary"):
+                got_out = b"".join(o[1] for o in outs).decode("utf8", "surrogateescape")
+            else:
+                got_out = normalize(
+                    b"".join(o[1] for o in outs).decode("utf8", "surrogateescape"),
+                    case_root,
+                )
+            got_err = normalize(
+                b"".join(o[2] for o in outs).decode("utf8", "surrogateescape"),
+                case_root,
+            )
             got_exit = [o[0] for o in outs]
             ok = got_out == want_out and got_err == want_err and got_exit == e["exits"]
             status = "OK " if ok else "FAIL"

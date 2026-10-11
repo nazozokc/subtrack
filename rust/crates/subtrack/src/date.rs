@@ -415,3 +415,17 @@ pub fn div_ceil_js(a: i64, b: i64) -> i64 {
         a / b + 1
     }
 }
+
+/// Today minus `days`, formatted YYYY-MM-DD (UTC).
+pub fn today_string_days_ago(days: i64) -> String {
+    (today() - chrono::Duration::days(days)).format("%Y-%m-%d").to_string()
+}
+
+/// Last day of 0-based month `month0` as "YYYY-MM-DD" (new Date(y, m+1, 0)).
+pub fn last_day_of_month_string(year: i64, month0: i64) -> String {
+    let (ny, nm) = if month0 + 1 == 12 { (year + 1, 1) } else { (year, month0 + 2) };
+    match chrono::NaiveDate::from_ymd_opt(ny as i32, nm as u32, 1) {
+        Some(d) => (d - chrono::Duration::days(1)).format("%Y-%m-%d").to_string(),
+        None => format!("{:04}-12-31", year),
+    }
+}

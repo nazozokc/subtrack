@@ -5,6 +5,7 @@ mod budget;
 mod audit;
 mod ansi;
 mod calendar;
+mod changes;
 mod check;
 mod cli;
 mod commands;
@@ -14,11 +15,13 @@ mod crypto;
 mod currency;
 mod date;
 mod db;
+mod dedupe;
 mod display;
 mod export;
 mod forecast;
 mod fx;
 mod help;
+mod history;
 mod json;
 mod list;
 mod logger;
@@ -28,15 +31,21 @@ mod optimize;
 mod payment;
 mod profile;
 mod price;
+mod receipt;
+mod report;
 mod router;
 mod search;
 mod stats;
+mod suggest;
 mod summary;
 mod tags;
 mod table;
+mod templates;
+mod timeline;
 mod trial;
 mod upcoming;
 mod usage;
+mod xlsx;
 
 use std::sync::atomic::{AtomicI32, Ordering};
 
@@ -74,3 +83,4 @@ pub fn run(args: Vec<std::ffi::OsString>) -> i32 {
         code
     }
 }
+

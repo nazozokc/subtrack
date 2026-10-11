@@ -1,0 +1,240 @@
+//! `suggest` command (reads) — port of `suggest/suggest.ts`
+//! (handleSuggestList / handleSuggestView).
+
+use crate::ansi;
+use crate::db::{get_suggestion, get_suggestions, Suggestion};
+use crate::json::quote_string;
+use crate::logger::{self, fail, info, log};
+use crate::parser::ParsedArgs;
+use crate::price::format_price;
+
+pub fn run_suggest_list(parsed: &ParsedArgs) -> i32 {
+    let all = parsed.bool("all") == Some(true);
+    let json = parsed.bool("json") == Some(true);
+    let status = if all { None } else { Some("pending") };
+    let suggestions = match get_suggestions(status) {
+        Ok(s) => s,
+        Err(e) => {
+            logger::fail(&format!("Failed to read suggestions: {}", e));
+            return 1;
+        }
+    };
+
+    if json {
+        let mut out = String::from("[\n");
+        for (i, s) in suggestions.iter().enumerate() {
+            out.push_str("  {\n");
+            out.push_str(&format!("    \"id\": {},\n", s.id));
+            out.push_str(&format!("    \"name\": {},\n", quote_string(&s.name)));
+            out.push_str(&format!(
+                "    \"price\": {},\n",
+                match s.price {
+                    Some(p) => crate::json::number(p),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(&format!(
+                "    \"currency\": {},\n",
+                match &s.currency {
+                    Some(c) => quote_string(c),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(&format!(
+                "    \"cycle\": {},\n",
+                match &s.cycle {
+                    Some(c) => quote_string(c),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(&format!(
+                "    \"vendorName\": {},\n",
+                match &s.vendor_name {
+                    Some(v) => quote_string(v),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(&format!(
+                "    \"vendorUrl\": {},\n",
+                match &s.vendor_url {
+                    Some(v) => quote_string(v),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(&format!(
+                "    \"planTier\": {},\n",
+                match &s.plan_tier {
+                    Some(v) => quote_string(v),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(&format!(
+                "    \"paymentMethod\": {},\n",
+                match &s.payment_method {
+                    Some(v) => quote_string(v),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(&format!("    \"source\": {},\n", quote_string(&s.source)));
+            out.push_str(&format!(
+                "    \"sourceDetail\": {},\n",
+                match &s.source_detail {
+                    Some(v) => quote_string(v),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(&format!(
+                "    \"emailSubject\": {},\n",
+                match &s.email_subject {
+                    Some(v) => quote_string(v),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(&format!(
+                "    \"emailFrom\": {},\n",
+                match &s.email_from {
+                    Some(v) => quote_string(v),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(&format!(
+                "    \"emailDate\": {},\n",
+                match &s.email_date {
+                    Some(v) => quote_string(v),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(&format!(
+                "    \"confidence\": {},\n",
+                crate::json::number(s.confidence)
+            ));
+            out.push_str(&format!("    \"status\": {},\n", quote_string(&s.status)));
+            out.push_str(&format!(
+                "    \"matchedSubId\": {},\n",
+                match s.matched_sub_id {
+                    Some(v) => v.to_string(),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(&format!(
+                "    \"createdAt\": {}\n",
+                match &s.created_at {
+                    Some(v) => quote_string(v),
+                    None => "null".to_string(),
+                }
+            ));
+            out.push_str(if i + 1 == suggestions.len() { "  }\n" } else { "  },\n" });
+        }
+        out.push_str("]\n");
+        logger::out_str(&out);
+        return 0;
+    }
+
+    if suggestions.is_empty() {
+        if all {
+            info("No suggestions found.");
+        } else {
+            info("No pending suggestions.");
+        }
+        return 0;
+    }
+
+    log(&ansi::bold(&ansi::cyan(&format!("── Suggestions ({}) ──", suggestions.len()))));
+    log("");
+    for s in &suggestions {
+        let price_str = match (s.price, &s.currency) {
+            (Some(p), Some(c)) => format_price(p, c),
+            _ => "N/A".to_string(),
+        };
+        let cycle_str = s.cycle.clone().unwrap_or_default();
+        let status_tag = if s.status == "pending" {
+            ansi::green("pending")
+        } else if s.status == "dismissed" {
+            ansi::dim("dismissed")
+        } else {
+            ansi::colored("blue", "added")
+        };
+        let cycle_part = if cycle_str.is_empty() {
+            String::new()
+        } else {
+            ansi::dim(&format!("/{}", cycle_str))
+        };
+        log(&format!(
+            "  {} {}  {}{}  {}  {}",
+            ansi::cyan(&format!("#{}", s.id)),
+            ansi::bold(&s.name),
+            ansi::yellow(&price_str),
+            cycle_part,
+            status_tag,
+            ansi::dim(s.source_detail.as_deref().unwrap_or("")),
+        ));
+    }
+    0
+}
+
+pub fn run_suggest_view(parsed: &ParsedArgs) -> i32 {
+    let id = parsed
+        .str("id")
+        .and_then(|i| i.parse::<i64>().ok())
+        .unwrap_or(-1);
+    let suggestion = match get_suggestion(id) {
+        Ok(s) => s,
+        Err(e) => {
+            logger::fail(&format!("Failed to read suggestion: {}", e));
+            return 1;
+        }
+    };
+    let Some(suggestion) = suggestion else {
+        fail(&format!("Suggestion #{} not found.", id));
+        return 1;
+    };
+
+    let price_str = match (suggestion.price, &suggestion.currency) {
+        (Some(p), Some(c)) => format_price(p, c),
+        _ => "N/A".to_string(),
+    };
+    log(&ansi::bold(&ansi::cyan(&format!("── Suggestion #{} ──", suggestion.id))));
+    log(&format!("  {}       {}", ansi::bold("Name:"), suggestion.name));
+    log(&format!(
+        "  {}      {}{}",
+        ansi::bold("Price:"),
+        price_str,
+        suggestion
+            .cycle
+            .as_ref()
+            .map(|c| ansi::dim(&format!("/{}", c)))
+            .unwrap_or_default(),
+    ));
+    if let Some(v) = &suggestion.vendor_name {
+        log(&format!("  {}     {}", ansi::bold("Vendor:"), v));
+    }
+    if let Some(v) = &suggestion.plan_tier {
+        log(&format!("  {}       {}", ansi::bold("Plan:"), v));
+    }
+    if let Some(v) = &suggestion.payment_method {
+        log(&format!("  {}    {}", ansi::bold("Payment:"), v));
+    }
+    log(&format!(
+        "  {}     {}",
+        ansi::bold("Source:"),
+        suggestion.source_detail.as_deref().unwrap_or(&suggestion.source)
+    ));
+    log(&format!(
+        "  {} {}",
+        ansi::bold("Confidence:"),
+        format!("{}%", (suggestion.confidence * 100.0).round() as i64)
+    ));
+    log(&format!("  {}     {}", ansi::bold("Status:"), suggestion.status));
+    if let Some(m) = suggestion.matched_sub_id {
+        log(&format!("  {}   subscription #{}", ansi::bold("Added as:"), m));
+    }
+    if let Some(c) = &suggestion.created_at {
+        log(&format!("  {}   {}", ansi::bold("Created:"), c));
+    }
+    0
+}
+
+#[allow(dead_code)]
+fn _unused(_s: Suggestion) {
+    let _ = info;
+}
