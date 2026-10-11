@@ -140,6 +140,22 @@ fn calc_cancelled(subs: &[Subscription], year: i64) -> Vec<(String, String)> {
     results
 }
 
+/// Port of the `yearly` command's year validation, then `handleYearly`.
+pub fn run_yearly(parsed: &ParsedArgs) -> i32 {
+    if let Some(raw) = parsed.str("year") {
+        let valid = raw
+            .trim()
+            .parse::<i64>()
+            .map(|n| (1970..=9999).contains(&n))
+            .unwrap_or(false);
+        if !valid {
+            fail("year must be a valid year");
+            return 1;
+        }
+    }
+    run_report(parsed)
+}
+
 pub fn run_report(parsed: &ParsedArgs) -> i32 {
     let today = crate::date::today();
     let year = parsed

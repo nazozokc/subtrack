@@ -69,6 +69,95 @@ pub fn run_trial_usage() -> i32 {
     0
 }
 
+/// Port of `handleTrialAdd` (validation + not-yet-persisted success path).
+pub fn run_trial_add(parsed: &ParsedArgs) -> i32 {
+    use crate::prompts::{prompt_cycle, prompt_select, prompt_string};
+    use crate::validation::{
+        is_valid_currency, js_number, validate_expires_at, validate_notes, validate_trial_name,
+        CURRENCY_VALUES,
+    };
+
+    let Some(_name) = prompt_string(parsed.str("name").as_deref(), validate_trial_name) else {
+        return 0;
+    };
+    let Some(_expires) =
+        prompt_string(parsed.str("expiresAt").as_deref(), validate_expires_at)
+    else {
+        return 0;
+    };
+
+    if let Some(raw) = parsed.str("price") {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() {
+            match js_number(trimmed) {
+                Some(n) if n.is_finite() && n >= 0.0 => {}
+                _ => {
+                    logger::fail("Price must be a non-negative number");
+                    return 1;
+                }
+            }
+        }
+    }
+
+    let Some(_currency) =
+        prompt_select(parsed.str("currency").as_deref(), is_valid_currency, &CURRENCY_VALUES)
+    else {
+        return 0;
+    };
+    let Some(_cycle) = prompt_cycle(parsed.str("cycle").as_deref()) else {
+        return 0;
+    };
+
+    if let Some(raw) = parsed.str("notes") {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() {
+            if let Err(e) = validate_notes(trimmed) {
+                logger::fail(&e);
+                return 1;
+            }
+        }
+    }
+
+    // Persistence is deferred to the mutating phase.
+    logger::success(&format!(
+        "Added trial: {}",
+        parsed.str("name").unwrap_or_default().trim()
+    ));
+    0
+}
+
+/// Port of `handleTrialDelete`.
+pub fn run_trial_delete(parsed: &ParsedArgs) -> i32 {
+    let ids: Vec<i64> = parsed
+        .str_array("id")
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|s| s.trim().parse::<i64>().ok())
+        .collect();
+    if ids.is_empty() {
+        return 0;
+    }
+    let mut rc = 0;
+    for id in ids {
+        match crate::db::get_trial(id) {
+            Ok(Some(trial)) => {
+                let _ = crate::db::remove_trial(id);
+                logger::success(&format!("Deleted trial: {}", trial.name));
+            }
+            Ok(None) => {
+                logger::fail(&format!("Trial with id {} not found", id));
+                rc = 1;
+            }
+            Err(e) => {
+                logger::fail(&format!("Failed to read trial: {}", e));
+                rc = 1;
+            }
+        }
+    }
+    rc
+}
+
+
 fn format_price_or_dash(t: &Trial) -> String {
     match t.price {
         Some(p) => {

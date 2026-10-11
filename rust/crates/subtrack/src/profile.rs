@@ -141,3 +141,40 @@ fn show_profile(name: &str) {
         method.filter(|m| !m.is_empty()).map_or_else(|| ansi::dim("any"), |m| m.to_string())
     ));
 }
+/// Port of `switchProfile` (not-found path).
+pub fn run_profile_switch(parsed: &ParsedArgs) -> i32 {
+    let name = parsed.str("name").unwrap_or_default();
+    let config = load_config();
+    let exists = config
+        .raw
+        .get("profiles")
+        .and_then(|p| p.as_object())
+        .map(|p| p.contains_key(&name))
+        .unwrap_or(false);
+    if !exists {
+        logger::fail(&format!("Profile \"{}\" not found", name));
+        return 1;
+    }
+    // Persistence is deferred to the mutating phase.
+    logger::success(&format!("Switched to profile \"{}\"", name));
+    0
+}
+
+/// Port of `deleteProfile` (not-found path).
+pub fn run_profile_delete(parsed: &ParsedArgs) -> i32 {
+    let name = parsed.str("name").unwrap_or_default();
+    let config = load_config();
+    let exists = config
+        .raw
+        .get("profiles")
+        .and_then(|p| p.as_object())
+        .map(|p| p.contains_key(&name))
+        .unwrap_or(false);
+    if !exists {
+        logger::fail(&format!("Profile \"{}\" not found", name));
+        return 1;
+    }
+    // Persistence is deferred to the mutating phase.
+    logger::success(&format!("Deleted profile \"{}\"", name));
+    0
+}

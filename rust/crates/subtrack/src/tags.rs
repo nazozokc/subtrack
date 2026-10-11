@@ -82,3 +82,29 @@ impl PadEnd for str {
         s
     }
 }
+/// Port of `handleTagRename`.
+pub fn run_tag_rename(parsed: &ParsedArgs) -> i32 {
+    let old_name = parsed.str("old").unwrap_or_default();
+    let new_name = parsed.str("new").unwrap_or_default();
+    if old_name.is_empty() || new_name.is_empty() {
+        fail("Usage: subtrack tag rename <old> <new>");
+        return 1;
+    }
+    match crate::db::rename_tag(&old_name, &new_name) {
+        Ok(true) => {
+            crate::logger::success(&format!(
+                "Renamed tag: \"{}\" → \"{}\"",
+                old_name, new_name
+            ));
+            0
+        }
+        Ok(false) => {
+            fail(&format!("Tag \"{}\" not found", old_name));
+            1
+        }
+        Err(e) => {
+            fail(&format!("Failed to rename tag: {}", e));
+            1
+        }
+    }
+}

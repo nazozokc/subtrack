@@ -295,6 +295,254 @@ pub fn handle_config_get(key: &str) -> i32 {
     0
 }
 
+/// Port of `handleConfigSet`. Returns 0 on success (config saved), 1 on the
+/// first validation failure.
+pub fn handle_config_set(key: &str, value: &str) -> i32 {
+    let cfg = load_config();
+    let mut raw = cfg.raw.clone();
+    macro_rules! bad {
+        ($msg:expr) => {{
+            crate::logger::fail($msg);
+            return 1;
+        }};
+    }
+    match key {
+        "defaultCurrency" => {
+            if !(value.len() == 3 && value.bytes().all(|b| b.is_ascii_uppercase())) {
+                bad!(&format!("Invalid currency code: \"{}\"", value));
+            }
+            raw.insert(key.into(), value.into());
+        }
+        "monthlyBudget" => {
+            let n = crate::validation::js_number(value);
+            match n {
+                Some(n) if n >= 0.0 && n.is_finite() => {
+                    raw.insert(key.into(), serde_json::json!(n));
+                }
+                _ => bad!("monthlyBudget must be a non-negative number"),
+            }
+        }
+        "yearlyBudget" => {
+            let n = crate::validation::js_number(value);
+            match n {
+                Some(n) if n >= 0.0 && n.is_finite() => {
+                    raw.insert(key.into(), serde_json::json!(n));
+                }
+                _ => bad!("yearlyBudget must be a non-negative number"),
+            }
+        }
+        "budgets" => {
+            match parse_budgets(value) {
+                Some(entries) => {
+                    raw.insert(key.into(), serde_json::Value::Array(entries));
+                }
+                None => return 1,
+            }
+        }
+        "theme" => {
+            const THEMES: [&str; 4] = ["default", "light", "high-contrast", "none"];
+            if !THEMES.contains(&value) {
+                bad!(&format!("theme must be one of: {}", THEMES.join(", ")));
+            }
+            raw.insert(key.into(), value.into());
+        }
+        "tableBorderColor" | "tableHeaderColor" | "tableZebraColor" | "accentColor" => {
+            if !crate::ansi::is_color_name(value) {
+                bad!(&format!(
+                    "\"{}\" must be a color name: black, red, green, yellow, blue, \
+magenta, cyan, white, gray, brightRed, brightGreen, brightYellow, brightBlue, \
+brightMagenta, brightCyan, brightWhite",
+                    key
+                ));
+            }
+            raw.insert(key.into(), value.into());
+        }
+        "tableZebra" => {
+            if value != "on" && value != "off" {
+                bad!("tableZebra must be 'on' or 'off'");
+            }
+            raw.insert(key.into(), value.into());
+        }
+        "tableMinWidth" => {
+            let n = crate::validation::js_number(value);
+            match n {
+                Some(n) if (20.0..=200.0).contains(&n) && n.fract() == 0.0 => {
+                    raw.insert(key.into(), serde_json::json!(n));
+                }
+                _ => bad!("tableMinWidth must be an integer between 20 and 200"),
+            }
+        }
+        "dateFormat" => {
+            if value != "iso" && value != "short" {
+                bad!("dateFormat must be 'iso' or 'short'");
+            }
+            raw.insert(key.into(), value.into());
+        }
+        "listShowNotes" | "listShowMethod" => {
+            if value != "on" && value != "off" {
+                bad!(&format!("\"{}\" must be 'on' or 'off'", key));
+            }
+            raw.insert(key.into(), value.into());
+        }
+        "notifyDays" => {
+            let n = crate::validation::js_number(value);
+            match n {
+                Some(n) if n >= 0.0 && n.fract() == 0.0 => {
+                    raw.insert(key.into(), serde_json::json!(n));
+                }
+                _ => bad!("notifyDays must be a non-negative integer"),
+            }
+        }
+        "notifyChannels" => {
+            let channels: Vec<String> = value
+                .split(',')
+                .map(|c| c.trim().to_lowercase())
+                .filter(|c| !c.is_empty())
+                .collect();
+            if channels.is_empty()
+                || channels
+                    .iter()
+                    .any(|c| !["os", "slack", "webhook"].contains(&c.as_str()))
+            {
+                bad!("notifyChannels must be a comma-separated list of: os, slack, webhook");
+            }
+            raw.insert(
+                key.into(),
+                serde_json::Value::Array(channels.into_iter().map(|c| c.into()).collect()),
+            );
+        }
+        "slackWebhook" => {
+            if !value.starts_with("https://") {
+                bad!("slackWebhook must be an https:// URL");
+            }
+            raw.insert(key.into(), value.into());
+        }
+        "webhookUrl" => {
+            if !value.starts_with("https://") {
+                bad!("webhookUrl must be an https:// URL");
+            }
+            raw.insert(key.into(), value.into());
+        }
+        _ => {
+            bad!(&format!(
+                "Unknown config key: \"{}\". Valid: {}",
+                key,
+                CONFIG_KEYS.join(", ")
+            ));
+        }
+    }
+    if let Err(e) = save_config_raw(&raw) {
+        crate::logger::fail(&format!("Failed to save config: {}", e));
+        return 1;
+    }
+    let display = if key == "slackWebhook" || key == "webhookUrl" {
+        mask_secret(value)
+    } else {
+        value.to_string()
+    };
+    crate::logger::success(&format!("Set {} = {}", key, display));
+    0
+}
+
+/// Validate + convert the `budgets` JSON value (port of `parseBudgets`).
+fn parse_budgets(value: &str) -> Option<Vec<serde_json::Value>> {
+    let parsed: serde_json::Value = match serde_json::from_str(value) {
+        Ok(v) => v,
+        Err(_) => {
+            crate::logger::fail("budgets must be a valid JSON array of budget entries");
+            return None;
+        }
+    };
+    let arr = match parsed.as_array() {
+        Some(a) => a.clone(),
+        None => {
+            crate::logger::fail("budgets must be a valid JSON array of budget entries");
+            return None;
+        }
+    };
+    for item in &arr {
+        let Some(obj) = item.as_object() else {
+            crate::logger::fail("Each budget entry must be an object with name, amount, currency");
+            return None;
+        };
+        let name = obj.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        if name.trim().is_empty() {
+            crate::logger::fail("Each budget entry needs a non-empty name");
+            return None;
+        }
+        let amount = obj.get("amount").and_then(|v| v.as_f64());
+        match amount {
+            Some(a) if a >= 0.0 && a.is_finite() => {}
+            _ => {
+                crate::logger::fail(&format!(
+                    "Budget \"{}\": amount must be a non-negative number",
+                    name
+                ));
+                return None;
+            }
+        }
+        let currency = obj.get("currency").and_then(|v| v.as_str()).unwrap_or("");
+        if !(currency.len() == 3 && currency.bytes().all(|b| b.is_ascii_uppercase())) {
+            crate::logger::fail(&format!(
+                "Budget \"{}\": currency must be a 3-letter code (e.g. JPY)",
+                name
+            ));
+            return None;
+        }
+        if let Some(period) = obj.get("period") {
+            if let Some(p) = period.as_str() {
+                if p != "monthly" && p != "yearly" {
+                    crate::logger::fail(&format!(
+                        "Budget \"{}\": period must be \"monthly\" or \"yearly\"",
+                        name
+                    ));
+                    return None;
+                }
+            } else {
+                crate::logger::fail(&format!(
+                    "Budget \"{}\": period must be \"monthly\" or \"yearly\"",
+                    name
+                ));
+                return None;
+            }
+        }
+        if let Some(cats) = obj.get("categories") {
+            let valid = cats
+                .as_array()
+                .map(|a| a.iter().all(|c| c.is_string()))
+                .unwrap_or(false);
+            if !valid {
+                crate::logger::fail(&format!(
+                    "Budget \"{}\": categories must be an array of tag names",
+                    name
+                ));
+                return None;
+            }
+        }
+    }
+    Some(arr)
+}
+
+/// Write the config JSON back to disk (encrypted when a key is available).
+fn save_config_raw(raw: &serde_json::Map<String, serde_json::Value>) -> std::io::Result<()> {
+    let dir = crate::crypto::config_dir();
+    std::fs::create_dir_all(&dir)?;
+    let json = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&serde_json::Value::Object(raw.clone()))
+            .map_err(|e| std::io::Error::other(e.to_string()))?
+    );
+    let bytes = if crate::crypto::has_encryption_key() {
+        let key = crate::crypto::get_or_create_key()?;
+        let mut out = crate::crypto::CONFIG_MAGIC.to_vec();
+        out.extend(crate::crypto::encrypt_buffer(&key, json.as_bytes()));
+        out
+    } else {
+        json.into_bytes()
+    };
+    std::fs::write(crate::crypto::config_dir().join("config.json"), bytes)
+}
+
 /// Resolve the display theme from config (mirror of getDisplayTheme).
 pub fn display_theme() -> crate::table::Theme {
     use crate::table::Theme;

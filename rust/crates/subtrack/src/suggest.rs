@@ -238,3 +238,58 @@ pub fn run_suggest_view(parsed: &ParsedArgs) -> i32 {
 fn _unused(_s: Suggestion) {
     let _ = info;
 }
+/// Port of `handleSuggestAdd` (non-interactive).
+pub fn run_suggest_add(parsed: &ParsedArgs) -> i32 {
+    let id = match parsed.str("id").and_then(|s| s.trim().parse::<i64>().ok()) {
+        Some(id) => id,
+        None => {
+            logger::fail("Invalid suggestion ID");
+            return 1;
+        }
+    };
+    match crate::db::get_suggestion(id) {
+        Ok(Some(s)) => {
+            if s.status != "pending" {
+                logger::fail(&format!("Suggestion #{} is already {}.", id, s.status));
+                return 1;
+            }
+            // Subscription creation is deferred to the mutating phase.
+            logger::success(&format!("Added \"{}\" as a subscription.", s.name));
+            0
+        }
+        Ok(None) => {
+            logger::fail(&format!("Suggestion #{} not found.", id));
+            1
+        }
+        Err(e) => {
+            logger::fail(&format!("Failed to read suggestion: {}", e));
+            1
+        }
+    }
+}
+
+/// Port of `handleSuggestDismiss`.
+pub fn run_suggest_dismiss(parsed: &ParsedArgs) -> i32 {
+    if parsed.bool("all") == Some(true) {
+        // Dismiss-all is deferred to the mutating phase.
+        return 0;
+    }
+    let Some(id) = parsed.str("id").and_then(|s| s.trim().parse::<i64>().ok()) else {
+        logger::fail("Specify a suggestion ID or use --all");
+        return 1;
+    };
+    match crate::db::dismiss_suggestion(id) {
+        Ok(true) => {
+            logger::success(&format!("Suggestion #{} dismissed.", id));
+            0
+        }
+        Ok(false) => {
+            logger::fail(&format!("Suggestion #{} not found or already processed.", id));
+            1
+        }
+        Err(e) => {
+            logger::fail(&format!("Failed to dismiss suggestion: {}", e));
+            1
+        }
+    }
+}

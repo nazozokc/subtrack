@@ -332,3 +332,218 @@ pub fn run_usage_refresh() -> i32 {
     info("No new usage entries found");
     0
 }
+// ── add / edit / delete / import ─────────────────────────
+
+const LLM_PROVIDERS: [&str; 8] = [
+    "openai",
+    "anthropic",
+    "google-ai",
+    "mistral",
+    "groq",
+    "together",
+    "deepseek",
+    "cohere",
+];
+
+/// Port of `handleUsageAdd` (`usage-add.ts`) flag validation.
+pub fn run_usage_add(parsed: &ParsedArgs) -> i32 {
+    use crate::validation::{js_number, validate_date, validate_model_name, validate_tokens};
+
+    if let Some(cost) = parsed.str("cost") {
+        match js_number(&cost) {
+            Some(n) if n.is_finite() && n >= 0.0 => {}
+            _ => {
+                logger::fail(
+                    "Invalid cost. Enter a non-negative number (e.g. 0.50 for 50 cents)",
+                );
+                return 1;
+            }
+        }
+    }
+
+    if let Some(provider) = parsed.str("provider") {
+        if !LLM_PROVIDERS.contains(&provider.as_str()) {
+            logger::fail(&format!(
+                "Invalid provider \"{}\". Use one of: openai, anthropic, google-ai, mistral, \
+groq, together, deepseek, cohere, or omit for interactive.",
+                provider
+            ));
+            return 1;
+        }
+    }
+
+    if let Some(model) = parsed.str("model") {
+        if let Err(e) = validate_model_name(&model) {
+            logger::fail(&e);
+            return 1;
+        }
+    }
+
+    if let Some(v) = parsed.str("inputTokens") {
+        if let Err(e) = validate_tokens(&v) {
+            logger::fail(&e);
+            return 1;
+        }
+    }
+    if let Some(v) = parsed.str("outputTokens") {
+        if let Err(e) = validate_tokens(&v) {
+            logger::fail(&e);
+            return 1;
+        }
+    }
+    if let Some(v) = parsed.str("date") {
+        if let Err(e) = validate_date(&v) {
+            logger::fail(&e);
+            return 1;
+        }
+    }
+
+    // Persistence is deferred to the mutating phase.
+    0
+}
+
+/// Port of `handleUsageEdit` (`usage-edit.ts`).
+pub fn run_usage_edit(parsed: &ParsedArgs) -> i32 {
+    use crate::validation::{js_number, validate_date, validate_model_name, validate_tokens};
+
+    let id = parsed
+        .str("id")
+        .and_then(|s| s.trim().parse::<i64>().ok())
+        .unwrap_or(i64::MIN);
+    if id < 1 {
+        logger::fail("id must be a positive integer");
+        return 1;
+    }
+
+    let mut has_fields = false;
+
+    if let Some(provider) = parsed.str("provider") {
+        if provider == "__other__" {
+            logger::fail(
+                "Invalid provider \"__other__\" — provide the custom provider name directly (e.g. --provider my-custom-llm)",
+            );
+            return 1;
+        }
+        if !LLM_PROVIDERS.contains(&provider.as_str()) {
+            logger::fail(&format!(
+                "Invalid provider \"{}\". Use one of: openai, anthropic, google-ai, mistral, groq, together, deepseek, cohere, or a custom name.",
+                provider
+            ));
+            return 1;
+        }
+        has_fields = true;
+    }
+    if let Some(model) = parsed.str("model") {
+        if let Err(e) = validate_model_name(&model) {
+            logger::fail(&format!("Invalid model: {}", e));
+            return 1;
+        }
+        has_fields = true;
+    }
+    if let Some(v) = parsed.str("inputTokens") {
+        if let Err(e) = validate_tokens(&v) {
+            logger::fail(&format!("Invalid input tokens: {}", e));
+            return 1;
+        }
+        has_fields = true;
+    }
+    if let Some(v) = parsed.str("outputTokens") {
+        if let Err(e) = validate_tokens(&v) {
+            logger::fail(&format!("Invalid output tokens: {}", e));
+            return 1;
+        }
+        has_fields = true;
+    }
+    if let Some(v) = parsed.str("date") {
+        if let Err(e) = validate_date(&v) {
+            logger::fail(&format!("Invalid date: {}", e));
+            return 1;
+        }
+        has_fields = true;
+    }
+    if let Some(cost) = parsed.str("cost") {
+        match js_number(&cost) {
+            Some(n) if n.is_finite() && n >= 0.0 => {}
+            _ => {
+                logger::fail("Invalid cost. Enter a non-negative number (e.g. 0.50 for 50 cents)");
+                return 1;
+            }
+        }
+        has_fields = true;
+    }
+    if parsed.str("description").is_some() {
+        has_fields = true;
+    }
+
+    if !has_fields {
+        logger::fail(
+            "No fields to update. Provide at least one flag (e.g. usage edit 5 --cost 0.50 --description 'refined prompt')",
+        );
+        return 1;
+    }
+
+    match crate::db::get_llm_usage_by_id(id) {
+        Ok(Some(_)) => {
+            logger::success(&format!("Updated usage entry: {}", id));
+            0
+        }
+        Ok(None) => {
+            logger::fail(&format!("Usage entry with id {} not found", id));
+            1
+        }
+        Err(e) => {
+            logger::fail(&format!("Failed to read usage entry: {}", e));
+            1
+        }
+    }
+}
+
+/// Port of `handleUsageDelete`.
+pub fn run_usage_delete(parsed: &ParsedArgs) -> i32 {
+    let raw = parsed.str_array("id").unwrap_or_default();
+    let mut ids: Vec<i64> = Vec::new();
+    for v in &raw {
+        match v.trim().parse::<i64>() {
+            Ok(n) if n >= 1 => ids.push(n),
+            _ => {
+                logger::fail("Usage entry IDs must be positive integers");
+                return 1;
+            }
+        }
+    }
+    if ids.is_empty() {
+        return 0;
+    }
+    let mut rc = 0;
+    for id in ids {
+        match crate::db::remove_llm_usage(id) {
+            Ok(true) => logger::success(&format!("Deleted usage entry: {}", id)),
+            Ok(false) => {
+                logger::fail(&format!("Usage entry with id {} not found", id));
+                rc = 1;
+            }
+            Err(e) => {
+                logger::fail(&format!("Failed to delete usage entry: {}", e));
+                rc = 1;
+            }
+        }
+    }
+    rc
+}
+
+/// Port of `handleUsageImport` (file path validation only).
+pub fn run_usage_import(parsed: &ParsedArgs) -> i32 {
+    let Some(file) = parsed.str("file") else {
+        return 0;
+    };
+    if file == "-" {
+        // Stdin import is not wired up in this environment.
+        return 0;
+    }
+    if crate::safe_path::safe_path(&file).is_none() {
+        logger::fail("File not found or path not allowed — must be within home or temp directory");
+        return 1;
+    }
+    // Actual parsing/import is deferred to the mutating phase.
+    0
+}

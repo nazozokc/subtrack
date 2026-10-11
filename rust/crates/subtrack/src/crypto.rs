@@ -33,6 +33,11 @@ pub fn home_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
 }
 
+/// True when an encryption key is available (passphrase or `.key` file).
+pub fn has_encryption_key() -> bool {
+    std::env::var("SUBSC_CLI_DB_PASSPHRASE").is_ok() || config_dir().join(".key").exists()
+}
+
 /// Raw encryption key: from the passphrase via scrypt, else from `.key`.
 pub fn get_or_create_key() -> std::io::Result<Vec<u8>> {
     if let Ok(passphrase) = std::env::var("SUBSC_CLI_DB_PASSPHRASE") {

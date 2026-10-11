@@ -1133,3 +1133,145 @@ pub fn get_subscription_by_id(id: i64) -> std::io::Result<Option<Subscription>> 
         None => Ok(None),
     }
 }
+
+// ── Single-row lookup / mutation helpers (error-path phases) ─────────────
+
+/// Fetch a single trial by id (port of `trialRepository.get`).
+pub fn get_trial(id: i64) -> std::io::Result<Option<Trial>> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, expires_at, price, currency, cycle, notes FROM trials \
+             WHERE id = ? LIMIT 1",
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut rows = stmt
+        .query_map(params![id], |row| {
+            Ok(Trial {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                expires_at: row.get(2)?,
+                price: row.get(3)?,
+                currency: row.get(4)?,
+                cycle: row.get(5)?,
+                notes: row.get(6)?,
+            })
+        })
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    match rows.next() {
+        Some(r) => Ok(Some(r.map_err(|e| std::io::Error::other(e.to_string()))?)),
+        None => Ok(None),
+    }
+}
+
+/// Delete a trial by id; returns false when no row matched.
+pub fn remove_trial(id: i64) -> std::io::Result<bool> {
+    let conn = open_db()?;
+    let n = conn
+        .execute("DELETE FROM trials WHERE id = ?", params![id])
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    Ok(n > 0)
+}
+
+/// Dismiss a pending suggestion; returns false when no pending row matched.
+pub fn dismiss_suggestion(id: i64) -> std::io::Result<bool> {
+    let conn = open_db()?;
+    let n = conn
+        .execute(
+            "UPDATE suggestions SET status = 'dismissed' WHERE id = ? AND status = 'pending'",
+            params![id],
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    Ok(n > 0)
+}
+
+/// Rename a tag (port of `renameTag`); returns false when the old tag is absent.
+pub fn rename_tag(old_name: &str, new_name: &str) -> std::io::Result<bool> {
+    if old_name == new_name {
+        return Ok(true);
+    }
+    let conn = open_db()?;
+    let old_id: Option<i64> = conn
+        .query_row("SELECT id FROM tags WHERE name = ?", params![old_name], |r| {
+            r.get(0)
+        })
+        .ok();
+    let Some(old_id) = old_id else {
+        return Ok(false);
+    };
+    let existing: Option<i64> = conn
+        .query_row("SELECT id FROM tags WHERE name = ?", params![new_name], |r| {
+            r.get(0)
+        })
+        .ok();
+    conn.execute_batch("BEGIN TRANSACTION")
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let result = (|| -> rusqlite::Result<()> {
+        if let Some(dest_id) = existing {
+            conn.execute(
+                "UPDATE OR IGNORE subscription_tags SET tag_id = ? WHERE tag_id = ?",
+                params![dest_id, old_id],
+            )?;
+            conn.execute(
+                "DELETE FROM subscription_tags WHERE tag_id = ?",
+                params![old_id],
+            )?;
+            conn.execute("DELETE FROM tags WHERE id = ?", params![old_id])?;
+        } else {
+            conn.execute(
+                "UPDATE tags SET name = ? WHERE id = ?",
+                params![new_name, old_id],
+            )?;
+        }
+        Ok(())
+    })();
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT")
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            Ok(true)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(std::io::Error::other(e.to_string()))
+        }
+    }
+}
+
+/// Fetch a single LLM usage row by id.
+pub fn get_llm_usage_by_id(id: i64) -> std::io::Result<Option<LlmUsage>> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, provider, model, input_tokens, output_tokens, cost, date, description \
+             FROM llm_usage WHERE id = ? LIMIT 1",
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut rows = stmt
+        .query_map(params![id], |row| {
+            Ok(LlmUsage {
+                id: row.get(0)?,
+                provider: row.get(1)?,
+                model: row.get(2)?,
+                input_tokens: row.get(3)?,
+                output_tokens: row.get(4)?,
+                cost: row.get::<_, f64>(5)?.round() as i64,
+                date: row.get(6)?,
+                description: row.get(7)?,
+            })
+        })
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    match rows.next() {
+        Some(r) => Ok(Some(r.map_err(|e| std::io::Error::other(e.to_string()))?)),
+        None => Ok(None),
+    }
+}
+
+/// Delete an LLM usage row by id; returns false when no row matched.
+pub fn remove_llm_usage(id: i64) -> std::io::Result<bool> {
+    let conn = open_db()?;
+    let n = conn
+        .execute("DELETE FROM llm_usage WHERE id = ?", params![id])
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    Ok(n > 0)
+}

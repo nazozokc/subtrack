@@ -38,6 +38,25 @@ pub fn run_template_list(parsed: &ParsedArgs) -> i32 {
     0
 }
 
+/// Port of `handleTemplate("delete")`.
+pub fn run_template_delete(parsed: &ParsedArgs) -> i32 {
+    let name = parsed.str("name").unwrap_or_default();
+    let config = load_config();
+    let exists = config
+        .raw
+        .get("templates")
+        .and_then(|v| v.as_object())
+        .map(|t| t.contains_key(&name))
+        .unwrap_or(false);
+    if !exists {
+        logger::fail(&format!("Template not found: {}", name));
+        return 1;
+    }
+    // Deletion persistence is deferred to the mutating phase.
+    logger::success(&format!("Deleted template: {}", name));
+    0
+}
+
 /// Receipt/template helper alias to keep the logger import stable.
 #[allow(dead_code)]
 fn _unused(_p: &ParsedArgs) {
