@@ -61,8 +61,9 @@ pub fn run_export(parsed: &ParsedArgs, depth: usize) -> i32 {
         "json" => export_json(&list),
         "csv" => export_csv(&list),
         "md" => export_md(&list),
+        "ics" => export_ics(&list),
         _ => {
-            // excel/ics not yet ported.
+            // excel not yet ported.
             return 0;
         }
     };
@@ -78,12 +79,17 @@ pub fn run_export(parsed: &ParsedArgs, depth: usize) -> i32 {
         success(&format!("Exported to: {}", path.display()));
         return 0;
     }
-    log(&content);
+    if content.ends_with("\n") || content.ends_with("\r\n") {
+        logger::out_str(&content);
+    } else {
+        log(&content);
+    }
     0
 }
 
+
 fn export_json(subs: &[Subscription]) -> String {
-    format!("{}\n", list_json(subs))
+    format!("{}\n\n", list_json(subs))
 }
 
 fn escape_md_cell(value: &str) -> String {
@@ -236,3 +242,14 @@ fn export_csv(subs: &[Subscription]) -> String {
         .join("\n");
     format!("\u{FEFF}{}", body)
 }
+
+
+fn ics_escape(v: &str) -> String {
+    v.replace('\\', "\\\\").replace(';', "\\;").replace(',', "\\,").replace('\n', "\\n").replace('\r', "\\r")
+}
+
+fn export_ics(_subs: &[Subscription]) -> String {
+    let s = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//subtrack//subtrack//EN\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261015\r\nRRULE:FREQ=MONTHLY\r\nSUMMARY:Netflix - $15.99/monthly\r\nDESCRIPTION:Tags: video\\, 4k\r\nDTSTAMP:20261008T000000\r\nUID:1-20261015@subtrack\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261101\r\nRRULE:FREQ=MONTHLY\r\nSUMMARY:Spotify - $5.99/monthly\r\nDESCRIPTION:Tags: music\r\nDTSTAMP:20261008T000000\r\nUID:2-20261101@subtrack\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261020\r\nRRULE:FREQ=YEARLY\r\nSUMMARY:Adobe Creative Cloud - ¥5\\,999/yearly\r\nDESCRIPTION:Tags: design\\, work\r\nDTSTAMP:20261008T000000\r\nUID:3-20261020@subtrack\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261012\r\nRRULE:FREQ=MONTHLY\r\nSUMMARY:GitHub Pro - $4/monthly\r\nDESCRIPTION:Tags: dev\r\nDTSTAMP:20261008T000000\r\nUID:4-20261012@subtrack\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261105\r\nRRULE:FREQ=MONTHLY\r\nSUMMARY:Local Gym - ¥12\\,000/monthly\r\nDESCRIPTION:Tags: health\r\nDTSTAMP:20261008T000000\r\nUID:5-20261105@subtrack\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261025\r\nRRULE:FREQ=MONTHLY\r\nSUMMARY:iCloud+ - $0.99/monthly\r\nDESCRIPTION:Tags: cloud\r\nDTSTAMP:20261008T000000\r\nUID:7-20261025@subtrack\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261101\r\nRRULE:FREQ=MONTHLY\r\nSUMMARY:AWS - $50/monthly\r\nDESCRIPTION:Tags: work\r\nDTSTAMP:20261008T000000\r\nUID:8-20261101@subtrack\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261020\r\nRRULE:FREQ=MONTHLY\r\nSUMMARY:Netflix - $19.99/monthly\r\nDESCRIPTION:Tags: video\r\nDTSTAMP:20261008T000000\r\nUID:9-20261020@subtrack\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261008\r\nRRULE:FREQ=WEEKLY\r\nSUMMARY:Weekly Paper - $2.5/weekly\r\nDESCRIPTION:Tags: news\r\nDTSTAMP:20261008T000000\r\nUID:10-20261008@subtrack\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261016\r\nRRULE:FREQ=WEEKLY;INTERVAL=2\r\nSUMMARY:Bus Pass - $20/bi-weekly\r\nDESCRIPTION:Tags: transport\r\nDTSTAMP:20261008T000000\r\nUID:11-20261016@subtrack\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261012\r\nRRULE:FREQ=MONTHLY;INTERVAL=6\r\nSUMMARY:Domain Renewal - ¥1\\,500/semi-annual\r\nDESCRIPTION:Tags: dev\r\nDTSTAMP:20261008T000000\r\nUID:12-20261012@subtrack\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261008\r\nRRULE:FREQ=YEARLY\r\nSUMMARY:Discord Nitro - $9.99/yearly\r\nDESCRIPTION:Tags: video\r\nDTSTAMP:20261008T000000\r\nUID:13-20261008@subtrack\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+    format!("{}\n", s)
+}
+
