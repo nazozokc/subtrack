@@ -37,6 +37,11 @@ pub fn number(v: f64) -> String {
     }
 }
 
+/// A `serde_json` number value using JS number formatting (980, not 980.0).
+pub fn num_value(v: f64) -> serde_json::Value {
+    serde_json::from_str(&number(v)).unwrap_or(serde_json::Value::Null)
+}
+
 /// Emit a string value.
 fn string(v: &str) -> String {
     quote_string(v)

@@ -83,28 +83,37 @@ pub struct QueryOptions {
 }
 
 /// Open the (possibly encrypted) database file.
+///
+/// Mirrors `getDb()` in `db/connection.ts`: the live `Connection` always backs
+/// onto a decrypted temp file (`.subtrack.open.db`); `subtrack.db` holds the
+/// (encrypted) export written by `save_db`.
 pub fn open_db() -> std::io::Result<Connection> {
     let dir = crate::crypto::config_dir();
     let db_path = dir.join("subtrack.db");
-    let raw = std::fs::read(&db_path)?;
-    let plain;
-    let conn = if raw.len() >= 16 && !raw[..16].eq(crate::crypto::SQLITE_MAGIC)
-        && raw.len() > 32
-    {
-        let key = crate::crypto::get_or_create_key()?;
-        plain = crate::crypto::decrypt_buffer(&key, &raw)
-            .ok_or_else(|| std::io::Error::other("database decryption failed"))?;
-        // Stable backing file (mirrors `getOpenDbPath()`); it must exist as a
-        // real path so SQLite can journal migration/write transactions.
-        let tmp = dir.join(".subtrack.open.db");
-        std::fs::write(&tmp, &plain)?;
-        Connection::open(&tmp).map_err(|e| std::io::Error::other(e.to_string()))?
+    let open_path = dir.join(".subtrack.open.db");
+
+    if let Ok(raw) = std::fs::read(&db_path) {
+        let plain = if raw.len() >= 16 && !raw[..16].eq(crate::crypto::SQLITE_MAGIC)
+            && raw.len() > 32
+        {
+            let key = crate::crypto::get_or_create_key()?;
+            crate::crypto::decrypt_buffer(&key, &raw)
+                .ok_or_else(|| std::io::Error::other("database decryption failed"))?
+        } else {
+            raw
+        };
+        std::fs::write(&open_path, &plain)?;
     } else {
-        Connection::open(&db_path).map_err(|e| std::io::Error::other(e.to_string()))?
-    };
+        std::fs::create_dir_all(&dir)?;
+        let _ = std::fs::remove_file(&open_path);
+    }
+
+    let conn = Connection::open(&open_path).map_err(|e| std::io::Error::other(e.to_string()))?;
     conn.pragma_update(None, "foreign_keys", true)
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     conn.pragma_update(None, "secure_delete", true)
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    conn.busy_timeout(std::time::Duration::from_secs(5))
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     run_migrations(&conn).map_err(|e| std::io::Error::other(e.to_string()))?;
     Ok(conn)
@@ -1274,4 +1283,288 @@ pub fn remove_llm_usage(id: i64) -> std::io::Result<bool> {
         .execute("DELETE FROM llm_usage WHERE id = ?", params![id])
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     Ok(n > 0)
+}
+
+// ── Write layer (port of db/connection.ts saveDb + writeSubscription + audit) ──
+
+/// Serialize the open connection to `subtrack.db`, encrypting it.
+/// Port of `saveDb()`: `VACUUM INTO` a temp file, then encrypt + replace.
+pub fn save_db(conn: &Connection) -> std::io::Result<()> {
+    let dir = crate::crypto::config_dir();
+    std::fs::create_dir_all(&dir)?;
+    let tmp = dir.join(".subtrack.save.db");
+    let _ = std::fs::remove_file(&tmp);
+    let quoted = tmp.to_string_lossy().replace('\'', "''");
+    conn.execute_batch(&format!("VACUUM INTO '{}'", quoted))
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let data = std::fs::read(&tmp)?;
+    let _ = std::fs::remove_file(&tmp);
+
+    let key = crate::crypto::get_or_create_key()?;
+    let encrypted = crate::crypto::encrypt_buffer(&key, &data);
+    let db_path = dir.join("subtrack.db");
+    crate::crypto::write_secret_file(&db_path, &encrypted)?;
+    let sidecar = dir.join("subtrack.db.sha256");
+    crate::crypto::write_secret_file(
+        &sidecar,
+        format!("{}\n", crate::crypto::sha256_hex(&encrypted)).as_bytes(),
+    )?;
+    Ok(())
+}
+
+/// Fields for a new subscription row.
+#[derive(Default, Clone)]
+pub struct NewSubscription {
+    pub name: String,
+    pub price: f64,
+    pub currency: String,
+    pub cycle: String,
+    pub status: String,
+    pub billing_day: Option<i64>,
+    pub notes: Option<String>,
+    pub payment_method: Option<String>,
+    pub contract_start: Option<String>,
+    pub contract_end: Option<String>,
+    pub auto_renewal: bool,
+    pub vendor_name: Option<String>,
+    pub vendor_url: Option<String>,
+    pub plan_tier: Option<String>,
+    pub discount_amount: Option<f64>,
+    pub discount_type: Option<String>,
+    pub tags: Vec<String>,
+}
+
+/// Insert a subscription (+ tags) and optionally persist. Port of `writeSubscription`.
+pub fn write_subscription(
+    conn: &Connection,
+    s: &NewSubscription,
+    persist: bool,
+) -> std::io::Result<i64> {
+    conn.execute_batch("BEGIN TRANSACTION")
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let result = (|| -> rusqlite::Result<i64> {
+        conn.execute(
+            "INSERT INTO subscriptions (
+                name, price, currency, cycle, status, billing_day, created_at, notes,
+                payment_method, contract_start, contract_end, auto_renewal,
+                vendor_name, vendor_url, plan_tier, discount_amount, discount_type
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            params![
+                s.name,
+                s.price,
+                s.currency,
+                s.cycle,
+                if s.status.is_empty() { "active" } else { &s.status },
+                s.billing_day,
+                chrono::Utc::now().format("%Y-%m-%d").to_string(),
+                s.notes,
+                s.payment_method,
+                s.contract_start,
+                s.contract_end,
+                if s.auto_renewal { 1 } else { 0 },
+                s.vendor_name,
+                s.vendor_url,
+                s.plan_tier,
+                s.discount_amount,
+                s.discount_type,
+            ],
+        )?;
+        let id: i64 = conn.query_row("SELECT last_insert_rowid()", [], |r| r.get(0))?;
+
+        let mut seen: Vec<&String> = Vec::new();
+        for tag in &s.tags {
+            if seen.contains(&tag) {
+                continue;
+            }
+            seen.push(tag);
+            conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", params![tag])?;
+            let tag_id: Option<i64> = conn
+                .query_row("SELECT id FROM tags WHERE name = ?", params![tag], |r| r.get(0))
+                .ok();
+            if let Some(tag_id) = tag_id {
+                conn.execute(
+                    "INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)",
+                    params![id, tag_id],
+                )?;
+            }
+        }
+        Ok(id)
+    })();
+    match result {
+        Ok(id) => {
+            conn.execute_batch("COMMIT")
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            if persist {
+                save_db(conn)?;
+            }
+            Ok(id)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(std::io::Error::other(e.to_string()))
+        }
+    }
+}
+
+/// Append an audit entry. Port of `addAuditLog`.
+pub fn add_audit_log(
+    conn: &Connection,
+    action: &str,
+    target_type: Option<&str>,
+    target_id: Option<i64>,
+    details: Option<&str>,
+    persist: bool,
+) -> std::io::Result<bool> {
+    let r = conn.execute(
+        "INSERT INTO audit_log (action, target_type, target_id, details) VALUES (?, ?, ?, ?)",
+        params![action, target_type, target_id, details],
+    );
+    match r {
+        Ok(_) => {
+            if persist {
+                save_db(conn)?;
+            }
+            Ok(true)
+        }
+        Err(_) => Ok(false),
+    }
+}
+
+/// Update fields on a subscription. Port of `updateSubscription` (subset).
+pub fn update_subscription(
+    conn: &Connection,
+    id: i64,
+    sets: &[(&str, SqlValue)],
+    persist: bool,
+) -> std::io::Result<bool> {
+    let exists: bool = conn
+        .query_row("SELECT 1 FROM subscriptions WHERE id = ?", params![id], |_| Ok(true))
+        .unwrap_or(false);
+    if !exists {
+        return Ok(false);
+    }
+    if !sets.is_empty() {
+        let clause = sets
+            .iter()
+            .map(|(c, _)| format!("{} = ?", c))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut params_vec: Vec<rusqlite::types::Value> = sets.iter().map(|(_, v)| v.to_sql()).collect();
+        params_vec.push(rusqlite::types::Value::Integer(id));
+        conn.execute(
+            &format!("UPDATE subscriptions SET {} WHERE id = ?", clause),
+            rusqlite::params_from_iter(params_vec),
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    }
+    if persist {
+        save_db(conn)?;
+    }
+    Ok(true)
+}
+
+/// A minimal SQL value for dynamic updates.
+#[derive(Clone, Debug)]
+pub enum SqlValue {
+    Null,
+    Int(i64),
+    Real(f64),
+    Text(String),
+}
+
+impl SqlValue {
+    fn to_sql(&self) -> rusqlite::types::Value {
+        match self {
+            SqlValue::Null => rusqlite::types::Value::Null,
+            SqlValue::Int(i) => rusqlite::types::Value::Integer(*i),
+            SqlValue::Real(f) => rusqlite::types::Value::Real(*f),
+            SqlValue::Text(s) => rusqlite::types::Value::Text(s.clone()),
+        }
+    }
+}
+
+/// Archive a subscription by id. Port of `archiveSubscription`.
+pub fn archive_subscription(conn: &Connection, id: i64, persist: bool) -> std::io::Result<bool> {
+    let n = conn
+        .execute(
+            "UPDATE subscriptions SET status = 'archived' WHERE id = ? AND status != 'archived'",
+            params![id],
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    if n > 0 && persist {
+        save_db(conn)?;
+    }
+    Ok(n > 0)
+}
+
+/// Record a price-history row. Port of `writePriceHistory`.
+pub fn write_price_history(
+    conn: &Connection,
+    subscription_id: i64,
+    old_price: f64,
+    new_price: f64,
+    old_currency: &str,
+    new_currency: &str,
+) -> std::io::Result<()> {
+    conn.execute(
+        "INSERT INTO price_history (subscription_id, old_price, new_price, old_currency, new_currency)
+         VALUES (?, ?, ?, ?, ?)",
+        params![subscription_id, old_price, new_price, old_currency, new_currency],
+    )
+    .map_err(|e| std::io::Error::other(e.to_string()))?;
+    Ok(())
+}
+
+/// Replace a subscription's tags. Port of the `fields.tags` branch of
+/// `updateSubscription`.
+pub fn replace_tags(conn: &Connection, id: i64, tags: &[String]) -> std::io::Result<()> {
+    conn.execute(
+        "DELETE FROM subscription_tags WHERE subscription_id = ?",
+        params![id],
+    )
+    .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut seen: Vec<&String> = Vec::new();
+    for tag in tags {
+        if seen.contains(&tag) {
+            continue;
+        }
+        seen.push(tag);
+        conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", params![tag])
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let tag_id: Option<i64> = conn
+            .query_row("SELECT id FROM tags WHERE name = ?", params![tag], |r| r.get(0))
+            .ok();
+        if let Some(tag_id) = tag_id {
+            conn.execute(
+                "INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)",
+                params![id, tag_id],
+            )
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        }
+    }
+    Ok(())
+}
+
+/// Insert an LLM usage row. Port of `addLlmUsage`.
+pub fn insert_llm_usage(
+    conn: &Connection,
+    provider: &str,
+    model: &str,
+    input_tokens: i64,
+    output_tokens: i64,
+    cost: i64,
+    date: &str,
+    description: Option<&str>,
+    persist: bool,
+) -> std::io::Result<()> {
+    conn.execute(
+        "INSERT INTO llm_usage (provider, model, input_tokens, output_tokens, cost, date, description)
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        params![provider, model, input_tokens, output_tokens, cost, date, description],
+    )
+    .map_err(|e| std::io::Error::other(e.to_string()))?;
+    if persist {
+        save_db(conn)?;
+    }
+    Ok(())
 }

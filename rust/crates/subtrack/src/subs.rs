@@ -41,25 +41,25 @@ fn opt_text(
 
 /// `subtrack add` — port of `resolveAddOptions` validation order.
 pub fn run_add(parsed: &ParsedArgs) -> i32 {
-    let Some(_name) = prompt_string(parsed.str("name").as_deref(), validate_name) else {
+    let Some(name) = prompt_string(parsed.str("name").as_deref(), validate_name) else {
         return 0;
     };
-    let Some(_price) = prompt_string(parsed.str("price").as_deref(), validate_price) else {
+    let Some(price) = prompt_string(parsed.str("price").as_deref(), validate_price) else {
         return 0;
     };
-    let Some(_currency) = prompt_select(
+    let Some(currency) = prompt_select(
         parsed.str("currency").as_deref(),
         is_valid_currency,
         &CURRENCY_VALUES,
     ) else {
         return 0;
     };
-    let Some(_cycle) = prompt_cycle(parsed.str("cycle").as_deref()) else {
+    let Some(cycle) = prompt_cycle(parsed.str("cycle").as_deref()) else {
         return 0;
     };
 
     // tags: hint from existing tags; flag split happens later.
-    let _tags_str = parsed.str("tags").unwrap_or_default();
+    let tags_str = parsed.str("tags").unwrap_or_default();
 
     if opt_text(parsed, "notes", validate_notes).is_err() {
         return 1;
@@ -112,17 +112,76 @@ pub fn run_add(parsed: &ParsedArgs) -> i32 {
     }
 
     // status (last)
-    if prompt_select(parsed.str("status").as_deref(), is_valid_status, &STATUS_VALUES).is_none() {
+    let Some(status) = prompt_select(parsed.str("status").as_deref(), is_valid_status, &STATUS_VALUES)
+    else {
         return 0;
-    }
+    };
 
-    // NOTE: persistence is implemented in the mutating phase.
-    let name = parsed.str("name").unwrap_or_default();
-    logger::success(&format!("Added subscription: {}", name.trim()));
-    0
+    let text = |key: &str| -> Option<String> {
+        parsed
+            .str(key)
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+    };
+    let tags: Vec<String> = tags_str
+        .split(',')
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .collect();
+    let new_sub = crate::db::NewSubscription {
+        name: name.trim().to_string(),
+        price: price.trim().parse::<f64>().unwrap_or(0.0),
+        currency,
+        cycle,
+        status,
+        billing_day: text("billingDay").and_then(|v| v.parse::<i64>().ok()),
+        notes: text("notes"),
+        payment_method: text("paymentMethod"),
+        contract_start: text("contractStart"),
+        contract_end: text("contractEnd"),
+        auto_renewal: parsed.str("autoRenewal").as_deref() != Some("false"),
+        vendor_name: text("vendorName"),
+        vendor_url: text("vendorUrl"),
+        plan_tier: text("planTier"),
+        discount_amount: text("discountAmount").and_then(|v| v.parse::<f64>().ok()),
+        discount_type: text("discountType"),
+        tags,
+    };
+
+    let conn = match crate::db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            fail(&format!("Failed to add subscription: {}", e));
+            return 1;
+        }
+    };
+    match crate::db::write_subscription(&conn, &new_sub, true) {
+        Ok(id) => {
+            let details = format!(
+                "{} — {}/{}",
+                new_sub.name,
+                crate::price::format_price(new_sub.price, &new_sub.currency),
+                new_sub.cycle
+            );
+            let _ = crate::db::add_audit_log(
+                &conn,
+                "subscription.add",
+                Some("subscription"),
+                Some(id),
+                Some(&details),
+                true,
+            );
+            logger::success(&format!("Added subscription: {}", new_sub.name));
+            0
+        }
+        Err(e) => {
+            fail(&format!("Failed to add subscription: {}", e));
+            1
+        }
+    }
 }
 
-/// Port of `handleEdit` (not-found path + interactive guard).
+/// Port of `handleEdit`.
 pub fn run_edit(parsed: &ParsedArgs) -> i32 {
     let all = match crate::db::get_subscriptions(&crate::db::QueryOptions {
         include_archived: true,
@@ -143,19 +202,268 @@ pub fn run_edit(parsed: &ParsedArgs) -> i32 {
         // Interactive selection is not available in this environment.
         return 0;
     }
-    match get_subscription_by_id(id.unwrap()) {
-        Ok(Some(_)) => {
-            // Field updates are deferred to the mutating phase.
-            0
-        }
+    let sub = match get_subscription_by_id(id.unwrap()) {
+        Ok(Some(s)) => s,
         Ok(None) => {
             fail(&format!("Subscription with id {} not found", id.unwrap()));
-            1
+            return 1;
         }
         Err(e) => {
             logger::fail(&format!("Failed to read subscription: {}", e));
-            1
+            return 1;
         }
+    };
+
+    // hasFlags: any of the editable flags present.
+    let flag_keys = [
+        "name", "price", "currency", "cycle", "status", "billingDay", "tags", "notes",
+        "paymentMethod", "vendorName", "vendorUrl", "planTier", "discountAmount",
+        "discountType", "contractStart", "contractEnd", "autoRenewal",
+    ];
+    let has_flags = flag_keys.iter().any(|k| parsed.str(k).is_some());
+    if !has_flags {
+        // Interactive editing is not available in this environment.
+        return 0;
+    }
+
+    use crate::db::SqlValue;
+    let mut sets: Vec<(&str, SqlValue)> = Vec::new();
+    let mut changed_keys: Vec<&str> = Vec::new();
+    let mut new_tags: Option<Vec<String>> = None;
+
+    if let Some(v) = parsed.str("name") {
+        match validate_name(&v) {
+            Ok(()) => {
+                sets.push(("name", SqlValue::Text(v)));
+                changed_keys.push("name");
+            }
+            Err(e) => {
+                fail(&format!("Invalid name: {}", e));
+                return 1;
+            }
+        }
+    }
+    if let Some(v) = parsed.str("price") {
+        match validate_price(&v) {
+            Ok(()) => {
+                sets.push(("price", SqlValue::Real(v.trim().parse::<f64>().unwrap_or(0.0))));
+                changed_keys.push("price");
+            }
+            Err(e) => {
+                fail(&format!("Invalid price: {}", e));
+                return 1;
+            }
+        }
+    }
+    if let Some(v) = parsed.str("currency") {
+        if !is_valid_currency(&v) {
+            fail(&format!("Invalid currency: \"{}\"", v));
+            return 1;
+        }
+        sets.push(("currency", SqlValue::Text(v)));
+        changed_keys.push("currency");
+    }
+    if let Some(v) = parsed.str("cycle") {
+        if !crate::validation::is_valid_cycle(&v) {
+            fail(&format!("Invalid cycle: \"{}\"", v));
+            return 1;
+        }
+        sets.push(("cycle", SqlValue::Text(v)));
+        changed_keys.push("cycle");
+    }
+    if let Some(v) = parsed.str("status") {
+        if !is_valid_status(&v) {
+            fail(&format!("Invalid status: \"{}\"", v));
+            return 1;
+        }
+        sets.push(("status", SqlValue::Text(v)));
+        changed_keys.push("status");
+    }
+    if let Some(raw) = parsed.str("billingDay") {
+        let trimmed = raw.trim();
+        if let Err(e) = validate_billing_day(trimmed) {
+            fail(&format!("Invalid billing day: {}", e));
+            return 1;
+        }
+        let val = if trimmed.is_empty() {
+            SqlValue::Null
+        } else {
+            SqlValue::Int(trimmed.parse::<i64>().unwrap_or(0))
+        };
+        sets.push(("billing_day", val));
+        changed_keys.push("billingDay");
+    }
+    if let Some(v) = parsed.str("tags") {
+        if let Err(e) = crate::validation::validate_tags(&v) {
+            fail(&format!("Invalid tags: {}", e));
+            return 1;
+        }
+        new_tags = Some(
+            v.split(',')
+                .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty())
+                .collect(),
+        );
+        changed_keys.push("tags");
+    }
+    if let Some(v) = parsed.str("notes") {
+        let trimmed = v.trim();
+        if let Err(e) = validate_notes(trimmed) {
+            fail(&format!("Invalid notes: {}", e));
+            return 1;
+        }
+        sets.push(("notes", opt_text_val(trimmed)));
+        changed_keys.push("notes");
+    }
+    if let Some(v) = parsed.str("paymentMethod") {
+        let trimmed = v.trim();
+        if let Err(e) = validate_payment_method(trimmed) {
+            fail(&format!("Invalid payment method: {}", e));
+            return 1;
+        }
+        sets.push(("payment_method", opt_text_val(trimmed)));
+        changed_keys.push("paymentMethod");
+    }
+    if let Some(v) = parsed.str("vendorName") {
+        let trimmed = v.trim();
+        if let Err(e) = validate_vendor_name(trimmed) {
+            fail(&format!("Invalid vendor name: {}", e));
+            return 1;
+        }
+        sets.push(("vendor_name", opt_text_val(trimmed)));
+        changed_keys.push("vendorName");
+    }
+    if let Some(v) = parsed.str("vendorUrl") {
+        let trimmed = v.trim();
+        if let Err(e) = validate_vendor_url(trimmed) {
+            fail(&format!("Invalid vendor URL: {}", e));
+            return 1;
+        }
+        sets.push(("vendor_url", opt_text_val(trimmed)));
+        changed_keys.push("vendorUrl");
+    }
+    if let Some(v) = parsed.str("planTier") {
+        let trimmed = v.trim();
+        if let Err(e) = validate_plan_tier(trimmed) {
+            fail(&format!("Invalid plan tier: {}", e));
+            return 1;
+        }
+        sets.push(("plan_tier", opt_text_val(trimmed)));
+        changed_keys.push("planTier");
+    }
+    if let Some(v) = parsed.str("contractStart") {
+        let trimmed = v.trim();
+        if let Err(e) = validate_date_string(trimmed) {
+            fail(&format!("Invalid contract start: {}", e));
+            return 1;
+        }
+        sets.push(("contract_start", opt_text_val(trimmed)));
+        changed_keys.push("contractStart");
+    }
+    if let Some(v) = parsed.str("contractEnd") {
+        let trimmed = v.trim();
+        if let Err(e) = validate_date_string(trimmed) {
+            fail(&format!("Invalid contract end: {}", e));
+            return 1;
+        }
+        sets.push(("contract_end", opt_text_val(trimmed)));
+        changed_keys.push("contractEnd");
+    }
+    if let Some(v) = parsed.str("discountAmount") {
+        let trimmed = v.trim();
+        if let Err(e) = validate_discount_value(trimmed) {
+            fail(&format!("Invalid discount amount: {}", e));
+            return 1;
+        }
+        let val = if trimmed.is_empty() {
+            SqlValue::Null
+        } else {
+            SqlValue::Real(trimmed.parse::<f64>().unwrap_or(0.0))
+        };
+        sets.push(("discount_amount", val));
+        changed_keys.push("discountAmount");
+    }
+    if let Some(v) = parsed.str("discountType") {
+        let trimmed = v.trim();
+        if let Err(e) = validate_discount_type(trimmed) {
+            fail(&format!("Invalid discount type: {}", e));
+            return 1;
+        }
+        sets.push(("discount_type", opt_text_val(trimmed)));
+        changed_keys.push("discountType");
+    }
+    if let Some(v) = parsed.str("autoRenewal") {
+        if let Err(e) = crate::validation::validate_auto_renewal(&v) {
+            fail(&format!("Invalid autoRenewal: {}", e));
+            return 1;
+        }
+        sets.push(("auto_renewal", SqlValue::Int(if v == "true" { 1 } else { 0 })));
+        changed_keys.push("autoRenewal");
+    }
+
+    let conn = match crate::db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            logger::fail(&format!("Failed to edit subscription: {}", e));
+            return 1;
+        }
+    };
+    let new_price = parsed
+        .str("price")
+        .and_then(|v| v.trim().parse::<f64>().ok())
+        .unwrap_or(sub.price);
+    let new_currency = parsed.str("currency").unwrap_or_else(|| sub.currency.clone());
+
+    if let Err(e) = crate::db::update_subscription(&conn, sub.id, &sets, false) {
+        fail(&format!("Failed to edit subscription: {}", e));
+        return 1;
+    }
+    if let Some(tags) = &new_tags {
+        if let Err(e) = crate::db::replace_tags(&conn, sub.id, tags) {
+            fail(&format!("Failed to edit subscription: {}", e));
+            return 1;
+        }
+    }
+    // Record price history when price or currency changed.
+    if sub.price != new_price || sub.currency != new_currency {
+        let _ = crate::db::write_price_history(
+            &conn,
+            sub.id,
+            sub.price,
+            new_price,
+            &sub.currency,
+            &new_currency,
+        );
+    }
+    let _ = crate::db::save_db(&conn);
+    let updated = crate::db::get_subscription_by_id(sub.id).ok().flatten();
+    let details = format!("{}: {} changed", sub.name, changed_keys.join(", "));
+    let _ = crate::db::add_audit_log(
+        &conn,
+        "subscription.edit",
+        Some("subscription"),
+        Some(sub.id),
+        Some(&details),
+        false,
+    );
+    let _ = crate::db::save_db(&conn);
+    if let Some(u) = updated {
+        logger::success(&format!(
+            "Updated: {} — {}/{}",
+            u.name,
+            crate::price::format_price(u.price, &u.currency),
+            u.cycle
+        ));
+    }
+    0
+}
+
+/// `trimmed || null` — empty string becomes SQL NULL.
+fn opt_text_val(trimmed: &str) -> crate::db::SqlValue {
+    if trimmed.is_empty() {
+        crate::db::SqlValue::Null
+    } else {
+        crate::db::SqlValue::Text(trimmed.to_string())
     }
 }
 
@@ -178,7 +486,7 @@ pub fn run_clone(parsed: &ParsedArgs) -> i32 {
     }
 }
 
-/// Port of `handleArchive` (not-found / already-archived paths).
+/// Port of `handleArchive` (not-found / already-archived / success).
 pub fn run_archive(parsed: &ParsedArgs) -> i32 {
     let id = match parse_id(parsed.str("id")) {
         Some(id) => id,
@@ -190,7 +498,32 @@ pub fn run_archive(parsed: &ParsedArgs) -> i32 {
                 info(&format!("\"{}\" is already archived", sub.name));
                 return 0;
             }
-            0
+            let conn = match crate::db::open_db() {
+                Ok(c) => c,
+                Err(e) => {
+                    fail(&format!("Failed to archive subscription: {}", e));
+                    return 1;
+                }
+            };
+            match crate::db::archive_subscription(&conn, id, true) {
+                Ok(true) => {
+                    let _ = crate::db::add_audit_log(
+                        &conn,
+                        "subscription.archive",
+                        Some("subscription"),
+                        Some(id),
+                        Some(&sub.name),
+                        true,
+                    );
+                    logger::success(&format!("Archived: \"{}\"", sub.name));
+                    0
+                }
+                Ok(false) => 0,
+                Err(e) => {
+                    fail(&format!("Failed to archive subscription: {}", e));
+                    1
+                }
+            }
         }
         Ok(None) => {
             fail(&format!("Subscription with id {} not found", id));

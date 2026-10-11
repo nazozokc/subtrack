@@ -160,6 +160,65 @@ pub fn run_profile_switch(parsed: &ParsedArgs) -> i32 {
     0
 }
 
+/// Port of `saveProfile`.
+pub fn run_profile_save(parsed: &ParsedArgs) -> i32 {
+    let name = parsed.str("name").unwrap_or_default();
+    if name.is_empty() {
+        logger::fail("Profile name required");
+        return 1;
+    }
+    let valid = name.len() <= 50
+        && !name.is_empty()
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if !valid {
+        logger::fail(
+            "Profile name must be 1-50 characters, using only letters, numbers, hyphens, and underscores",
+        );
+        return 1;
+    }
+
+    let raw_tag = parsed.str_array("tag");
+    let tags: Option<Vec<String>> = raw_tag.and_then(|v| {
+        let flat: Vec<String> = v
+            .iter()
+            .flat_map(|t| t.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
+            .collect();
+        if flat.is_empty() { None } else { Some(flat) }
+    });
+
+    let mut filter = serde_json::Map::new();
+    if let Some(tags) = &tags {
+        filter.insert(
+            "tags".into(),
+            serde_json::Value::Array(tags.iter().cloned().map(serde_json::Value::String).collect()),
+        );
+    }
+    if let Some(status) = parsed.str("status") {
+        if !status.is_empty() {
+            filter.insert("status".into(), serde_json::Value::String(status));
+        }
+    }
+    if let Some(method) = parsed.str("payment-method") {
+        if !method.is_empty() {
+            filter.insert("paymentMethod".into(), serde_json::Value::String(method));
+        }
+    }
+
+    if let Err(e) = crate::config::save_config_mut(|raw| {
+        let entry = raw
+            .entry("profiles")
+            .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+        if let serde_json::Value::Object(map) = entry {
+            map.insert(name.clone(), serde_json::Value::Object(filter.clone()));
+        }
+    }) {
+        logger::fail(&format!("Failed to save profile: {}", e));
+        return 1;
+    }
+    logger::success(&format!("Profile \"{}\" saved", name));
+    0
+}
+
 /// Port of `deleteProfile` (not-found path).
 pub fn run_profile_delete(parsed: &ParsedArgs) -> i32 {
     let name = parsed.str("name").unwrap_or_default();

@@ -56,13 +56,47 @@ pub fn get_or_create_key() -> std::io::Result<Vec<u8>> {
             }
             Ok(key_content)
         }
-        Err(e) => Err(std::io::Error::other(format!(
-            "No encryption key found at {}: {}. Set SUBSC_CLI_DB_PASSPHRASE \
-             or create the key file.",
-            key_path.display(),
-            e
-        ))),
+        Err(_) => {
+            // Key missing — generate, persist, and warn (port of getOrCreateKey).
+            let dir = config_dir();
+            std::fs::create_dir_all(&dir)?;
+            let key = generate_key();
+            write_secret_file(&key_path, &key)?;
+            let integrity_path = dir.join(".key.sha256");
+            let _ = write_secret_file(&integrity_path, format!("{}\n", sha256_hex(&key)).as_bytes());
+            crate::logger::warn(&format!(
+                "Encryption key created at: {}\n  \
+                 !! BACKUP THIS KEY! If lost, your encrypted database cannot be recovered.\n  \
+                 >> Copy the file to a secure location (e.g. password manager).\n  \
+                 >> Or set SUBSC_CLI_DB_PASSPHRASE to derive the key from a passphrase instead.",
+                key_path.display()
+            ));
+            Ok(key)
+        }
     }
+}
+
+/// Cryptographically secure random key (32 bytes).
+fn generate_key() -> Vec<u8> {
+    use std::io::Read;
+    let mut key = vec![0u8; KEY_LENGTH];
+    std::fs::File::open("/dev/urandom")
+        .and_then(|mut f| f.read_exact(&mut key))
+        .expect("failed to read /dev/urandom");
+    key
+}
+
+/// Write a file with owner-only (0o600) permissions.
+pub fn write_secret_file(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)?;
+    f.write_all(data)
 }
 
 /// scrypt(passphrase, salt, 32, N=2^17, r=8, p=1).
@@ -80,18 +114,20 @@ fn aesgcm(key: &[u8]) -> Aes256Gcm {
     Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key))
 }
 
-/// `iv(16) + tag(16) + ct(16)` — port of encryptBuffer.
+/// `iv(16) + tag(16) + ct` — port of encryptBuffer.
 pub fn encrypt_buffer(key: &[u8], plaintext: &[u8]) -> Vec<u8> {
     let mut iv = [0u8; IV_LENGTH];
     getrandom(&mut iv);
     let cipher = aesgcm(key);
-    let ct = cipher
+    // `Aead::encrypt` returns `ciphertext || tag`.
+    let sealed = cipher
         .encrypt(Nonce::from_slice(&iv), plaintext)
         .expect("encryption failed");
-    let mut out = Vec::with_capacity(IV_LENGTH + TAG_LENGTH + ct.len());
+    let split = sealed.len() - TAG_LENGTH;
+    let mut out = Vec::with_capacity(IV_LENGTH + TAG_LENGTH + split);
     out.extend_from_slice(&iv);
-    out.extend_from_slice(&ct[..TAG_LENGTH]);
-    out.extend_from_slice(&ct[TAG_LENGTH..]);
+    out.extend_from_slice(&sealed[split..]); // tag
+    out.extend_from_slice(&sealed[..split]); // ciphertext
     out
 }
 

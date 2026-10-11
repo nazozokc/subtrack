@@ -398,7 +398,70 @@ groq, together, deepseek, cohere, or omit for interactive.",
         }
     }
 
-    // Persistence is deferred to the mutating phase.
+    // Non-interactive success path: all required flags supplied.
+    let (Some(provider), Some(model)) = (parsed.str("provider"), parsed.str("model")) else {
+        return 0;
+    };
+    let input_tokens = parsed
+        .str("inputTokens")
+        .and_then(|v| v.trim().parse::<i64>().ok())
+        .unwrap_or(0);
+    let output_tokens = parsed
+        .str("outputTokens")
+        .and_then(|v| v.trim().parse::<i64>().ok())
+        .unwrap_or(0);
+    let date = parsed
+        .str("date")
+        .unwrap_or_else(|| crate::date::today_string());
+    let cost_cents = parsed
+        .str("cost")
+        .and_then(|v| js_number(&v))
+        .map(|n| (n * 100.0).round() as i64)
+        .unwrap_or(0);
+    let description = parsed.str("description");
+
+    let conn = match crate::db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            logger::fail(&format!("Failed to add usage entry: {}", e));
+            return 1;
+        }
+    };
+    if let Err(e) = crate::db::insert_llm_usage(
+        &conn,
+        &provider,
+        &model,
+        input_tokens,
+        output_tokens,
+        cost_cents,
+        &date,
+        description.as_deref(),
+        true,
+    ) {
+        logger::fail(&format!("Failed to add usage entry: {}", e));
+        return 1;
+    }
+    let _ = crate::db::add_audit_log(
+        &conn,
+        "usage.add",
+        Some("usage"),
+        None,
+        Some(&format!(
+            "{}/{}: {} on {}",
+            provider,
+            model,
+            crate::price::format_usd_cost(cost_cents, 4),
+            date
+        )),
+        true,
+    );
+    logger::success(&format!(
+        "Added usage: {}/{} — {} on {}",
+        provider,
+        model,
+        crate::price::format_usd_cost(cost_cents, 4),
+        date
+    ));
     0
 }
 

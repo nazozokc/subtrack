@@ -161,6 +161,27 @@ pub fn validate_notes(v: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Port of `validateTags`.
+pub fn validate_tags(v: &str) -> Result<(), String> {
+    if v.trim().is_empty() {
+        return Ok(());
+    }
+    let tags: Vec<&str> = v
+        .split(',')
+        .map(|t| t.trim())
+        .filter(|t| !t.is_empty())
+        .collect();
+    if tags.len() > 10 {
+        return Err("Maximum 10 tags allowed".to_string());
+    }
+    for tag in tags {
+        if tag.chars().count() > 50 {
+            return Err(format!("Tag too long: \"{}\" (max 50 chars)", tag));
+        }
+    }
+    Ok(())
+}
+
 pub fn validate_payment_method(v: &str) -> Result<(), String> {
     if v.chars().count() > 100 {
         return Err("Payment method too long (max 100 chars)".to_string());

@@ -524,6 +524,15 @@ fn parse_budgets(value: &str) -> Option<Vec<serde_json::Value>> {
 }
 
 /// Write the config JSON back to disk (encrypted when a key is available).
+/// Mutate the on-disk config object and persist it.
+pub fn save_config_mut(
+    f: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>),
+) -> std::io::Result<()> {
+    let mut raw = load_config().raw;
+    f(&mut raw);
+    save_config_raw(&raw)
+}
+
 fn save_config_raw(raw: &serde_json::Map<String, serde_json::Value>) -> std::io::Result<()> {
     let dir = crate::crypto::config_dir();
     std::fs::create_dir_all(&dir)?;
