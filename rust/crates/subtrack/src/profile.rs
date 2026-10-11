@@ -233,7 +233,14 @@ pub fn run_profile_delete(parsed: &ParsedArgs) -> i32 {
         logger::fail(&format!("Profile \"{}\" not found", name));
         return 1;
     }
-    // Persistence is deferred to the mutating phase.
-    logger::success(&format!("Deleted profile \"{}\"", name));
+    let _ = crate::config::save_config_mut(|raw| {
+        if let Some(serde_json::Value::Object(map)) = raw.get_mut("profiles") {
+            map.remove(&name);
+        }
+        if raw.get("activeProfile").and_then(|v| v.as_str()) == Some(name.as_str()) {
+            raw.remove("activeProfile");
+        }
+    });
+    logger::success(&format!("Profile \"{}\" deleted", name));
     0
 }

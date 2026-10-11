@@ -1247,6 +1247,36 @@ pub fn rename_tag(old_name: &str, new_name: &str) -> std::io::Result<bool> {
     }
 }
 
+/// Delete a tag and its links. Returns whether the tag existed.
+pub fn remove_tag(conn: &Connection, name: &str, persist: bool) -> std::io::Result<bool> {
+    let tag_id: Option<i64> = conn
+        .query_row("SELECT id FROM tags WHERE name = ?", params![name], |r| r.get(0))
+        .ok();
+    let Some(tag_id) = tag_id else { return Ok(false) };
+    conn.execute("DELETE FROM subscription_tags WHERE tag_id = ?", params![tag_id])
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    conn.execute("DELETE FROM tags WHERE id = ?", params![tag_id])
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    if persist {
+        save_db(conn)?;
+    }
+    Ok(true)
+}
+
+/// Remove tags that have no subscription links. Returns the number removed.
+pub fn prune_tags(conn: &Connection, persist: bool) -> std::io::Result<usize> {
+    let n = conn
+        .execute(
+            "DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM subscription_tags)",
+            [],
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    if n > 0 && persist {
+        save_db(conn)?;
+    }
+    Ok(n)
+}
+
 /// Fetch a single LLM usage row by id.
 pub fn get_llm_usage_by_id(id: i64) -> std::io::Result<Option<LlmUsage>> {
     let conn = open_db()?;
@@ -1461,6 +1491,31 @@ pub fn update_subscription(
         save_db(conn)?;
     }
     Ok(true)
+}
+
+/// Delete a subscription by id. Port of `subscriptionRepository.remove`.
+pub fn remove_subscription(conn: &Connection, id: i64, persist: bool) -> std::io::Result<bool> {
+    let n = conn
+        .execute("DELETE FROM subscriptions WHERE id = ?", params![id])
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    if n > 0 && persist {
+        save_db(conn)?;
+    }
+    Ok(n > 0)
+}
+
+/// Unarchive a subscription by id. Port of `unarchiveSubscription`.
+pub fn unarchive_subscription(conn: &Connection, id: i64, persist: bool) -> std::io::Result<bool> {
+    let n = conn
+        .execute(
+            "UPDATE subscriptions SET status = 'active' WHERE id = ? AND status = 'archived'",
+            params![id],
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    if n > 0 && persist {
+        save_db(conn)?;
+    }
+    Ok(n > 0)
 }
 
 /// A minimal SQL value for dynamic updates.

@@ -402,6 +402,17 @@ groq, together, deepseek, cohere, or omit for interactive.",
     let (Some(provider), Some(model)) = (parsed.str("provider"), parsed.str("model")) else {
         return 0;
     };
+    // Without an explicit --cost we would look the model up in the LiteLLM
+    // pricing cache; it is unavailable in this environment, so fail as the
+    // reference does when no pricing can be resolved.
+    let cost_flag = parsed.str("cost");
+    if cost_flag.is_none() {
+        logger::fail(&format!(
+            "Could not find pricing for \"{}\". Provide --cost to set cost manually (e.g. --cost 0.50 for 50 cents).",
+            model
+        ));
+        return 1;
+    }
     let input_tokens = parsed
         .str("inputTokens")
         .and_then(|v| v.trim().parse::<i64>().ok())

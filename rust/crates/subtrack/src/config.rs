@@ -552,6 +552,15 @@ fn save_config_raw(raw: &serde_json::Map<String, serde_json::Value>) -> std::io:
     std::fs::write(crate::crypto::config_dir().join("config.json"), bytes)
 }
 
+/// Port of `handleConfigReset`.
+pub fn handle_config_reset() -> i32 {
+    let dir = crate::crypto::config_dir();
+    let _ = std::fs::remove_file(dir.join("config.json"));
+    let _ = std::fs::remove_file(dir.join("config.json.sha256"));
+    crate::logger::success("Config reset to defaults");
+    0
+}
+
 /// Resolve the display theme from config (mirror of getDisplayTheme).
 pub fn display_theme() -> crate::table::Theme {
     use crate::table::Theme;

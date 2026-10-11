@@ -220,9 +220,17 @@ pub fn run_edit(parsed: &ParsedArgs) -> i32 {
         "paymentMethod", "vendorName", "vendorUrl", "planTier", "discountAmount",
         "discountType", "contractStart", "contractEnd", "autoRenewal",
     ];
-    let has_flags = flag_keys.iter().any(|k| parsed.str(k).is_some());
+    let has_flags = flag_keys
+        .iter()
+        .any(|k| parsed.str(k).map(|v| !v.is_empty()).unwrap_or(false));
     if !has_flags {
-        // Interactive editing is not available in this environment.
+        info(&format!(
+            "Editing: {} — {}/{} [{}]",
+            sub.name,
+            crate::price::format_price(sub.price, &sub.currency),
+            sub.cycle,
+            if sub.tags.is_empty() { "no tags".to_string() } else { sub.tags.join(", ") }
+        ));
         return 0;
     }
 
@@ -468,19 +476,195 @@ fn opt_text_val(trimmed: &str) -> crate::db::SqlValue {
 }
 
 /// Port of `handleClone` (not-found path).
+/// Port of `handleDelete` — flag/id path (no interactive selection).
+pub fn run_delete(parsed: &ParsedArgs) -> i32 {
+    let ids: Vec<i64> = parsed
+        .str_array("id")
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|s| s.trim().parse::<i64>().ok())
+        .collect();
+    if ids.is_empty() {
+        // Interactive selection is not available in this environment.
+        return 0;
+    }
+    let conn = match crate::db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            logger::fail(&format!("Failed to delete: {}", e));
+            return 1;
+        }
+    };
+    for id in ids {
+        match get_subscription_by_id(id) {
+            Ok(Some(sub)) => {
+                if let Err(e) = crate::db::remove_subscription(&conn, id, true) {
+                    logger::fail(&format!("Failed to delete: {}", e));
+                    continue;
+                }
+                let _ = crate::db::add_audit_log(
+                    &conn,
+                    "subscription.delete",
+                    Some("subscription"),
+                    Some(id),
+                    Some(&sub.name),
+                    true,
+                );
+                logger::success(&format!("Deleted: {}", sub.name));
+            }
+            Ok(None) => {
+                fail(&format!("Subscription with id {} not found", id));
+            }
+            Err(e) => {
+                logger::fail(&format!("Failed to read subscription: {}", e));
+            }
+        }
+    }
+    0
+}
+
+/// Port of `handleClone`.
 pub fn run_clone(parsed: &ParsedArgs) -> i32 {
     let id = match parse_id(parsed.str("id")) {
         Some(id) => id,
         None => return 0,
     };
-    match get_subscription_by_id(id) {
-        Ok(Some(_)) => 0,
+    let sub = match get_subscription_by_id(id) {
+        Ok(Some(s)) => s,
         Ok(None) => {
             fail(&format!("Subscription with id {} not found", id));
-            1
+            return 1;
         }
         Err(e) => {
             logger::fail(&format!("Failed to read subscription: {}", e));
+            return 1;
+        }
+    };
+
+    let new_name = parsed.str("name").unwrap_or_else(|| format!("{} (copy)", sub.name));
+    let mut price = sub.price;
+    if let Some(v) = parsed.str("price") {
+        if let Err(e) = validate_price(&v) {
+            fail(&format!("Invalid price: {}", e));
+            return 1;
+        }
+        price = v.trim().parse::<f64>().unwrap_or(sub.price);
+    }
+    let mut currency = sub.currency.clone();
+    if let Some(v) = parsed.str("currency") {
+        if !is_valid_currency(&v) {
+            fail(&format!("Invalid currency: \"{}\"", v));
+            return 1;
+        }
+        currency = v;
+    }
+    let mut cycle = sub.cycle.clone();
+    if let Some(v) = parsed.str("cycle") {
+        if !crate::validation::is_valid_cycle(&v) {
+            fail(&format!("Invalid cycle: \"{}\"", v));
+            return 1;
+        }
+        cycle = v;
+    }
+    let tags = match parsed.str("tags") {
+        Some(v) => v
+            .split(',')
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .collect::<Vec<_>>(),
+        None => sub.tags.clone(),
+    };
+
+    let conn = match crate::db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            fail(&format!("Failed to clone subscription: {}", e));
+            return 1;
+        }
+    };
+    let new = crate::db::NewSubscription {
+        name: new_name.clone(),
+        price,
+        currency,
+        cycle,
+        status: sub.status.clone(),
+        billing_day: sub.billing_day,
+        notes: sub.notes.clone(),
+        payment_method: sub.payment_method.clone(),
+        contract_start: sub.contract_start.clone(),
+        contract_end: sub.contract_end.clone(),
+        auto_renewal: sub.auto_renewal,
+        vendor_name: sub.vendor_name.clone(),
+        vendor_url: sub.vendor_url.clone(),
+        plan_tier: sub.plan_tier.clone(),
+        discount_amount: sub.discount_amount,
+        discount_type: sub.discount_type.clone(),
+        tags,
+    };
+    match crate::db::write_subscription(&conn, &new, true) {
+        Ok(new_id) => {
+            let _ = crate::db::add_audit_log(
+                &conn,
+                "subscription.clone",
+                Some("subscription"),
+                Some(new_id),
+                Some(&format!("Cloned from #{} \"{}\" → \"{}\"", id, sub.name, new_name)),
+                true,
+            );
+            logger::success(&format!("Cloned: \"{}\" → \"{}\" (id={})", sub.name, new_name, new_id));
+            0
+        }
+        Err(e) => {
+            fail(&format!("Failed to clone subscription: {}", e));
+            1
+        }
+    }
+}
+
+/// Port of `handleUnarchive`.
+pub fn run_unarchive(parsed: &ParsedArgs) -> i32 {
+    let id = match parse_id(parsed.str("id")) {
+        Some(id) => id,
+        None => return 0,
+    };
+    let sub = match get_subscription_by_id(id) {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            fail(&format!("Subscription with id {} not found", id));
+            return 1;
+        }
+        Err(e) => {
+            logger::fail(&format!("Failed to read subscription: {}", e));
+            return 1;
+        }
+    };
+    if sub.status != "archived" {
+        info(&format!("\"{}\" is not archived (status: {})", sub.name, sub.status));
+        return 0;
+    }
+    let conn = match crate::db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            logger::fail(&format!("Failed to unarchive: {}", e));
+            return 1;
+        }
+    };
+    match crate::db::unarchive_subscription(&conn, id, true) {
+        Ok(true) => {
+            let _ = crate::db::add_audit_log(
+                &conn,
+                "subscription.unarchive",
+                Some("subscription"),
+                Some(id),
+                Some(&sub.name),
+                true,
+            );
+            logger::success(&format!("Unarchived: \"{}\"", sub.name));
+            0
+        }
+        Ok(false) => 0,
+        Err(e) => {
+            logger::fail(&format!("Failed to unarchive: {}", e));
             1
         }
     }
@@ -548,20 +732,56 @@ fn change_status(parsed: &ParsedArgs, target: &str) -> i32 {
         // Interactive selection is not available in this environment.
         return 0;
     }
-    let mut pending = 0usize;
-    for id in ids {
-        if let Ok(Some(sub)) = get_subscription_by_id(id) {
+    let force = parsed.bool("force").unwrap_or(false);
+    let mut pending: Vec<i64> = Vec::new();
+    for id in &ids {
+        if let Ok(Some(sub)) = get_subscription_by_id(*id) {
             if sub.status != target && sub.status != "archived" {
-                pending += 1;
+                pending.push(*id);
             }
         }
     }
-    if pending == 0 {
+    if pending.is_empty() {
         info("No subscriptions need changing");
         return 0;
     }
-    // Status updates are deferred to the mutating phase.
-    logger::success(&format!("Updated {} subscription(s)", pending));
+    if !force {
+        // Confirmation prompt is unavailable; the reference defaults to false.
+        info("Cancelled");
+        return 0;
+    }
+    let conn = match crate::db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            logger::fail(&format!("Failed to update: {}", e));
+            return 1;
+        }
+    };
+    for id in &pending {
+        let name = get_subscription_by_id(*id)
+            .ok()
+            .flatten()
+            .map(|s| s.name)
+            .unwrap_or_default();
+        if let Err(e) = crate::db::update_subscription(
+            &conn,
+            *id,
+            &[("status", crate::db::SqlValue::Text(target.to_string()))],
+            true,
+        ) {
+            fail(&format!("Failed to update: {}", e));
+            return 1;
+        }
+        let _ = crate::db::add_audit_log(
+            &conn,
+            if target == "active" { "subscription.resume" } else { "subscription.pause" },
+            Some("subscription"),
+            Some(*id),
+            Some(&name),
+            true,
+        );
+    }
+    logger::success(&format!("Updated {} subscription(s)", pending.len()));
     0
 }
 
@@ -573,14 +793,14 @@ pub fn run_resume(parsed: &ParsedArgs) -> i32 {
     change_status(parsed, "active")
 }
 
-/// Port of `handleRenew` (not-found + flag validation).
+/// Port of `handleRenew`.
 pub fn run_renew(parsed: &ParsedArgs) -> i32 {
     let id = match parse_id(parsed.str("id")) {
         Some(id) => id,
         None => return 0,
     };
-    match get_subscription_by_id(id) {
-        Ok(Some(_)) => {}
+    let sub = match get_subscription_by_id(id) {
+        Ok(Some(s)) => s,
         Ok(None) => {
             fail(&format!("Subscription with id {} not found", id));
             return 1;
@@ -589,45 +809,212 @@ pub fn run_renew(parsed: &ParsedArgs) -> i32 {
             logger::fail(&format!("Failed to read subscription: {}", e));
             return 1;
         }
-    }
+    };
+    use crate::db::SqlValue;
+    let mut sets: Vec<(&str, SqlValue)> = vec![("status", SqlValue::Text("active".to_string()))];
     if let Some(price) = parsed.str("price") {
         if let Err(e) = validate_price(&price) {
             fail(&format!("Invalid price: {}", e));
             return 1;
         }
+        sets.push(("price", SqlValue::Real(price.trim().parse::<f64>().unwrap_or(sub.price))));
     }
     if let Some(currency) = parsed.str("currency") {
         if !is_valid_currency(&currency) {
             fail(&format!("Invalid currency: \"{}\"", currency));
             return 1;
         }
+        sets.push(("currency", SqlValue::Text(currency)));
     }
     if let Some(cycle) = parsed.str("cycle") {
         if !crate::validation::is_valid_cycle(&cycle) {
             fail(&format!("Invalid cycle: \"{}\"", cycle));
             return 1;
         }
+        sets.push(("cycle", SqlValue::Text(cycle)));
     }
-    0
+    if let Some(contract_end) = parsed.str("contractEnd") {
+        let trimmed = contract_end.trim();
+        if trimmed.is_empty() {
+            sets.push(("contract_end", SqlValue::Null));
+        } else {
+            if let Err(e) = validate_date_string(trimmed) {
+                fail(&format!("Invalid contract end: {}", e));
+                return 1;
+            }
+            sets.push(("contract_end", SqlValue::Text(trimmed.to_string())));
+        }
+    }
+    if let Some(plan_tier) = parsed.str("planTier") {
+        let trimmed = plan_tier.trim();
+        if trimmed.is_empty() {
+            sets.push(("plan_tier", SqlValue::Null));
+        } else {
+            if let Err(e) = validate_plan_tier(trimmed) {
+                fail(&format!("Invalid plan tier: {}", e));
+                return 1;
+            }
+            sets.push(("plan_tier", SqlValue::Text(trimmed.to_string())));
+        }
+    }
+    if let Some(v) = parsed.str("autoRenewal") {
+        sets.push(("auto_renewal", SqlValue::Int(if v == "true" { 1 } else { 0 })));
+    }
+
+    let conn = match crate::db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            fail(&format!("Failed to renew subscription: {}", e));
+            return 1;
+        }
+    };
+    match crate::db::update_subscription(&conn, id, &sets, false) {
+        Ok(true) => {
+            let new_price = parsed
+                .str("price")
+                .and_then(|v| v.trim().parse::<f64>().ok())
+                .unwrap_or(sub.price);
+            let new_currency = parsed.str("currency").unwrap_or_else(|| sub.currency.clone());
+            let _ = crate::db::write_price_history(
+                &conn,
+                id,
+                sub.price,
+                new_price,
+                &sub.currency,
+                &new_currency,
+            );
+            let _ = crate::db::add_audit_log(
+                &conn,
+                "subscription.renew",
+                Some("subscription"),
+                Some(id),
+                Some(&format!("{} renewed", sub.name)),
+                false,
+            );
+            let _ = crate::db::save_db(&conn);
+            logger::success(&format!("Renewed: {}", sub.name));
+            0
+        }
+        Ok(false) => {
+            fail(&format!("Subscription with id {} not found", id));
+            1
+        }
+        Err(e) => {
+            fail(&format!("Failed to renew subscription: {}", e));
+            1
+        }
+    }
 }
 
-/// Port of `handleCancel` (not-found path).
+/// Port of `handleCancel`.
 pub fn run_cancel(parsed: &ParsedArgs) -> i32 {
     let id = match parse_id(parsed.str("id")) {
         Some(id) => id,
         None => return 0,
     };
-    match get_subscription_by_id(id) {
-        Ok(Some(_)) => 0,
+    let sub = match get_subscription_by_id(id) {
+        Ok(Some(s)) => s,
         Ok(None) => {
             fail(&format!("Subscription with id {} not found", id));
-            1
+            return 1;
         }
         Err(e) => {
             logger::fail(&format!("Failed to read subscription: {}", e));
-            1
+            return 1;
         }
+    };
+    if sub.status == "cancelled" {
+        info(&format!("\"{}\" is already cancelled", sub.name));
+        return 0;
     }
+    if sub.status == "archived" {
+        info(&format!(
+            "\"{}\" is archived — unarchive it first: subtrack unarchive {}",
+            sub.name, id
+        ));
+        return 0;
+    }
+
+    let next_billing = crate::date::calculate_next_billing(
+        sub.billing_day,
+        &sub.created_at,
+        &sub.cycle,
+        crate::date::today(),
+    );
+    let cancellation_date = crate::date::today_string();
+    let force = parsed.bool("force").unwrap_or(false);
+    let as_json = parsed.bool("json").unwrap_or(false);
+
+    if as_json {
+        let out = format!(
+            "{{\n  \"id\": {},\n  \"name\": {},\n  \"price\": {},\n  \"currency\": {},\n  \"cycle\": {},\n  \"status\": {},\n  \"nextBilling\": {},\n  \"cancellationDate\": {}\n}}\n",
+            sub.id,
+            crate::json::quote_string(&sub.name),
+            crate::json::number(sub.price),
+            crate::json::quote_string(&sub.currency),
+            crate::json::quote_string(&sub.cycle),
+            crate::json::quote_string(&sub.status),
+            crate::json::quote_string(&crate::date::format_date(next_billing)),
+            crate::json::quote_string(&cancellation_date),
+        );
+        crate::logger::out_str(&out);
+        return 0;
+    }
+
+    crate::logger::log(&crate::ansi::bold(&format!("Cancelling: {}", sub.name)));
+    crate::logger::log(&format!(
+        "  Price:        {}/{}",
+        crate::price::format_price(sub.price, &sub.currency),
+        sub.cycle
+    ));
+    let cfg = crate::config::load_config();
+    let fmt = if cfg.date_format == "short" {
+        crate::date::format_short_date(next_billing)
+    } else {
+        crate::date::format_date(next_billing)
+    };
+    crate::logger::log(&format!("  Next billing: {}", fmt));
+    crate::logger::log("");
+
+    if !force {
+        // All interactive confirms resolve to their default (false) without a
+        // TTY: no export, no alternatives checked, no note, no final confirm.
+        crate::logger::warn("You may want to review alternatives before cancelling");
+        info("Aborted — no changes made");
+        return 0;
+    }
+
+    let conn = match crate::db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            fail(&format!("Failed to cancel subscription: {}", e));
+            return 1;
+        }
+    };
+    let mut sets: Vec<(&str, crate::db::SqlValue)> =
+        vec![("status", crate::db::SqlValue::Text("cancelled".to_string()))];
+    if sub.contract_end.is_none() {
+        sets.push((
+            "contract_end",
+            crate::db::SqlValue::Text(cancellation_date.clone()),
+        ));
+    }
+    if let Err(e) = crate::db::update_subscription(&conn, id, &sets, false) {
+        fail(&format!("Failed to cancel subscription: {}", e));
+        return 1;
+    }
+    let _ = crate::db::add_audit_log(
+        &conn,
+        "subscription.cancel",
+        Some("subscription"),
+        Some(id),
+        Some(&sub.name),
+        false,
+    );
+    let _ = crate::db::save_db(&conn);
+    logger::success(&format!("Cancelled: \"{}\"", sub.name));
+    info(&format!("Remove it permanently with: subtrack delete {}", id));
+    0
 }
 
 /// Validate an optional notes/discount flag value (used by add side effects).

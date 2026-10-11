@@ -82,7 +82,115 @@ impl PadEnd for str {
         s
     }
 }
-/// Port of `handleTagRename`.
+/// Port of `handleTagDelete`.
+pub fn run_tag_delete(parsed: &ParsedArgs) -> i32 {
+    let name = parsed.str("name").unwrap_or_default();
+    if name.is_empty() {
+        fail("Usage: subtrack tag delete <name>");
+        return 1;
+    }
+    let conn = match crate::db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            fail(&format!("Failed to delete tag: {}", e));
+            return 1;
+        }
+    };
+    match crate::db::remove_tag(&conn, &name, true) {
+        Ok(true) => {
+            let _ = crate::db::add_audit_log(
+                &conn,
+                "tag.delete",
+                None,
+                None,
+                Some(&format!("\"{}\"", name)),
+                true,
+            );
+            logger::success(&format!("Deleted tag: \"{}\"", name));
+            0
+        }
+        Ok(false) => {
+            fail(&format!("Tag \"{}\" not found", name));
+            1
+        }
+        Err(e) => {
+            fail(&format!("Failed to delete tag: {}", e));
+            1
+        }
+    }
+}
+
+/// Port of `handleTagMerge`.
+pub fn run_tag_merge(parsed: &ParsedArgs) -> i32 {
+    let source = parsed.str("source").unwrap_or_default();
+    let target = parsed.str("target").unwrap_or_default();
+    if source.is_empty() || target.is_empty() {
+        fail("Usage: subtrack tag merge <source> <target>");
+        return 1;
+    }
+    match crate::db::rename_tag(&source, &target) {
+        Ok(true) => {
+            if let Ok(conn) = crate::db::open_db() {
+                let _ = crate::db::save_db(&conn);
+                let _ = crate::db::add_audit_log(
+                    &conn,
+                    "tag.merge",
+                    None,
+                    None,
+                    Some(&format!("\"{}\" → \"{}\"", source, target)),
+                    true,
+                );
+            }
+            logger::success(&format!("Merged tag: \"{}\" → \"{}\"", source, target));
+            0
+        }
+        Ok(false) => {
+            fail(&format!("Tag \"{}\" not found", source));
+            1
+        }
+        Err(e) => {
+            fail(&format!("Failed to merge tag: {}", e));
+            1
+        }
+    }
+}
+
+/// Port of `handleTagPrune`.
+pub fn run_tag_prune(_parsed: &ParsedArgs) -> i32 {
+    let conn = match crate::db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            fail(&format!("Failed to prune tags: {}", e));
+            return 1;
+        }
+    };
+    match crate::db::prune_tags(&conn, true) {
+        Ok(0) => {
+            info("No orphaned tags found");
+            0
+        }
+        Ok(n) => {
+            let _ = crate::db::add_audit_log(
+                &conn,
+                "tag.prune",
+                None,
+                None,
+                Some(&format!("{} orphaned tags removed", n)),
+                true,
+            );
+            logger::success(&format!(
+                "Removed {} orphaned tag{}",
+                n,
+                if n > 1 { "s" } else { "" }
+            ));
+            0
+        }
+        Err(e) => {
+            fail(&format!("Failed to prune tags: {}", e));
+            1
+        }
+    }
+}
 pub fn run_tag_rename(parsed: &ParsedArgs) -> i32 {
     let old_name = parsed.str("old").unwrap_or_default();
     let new_name = parsed.str("new").unwrap_or_default();
