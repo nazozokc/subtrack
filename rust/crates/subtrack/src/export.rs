@@ -3,7 +3,8 @@
 
 use crate::db::{get_subscriptions, QueryOptions, Subscription};
 use crate::json::{list_json, number};
-use crate::logger::{self, log};
+use crate::logger::{self, log, success};
+use std::fs;
 use crate::parser::ParsedArgs;
 
 const SUPPORTED: [&str; 5] = ["csv", "json", "md", "excel", "ics"];
@@ -67,6 +68,16 @@ pub fn run_export(parsed: &ParsedArgs, depth: usize) -> i32 {
     };
 
     // `consola.log(content)` — content already ends in "\n" for json.
+    if let Some(outpath) = parsed.str("output").or_else(|| parsed.str("o")) {
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let path = cwd.join(outpath);
+        if let Err(e) = fs::write(&path, content.as_bytes()) {
+            logger::fail(&format!("Failed to write file: {}", e));
+            return 1;
+        }
+        success(&format!("Exported to: {}", path.display()));
+        return 0;
+    }
     log(&content);
     0
 }
