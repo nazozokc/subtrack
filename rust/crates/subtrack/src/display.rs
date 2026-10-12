@@ -226,8 +226,9 @@ pub fn render_table(
     let label_col = price_col - 1;
 
     for (i, row) in rows.iter().enumerate() {
-        let is_total = row.get(0).map(|c| c.is_empty()).unwrap_or(false);
-            && row.get(1).map(|c| c.is_empty()).unwrap_or(false);
+        // Total rows are marked by three leading empty cells.
+        let is_total = row.get(0).map(|c| c.is_empty()).unwrap_or(false)
+            && row.get(1).map(|c| c.is_empty()).unwrap_or(false)
             && row.get(2).map(|c| c.is_empty()).unwrap_or(false);
         if is_total {
             let mapped: Vec<String> = row
