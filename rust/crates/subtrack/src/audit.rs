@@ -198,8 +198,36 @@ fn list(
 fn run_audit_prune(parsed: &ParsedArgs) -> i32 {
     let days = parsed.str("days").and_then(|d| d.parse::<i64>().ok()).unwrap_or(90);
     let force = parsed.bool("force") == Some(true);
-    let json = parsed.bool("json") == Some(true);
-    let _ = (days, force, json);
-    logger::fail("audit prune is not yet implemented");
-    1
+    let before = (chrono::Utc::now() - chrono::Duration::days(days))
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+
+    let count = db::count_audit_before(&before);
+    if count == 0 {
+        info(&format!("No audit log entries older than {} days", days));
+        return 0
+    }
+    if !force {
+        logger::warn(&format!(
+            "This will delete {} audit log entr{} older than {} days.\n  Use --force to proceed.",
+            count,
+            if count != 1 { "ies" } else { "y" },
+            days
+        ));
+        return 0
+    }
+    let conn = match db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            logger::fail(&e.to_string());
+            return 1
+        }
+    };
+    let deleted = db::prune_audit_logs(&conn, &before, true).unwrap_or(0);
+    logger::success(&format!(
+        "Pruned {} audit log entr{}",
+        deleted,
+        if deleted != 1 { "ies" } else { "y" }
+    ));
+    0
 }

@@ -74,3 +74,9 @@ pub fn format_usd_cost(cents: i64, digits: usize) -> String {
     let v = cents as f64 / 100.0;
     format!("${:.1$}", v, digits)
 }
+
+/// Like [`format_usd_cost`] but preserves fractional cents (LLM API costs).
+pub fn format_usd_cost_f(cents: f64, digits: usize) -> String {
+    let v = cents / 100.0;
+    format!("${:.1$}", v, digits)
+}

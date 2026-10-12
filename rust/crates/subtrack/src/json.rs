@@ -56,6 +56,12 @@ pub fn list_json(list: &[crate::db::Subscription]) -> String {
 }
 
 pub fn sub_json(sub: &crate::db::Subscription) -> String {
+    let fields = sub_fields(sub);
+    format!("  {{\n    {}\n  }}", fields.join(",\n    "))
+}
+
+/// Key/value pairs for a subscription row (SUB_COLUMNS order, then `tags`).
+pub fn sub_fields(sub: &crate::db::Subscription) -> Vec<String> {
     let mut fields: Vec<String> = Vec::new();
     let kv = |k: &str, v: String| format!("{}: {}", quote_string(k), v);
 
@@ -67,7 +73,7 @@ pub fn sub_json(sub: &crate::db::Subscription) -> String {
     fields.push(kv("status", string(&sub.status)));
     fields.push(kv(
         "billingDay",
-        sub.billing_day.map(|v| v.to_string()).unwrap_or_else(|| "null".to_string()),
+        sub.billing_day.map(|d| d.to_string()).unwrap_or_else(|| "null".to_string()),
     ));
     fields.push(kv("createdAt", string(&sub.created_at)));
     fields.push(kv(
@@ -109,7 +115,22 @@ pub fn sub_json(sub: &crate::db::Subscription) -> String {
     ));
     fields.push(kv("tags", tags_json(&sub.tags)));
 
-    format!("  {{\n    {}\n  }}", fields.join(",\n    "))
+    fields
+}
+
+/// Key/value pairs for a trial row (id, name, expiresAt, …).
+pub fn trial_fields(t: &crate::db::Trial) -> Vec<String> {
+    let kv = |k: &str, v: String| format!("{}: {}", quote_string(k), v);
+    vec![
+        kv("id", t.id.to_string()),
+        kv("name", string(&t.name)),
+        kv("expiresAt", string(&t.expires_at)),
+        kv("price", t.price.map(number).unwrap_or_else(|| "null".to_string())),
+        kv("currency", t.currency.as_deref().map(string).unwrap_or_else(|| "null".to_string())),
+        kv("cycle", t.cycle.as_deref().map(string).unwrap_or_else(|| "null".to_string())),
+        kv("notes", t.notes.as_deref().map(string).unwrap_or_else(|| "null".to_string())),
+        kv("createdAt", string(&t.created_at)),
+    ]
 }
 
 fn tags_json(tags: &[String]) -> String {

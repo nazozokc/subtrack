@@ -271,7 +271,26 @@ pub fn run_suggest_add(parsed: &ParsedArgs) -> i32 {
 /// Port of `handleSuggestDismiss`.
 pub fn run_suggest_dismiss(parsed: &ParsedArgs) -> i32 {
     if parsed.bool("all") == Some(true) {
-        // Dismiss-all is deferred to the mutating phase.
+        let count = match crate::db::get_suggestions(Some("pending")) {
+            Ok(v) => v.len(),
+            Err(e) => {
+                logger::fail(&format!("Failed to dismiss suggestions: {}", e));
+                return 1;
+            }
+        };
+        if count == 0 {
+            logger::info("No pending suggestions to dismiss.");
+            return 0;
+        }
+        if let Err(e) = crate::db::dismiss_all_suggestions() {
+            logger::fail(&format!("Failed to dismiss suggestions: {}", e));
+            return 1;
+        }
+        logger::success(&format!(
+            "{} suggestion{} dismissed.",
+            count,
+            if count > 1 { "s" } else { "" }
+        ));
         return 0;
     }
     let Some(id) = parsed.str("id").and_then(|s| s.trim().parse::<i64>().ok()) else {

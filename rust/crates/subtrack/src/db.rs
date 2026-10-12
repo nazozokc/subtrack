@@ -505,7 +505,7 @@ pub struct LlmUsage {
     pub model: String,
     pub input_tokens: i64,
     pub output_tokens: i64,
-    pub cost: i64,
+    pub cost: f64,
     pub date: String,
     pub description: Option<String>,
 }
@@ -570,7 +570,7 @@ pub fn get_llm_usage(
                 model: row.get(2)?,
                 input_tokens: row.get(3)?,
                 output_tokens: row.get(4)?,
-                cost: row.get::<_, f64>(5)?.round() as i64,
+                cost: row.get::<_, f64>(5)?,
                 date: row.get(6)?,
                 description: row.get(7)?,
             })
@@ -593,6 +593,7 @@ pub struct Trial {
     pub currency: Option<String>,
     pub cycle: Option<String>,
     pub notes: Option<String>,
+    pub created_at: String,
 }
 
 /// All trials, oldest expiry first (port of `getTrials`).
@@ -600,7 +601,7 @@ pub fn get_trials() -> std::io::Result<Vec<Trial>> {
     let conn = open_db()?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, expires_at, price, currency, cycle, notes FROM trials \
+            "SELECT id, name, expires_at, price, currency, cycle, notes, created_at FROM trials \
              ORDER BY expires_at ASC",
         )
         .map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -614,6 +615,7 @@ pub fn get_trials() -> std::io::Result<Vec<Trial>> {
                 currency: row.get(4)?,
                 cycle: row.get(5)?,
                 notes: row.get(6)?,
+                created_at: row.get(7)?,
             })
         })
         .map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -633,7 +635,7 @@ pub fn get_trials_expiring_soon(days: i64) -> std::io::Result<Vec<Trial>> {
         .to_string();
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, expires_at, price, currency, cycle, notes FROM trials \
+            "SELECT id, name, expires_at, price, currency, cycle, notes, created_at FROM trials \
              WHERE expires_at >= ? AND expires_at <= ? ORDER BY expires_at ASC",
         )
         .map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -647,6 +649,7 @@ pub fn get_trials_expiring_soon(days: i64) -> std::io::Result<Vec<Trial>> {
                 currency: row.get(4)?,
                 cycle: row.get(5)?,
                 notes: row.get(6)?,
+                created_at: row.get(7)?,
             })
         })
         .map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -1150,7 +1153,7 @@ pub fn get_trial(id: i64) -> std::io::Result<Option<Trial>> {
     let conn = open_db()?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, expires_at, price, currency, cycle, notes FROM trials \
+            "SELECT id, name, expires_at, price, currency, cycle, notes, created_at FROM trials \
              WHERE id = ? LIMIT 1",
         )
         .map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -1164,6 +1167,7 @@ pub fn get_trial(id: i64) -> std::io::Result<Option<Trial>> {
                 currency: row.get(4)?,
                 cycle: row.get(5)?,
                 notes: row.get(6)?,
+                created_at: row.get(7)?,
             })
         })
         .map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -1183,6 +1187,18 @@ pub fn remove_trial(id: i64) -> std::io::Result<bool> {
 }
 
 /// Dismiss a pending suggestion; returns false when no pending row matched.
+/// Dismiss all pending suggestions (dismissAllSuggestions).
+pub fn dismiss_all_suggestions() -> std::io::Result<usize> {
+    let conn = open_db()?;
+    let n = conn
+        .execute(
+            "UPDATE suggestions SET status = 'dismissed' WHERE status = 'pending'",
+            [],
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    Ok(n)
+}
+
 pub fn dismiss_suggestion(id: i64) -> std::io::Result<bool> {
     let conn = open_db()?;
     let n = conn
@@ -1277,6 +1293,55 @@ pub fn prune_tags(conn: &Connection, persist: bool) -> std::io::Result<usize> {
     Ok(n)
 }
 
+/// Path of the encrypted database file (`getDbPath`).
+pub fn db_path() -> std::path::PathBuf {
+    crate::crypto::config_dir().join("subtrack.db")
+}
+
+/// Size in bytes of the encrypted database file (`getFileSize`).
+pub fn db_file_size() -> i64 {
+    std::fs::metadata(db_path()).map(|m| m.len() as i64).unwrap_or(0)
+}
+
+/// `PRAGMA integrity_check` → the reported string (defaults to "ok").
+pub fn integrity_check(conn: &Connection) -> String {
+    conn.query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
+        .unwrap_or_else(|_| "ok".to_string())
+}
+
+/// Run `VACUUM` and persist. Port of the maintenance/cleanup VACUUM step.
+pub fn vacuum_db(conn: &Connection) -> std::io::Result<()> {
+    conn.execute_batch("VACUUM")
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    save_db(conn)
+}
+
+/// Count of audit log entries with `created_at <= before + "T23:59:59"`
+/// (port of `auditRepository.count({ to: before })`).
+pub fn count_audit_before(before: &str) -> i64 {
+    let conn = match open_db() {
+        Ok(c) => c,
+        Err(_) => return 0,
+    };
+    conn.query_row(
+        "SELECT COUNT(*) FROM audit_log WHERE created_at <= ?",
+        params![format!("{}T23:59:59", before)],
+        |row| row.get::<_, i64>(0),
+    )
+    .unwrap_or(0)
+}
+
+/// Delete audit log entries older than `before`; returns count deleted.
+pub fn prune_audit_logs(conn: &Connection, before: &str, persist: bool) -> std::io::Result<usize> {
+    let n = conn
+        .execute("DELETE FROM audit_log WHERE created_at < ?", params![before])
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    if n > 0 && persist {
+        save_db(conn)?;
+    }
+    Ok(n)
+}
+
 /// Fetch a single LLM usage row by id.
 pub fn get_llm_usage_by_id(id: i64) -> std::io::Result<Option<LlmUsage>> {
     let conn = open_db()?;
@@ -1294,7 +1359,7 @@ pub fn get_llm_usage_by_id(id: i64) -> std::io::Result<Option<LlmUsage>> {
                 model: row.get(2)?,
                 input_tokens: row.get(3)?,
                 output_tokens: row.get(4)?,
-                cost: row.get::<_, f64>(5)?.round() as i64,
+                cost: row.get::<_, f64>(5)?,
                 date: row.get(6)?,
                 description: row.get(7)?,
             })
@@ -1342,6 +1407,156 @@ pub fn save_db(conn: &Connection) -> std::io::Result<()> {
     Ok(())
 }
 
+// ── Backup / restore (port of db/connection.ts backup helpers) ──
+
+/// Serialize the open DB to bytes via `VACUUM INTO` (port of `exportDbBytes`).
+pub fn export_db_bytes(conn: &Connection) -> std::io::Result<Vec<u8>> {
+    let dir = crate::crypto::config_dir();
+    std::fs::create_dir_all(&dir)?;
+    let tmp = dir.join(".subtrack.save.db");
+    let _ = std::fs::remove_file(&tmp);
+    let quoted = tmp.to_string_lossy().replace('\'', "''");
+    conn.execute_batch(&format!("VACUUM INTO '{}'", quoted))
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let data = std::fs::read(&tmp)?;
+    let _ = std::fs::remove_file(&tmp);
+    Ok(data)
+}
+
+/// Default backup directory: `<config>/backups`.
+pub fn default_backup_dir() -> std::path::PathBuf {
+    crate::crypto::config_dir().join("backups")
+}
+
+fn file_name_of(path: &std::path::Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// Write `<path>.sha256` with the file's SHA256 (port of `writeBackupHash`).
+pub fn write_backup_hash(path: &std::path::Path) -> std::io::Result<()> {
+    let content = std::fs::read(path)?;
+    let hash = crate::crypto::sha256_hex(&content);
+    crate::crypto::write_secret_file(
+        &std::path::PathBuf::from(format!("{}.sha256", path.display())),
+        format!("{}\n", hash).as_bytes(),
+    )
+}
+
+/// Verify `<path>.sha256`. Missing sidecar warns and returns true (port of
+/// `verifyBackupHash`).
+pub fn verify_backup_hash(path: &std::path::Path) -> bool {
+    let hash_path = std::path::PathBuf::from(format!("{}.sha256", path.display()));
+    if !hash_path.exists() {
+        crate::logger::warn(&format!(
+            "No integrity hash found for \"{}\" — integrity cannot be verified.",
+            file_name_of(path)
+        ));
+        return true;
+    }
+    let expected = std::fs::read_to_string(&hash_path)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let content = std::fs::read(path).unwrap_or_default();
+    crate::crypto::sha256_hex(&content) == expected
+}
+
+fn gunzip(data: &[u8]) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    let mut dec = flate2::read::GzDecoder::new(data);
+    let mut out = Vec::new();
+    dec.read_to_end(&mut out)?;
+    Ok(out)
+}
+
+/// Replace the live database with the contents of `backup_path`.
+/// Port of `restoreDb` (validated + migrated before it becomes active).
+pub fn restore_db(backup_path: &std::path::Path) -> std::io::Result<()> {
+    let raw = std::fs::read(backup_path)?;
+    let lower = backup_path.to_string_lossy().to_lowercase();
+    let has_gzip_magic = raw.len() >= 2 && raw[0] == 0x1f && raw[1] == 0x8b;
+    let key = crate::crypto::get_or_create_key()?;
+
+    let decrypt_err = || {
+        std::io::Error::other(
+            "Failed to decrypt backup. The encryption key may have changed or the backup is corrupted.\n  If you changed your database passphrase or .key file, restore using the old key.",
+        )
+    };
+
+    let data = if lower.ends_with(".db.enc") {
+        crate::crypto::decrypt_buffer(&key, &raw).ok_or_else(decrypt_err)?
+    } else if lower.ends_with(".gz") || has_gzip_magic {
+        let decompressed = gunzip(&raw)?;
+        if crate::crypto::is_encrypted(&decompressed) {
+            crate::crypto::decrypt_buffer(&key, &decompressed).ok_or_else(decrypt_err)?
+        } else {
+            decompressed
+        }
+    } else if crate::crypto::is_encrypted(&raw) {
+        crate::crypto::decrypt_buffer(&key, &raw).ok_or_else(decrypt_err)?
+    } else {
+        raw
+    };
+
+    let buf = if data.len() >= 2 && data[0] == 0x1f && data[1] == 0x8b {
+        gunzip(&data)?
+    } else {
+        data
+    };
+
+    let dir = crate::crypto::config_dir();
+    std::fs::create_dir_all(&dir)?;
+
+    // Validate + migrate against the throwaway save path before replacing live.
+    let save_path = dir.join(".subtrack.save.db");
+    std::fs::write(&save_path, &buf)?;
+    let validate = (|| -> std::io::Result<()> {
+        let c = Connection::open(&save_path).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let ok: String = c
+            .query_row("PRAGMA integrity_check", [], |r| r.get(0))
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        if ok != "ok" {
+            return Err(std::io::Error::other(format!(
+                "Invalid backup file: integrity check failed ({})",
+                ok
+            )));
+        }
+        let has_subs: i64 = c
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='subscriptions'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        if has_subs == 0 {
+            return Err(std::io::Error::other(
+                "Invalid backup file: subscriptions table is missing",
+            ));
+        }
+        run_migrations(&c).map_err(|e| std::io::Error::other(e.to_string()))?;
+        Ok(())
+    })();
+    if let Err(e) = validate {
+        let _ = std::fs::remove_file(&save_path);
+        return Err(e);
+    }
+
+    let restored = std::fs::read(&save_path)?;
+    let _ = std::fs::remove_file(&save_path);
+
+    let encrypted = crate::crypto::encrypt_buffer(&key, &restored);
+    let db_path = dir.join("subtrack.db");
+    crate::crypto::write_secret_file(&db_path, &encrypted)?;
+    crate::crypto::write_secret_file(
+        &dir.join("subtrack.db.sha256"),
+        format!("{}\n", crate::crypto::sha256_hex(&encrypted)).as_bytes(),
+    )?;
+    let _ = std::fs::remove_file(dir.join(".subtrack.open.db"));
+    Ok(())
+}
+
 /// Fields for a new subscription row.
 #[derive(Default, Clone)]
 pub struct NewSubscription {
@@ -1362,6 +1577,21 @@ pub struct NewSubscription {
     pub discount_amount: Option<f64>,
     pub discount_type: Option<String>,
     pub tags: Vec<String>,
+}
+
+/// Port of `subscriptionRepository.findByName`; returns the matching id.
+pub fn find_subscription_by_name(name: &str) -> std::io::Result<Option<i64>> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare("SELECT id FROM subscriptions WHERE name = ? LIMIT 1")
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut rows = stmt
+        .query_map(params![name], |row| row.get::<_, i64>(0))
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    match rows.next() {
+        Some(r) => Ok(Some(r.map_err(|e| std::io::Error::other(e.to_string()))?)),
+        None => Ok(None),
+    }
 }
 
 /// Insert a subscription (+ tags) and optionally persist. Port of `writeSubscription`.
@@ -1386,7 +1616,7 @@ pub fn write_subscription(
                 s.cycle,
                 if s.status.is_empty() { "active" } else { &s.status },
                 s.billing_day,
-                chrono::Utc::now().format("%Y-%m-%d").to_string(),
+                crate::date::today_string(),
                 s.notes,
                 s.payment_method,
                 s.contract_start,
@@ -1493,9 +1723,46 @@ pub fn update_subscription(
     Ok(true)
 }
 
+/// Replace a subscription's tags (port of the `fields.tags` branch of
+/// `updateSubscription`).
+pub fn set_subscription_tags(
+    conn: &Connection,
+    id: i64,
+    tags: &[String],
+    persist: bool,
+) -> std::io::Result<()> {
+    conn.execute(
+        "DELETE FROM subscription_tags WHERE subscription_id = ?",
+        params![id],
+    )
+    .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let mut seen: Vec<&String> = Vec::new();
+    for tag in tags {
+        if seen.contains(&tag) {
+            continue;
+        }
+        seen.push(tag);
+        conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", params![tag])
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let tag_id: Option<i64> = conn
+            .query_row("SELECT id FROM tags WHERE name = ?", params![tag], |r| r.get(0))
+            .ok();
+        if let Some(tag_id) = tag_id {
+            conn.execute(
+                "INSERT INTO subscription_tags (subscription_id, tag_id) VALUES (?, ?)",
+                params![id, tag_id],
+            )
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        }
+    }
+    if persist {
+        save_db(conn)?;
+    }
+    Ok(())
+}
+
 /// Delete a subscription by id. Port of `subscriptionRepository.remove`.
-pub fn remove_subscription(conn: &Connection, id: i64, persist: bool) -> std::io::Result<bool> {
-    let n = conn
+pub fn remove_subscription(conn: &Connection, id: i64, persist: bool) -> std::io::Result<bool> {    let n = conn
         .execute("DELETE FROM subscriptions WHERE id = ?", params![id])
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     if n > 0 && persist {
@@ -1622,4 +1889,41 @@ pub fn insert_llm_usage(
         save_db(conn)?;
     }
     Ok(())
+}
+
+/// Port of `addLlmUsageFromLog` — insert with fractional-cent cost and dedup by
+/// `generation_id`. Returns `true` when a row was inserted, `false` for a
+/// duplicate.
+pub fn add_llm_usage_from_log(
+    conn: &Connection,
+    provider: &str,
+    model: &str,
+    input_tokens: i64,
+    output_tokens: i64,
+    cost: f64,
+    date: &str,
+    description: Option<&str>,
+    generation_id: &str,
+    persist: bool,
+) -> std::io::Result<bool> {
+    let existing: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM llm_usage WHERE generation_id = ? LIMIT 1",
+            params![generation_id],
+            |row| row.get(0),
+        )
+        .ok();
+    if existing.is_some() {
+        return Ok(false);
+    }
+    conn.execute(
+        "INSERT INTO llm_usage (provider, model, input_tokens, output_tokens, cost, date, description, generation_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        params![provider, model, input_tokens, output_tokens, cost, date, description, generation_id],
+    )
+    .map_err(|e| std::io::Error::other(e.to_string()))?;
+    if persist {
+        save_db(conn)?;
+    }
+    Ok(true)
 }

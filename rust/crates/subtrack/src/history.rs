@@ -27,8 +27,14 @@ pub fn format_diff(
     if let Some(old) = old_price {
         if old != new_price {
             let diff = new_price - old;
-            let sign = if diff > 0.0 { "+" } else { "" };
-            return format!("{} → {}  ({}{})", old_str, new_str, sign, format_price(diff, new_currency));
+            let sign = if diff > 0.0 { "+" } else { "-" };
+            return format!(
+                "{} → {}  ({}{})",
+                old_str,
+                new_str,
+                sign,
+                format_price(diff.abs(), new_currency)
+            );
         }
     }
     format!("→ {}", new_str)
