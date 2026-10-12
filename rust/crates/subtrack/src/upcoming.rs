@@ -11,10 +11,11 @@ use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
 use chrono::NaiveDate;
 
-struct Entry {
-    idx: usize,
-    next_date: NaiveDate,
-    amount: f64,
+#[derive(Clone)]
+pub struct Entry {
+    pub idx: usize,
+    pub next_date: NaiveDate,
+    pub amount: f64,
 }
 
 fn active_subs() -> std::io::Result<Vec<Subscription>> {
@@ -25,7 +26,7 @@ fn active_subs() -> std::io::Result<Vec<Subscription>> {
 }
 
 /// Port of `upcomingWithinDays(listActive(), days)`.
-fn upcoming_within_days(subs: &[Subscription], days: i64) -> Vec<Entry> {
+pub(crate) fn upcoming_within_days(subs: &[Subscription], days: i64) -> Vec<Entry> {
     if subs.is_empty() {
         return Vec::new();
     }
@@ -48,6 +49,14 @@ fn upcoming_within_days(subs: &[Subscription], days: i64) -> Vec<Entry> {
 }
 
 /// Port of `calcUpcomingWithCurrency` (embedded rates never fail).
+pub fn upcoming_with_currency_internal(
+    subs: &[Subscription],
+    days: i64,
+    target: Option<&str>,
+) -> (Vec<Entry>, Vec<Subscription>) {
+    upcoming_with_currency(subs, days, target)
+}
+
 fn upcoming_with_currency(
     subs: &[Subscription],
     days: i64,

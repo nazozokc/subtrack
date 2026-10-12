@@ -237,16 +237,75 @@ pub fn run(args: &[String]) -> i32 {
             "suggest list" => crate::suggest::run_suggest_list(&parsed),
             "suggest view" => crate::suggest::run_suggest_view(&parsed),
             "receipt" => crate::receipt::run_receipt(&parsed),
+            "mcp" => crate::mcp::run_mcp(&parsed),
             // entry menu and unported commands — later phases
             _ => 0,
         },
-        None => 0,
+        None => {
+            if !silent {
+                // Print menu header (port of showMenuHeader)
+                print_root_header();
+            }
+            0
+        },
     };
     if code != 0 {
         crate::set_exit_code(1);
     }
 
     0
+}
+
+fn print_root_header() {
+    let subs = match crate::db::get_subscriptions(&crate::db::QueryOptions::default()) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let count = subs.iter().filter(|s| s.status != "cancelled").count();
+    let total_all = subs.len();
+    let active: Vec<_> = subs.iter().filter(|s| s.status != "cancelled").cloned().collect();
+    logger::log(&format!("\x1b[1m\x1b[36msubtrack v{}\x1b[39m\x1b[22m", VERSION));
+    logger::log(&format!(
+        "\x1b[2m  {} subscriptions · {}\x1b[22m",
+        total_all,
+        crate::db::db_path().display()
+    ));
+    if !active.is_empty() {
+        let data = crate::summary::calc_summary_internal(&active);
+        let mut parts: Vec<String> = Vec::new();
+        let mut sorted_currencies: Vec<_> = data.monthly_by_currency.iter().collect();
+        sorted_currencies.sort_by(|a, b| a.0.cmp(&b.0));
+        for (ccy, total) in &sorted_currencies {
+            parts.push(crate::price::format_price(*total, ccy));
+        }
+        logger::log(&format!("  Monthly: {}", parts.join(" + ")));
+        let days = 7i64;
+        let (entries, _) = crate::upcoming::upcoming_with_currency_internal(&active, days, None);
+        if !entries.is_empty() {
+            let mut totals: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+            for entry in &entries {
+                let sub = &active[entry.idx];
+                *totals.entry(sub.currency.clone()).or_insert(0.0) += entry.amount;
+            }
+            let mut parts2: Vec<String> = Vec::new();
+            let mut sorted2: Vec<_> = totals.iter().collect();
+            sorted2.sort_by(|a,b| a.0.cmp(b.0));
+            for (ccy, total) in &sorted2 {
+                parts2.push(crate::price::format_price(**total, ccy));
+            }
+            let bill_label = if entries.len() == 1 { "bill" } else { "bills" };
+            logger::log(&format!(
+                "  Next 7 days: {} {} ({})",
+                entries.len(),
+                bill_label,
+                parts2.join(" + ")
+            ));
+        }
+    } else {
+        logger::log("\x1b[2m  No subscriptions yet — choose Add to create one\x1b[22m");
+    }
+    logger::log("\x1b[2m────────────────────────────────────────────────────\x1b[0m");
+    logger::log("");
 }
 
 #[allow(dead_code)]

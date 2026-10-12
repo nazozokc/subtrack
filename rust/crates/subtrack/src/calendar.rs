@@ -80,20 +80,20 @@ fn day_cycle_days_in_month(
     result
 }
 
-struct CalendarSub {
-    name: String,
-    price: f64,
-    currency: String,
-    status: String,
-    id: i64,
+pub(crate) struct CalendarSub {
+    pub(crate) name: String,
+    pub(crate) price: f64,
+    pub(crate) currency: String,
+    pub(crate) status: String,
+    pub(crate) id: i64,
 }
 
-struct CalendarEntry {
-    day: u32,
-    subs: Vec<CalendarSub>,
+pub(crate) struct CalendarEntry {
+    pub(crate) day: u32,
+    pub(crate) subs: Vec<CalendarSub>,
 }
 
-fn calc_calendar_entries(month: u32, year: i32) -> Vec<CalendarEntry> {
+pub(crate) fn calc_calendar_entries(month: u32, year: i32) -> Vec<CalendarEntry> {
     let subs = get_subscriptions(&QueryOptions::default())
         .map(|mut v| {
             v.retain(|s| s.status != "cancelled");

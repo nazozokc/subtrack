@@ -40,6 +40,23 @@ with open(os.path.join(FIXTURES, "cases.jsonl")) as f:
             IN_SCOPE.append(e)
 
 
+# MCP stdio input (port of MCP_STDIN in capture.mjs). Cases flagged
+# `"stdin": true` receive this NDJSON stream on stdin.
+MCP_STDIN = (
+    "\n".join(
+        [
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"capture","version":"1"}}}',
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}',
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}',
+            '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_subscriptions","arguments":{}}}',
+            '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_subscription","arguments":{"id":1}}}',
+            '{"jsonrpc":"2.0","id":5,"method":"shutdown"}',
+        ]
+    )
+    + "\n"
+)
+
+
 def normalize(text, work):
     s = text
     s = s.replace(work, "{WORK}")
@@ -107,8 +124,14 @@ def run_case(e, root, shared=None):
 
     outs = []
     for i, argv in enumerate(e["steps"]):
+        stdin = MCP_STDIN.encode() if e.get("stdin") else None
         r = subprocess.run(
-            [BIN, *argv], cwd=cwd, env=env, capture_output=True, timeout=30
+            [BIN, *argv],
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            input=stdin,
+            timeout=30,
         )
         if sep:
             n = e.get("_seedIdx", i + 1)

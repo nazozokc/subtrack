@@ -30,6 +30,7 @@ mod json;
 mod list;
 mod logger;
 mod maintenance;
+mod mcp;
 mod notify;
 mod parser;
 mod optimize;

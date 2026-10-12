@@ -13,12 +13,16 @@ struct TagInfo {
     monthly: Vec<(String, f64)>,
 }
 
-struct Summary {
+pub struct Summary {
     total_count: usize,
     /// (currency, total) in first-appearance order.
-    monthly_by_currency: Vec<(String, f64)>,
+    pub monthly_by_currency: Vec<(String, f64)>,
     monthly_by_tag: Vec<(String, TagInfo)>,
     most_expensive: Option<usize>,
+}
+
+pub fn calc_summary_internal(subs: &[Subscription]) -> Summary {
+    calc_summary(subs)
 }
 
 fn calc_summary(subs: &[Subscription]) -> Summary {

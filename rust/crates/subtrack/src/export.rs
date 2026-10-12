@@ -108,7 +108,7 @@ pub fn run_export(parsed: &ParsedArgs, depth: usize) -> i32 {
 }
 
 
-fn export_json(subs: &[Subscription]) -> String {
+pub(crate) fn export_json(subs: &[Subscription]) -> String {
     format!("{}\n\n", list_json(subs))
 }
 
@@ -119,7 +119,7 @@ fn escape_md_cell(value: &str) -> String {
         .replace(['\r', '\n'], " ")
 }
 
-fn export_md(subs: &[Subscription]) -> String {
+pub(crate) fn export_md(subs: &[Subscription]) -> String {
     let header = "| name | status | cycle | tags | price | currency | notes | payment_method | contract | vendor | plan | discount |";
     let separator = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |";
     let rows: Vec<String> = subs
@@ -223,7 +223,7 @@ fn csv_field(v: Option<&str>) -> String {
     }
 }
 
-fn export_csv(subs: &[Subscription]) -> String {
+pub(crate) fn export_csv(subs: &[Subscription]) -> String {
     let header = "name,status,cycle,tags,price,currency,notes,payment_method,contract_start,contract_end,auto_renewal,vendor_name,vendor_url,plan_tier,discount_amount,discount_type,billing_day";
     let rows: Vec<String> = subs
         .iter()
