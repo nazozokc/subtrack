@@ -2,7 +2,7 @@
 //! (handleSuggestList / handleSuggestView).
 
 use crate::ansi;
-use crate::db::{get_suggestion, get_suggestions, Suggestion};
+use crate::db::{get_suggestion, get_suggestions};
 use crate::json::quote_string;
 use crate::logger::{self, fail, info, log};
 use crate::parser::ParsedArgs;
@@ -234,10 +234,6 @@ pub fn run_suggest_view(parsed: &ParsedArgs) -> i32 {
     0
 }
 
-#[allow(dead_code)]
-fn _unused(_s: Suggestion) {
-    let _ = info;
-}
 /// Port of `handleSuggestAdd` (non-interactive).
 pub fn run_suggest_add(parsed: &ParsedArgs) -> i32 {
     let id = match parsed.str("id").and_then(|s| s.trim().parse::<i64>().ok()) {
@@ -253,8 +249,53 @@ pub fn run_suggest_add(parsed: &ParsedArgs) -> i32 {
                 logger::fail(&format!("Suggestion #{} is already {}.", id, s.status));
                 return 1;
             }
-            // Subscription creation is deferred to the mutating phase.
-            logger::success(&format!("Added \"{}\" as a subscription.", s.name));
+            // Port of the success path of `handleSuggestAdd`: create a
+            // subscription from the suggestion, then link it back.
+            let new = crate::db::NewSubscription {
+                name: s.name.clone(),
+                price: s.price.unwrap_or(0.0),
+                currency: s.currency.clone().unwrap_or_else(|| "USD".to_string()),
+                cycle: s.cycle.clone().unwrap_or_else(|| "monthly".to_string()),
+                status: "active".to_string(),
+                billing_day: None,
+                notes: None,
+                payment_method: s.payment_method.clone(),
+                contract_start: None,
+                contract_end: None,
+                auto_renewal: true,
+                vendor_name: s.vendor_name.clone(),
+                vendor_url: None,
+                plan_tier: s.plan_tier.clone(),
+                discount_amount: None,
+                discount_type: None,
+                tags: Vec::new(),
+            };
+            let conn = match crate::db::open_db() {
+                Ok(c) => c,
+                Err(e) => {
+                    logger::fail(&format!("Failed to open database: {}", e));
+                    return 1;
+                }
+            };
+            let sub_id = match crate::db::write_subscription(&conn, &new, false) {
+                Ok(id) => id,
+                Err(e) => {
+                    logger::fail(&format!("Failed to add subscription: {}", e));
+                    return 1;
+                }
+            };
+            if let Err(e) = crate::db::mark_suggestion_added(&conn, id, sub_id) {
+                logger::fail(&format!("Failed to update suggestion: {}", e));
+                return 1;
+            }
+            if let Err(e) = crate::db::save_db(&conn) {
+                logger::fail(&format!("Failed to save subscription: {}", e));
+                return 1;
+            }
+            logger::success(&format!(
+                "Added \"{}\" as subscription #{}.",
+                s.name, sub_id
+            ));
             0
         }
         Ok(None) => {

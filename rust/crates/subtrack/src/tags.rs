@@ -3,7 +3,7 @@
 
 use crate::db::{get_subscriptions, get_tags_with_count, QueryOptions};
 use crate::display::spread_subscription;
-use crate::logger::{self, fail, info, log, out_str};
+use crate::logger::{self, fail, info, out_str};
 use crate::parser::ParsedArgs;
 
 /// `subtrack tags <names...>` — AND-filtered subscription list.

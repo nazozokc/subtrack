@@ -1,7 +1,5 @@
 //! ANSI escape helpers mirroring @subtrack/lib/ansi.ts.
 
-pub const RESET: &str = "\x1b[0m";
-
 /// Named ANSI colors (foreground). Mirror of lib/src/ansi.ts FG_CODES.
 pub fn fg_code(name: &str) -> &'static str {
     match name {

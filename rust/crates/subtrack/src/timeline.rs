@@ -6,7 +6,7 @@ use crate::ansi;
 use crate::db::{get_subscriptions, QueryOptions, Subscription};
 use crate::date::{period_factor, today};
 use crate::fx::{fetch_rates, FxRates};
-use crate::logger::{self, fail, info, log, warn};
+use crate::logger::{self, fail, info, log};
 use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
 use crate::json::quote_string;
@@ -311,9 +311,4 @@ pub fn run_timeline(parsed: &ParsedArgs) -> i32 {
         log(&render_bar_chart(&totals, &ccy));
     }
     0
-}
-
-/// Keep the `warn` symbol referenced (fetch fallback parity).
-pub fn _unused() {
-    let _ = warn;
 }

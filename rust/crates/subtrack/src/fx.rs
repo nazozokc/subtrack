@@ -7,7 +7,6 @@ const MIN_SANE_RATE: f64 = 0.0001;
 const MAX_SANE_RATE: f64 = 1_000_000.0;
 
 pub struct FxRates {
-    pub base: String,
     pub rates: HashMap<String, f64>,
 }
 
@@ -22,12 +21,7 @@ fn embedded_rates() -> FxRates {
             }
         }
     }
-    let base = v
-        .get("base")
-        .and_then(|b| b.as_str())
-        .unwrap_or("USD")
-        .to_string();
-    FxRates { base, rates }
+    FxRates { rates }
 }
 
 fn validate_rate(rate: f64, currency: &str) {

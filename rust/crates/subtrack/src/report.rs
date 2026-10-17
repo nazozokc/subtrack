@@ -7,7 +7,7 @@ use crate::db::{get_all_price_changes, get_audit_logs_filtered, get_subscription
 use crate::date::{occurrences_per_year, period_factor};
 use crate::fx::{fetch_rates, try_convert, FxRates};
 use crate::json::quote_string;
-use crate::logger::{self, fail, info, log, warn};
+use crate::logger::{self, fail, log, warn};
 use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
 use crate::timeline::{convert_subs, render_bar_chart, MonthTotal};
@@ -46,41 +46,6 @@ fn calc_yearly_totals(subs: &[Subscription], year: i64) -> Vec<MonthTotal> {
                 }
             }
             total += sub.price * period_factor(&sub.cycle, "monthly");
-        }
-        results.push(MonthTotal {
-            label: format!("{:04}-{:02}", year, m + 1),
-            year,
-            month: m as usize,
-            total,
-        });
-    }
-    results
-}
-
-/// Same as `calc_yearly_totals` but each price is converted to `target`
-/// WITHOUT per-sub rounding (used for the mixed-currency budget comparison).
-fn calc_yearly_totals_converted(subs: &[Subscription], year: i64, target: &str, rates: &FxRates) -> Vec<MonthTotal> {
-    let mut results = Vec::new();
-    for m in 0..12 {
-        let month_start = format!("{:04}-{:02}-01", year, m + 1);
-        let month_end = month_end_string(year, m);
-        let mut total = 0.0;
-        for sub in subs {
-            if sub.status == "archived" {
-                continue;
-            }
-            if sub.created_at.as_str() > month_end.as_str() {
-                continue;
-            }
-            if sub.status == "cancelled" {
-                let Some(end) = sub.contract_end.as_deref() else { continue };
-                if end < month_start.as_str() {
-                    continue;
-                }
-            }
-            let converted = try_convert(sub.price, &sub.currency, target, &rates.rates)
-                .unwrap_or(sub.price);
-            total += converted * period_factor(&sub.cycle, "monthly");
         }
         results.push(MonthTotal {
             label: format!("{:04}-{:02}", year, m + 1),
@@ -621,9 +586,4 @@ fn report_json(
     }
     out.push_str("}\n");
     out
-}
-
-#[allow(dead_code)]
-fn _unused() {
-    let _ = info;
 }

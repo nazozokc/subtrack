@@ -234,12 +234,6 @@ pub fn run_template_edit(parsed: &ParsedArgs) -> i32 {
     0
 }
 
-/// Receipt/template helper alias to keep the logger import stable.
-#[allow(dead_code)]
-fn _unused(_p: &ParsedArgs) {
-    let _ = logger::success;
-}
-
 /// Port of `handleTemplate("add")`.
 pub fn run_template_add(parsed: &ParsedArgs) -> i32 {
     let name = parsed.str("name").unwrap_or_default();
@@ -331,6 +325,9 @@ pub fn run_template_add(parsed: &ParsedArgs) -> i32 {
     }) {
         logger::fail(&format!("Failed to save template: {}", e));
         return 1;
+    }
+    if let Ok(conn) = crate::db::open_db() {
+        let _ = crate::db::add_audit_log(&conn, "template.add", None, None, Some(&name), true);
     }
     logger::success(&format!("Added template: {}", name));
     0

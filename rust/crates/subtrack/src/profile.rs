@@ -141,7 +141,7 @@ fn show_profile(name: &str) {
         method.filter(|m| !m.is_empty()).map_or_else(|| ansi::dim("any"), |m| m.to_string())
     ));
 }
-/// Port of `switchProfile` (not-found path).
+/// Port of `switchProfile`.
 pub fn run_profile_switch(parsed: &ParsedArgs) -> i32 {
     let name = parsed.str("name").unwrap_or_default();
     let config = load_config();
@@ -155,7 +155,15 @@ pub fn run_profile_switch(parsed: &ParsedArgs) -> i32 {
         logger::fail(&format!("Profile \"{}\" not found", name));
         return 1;
     }
-    // Persistence is deferred to the mutating phase.
+    if let Err(e) = crate::config::save_config_mut(|raw| {
+        raw.insert(
+            "activeProfile".into(),
+            serde_json::Value::String(name.clone()),
+        );
+    }) {
+        logger::fail(&format!("Failed to save profile: {}", e));
+        return 1;
+    }
     logger::success(&format!("Switched to profile \"{}\"", name));
     0
 }

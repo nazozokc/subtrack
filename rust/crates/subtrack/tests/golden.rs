@@ -260,6 +260,127 @@ fn db_snapshot(path: &Path) -> String {
     out
 }
 
+/// Like `db_snapshot`, but drops volatile timestamp columns
+/// (`created_at` / `changed_at`) so two dbs can be compared by content.
+///
+/// Used to assert that the seed chain reconstructs the committed `populated`
+/// fixture — a property the stdout/file goldens never exercise, because the
+/// seed cases are write-only (they never read the rows back).
+fn db_table_snapshot(path: &Path) -> String {
+    use rusqlite::types::Value;
+    let conn = rusqlite::Connection::open(path).expect("open db");
+    let mut out = String::new();
+    for (ty, name, sql) in conn
+        .prepare("SELECT type, name, sql FROM sqlite_master ORDER BY type, name")
+        .unwrap()
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+            ))
+        })
+        .unwrap()
+        .map(|r| r.unwrap())
+    {
+        // node:sqlite (TS) and rusqlite emit identical schema semantics but
+        // the stored CREATE-statement text differs in indentation, so compare
+        // it whitespace-normalized.
+        let sql = sql.unwrap_or_default();
+        let sql_norm = sql.split_whitespace().collect::<Vec<_>>().join(" ");
+        out.push_str(&format!("{ty}|{name}|{sql_norm}\n"));
+    }
+    const VOLATILE: &[&str] = &["created_at", "changed_at"];
+    let names: Vec<String> = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+    for name in names {
+        let cols: Vec<String> = conn
+            .prepare(&format!("PRAGMA table_info(\"{name}\")"))
+            .unwrap()
+            .query_map([], |r| r.get::<_, String>(1))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        let keep: Vec<String> = cols
+            .iter()
+            .filter(|c| !VOLATILE.contains(&c.as_str()))
+            .map(|c| format!("\"{c}\""))
+            .collect();
+        let sql = format!("SELECT {} FROM \"{name}\" ORDER BY rowid", keep.join(","));
+        let mut stmt = conn.prepare(&sql).unwrap();
+        let cols = stmt.column_count();
+        let mut rows = stmt.query([]).unwrap();
+        while let Some(row) = rows.next().unwrap() {
+            let vals: Vec<Value> = (0..cols).map(|i| row.get(i).unwrap()).collect();
+            out.push_str(&format!("{name}|{vals:?}\n"));
+        }
+    }
+    out
+}
+
+/// Multiset difference of two line-oriented snapshots: reports every line
+/// whose occurrence count differs (robust to row ordering).
+fn snapshot_diff(seed: &str, populated: &str) -> Vec<String> {
+    let mut ca: std::collections::BTreeMap<&str, i64> = std::collections::BTreeMap::new();
+    for l in seed.lines() {
+        *ca.entry(l).or_default() += 1;
+    }
+    let mut cb: std::collections::BTreeMap<&str, i64> = std::collections::BTreeMap::new();
+    for l in populated.lines() {
+        *cb.entry(l).or_default() += 1;
+    }
+    let mut keys: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    keys.extend(ca.keys());
+    keys.extend(cb.keys());
+    let mut out = Vec::new();
+    for k in keys {
+        let (x, y) = (
+            ca.get(k).copied().unwrap_or(0),
+            cb.get(k).copied().unwrap_or(0),
+        );
+        if x != y {
+            out.push(format!("  [seed:{x} populated:{y}] {k}"));
+        }
+    }
+    out
+}
+
+/// Run `subtrack backup <dest>` against a db dir and return the content
+/// snapshot of the resulting plaintext db (the `.db.gz` is gunzipped first).
+fn backup_snapshot(env: &HashMap<String, String>, cwd: &Path, dest: &Path) -> String {
+    fs::create_dir_all(dest).unwrap();
+    let out = Command::new(BIN)
+        .args(["backup", &dest.display().to_string()])
+        .current_dir(cwd)
+        .envs(env)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .expect("run backup");
+    assert!(
+        out.status.success(),
+        "backup failed ({}): {}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let gz = fs::read_dir(dest)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.to_string_lossy().ends_with(".db.gz"))
+        .expect("backup produced a .db.gz");
+    let plain = dest.join("__parity.db");
+    fs::write(&plain, gunzip(&fs::read(&gz).unwrap())).unwrap();
+    let snap = db_table_snapshot(&plain);
+    let _ = fs::remove_file(&plain);
+    snap
+}
+
 /// Compare files produced in the case cwd against the committed `<id>.files/`
 /// goldens (gzip = compare after gunzip; sha256/xlsx/db = skip).
 fn check_files(case: &Case, cwd: &Path, case_root: &Path) -> Vec<String> {
@@ -392,6 +513,29 @@ fn goldens_match_ts_reference() {
             for p in problems {
                 println!("FAIL {}/{}: {p}", case.group, case.id);
             }
+        }
+    }
+
+    // ── Cross-check: the seed chain must rebuild the committed `populated` db ──
+    // The goldens above are write-only for the seed group, so a broken
+    // persistence path (missing save_db / dropped column) would still pass.
+    // Back up both dbs to plaintext and compare every table's rows (timestamps
+    // excluded).
+    let seed_snap = backup_snapshot(&seed_env, &seed_root.join("cwd"), &root.join("parity/seed"));
+    let pop_root = root.join("parity/populated");
+    fs::create_dir_all(pop_root.join("cwd")).unwrap();
+    fs::create_dir_all(pop_root.join("home")).unwrap();
+    copy_db("populated", &pop_root.join("db"));
+    let pop_env = case_env(&pop_root.join("db"), &pop_root.join("home"));
+    let pop_snap = backup_snapshot(&pop_env, &pop_root.join("cwd"), &root.join("parity/pop-backup"));
+    if seed_snap == pop_snap {
+        println!("OK   parity: seed chain == fixtures/dbs/populated");
+    } else {
+        failures += 1;
+        let diff = snapshot_diff(&seed_snap, &pop_snap);
+        println!("FAIL parity: seed chain != fixtures/dbs/populated ({} differing line(s))", diff.len());
+        for line in diff.iter().take(40) {
+            println!("{line}");
         }
     }
 

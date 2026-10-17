@@ -1,7 +1,7 @@
 //! `audit` command — port of `audit.ts` (handleAuditList / handleAuditPrune).
 
 use crate::ansi;
-use crate::db::{self, AuditEntry};
+use crate::db::{self};
 use crate::json::quote_string;
 use crate::logger::{self, info, log};
 use crate::parser::ParsedArgs;

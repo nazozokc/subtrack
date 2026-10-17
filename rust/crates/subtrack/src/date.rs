@@ -131,27 +131,6 @@ pub fn is_day_cycle(cycle: &str) -> bool {
     cycle_days(cycle).is_some()
 }
 
-/// Days of `month` (1-12) on which an every-N-days cycle bills
-/// (port of `dayCycleDaysInMonth`).
-pub fn day_cycle_days_in_month(
-    anchor_date: NaiveDate,
-    anchor_day: u32,
-    days: i64,
-    year: i32,
-    month: u32,
-) -> Vec<u32> {
-    let anchor = date_with_clamped_day(anchor_date.year(), anchor_date.month(), anchor_day);
-    let start = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
-    let end = NaiveDate::from_ymd_opt(year, month, days_in_month(year, month)).unwrap();
-    let k_start = 0.max(div_ceil_js(whole_days_between(anchor, start), days));
-    let k_end = whole_days_between(anchor, end).div_euclid(days);
-    let mut result = Vec::new();
-    for k in k_start..=k_end {
-        result.push(add_day_periods(anchor, days, k).day());
-    }
-    result
-}
-
 /// Human-readable cycle label: "every 3 days", or the preset name.
 pub fn format_cycle(cycle: &str) -> String {
     if let Some(days) = cycle_days(cycle) {

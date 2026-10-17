@@ -1177,6 +1177,35 @@ pub fn get_trial(id: i64) -> std::io::Result<Option<Trial>> {
     }
 }
 
+/// Insert a trial (port of the persistence half of `handleTrialAdd`).
+#[allow(clippy::too_many_arguments)]
+pub fn insert_trial(
+    conn: &Connection,
+    name: &str,
+    expires_at: &str,
+    price: Option<f64>,
+    currency: Option<&str>,
+    cycle: Option<&str>,
+    notes: Option<&str>,
+    created_at: &str,
+    persist: bool,
+) -> std::io::Result<bool> {
+    let r = conn.execute(
+        "INSERT INTO trials (name, expires_at, price, currency, cycle, notes, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        params![name, expires_at, price, currency, cycle, notes, created_at],
+    );
+    match r {
+        Ok(_) => {
+            if persist {
+                save_db(conn)?;
+            }
+            Ok(true)
+        }
+        Err(e) => Err(std::io::Error::other(e.to_string())),
+    }
+}
+
 /// Delete a trial by id; returns false when no row matched.
 pub fn remove_trial(id: i64) -> std::io::Result<bool> {
     let conn = open_db()?;
@@ -1208,6 +1237,94 @@ pub fn dismiss_suggestion(id: i64) -> std::io::Result<bool> {
         )
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     Ok(n > 0)
+}
+
+/// Mark a suggestion as added and link it to a subscription.
+/// Port of `markSuggestionAsAdded`.
+pub fn mark_suggestion_added(
+    conn: &Connection,
+    suggestion_id: i64,
+    subscription_id: i64,
+) -> std::io::Result<bool> {
+    let n = conn
+        .execute(
+            "UPDATE suggestions SET status = 'added', matched_sub_id = ? \
+             WHERE id = ? AND status = 'pending'",
+            params![subscription_id, suggestion_id],
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    Ok(n > 0)
+}
+
+/// A suggestion row to insert (port of the fields read by `writeSuggestion`).
+pub struct NewSuggestion {
+    pub name: String,
+    pub price: Option<f64>,
+    pub currency: Option<String>,
+    pub cycle: Option<String>,
+    pub source: String,
+    pub source_detail: Option<String>,
+    pub confidence: f64,
+}
+
+/// Batch-insert suggestions, deduping by name+price+source (case-insensitive).
+/// Port of `writeSuggestionBatch`; returns the number of rows inserted.
+pub fn write_suggestion_batch(
+    conn: &Connection,
+    items: &[NewSuggestion],
+    persist: bool,
+) -> std::io::Result<usize> {
+    conn.execute_batch("BEGIN TRANSACTION")
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let result = (|| -> rusqlite::Result<usize> {
+        let mut inserted = 0usize;
+        for it in items {
+            let existing: Option<i64> = conn
+                .query_row(
+                    "SELECT id FROM suggestions \
+                     WHERE LOWER(name) = LOWER(?) AND price IS ? AND source = ? \
+                     AND status = 'pending' LIMIT 1",
+                    params![it.name, it.price, it.source],
+                    |r| r.get(0),
+                )
+                .ok();
+            if existing.is_some() {
+                continue;
+            }
+            conn.execute(
+                "INSERT INTO suggestions (\
+                    name, price, currency, cycle, vendor_name, vendor_url, plan_tier, \
+                    payment_method, source, source_detail, email_subject, email_from, \
+                    email_date, confidence\
+                 ) VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, NULL, NULL, NULL, ?)",
+                params![
+                    it.name,
+                    it.price,
+                    it.currency,
+                    it.cycle,
+                    it.source,
+                    it.source_detail,
+                    it.confidence
+                ],
+            )?;
+            inserted += 1;
+        }
+        Ok(inserted)
+    })();
+    match result {
+        Ok(n) => {
+            conn.execute_batch("COMMIT")
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            if persist && n > 0 {
+                save_db(conn)?;
+            }
+            Ok(n)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(std::io::Error::other(e.to_string()))
+        }
+    }
 }
 
 /// Rename a tag (port of `renameTag`); returns false when the old tag is absent.

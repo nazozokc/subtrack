@@ -14,7 +14,6 @@ use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
 use crate::table::{calc_column_widths, ColumnConfig, TableBuilder};
 use crate::{ansi, json};
-use crate::logger::out_str;
 
 const VALID_PERIODS: [&str; 6] = [
     "weekly", "bi-weekly", "monthly", "quarterly", "semi-annual", "yearly",
@@ -251,7 +250,7 @@ pub fn run_compare(parsed: &ParsedArgs) -> i32 {
     logger::log("");
 
     let mut rows: Vec<CompareRow> = Vec::new();
-    let mut currencies: Vec<&str> = current_totals
+    let currencies: Vec<&str> = current_totals
         .keys()
         .chain(previous_totals.keys())
         .map(|s| s.as_str())

@@ -1,7 +1,7 @@
 //! `changes` command — port of `diagnostics.ts` handleChanges.
 
 use crate::ansi;
-use crate::db::{get_all_price_changes, get_audit_logs_filtered, PriceChange};
+use crate::db::{get_all_price_changes, get_audit_logs_filtered};
 use crate::json::quote_string;
 use crate::logger::{self, info, log};
 use crate::parser::ParsedArgs;

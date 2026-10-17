@@ -69,7 +69,7 @@ pub fn run_trial_usage() -> i32 {
     0
 }
 
-/// Port of `handleTrialAdd` (validation + not-yet-persisted success path).
+/// Port of `handleTrialAdd` (validation + persistence).
 pub fn run_trial_add(parsed: &ParsedArgs) -> i32 {
     use crate::prompts::{prompt_cycle, prompt_select, prompt_string};
     use crate::validation::{
@@ -77,52 +77,81 @@ pub fn run_trial_add(parsed: &ParsedArgs) -> i32 {
         CURRENCY_VALUES,
     };
 
-    let Some(_name) = prompt_string(parsed.str("name").as_deref(), validate_trial_name) else {
+    let Some(name) = prompt_string(parsed.str("name").as_deref(), validate_trial_name) else {
         return 0;
     };
-    let Some(_expires) =
+    let Some(expires_at) =
         prompt_string(parsed.str("expiresAt").as_deref(), validate_expires_at)
     else {
         return 0;
     };
 
-    if let Some(raw) = parsed.str("price") {
-        let trimmed = raw.trim();
-        if !trimmed.is_empty() {
-            match js_number(trimmed) {
-                Some(n) if n.is_finite() && n >= 0.0 => {}
-                _ => {
-                    logger::fail("Price must be a non-negative number");
-                    return 1;
+    let price = match parsed.str("price") {
+        Some(raw) => {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                match js_number(trimmed) {
+                    Some(n) if n.is_finite() && n >= 0.0 => Some(n),
+                    _ => {
+                        logger::fail("Price must be a non-negative number");
+                        return 1;
+                    }
                 }
             }
         }
-    }
+        None => None,
+    };
 
-    let Some(_currency) =
+    let Some(currency) =
         prompt_select(parsed.str("currency").as_deref(), is_valid_currency, &CURRENCY_VALUES)
     else {
         return 0;
     };
-    let Some(_cycle) = prompt_cycle(parsed.str("cycle").as_deref()) else {
+    let Some(cycle) = prompt_cycle(parsed.str("cycle").as_deref()) else {
         return 0;
     };
 
-    if let Some(raw) = parsed.str("notes") {
-        let trimmed = raw.trim();
-        if !trimmed.is_empty() {
-            if let Err(e) = validate_notes(trimmed) {
-                logger::fail(&e);
-                return 1;
+    let notes = match parsed.str("notes") {
+        Some(raw) => {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                if let Err(e) = validate_notes(trimmed) {
+                    logger::fail(&e);
+                    return 1;
+                }
+                Some(trimmed.to_string())
             }
         }
+        None => None,
+    };
+
+    let conn = match crate::db::open_db() {
+        Ok(c) => c,
+        Err(e) => {
+            logger::fail(&format!("Failed to add trial: {}", e));
+            return 1;
+        }
+    };
+    if let Err(e) = crate::db::insert_trial(
+        &conn,
+        &name,
+        &expires_at,
+        price,
+        Some(&currency),
+        Some(&cycle),
+        notes.as_deref(),
+        &crate::date::today_string(),
+        true,
+    ) {
+        logger::fail(&format!("Failed to add trial: {}", e));
+        return 1;
     }
 
-    // Persistence is deferred to the mutating phase.
-    logger::success(&format!(
-        "Added trial: {}",
-        parsed.str("name").unwrap_or_default().trim()
-    ));
+    logger::success(&format!("Added trial: {}", name));
     0
 }
 

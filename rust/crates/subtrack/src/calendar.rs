@@ -214,12 +214,10 @@ pub fn run_calendar(parsed: &ParsedArgs) -> i32 {
         line.push_str("   ")
     }
 
-    let mut event_count = 0usize;
     for day in 1..=total_days {
         let day_entries = entry_map.get(&day);
         if let Some(subs) = day_entries {
             let n = subs.len();
-            event_count += n;
             let label = if n > 1 {
                 format!("{}{}", day.to_string(), superscript(n as u32))
             } else {

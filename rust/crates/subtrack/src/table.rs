@@ -346,14 +346,6 @@ fn wrap_chars(max_length: i64, input: &str) -> Vec<String> {
     let mut line = String::new();
     for (i, piece) in split.iter().enumerate() {
         let is_word = i % 2 == 0;
-        let ws = if !is_word && i >= 1 {
-            Some(piece.as_str())
-        } else if is_word && i + 1 < split.len() {
-            // leading whitespace was consumed by splitter; JS uses split[i-1]
-            None
-        } else {
-            None
-        };
         if !line.is_empty() && !is_word {
             // whitespace piece: append directly
             line.push_str(piece);
@@ -845,7 +837,7 @@ pub fn calc_column_widths(
         .collect();
 
     // Adjust to exactly fit avail
-    let mut sum: i64 = widths.iter().sum();
+    let sum: i64 = widths.iter().sum();
     let mut diff = sum - avail;
     let mut iterations = 0;
 

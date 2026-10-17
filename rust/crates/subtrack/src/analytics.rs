@@ -5,7 +5,7 @@ use crate::ansi;
 use crate::config::load_config;
 use crate::db::{get_subscriptions, QueryOptions, Subscription};
 use crate::date::period_factor;
-use crate::fx::{try_convert, FxRates};
+use crate::fx::try_convert;
 use crate::json::{number, quote_string, sub_json};
 use crate::logger::{self, log, out_str};
 use crate::parser::ParsedArgs;
@@ -66,7 +66,7 @@ fn show_analytics(parsed: &ParsedArgs) -> i32 {
     }
 
     let config = load_config();
-    let (total_count, by_currency, by_tag, most_expensive) = calc_summary(&list);
+    let (total_count, _by_currency, by_tag, most_expensive) = calc_summary(&list);
 
     let target_currency = parsed.str("currency");
     let is_yearly = parsed.str("period").as_deref() == Some("yearly");

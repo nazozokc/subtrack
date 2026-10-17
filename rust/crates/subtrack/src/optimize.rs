@@ -42,13 +42,6 @@ struct CancelledSuggestion {
     monthly: f64,
 }
 
-enum Suggestion {
-    Cycle(CycleSuggestion),
-    Duplicate(DuplicateSuggestion),
-    Inactive(InactiveSuggestion),
-    Cancelled(CancelledSuggestion),
-}
-
 /// Port of `tokenizeName` — lowercase, strip parens, split on whitespace/-,
 /// drop tokens ≤2 chars and common plan words.
 fn tokenize_name(name: &str) -> Vec<String> {

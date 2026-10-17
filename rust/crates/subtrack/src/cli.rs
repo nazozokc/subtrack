@@ -3,7 +3,7 @@
 
 use crate::commands::{CommandDef, COMMANDS, TOP_SUBCOMMANDS};
 use crate::help::{render_usage, ArgKind, ArgSpec, CallMode};
-use crate::logger::{self, OUT};
+use crate::logger::{self};
 use crate::parser::{resolve_args, tokenize, ParsedArgs, Token};
 use crate::router::{get_command_positionals, resolve_command};
 
@@ -261,7 +261,6 @@ fn print_root_header() {
         Ok(s) => s,
         Err(_) => return,
     };
-    let count = subs.iter().filter(|s| s.status != "cancelled").count();
     let total_all = subs.len();
     let active: Vec<_> = subs.iter().filter(|s| s.status != "cancelled").cloned().collect();
     logger::log(&format!("\x1b[1m\x1b[36msubtrack v{}\x1b[39m\x1b[22m", VERSION));
@@ -306,12 +305,4 @@ fn print_root_header() {
     }
     logger::log("\x1b[2m────────────────────────────────────────────────────\x1b[0m");
     logger::log("");
-}
-
-#[allow(dead_code)]
-fn _unused(_p: &ParsedArgs) {}
-
-#[allow(dead_code)]
-fn _flush_handle() -> usize {
-    OUT.lock().unwrap().len()
 }

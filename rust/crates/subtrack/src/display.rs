@@ -13,7 +13,6 @@ use crate::table::{
 };
 
 fn next_billing_cell(sub: &Subscription) -> String {
-    let theme = config::display_theme();
     if sub.status == "cancelled" || sub.status == "archived" {
         return "-".to_string()
     }
@@ -106,8 +105,7 @@ fn build_row(
         };
         row.insert(insert_idx, vendor_cell);
         insert_idx += 1;
-        row.insert(insert_idx, tier_cell);
-        insert_idx += 1
+        row.insert(insert_idx, tier_cell)
     }
 
     if show_notes {

@@ -196,8 +196,8 @@ pub fn run_budget(parsed: &ParsedArgs) -> i32 {
     let period_name = if compare_period == "yearly" { "Yearly" } else { "Monthly" };
 
     // Determine a single comparable (currency, spending) pair.
-    let mut display_currency: Option<String> = None;
-    let mut spending = 0.0;
+    let display_currency: Option<String>;
+    let spending: f64;
     let mut budget_display = budget.amount;
 
     if let (Some(target), Some(r)) = (&currency, &rates) {

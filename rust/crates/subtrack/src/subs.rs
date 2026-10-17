@@ -3,8 +3,9 @@
 //! `subscription/edit.ts`, `subscription-actions.ts` (pause/resume/renew)
 //! and `cancel.ts`.
 //!
-//! Error paths (not-found / validation) are complete; the DB write on the
-//! success path is deferred to the mutating phase (no `saveDb` yet).
+//! Error paths (not-found / validation) and the DB write on the success path
+//! are both implemented (`write_subscription` / `update_subscription` +
+//! `save_db`).
 
 use crate::db::get_subscription_by_id;
 use crate::logger::{self, fail, info};

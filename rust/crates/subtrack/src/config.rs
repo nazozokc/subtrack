@@ -2,7 +2,6 @@
 //! The config file is `config.json` in the DB directory (possibly encrypted
 //! with the SUBCCFG magic header).
 
-use std::collections::HashMap;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
@@ -80,6 +79,15 @@ pub fn load_config() -> Config {
 
 fn read_config() -> Config {
     let mut cfg = Config::default();
+    // `DEFAULT_CONFIG` in config.ts carries these two non-nullable defaults, so
+    // they are present in `raw` even before the file sets them (and are thereby
+    // persisted on the next save).
+    cfg.raw
+        .insert("theme".into(), serde_json::Value::String("default".into()));
+    cfg.raw.insert(
+        "defaultCurrency".into(),
+        serde_json::Value::String("USD".into()),
+    );
     let path = crate::crypto::config_dir().join("config.json");
     let Ok(decrypted) = crate::crypto::decrypt_file_if_needed(&path) else {
         return cfg;
@@ -148,7 +156,11 @@ fn read_config() -> Config {
             });
         }
     }
-    cfg.raw = obj.cloned().unwrap_or_default();
+    if let Some(o) = obj {
+        for (k, v) in o {
+            cfg.raw.insert(k.clone(), v.clone());
+        }
+    }
     cfg
 }
 
@@ -317,7 +329,7 @@ pub fn handle_config_set(key: &str, value: &str) -> i32 {
             let n = crate::validation::js_number(value);
             match n {
                 Some(n) if n >= 0.0 && n.is_finite() => {
-                    raw.insert(key.into(), serde_json::json!(n));
+                    raw.insert(key.into(), crate::json::num_value(n));
                 }
                 _ => bad!("monthlyBudget must be a non-negative number"),
             }
@@ -326,7 +338,7 @@ pub fn handle_config_set(key: &str, value: &str) -> i32 {
             let n = crate::validation::js_number(value);
             match n {
                 Some(n) if n >= 0.0 && n.is_finite() => {
-                    raw.insert(key.into(), serde_json::json!(n));
+                    raw.insert(key.into(), crate::json::num_value(n));
                 }
                 _ => bad!("yearlyBudget must be a non-negative number"),
             }
@@ -367,7 +379,7 @@ brightMagenta, brightCyan, brightWhite",
             let n = crate::validation::js_number(value);
             match n {
                 Some(n) if (20.0..=200.0).contains(&n) && n.fract() == 0.0 => {
-                    raw.insert(key.into(), serde_json::json!(n));
+                    raw.insert(key.into(), crate::json::num_value(n));
                 }
                 _ => bad!("tableMinWidth must be an integer between 20 and 200"),
             }
@@ -388,7 +400,7 @@ brightMagenta, brightCyan, brightWhite",
             let n = crate::validation::js_number(value);
             match n {
                 Some(n) if n >= 0.0 && n.fract() == 0.0 => {
-                    raw.insert(key.into(), serde_json::json!(n));
+                    raw.insert(key.into(), crate::json::num_value(n));
                 }
                 _ => bad!("notifyDays must be a non-negative integer"),
             }
@@ -440,6 +452,16 @@ brightMagenta, brightCyan, brightWhite",
     } else {
         value.to_string()
     };
+    if let Ok(conn) = crate::db::open_db() {
+        let _ = crate::db::add_audit_log(
+            &conn,
+            "config.set",
+            None,
+            None,
+            Some(&format!("{} = {}", key, display)),
+            true,
+        );
+    }
     crate::logger::success(&format!("Set {} = {}", key, display));
     0
 }
@@ -541,14 +563,13 @@ fn save_config_raw(raw: &serde_json::Map<String, serde_json::Value>) -> std::io:
         serde_json::to_string_pretty(&serde_json::Value::Object(raw.clone()))
             .map_err(|e| std::io::Error::other(e.to_string()))?
     );
-    let bytes = if crate::crypto::has_encryption_key() {
-        let key = crate::crypto::get_or_create_key()?;
-        let mut out = crate::crypto::CONFIG_MAGIC.to_vec();
-        out.extend(crate::crypto::encrypt_buffer(&key, json.as_bytes()));
-        out
-    } else {
-        json.into_bytes()
-    };
+    // Always encrypt, mirroring `save_db`: the DB is always encrypted and the
+    // captured config carries the SUBCCFG header. Writing plaintext here (when
+    // no key exists yet) produced a file that `decrypt_file_if_needed` then
+    // misdetected as an encrypted database, silently discarding the config.
+    let key = crate::crypto::get_or_create_key()?;
+    let mut bytes = crate::crypto::CONFIG_MAGIC.to_vec();
+    bytes.extend(crate::crypto::encrypt_buffer(&key, json.as_bytes()));
     std::fs::write(crate::crypto::config_dir().join("config.json"), bytes)
 }
 
@@ -628,6 +649,3 @@ fn preset_high_contrast() -> crate::table::Theme {
 fn preset_none() -> crate::table::Theme {
     crate::table::Theme::default()
 }
-
-#[allow(dead_code)]
-pub fn _unused(_: HashMap<String, String>) {}

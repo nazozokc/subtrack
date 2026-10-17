@@ -39,6 +39,18 @@ After `last-typescript`, the TS sources are gone from the branch — check out t
 tag (or keep `dist/`) to regenerate. Prefer fixing the Rust side over
 re-capturing; re-capture only when the reference itself was wrong.
 
+## Running the harness (Rust, no TS build needed)
+
+```bash
+cd rust
+cargo test --test golden      # replays all 365 cases (~30s)
+```
+
+The harness is a single integration test at `crates/subtrack/tests/golden.rs`.
+It builds the `subtrack` binary, replays every case in `cases.jsonl` under a
+shared temp root, and byte-compares normalized stdout/stderr, exit codes, and
+produced files against `goldens/<group>/`. No network access is required.
+
 ## Harness contract (what the Rust test runner must reproduce)
 
 - **cwd**: a `cwd/` dir inside the per-case temp root; snapshot compares
@@ -77,7 +89,9 @@ the same normalization.
 `<id>.files/` holds new/changed files relative to the case cwd:
 
 - **text** — stored normalized (same tokens as stdout)
-- **gzip** (`.db.gz`) — stored raw; gunzip before comparing the DB
+- **gzip** (`.db.gz`) — stored raw; compared *logically* (schema + all rows)
+  rather than by bytes, since `node:sqlite` and `rusqlite` differ in a few
+  DB-header bytes (schema cookie / `version-valid-for`)
 - **skip** — `.sha256` sidecars, `.xlsx`, raw `.db` (random IVs /
   implementation-defined bytes): not captured, not compared
 

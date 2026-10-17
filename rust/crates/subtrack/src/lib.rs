@@ -47,6 +47,7 @@ mod search;
 mod stats;
 mod subs;
 mod suggest;
+mod suggest_parser;
 mod summary;
 mod tags;
 mod table;

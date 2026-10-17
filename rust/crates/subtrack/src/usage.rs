@@ -752,6 +752,7 @@ fn calculate_cost_cents(
 }
 
 const MAX_USAGE_FILE_BYTES: u64 = 50 * 1024 * 1024;
+const MAX_USAGE_STDIN_BYTES: u64 = 10 * 1024 * 1024;
 
 /// Port of `handleUsageImport`.
 pub fn run_usage_import(parsed: &ParsedArgs) -> i32 {
@@ -761,8 +762,22 @@ pub fn run_usage_import(parsed: &ParsedArgs) -> i32 {
     let dry_run = parsed.bool("dryRun") == Some(true);
 
     let content = if file == "-" {
-        // Stdin import is not wired up in this environment.
-        return 0;
+        // Read the whole of stdin, capped at 10 MB (port of the stdin branch).
+        use std::io::Read;
+        let mut buf: Vec<u8> = Vec::new();
+        let stdin = std::io::stdin().lock();
+        if let Err(e) = stdin.take(MAX_USAGE_STDIN_BYTES + 1).read_to_end(&mut buf) {
+            logger::fail(&format!("Failed to read stdin: {}", e));
+            return 1;
+        }
+        if buf.len() as u64 > MAX_USAGE_STDIN_BYTES {
+            logger::fail(&format!(
+                "Stdin input too large (max {} MB)",
+                MAX_USAGE_STDIN_BYTES / 1024 / 1024
+            ));
+            return 1;
+        }
+        String::from_utf8_lossy(&buf).into_owned()
     } else {
         let Some(safe_file) = crate::safe_path::safe_path(&file) else {
             logger::fail(
