@@ -1,0 +1,7 @@
+# Normalize line endings to LF
+* text=auto eol=lf
+
+# Native binaries staged into the platform packages must never be line-ending
+# converted or diffed as text.
+packages/subtrack-*/bin/subtrack binary -text
+packages/subtrack-*/bin/subtrack.exe binary -text

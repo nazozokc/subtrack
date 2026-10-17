@@ -43,6 +43,12 @@ jobs:
 
       - run: pnpm test
 
+      # Replays the TypeScript reference goldens against the Rust binary
+      # (rust/fixtures). No network access is required; rustup installs the
+      # pinned toolchain from rust-toolchain.toml on first use.
+      - name: Test Rust golden harness
+        run: cargo test --test golden --manifest-path rust/Cargo.toml
+
       - name: Audit dependencies (pnpm)
         run: pnpm audit --audit-level=high
 

@@ -8,7 +8,13 @@ use crate::parser::{resolve_args, tokenize, ParsedArgs, Token};
 use crate::router::{get_command_positionals, resolve_command};
 
 pub const NAME: &str = "subtrack";
-pub const VERSION: &str = "10.0.0";
+/// Release builds set `SUBTRACK_VERSION` from the git tag so the binary reports
+/// the same version as the published npm packages; normal builds fall back to
+/// the crate version.
+pub const VERSION: &str = match option_env!("SUBTRACK_VERSION") {
+    Some(version) => version,
+    None => env!("CARGO_PKG_VERSION"),
+};
 
 /// Global help/version options merged into every command's args.
 pub const COMMON_ARGS: [ArgSpec<'static>; 2] = [

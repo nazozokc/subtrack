@@ -22,7 +22,38 @@ importers:
         specifier: ^1.6.4
         version: 1.6.4(@algolia/client-search@5.56.0)(@types/node@26.5.0)(lightningcss@1.33.0)(postcss@8.5.28)(search-insights@2.17.3)(tsx@4.23.13)(typescript@7.0.2)(yaml@2.9.0)
 
-  packages/subtrack: {}
+  packages/subtrack:
+    optionalDependencies:
+      '@subtrack/subtrack-darwin-arm64':
+        specifier: workspace:*
+        version: link:../subtrack-darwin-arm64
+      '@subtrack/subtrack-darwin-x64':
+        specifier: workspace:*
+        version: link:../subtrack-darwin-x64
+      '@subtrack/subtrack-linux-arm64':
+        specifier: workspace:*
+        version: link:../subtrack-linux-arm64
+      '@subtrack/subtrack-linux-x64':
+        specifier: workspace:*
+        version: link:../subtrack-linux-x64
+      '@subtrack/subtrack-win32-arm64':
+        specifier: workspace:*
+        version: link:../subtrack-win32-arm64
+      '@subtrack/subtrack-win32-x64':
+        specifier: workspace:*
+        version: link:../subtrack-win32-x64
+
+  packages/subtrack-darwin-arm64: {}
+
+  packages/subtrack-darwin-x64: {}
+
+  packages/subtrack-linux-arm64: {}
+
+  packages/subtrack-linux-x64: {}
+
+  packages/subtrack-win32-arm64: {}
+
+  packages/subtrack-win32-x64: {}
 
 packages:
 

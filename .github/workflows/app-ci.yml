@@ -6,6 +6,9 @@ on:
     branches: [main]
     paths:
       - "packages/subtrack/**"
+      - "rust/**"
+      - "rust-toolchain.toml"
+      - "scripts/**"
       - ".github/workflows/**"
       - "pnpm-workspace.yaml"
       - "package.json"
@@ -13,6 +16,9 @@ on:
     branches: [main]
     paths:
       - "packages/subtrack/**"
+      - "rust/**"
+      - "rust-toolchain.toml"
+      - "scripts/**"
       - ".github/workflows/**"
       - "pnpm-workspace.yaml"
       - "package.json"

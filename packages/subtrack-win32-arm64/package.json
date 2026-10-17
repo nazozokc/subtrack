@@ -1,0 +1,28 @@
+{
+  "name": "@subtrack/subtrack-win32-arm64",
+  "version": "10.0.0",
+  "description": "Native subtrack binary for Windows arm64",
+  "license": "MIT",
+  "author": "nazozokc",
+  "type": "commonjs",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin/subtrack.exe"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nazozokc/subtrack.git",
+    "directory": "packages/subtrack-win32-arm64"
+  },
+  "scripts": {
+    "prepack": "node ../../scripts/verify-native-package.mjs"
+  }
+}

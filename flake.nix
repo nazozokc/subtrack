@@ -31,16 +31,22 @@
                 pnpm
                 typos
                 typescript
+                rustc
+                cargo
+                rustfmt
+                clippy
                 nixfmt-rfc-style
               ];
               shellHook = ''
                 echo "[subtrack devShell]"
                 echo "  node $(node --version)  pnpm $(pnpm --version)"
+                echo "  rust $(rustc --version 2>/dev/null || echo 'unavailable')"
                 echo ""
                 echo "  Tasks:"
                 echo "    pnpm install    install dependencies"
                 echo "    pnpm build      build packages"
                 echo "    pnpm test       run tests"
+                echo "    cargo test --test golden --manifest-path rust/Cargo.toml"
                 echo "    typos           check typos"
                 echo "    nix fmt         format nix files"
               '';

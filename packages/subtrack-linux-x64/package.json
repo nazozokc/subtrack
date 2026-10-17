@@ -1,0 +1,28 @@
+{
+  "name": "@subtrack/subtrack-linux-x64",
+  "version": "10.0.0",
+  "description": "Static native subtrack binary for Linux x64",
+  "license": "MIT",
+  "author": "nazozokc",
+  "type": "commonjs",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin/subtrack"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nazozokc/subtrack.git",
+    "directory": "packages/subtrack-linux-x64"
+  },
+  "scripts": {
+    "prepack": "node ../../scripts/verify-native-package.mjs"
+  }
+}
