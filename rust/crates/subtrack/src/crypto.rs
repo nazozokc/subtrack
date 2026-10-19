@@ -8,6 +8,7 @@ use aes_gcm::aead::consts::U16;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::aes::Aes256;
 use aes_gcm::{AesGcm, Key, Nonce};
+use getrandom::getrandom as getrandom_fill;
 use sha2::{Digest, Sha256};
 
 type Aes256Gcm = AesGcm<Aes256, U16>;
@@ -83,11 +84,9 @@ pub fn get_or_create_key() -> std::io::Result<Vec<u8>> {
 
 /// Cryptographically secure random key (32 bytes).
 fn generate_key() -> Vec<u8> {
-    use std::io::Read;
     let mut key = vec![0u8; KEY_LENGTH];
-    std::fs::File::open("/dev/urandom")
-        .and_then(|mut f| f.read_exact(&mut key))
-        .expect("failed to read /dev/urandom");
+    // `getrandom::getrandom` delegates to the OS CSPRNG on every supported platform.
+    getrandom_fill(&mut key).expect("OS CSPRNG is unavailable");
     key
 }
 
@@ -106,7 +105,7 @@ pub fn write_secret_file(path: &std::path::Path, data: &[u8]) -> std::io::Result
 
 /// scrypt(passphrase, salt, 32, N=2^17, r=8, p=1).
 pub fn derive_key_from_passphrase(passphrase: &str) -> Vec<u8> {
-    use scrypt::{Params, scrypt as scrypt_kdf};
+    use scrypt::{scrypt as scrypt_kdf, Params};
     let salt_path = config_dir().join(".key.salt");
     let salt = std::fs::read(&salt_path).unwrap_or_else(|_| vec![0u8; SALT_LENGTH]);
     let params = Params::new(17, 8, 1, 256 * 1024 * 1024).unwrap();
@@ -122,7 +121,7 @@ fn aesgcm(key: &[u8]) -> Aes256Gcm {
 /// `iv(16) + tag(16) + ct` — port of encryptBuffer.
 pub fn encrypt_buffer(key: &[u8], plaintext: &[u8]) -> Vec<u8> {
     let mut iv = [0u8; IV_LENGTH];
-    getrandom(&mut iv);
+    getrandom_fill(&mut iv).expect("OS CSPRNG is unavailable");
     let cipher = aesgcm(key);
     // `Aead::encrypt` returns `ciphertext || tag`.
     let sealed = cipher
@@ -134,12 +133,6 @@ pub fn encrypt_buffer(key: &[u8], plaintext: &[u8]) -> Vec<u8> {
     out.extend_from_slice(&sealed[split..]); // tag
     out.extend_from_slice(&sealed[..split]); // ciphertext
     out
-}
-
-fn getrandom(buf: &mut [u8]) {
-    use std::io::Read;
-    let mut f = std::fs::File::open("/dev/urandom").expect("no /dev/urandom");
-    f.read_exact(buf).expect("urandom read failed")
 }
 
 /// Port of decryptBuffer — ciphertext layout `iv(16) + tag(16) + ct`.

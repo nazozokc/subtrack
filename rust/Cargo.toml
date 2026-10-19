@@ -22,3 +22,6 @@ aes-gcm = "0.10"
 scrypt = "0.11"
 sha2 = "0.10"
 hex = "0.4"
+# OS CSPRNG for key/nonce generation (replaces direct /dev/urandom reads,
+# which do not exist on Windows).
+getrandom = "0.2"

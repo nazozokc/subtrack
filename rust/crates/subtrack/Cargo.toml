@@ -14,6 +14,7 @@ aes-gcm.workspace = true
 scrypt.workspace = true
 sha2.workspace = true
 hex.workspace = true
+getrandom.workspace = true
 # Keep C zlib (byte-identical deflate output to the TypeScript reference) and
 # link it statically so the Linux musl artifact is self-contained. flate2 has no
 # feature for this; enabling libz-sys's `static` feature is the standard way to
