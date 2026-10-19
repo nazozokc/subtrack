@@ -140,10 +140,27 @@ function isMainModule({ argvEntry = process.argv[1], moduleUrl, realpathPath = r
 
 	const modulePath = fileURLToPath(moduleUrl);
 	try {
-		return realpathPath(modulePath) === realpathPath(argvEntry);
+		if (realpathPath(modulePath) === realpathPath(argvEntry)) {
+			return true;
+		}
 	} catch {
-		return modulePath === argvEntry;
+		// Paths could not be real-pathed (missing entry point); compare raws below.
 	}
+	return toComparablePath(modulePath) === toComparablePath(argvEntry);
+}
+
+/**
+ * Normalizes Windows path styles so entry points compare equal regardless of
+ * representation: an URL pathname (`file:///D:/x` stored as `/D:/x`) is turned
+ * into a drive path and separators are unified to `\`.
+ * @param {string} filePath
+ * @returns {string}
+ */
+function toComparablePath(filePath) {
+	if (process.platform !== "win32") {
+		return filePath;
+	}
+	return filePath.replace(/^\/([A-Za-z]:)/, "$1").replaceAll("/", "\\");
 }
 
 /**
