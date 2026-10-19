@@ -1,8 +1,0 @@
-<<<step 1>>>
-subtrack (subtrack v{VERSION})
-
-[33m⚠[39m Encryption key created at: {WORK}/db/.key
-  !! BACKUP THIS KEY! If lost, your encrypted database cannot be recovered.
-  >> Copy the file to a secure location (e.g. password manager).
-  >> Or set SUBSC_CLI_DB_PASSPHRASE to derive the key from a passphrase instead.
-[32m✔[39m Added subscription: Netflix

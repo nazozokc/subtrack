@@ -676,13 +676,28 @@ mod tests {
         }
     }
 
+    /// Regression: a full bank-receipt email without recognizable field
+    /// labels must not yield any candidate ("Streamly" receipt shape).
     #[test]
     fn receipt_txt_fixture_yields_no_candidate() {
-        let body = std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../fixtures/inputs/receipt.txt"
-        ))
-        .expect("read receipt.txt");
+        let body = [
+            "From: billing@example-bank.com",
+            "To: user@example.com",
+            "Subject: Your receipt from Streamly",
+            "Date: Mon, 5 Oct 2026 09:14:22 +0000",
+            "",
+            "Streamly Premium Monthly",
+            "Receipt #: R-2026-1005-4471",
+            "",
+            "Plan: Premium (Monthly)",
+            "Billing period: Oct 5, 2026 - Nov 4, 2026",
+            "Amount charged: USD 12.99",
+            "Payment method: Visa ending in 4242",
+            "",
+            "Thank you for your payment.",
+            "",
+        ]
+        .join("\n");
         let email = RawEmail {
             subject: None,
             from: None,

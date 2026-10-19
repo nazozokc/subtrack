@@ -1,6 +1,0 @@
-subtrack (subtrack v{VERSION})
-
-[32m✔[39m Integrity check: passed
-[36mℹ[39m VACUUM: no space reclaimed (already optimized)
-[36mℹ[39m Audit log: nothing to prune
-[36mℹ[39m Tags: no orphans found

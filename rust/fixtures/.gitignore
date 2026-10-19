@@ -1,3 +1,0 @@
-# The "backup ~/backups" golden writes into a literal `~/` directory inside the
-# case cwd; the global `*~` ignore pattern would otherwise swallow it.
-!~/

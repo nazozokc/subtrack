@@ -1,5 +1,5 @@
 //! FX conversion — port of `packages/subtrack/src/fx.ts`, with rates embedded
-//! from `rust/fixtures/inputs/fx-rates.json` (no network in Rust).
+//! from `../data/fx-rates.json` (no network in Rust).
 
 use std::collections::HashMap;
 
@@ -11,7 +11,7 @@ pub struct FxRates {
 }
 
 fn embedded_rates() -> FxRates {
-    let json = include_str!("../../fixtures/inputs/fx-rates.json");
+    let json = include_str!("../data/fx-rates.json");
     let v: serde_json::Value = serde_json::from_str(json).unwrap_or(serde_json::Value::Null);
     let mut rates = HashMap::new();
     if let Some(map) = v.get("rates").and_then(|r| r.as_object()) {

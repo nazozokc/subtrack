@@ -32,8 +32,9 @@ This provides `node`, `pnpm`, `typescript`, `typos`, `rustc`, `cargo`, `rustfmt`
 | `cargo build --manifest-path rust/Cargo.toml` | Build the Rust CLI (debug) |
 | `cargo build --release --manifest-path rust/Cargo.toml` | Build the optimized release binary |
 | `cargo run --manifest-path rust/Cargo.toml` | Run the CLI from source |
-| `cargo test --test golden --manifest-path rust/Cargo.toml` | Run the golden test suite (`cd rust && cargo test --test golden`, ~30 s) |
-| `cargo clippy` / `cargo fmt` | Lint / format the Rust code |
+| `cargo test --manifest-path rust/Cargo.toml` | Run the Rust test suite (unit tests + CLI smoke suite) |
+| `cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings` | Lint the Rust code (CI gate, denies warnings) |
+| `cargo fmt --manifest-path rust/Cargo.toml --all -- --check` | Verify Rust formatting (CI gate) |
 
 ## Tech stack
 
@@ -50,14 +51,15 @@ This provides `node`, `pnpm`, `typescript`, `typos`, `rustc`, `cargo`, `rustfmt`
 | Package manager | `pnpm` (workspace), `cargo` (Rust) |
 | Documentation | VitePress (this site) |
 
-## Golden fixtures
+## Testing
 
-The test suite is a goldens harness: `rust/fixtures/` contains frozen reference outputs captured from the TypeScript implementation (tag `last-typescript`). Every case runs the Rust binary and compares stdout, stderr, and exit code byte-for-byte.
+The Rust crate carries two layers of tests, plus format/lint gates — all wired into CI (`check.yml` runs `cargo fmt --check`, `cargo clippy -D warnings`, and `cargo test`):
 
-- `cd rust && cargo test --test golden` runs the full matrix (365 cases: seed, help, reads, mutations, errors, mcp, legacy).
-- Populated databases (`fixtures/dbs/populated/`) are seeded from `config.json` + `subtrack.db` + `.key` per group.
-- Re-capturing fixtures requires building the TypeScript implementation: `pnpm build`, then the capture scripts under `rust/fixtures/`.
-- For deterministic date-sensitive output, fixtures set `SUBTRACK_TODAY` (a Rust-only environment variable that pins the "today" used by date logic).
+- **Unit tests** live inline as `#[cfg(test)] mod tests` inside each source module. Pure logic — date/billing math, price formatting, validators, argument parsing, table layout, safe path resolution, crypto round-trips, FX conversion, and the suggest email parser — is covered directly against the implementation.
+- **CLI smoke suite** (`rust/subtrack/tests/cli_smoke.rs`) runs the compiled binary end-to-end in a temporary database directory with `SUBTRACK_TODAY` pinned (a Rust-only environment variable that fixes the "today" used by date logic), asserting exit codes and key output fragments for the main command flows.
+- **Formatter/lint gates.** `cargo fmt --check` and `cargo clippy --all-targets -D warnings` keep the code base format- and lint-clean; both come from the pinned `rust-toolchain.toml`.
+
+Add a unit test next to the function it covers; extend `cli_smoke.rs` when a new user-facing command lands.
 
 ## Release packaging
 
@@ -117,8 +119,8 @@ subtrack/
 │   │   │   ├── date.rs            # Date helpers (SUBTRACK_TODAY override)
 │   │   │   ├── ansi.rs, logger.rs # ANSI helpers & consola-compatible logger
 │   │   │   └── …
-│   │   └── tests/golden.rs        # Golden fixture harness
-│   └── fixtures/                  # Frozen TS reference goldens (README.md explains re-capture)
+│   │   ├── tests/cli_smoke.rs     # End-to-end CLI smoke tests
+│   │   └── data/fx-rates.json     # Embedded FX rates (include_str! in fx.rs)
 ├── packages/
 │   ├── subtrack/                  # npm package: launcher + metadata
 │   │   ├── src/launcher.mjs       # Spawns the platform binary (SUBTRACK_BINARY override)

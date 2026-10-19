@@ -1,3 +1,0 @@
-subtrack (subtrack v{VERSION})
-
-[31m✖[39m Invalid CSV header. Required columns: name, cycle, tags, price, currency (missing: name, cycle, tags, price, currency)

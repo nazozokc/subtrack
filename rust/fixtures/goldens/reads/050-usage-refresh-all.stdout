@@ -1,9 +1,0 @@
-subtrack (subtrack v{VERSION})
-
-[36mℹ[39m OpenCode DB not found — skip
-[36mℹ[39m Claude Code session files not found — skip
-[36mℹ[39m Codex CLI DB not found — skip
-[36mℹ[39m Cursor DB not found — skip
-[36mℹ[39m Copilot CLI session files not found — skip
-[36mℹ[39m Windsurf DB not found — skip
-[36mℹ[39m No new usage entries found

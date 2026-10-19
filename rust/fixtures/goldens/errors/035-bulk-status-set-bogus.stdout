@@ -1,3 +1,0 @@
-subtrack (subtrack v{VERSION})
-
-[31m✖[39m Invalid status "bogus". Must be active, paused, or cancelled

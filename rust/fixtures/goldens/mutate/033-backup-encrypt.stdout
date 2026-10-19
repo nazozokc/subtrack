@@ -1,3 +1,0 @@
-subtrack (subtrack v{VERSION})
-
-[32m✔[39m Backup created: {WORK}/db/backups/subtrack_{STAMP}.db.enc (encrypted)

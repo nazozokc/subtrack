@@ -43,12 +43,15 @@ jobs:
 
       - run: pnpm test
 
-      # Replays the TypeScript reference goldens against the Rust binary
-      # (rust/fixtures). No network access is required; the root
-      # rust-toolchain.toml pins the toolchain, installed by rustup on
-      # first use.
-      - name: Test Rust golden harness
-        run: cargo test --test golden --manifest-path rust/Cargo.toml
+      # Rust gates. The root rust-toolchain.toml pins the toolchain
+      # (clippy + rustfmt included), installed by rustup on first use.
+      - run: cargo fmt --manifest-path rust/Cargo.toml --all -- --check
+
+      - name: Lint Rust (clippy, deny warnings)
+        run: cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
+
+      - name: Test Rust (unit + CLI smoke suite)
+        run: cargo test --manifest-path rust/Cargo.toml
 
       - name: Audit dependencies (pnpm)
         run: pnpm audit --audit-level=high

@@ -1,8 +1,0 @@
-subtrack (subtrack v{VERSION})
-
-[1mCancelling: Adobe Creative Cloud[22m
-  Price:        ¥5,999/yearly
-  Next billing: {DATE}
-
-[32m✔[39m Cancelled: "Adobe Creative Cloud"
-[36mℹ[39m Remove it permanently with: subtrack delete 3

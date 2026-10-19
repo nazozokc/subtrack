@@ -1,5 +1,0 @@
-subtrack (subtrack v{VERSION})
-
-[33m⚠[39m Database is encrypted but backup will NOT be encrypted.
-  Use --encrypt (-e) to encrypt the backup.
-[32m✔[39m Backup created: {WORK}/cwd/subtrack_{STAMP}.db.gz

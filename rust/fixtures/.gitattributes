@@ -1,6 +1,0 @@
-# Golden fixtures are byte-exact reference outputs — never normalize them.
-# (core.autocrlf=input would otherwise turn the CRLF ICS golden into LF on add
-# and back on checkout, breaking byte-comparison in the Rust harness.)
-goldens/** -text
-dbs/** -text
-inputs/** -text

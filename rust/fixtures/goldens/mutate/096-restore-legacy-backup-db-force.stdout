@@ -1,5 +1,0 @@
-subtrack (subtrack v{VERSION})
-
-[33m⚠[39m No integrity hash found for "legacy-backup.db" — integrity cannot be verified.
-[36mℹ[39m Auto-backup created: {WORK}/db/backups/subtrack_{STAMP}_before_restore.db.enc (encrypted)
-[32m✔[39m Restored 4 subscriptions from: {WORK}/cwd/legacy-backup.db

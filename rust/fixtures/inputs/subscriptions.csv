@@ -1,5 +1,0 @@
-name,cycle,tags,price,currency,notes,status,billing_day,payment_method,contract_start,contract_end,auto_renewal,vendor_name,vendor_url,plan_tier,discount_amount,discount_type
-Figma,monthly,design,15.00,USD,team seat,active,10,credit_card,2026-01-15,,true,Figma Inc.,https://www.figma.com,Professional,,
-1Password,yearly,security,35.88,USD,family plan,active,3,paypal,,,true,AgileBits,https://1password.com,Family,5,percentage
-Vercel,monthly,dev,20.00,USD,,active,28,credit_card,,,,Vercel,https://vercel.com,Pro,,
-Kagi,yearly,search,10.00,USD,,paused,1,credit_card,,,,Kagi,https://kagi.com,Ultimate,,

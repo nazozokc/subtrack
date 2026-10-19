@@ -1,3 +1,0 @@
-subtrack (subtrack v{VERSION})
-
-[31m✖[39m Unsupported export format: "bogus-format". Supported: csv, json, md, excel, ics
