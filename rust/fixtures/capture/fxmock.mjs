@@ -17,9 +17,20 @@ const rates = JSON.parse(
   readFileSync(path.join(here, "..", "inputs", "fx-rates.json"), "utf8"),
 )
 
+// Exact-origin match instead of a substring check: a raw `includes` on the
+// URL string would let attacker-crafted hosts through (CodeQL
+// js/incomplete-url-substring-sanitization).
+function hostOf(value) {
+  try {
+    return new URL(value).host
+  } catch {
+    return ""
+  }
+}
+
 globalThis.fetch = async (input) => {
   const url = String(typeof input === "object" && input?.url ? input.url : input)
-  if (url.includes("open.er-api.com")) {
+  if (hostOf(url) === "open.er-api.com") {
     return new Response(JSON.stringify(rates), {
       status: 200,
       statusText: "OK",
