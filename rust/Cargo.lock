@@ -647,6 +647,7 @@ dependencies = [
  "aes-gcm",
  "chrono",
  "flate2",
+ "getrandom",
  "hex",
  "libz-sys",
  "regex",
