@@ -190,9 +190,17 @@ pub fn decrypt_file_if_needed(path: &std::path::Path) -> std::io::Result<Vec<u8>
 mod tests {
     use super::*;
 
+    /// Cryptographically random test key tagged with a marker byte — avoids
+    /// literal key material (CodeQL "hard-coded cryptographic key").
+    fn seeded_key(marker: u8) -> Vec<u8> {
+        let mut key = generate_key();
+        key[0] = marker;
+        key
+    }
+
     #[test]
     fn encrypt_decrypt_roundtrip() {
-        let key = vec![7u8; KEY_LENGTH];
+        let key = seeded_key(7);
         let plaintext = "subtrack config payload \u{1f389}".as_bytes().to_vec();
         let sealed = encrypt_buffer(&key, &plaintext);
 
@@ -200,14 +208,14 @@ mod tests {
         assert!(sealed.len() > IV_LENGTH + TAG_LENGTH);
         assert_eq!(decrypt_buffer(&key, &sealed).unwrap(), plaintext);
         // a different key yields an authentication failure, not garbage
-        assert_eq!(decrypt_buffer(&[9u8; KEY_LENGTH], &sealed), None);
+        assert_eq!(decrypt_buffer(&seeded_key(9), &sealed), None);
         // too-short buffers cannot even carry iv+tag
         assert_eq!(decrypt_buffer(&key, &sealed[..12]), None);
     }
 
     #[test]
     fn encryption_uses_a_random_iv() {
-        let key = vec![1u8; KEY_LENGTH];
+        let key = seeded_key(1);
         let a = encrypt_buffer(&key, b"x");
         let b = encrypt_buffer(&key, b"x");
         assert_ne!(a, b); // fresh non-deterministic iv per call
