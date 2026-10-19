@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/subtrack"]
+members = ["subtrack"]
 
 [profile.release]
 lto = "fat"

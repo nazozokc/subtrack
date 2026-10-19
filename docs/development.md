@@ -87,8 +87,8 @@ Make sure all checks pass and CI is green.
 ```
 subtrack/
 ├── rust/                          # Rust implementation
-│   ├── Cargo.toml                 # Workspace (crates: ["crates/subtrack"], edition 2024)
-│   ├── crates/subtrack/           # The CLI crate
+│   ├── Cargo.toml                 # Workspace (crates: ["subtrack"], edition 2024)
+│   ├── subtrack/                  # The CLI crate
 │   │   ├── src/
 │   │   │   ├── main.rs            # Entry point
 │   │   │   ├── cli.rs             # Self-contained CLI framework (define(), routing, header)

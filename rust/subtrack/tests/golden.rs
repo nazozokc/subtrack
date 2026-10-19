@@ -21,7 +21,7 @@ use serde::Deserialize;
 
 // ── Locations & injected environment ─────────────────────────────
 
-const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures");
+const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../fixtures");
 const BIN: &str = env!("CARGO_BIN_EXE_subtrack");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const CAPTURE_TODAY: &str = "2026-10-08";

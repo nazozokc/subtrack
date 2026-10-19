@@ -46,7 +46,7 @@ cd rust
 cargo test --test golden      # replays all 365 cases (~30s)
 ```
 
-The harness is a single integration test at `crates/subtrack/tests/golden.rs`.
+The harness is a single integration test at `subtrack/tests/golden.rs`.
 It builds the `subtrack` binary, replays every case in `cases.jsonl` under a
 shared temp root, and byte-compares normalized stdout/stderr, exit codes, and
 produced files against `goldens/<group>/`. No network access is required.
