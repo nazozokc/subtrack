@@ -76,3 +76,52 @@ pub fn format_usd_cost_f(cents: f64, digits: usize) -> String {
     let v = cents / 100.0;
     format!("${:.1$}", v, digits)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn round_currency_rounds_half_away_from_zero() {
+        assert_eq!(round_currency(12.987), 12.99);
+        assert_eq!(round_currency(12.321), 12.32);
+        assert_eq!(round_currency(99.999), 100.0);
+        assert_eq!(round_currency(-1.006), -1.01);
+        assert_eq!(round_currency(0.0), 0.0);
+    }
+
+    #[test]
+    fn group_whole_inserts_thousands_separators() {
+        assert_eq!(group_whole(0), "0");
+        assert_eq!(group_whole(12), "12");
+        assert_eq!(group_whole(1234), "1,234");
+        assert_eq!(group_whole(1234567), "1,234,567");
+        assert_eq!(group_whole(-1234567), "-1,234,567");
+    }
+
+    #[test]
+    fn format_price_mimics_intl_en_us() {
+        // trailing zeros are dropped: 2.50 → "2.5"
+        assert_eq!(format_price(12.5, "USD"), "$12.5");
+        assert_eq!(format_price(2.0, "USD"), "$2");
+        // f64 2.3 truncation still rounds to cents 230 → "2.3"
+        assert_eq!(format_price(2.3, "USD"), "$2.3");
+        assert_eq!(format_price(12.99, "USD"), "$12.99");
+        assert_eq!(format_price(1000.0, "USD"), "$1,000");
+        assert_eq!(format_price(1234.56, "EUR"), "€1,234.56");
+        assert_eq!(format_price(1234.567, "GBP"), "£1,234.57");
+        assert_eq!(format_price(9999.99, "CHF"), "CHF 9,999.99");
+        assert_eq!(format_price(500.0, "JPY"), "¥500");
+        // unknown currencies fall back to "CODE amount"
+        assert_eq!(format_price(42.0, "XXX"), "XXX 42");
+    }
+
+    #[test]
+    fn format_usd_cost_renders_fixed_digits() {
+        assert_eq!(format_usd_cost(1234, 2), "$12.34");
+        assert_eq!(format_usd_cost(5, 2), "$0.05");
+        assert_eq!(format_usd_cost(0, 2), "$0.00");
+        assert_eq!(format_usd_cost_f(123.456, 2), "$1.23");
+        assert_eq!(format_usd_cost_f(1.5, 4), "$0.0150");
+    }
+}

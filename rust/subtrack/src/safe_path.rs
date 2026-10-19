@@ -116,3 +116,62 @@ pub fn resolve_safe_output_path(bases: &[PathBuf], target_path: &str) -> Option<
     }
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Unique root under the system temp dir: temp_dir is a default base.
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "subtrack-{}-{}-{:?}",
+            tag,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn safe_path_requires_existing_target_inside_a_base() {
+        let dir = scratch("safe-path");
+        let file = dir.join("book.json");
+        std::fs::write(&file, "{}").unwrap();
+        let bases = vec![dir.clone()];
+
+        assert!(resolve_safe_path(&bases, file.to_str().unwrap()).is_some());
+        // non-existent targets are rejected
+        assert!(resolve_safe_path(&bases, dir.join("nope.json").to_str().unwrap()).is_none());
+        // existing files outside the base are rejected
+        assert!(resolve_safe_path(&bases, "/etc/passwd").is_none());
+    }
+
+    #[test]
+    fn safe_output_path_resolves_through_missing_parents() {
+        let dir = scratch("safe-output");
+        let bases = vec![dir.clone()];
+        let target = dir.join("nested").join("deeper").join("report.json");
+
+        let resolved = resolve_safe_output_path(&bases, target.to_str().unwrap()).unwrap();
+        assert!(resolved.ends_with("nested/deeper/report.json"));
+
+        // base itself is fine
+        assert!(resolve_safe_output_path(&bases, dir.to_str().unwrap()).is_some());
+
+        // outside the base → rejected
+        assert!(resolve_safe_output_path(&bases, "/etc/subtrack-evil.json").is_none());
+    }
+
+    #[test]
+    fn normalize_collapses_dot_and_parent_segments() {
+        assert_eq!(
+            normalize(Path::new("/a/b/./c/../d")),
+            PathBuf::from("/a/b/d")
+        );
+        assert_eq!(normalize(Path::new("/a/b/../../c")), PathBuf::from("/c"));
+    }
+}

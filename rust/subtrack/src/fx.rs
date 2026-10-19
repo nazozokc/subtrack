@@ -114,3 +114,100 @@ pub fn convert_amounts(
     let has_missing = converted.iter().any(|v| v.is_none());
     (converted, has_missing)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn embedded_rates_cover_reference_file() {
+        let rates = fetch_rates();
+        assert!(rates.rates.len() > 10);
+        assert_eq!(rates.rates.get("USD"), Some(&1.0));
+        assert!(rates.rates.contains_key("JPY"));
+        assert!(rates.rates.contains_key("EUR"));
+    }
+
+    #[test]
+    fn try_convert_passes_through_same_currency() {
+        let mut rates = HashMap::new();
+        rates.insert("USD".to_string(), 1.0);
+        rates.insert("JPY".to_string(), 150.0);
+        assert_eq!(try_convert(12.5, "USD", "USD", &rates), Some(12.5));
+    }
+
+    #[test]
+    fn try_convert_goes_through_usd_base() {
+        let mut rates = HashMap::new();
+        rates.insert("USD".to_string(), 1.0);
+        rates.insert("EUR".to_string(), 0.5);
+        // USD → USD → EUR
+        assert_eq!(try_convert(100.0, "USD", "EUR", &rates), Some(50.0));
+        // EUR → USD → USD
+        assert_eq!(try_convert(50.0, "EUR", "USD", &rates), Some(100.0));
+        // EUR → USD → JPY
+        rates.insert("JPY".to_string(), 150.0);
+        assert!((try_convert(100.0, "EUR", "JPY", &rates).unwrap() - 30_000.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn try_convert_rejects_unknown_currencies() {
+        let rates = fetch_rates();
+        assert_eq!(try_convert(1.0, "XXX", "USD", &rates.rates), None);
+        assert_eq!(try_convert(1.0, "USD", "YYY", &rates.rates), None);
+    }
+
+    #[test]
+    fn try_convert_subs_keeps_missing_rates_unconverted() {
+        fn sub(price: f64, currency: &str) -> crate::db::Subscription {
+            crate::db::Subscription {
+                id: 1,
+                name: "t".to_string(),
+                price,
+                currency: currency.to_string(),
+                cycle: "monthly".to_string(),
+                status: "active".to_string(),
+                billing_day: None,
+                created_at: "2026-10-08".to_string(),
+                notes: None,
+                payment_method: None,
+                contract_start: None,
+                contract_end: None,
+                auto_renewal: true,
+                vendor_name: None,
+                vendor_url: None,
+                plan_tier: None,
+                discount_amount: None,
+                discount_type: None,
+                tags: vec![],
+            }
+        }
+        let sub_bad = sub(10.0, "XXX");
+        let sub_usd = sub(10.0, "USD");
+        let rates = fetch_rates();
+        let converted = try_convert_subs(&[sub_bad], "JPY", &rates);
+        assert!(converted.has_missing);
+        assert_eq!(converted.list[0].currency, "XXX");
+
+        let converted = try_convert_subs(&[sub_usd], "USD", &rates);
+        assert!(!converted.has_missing);
+        assert_eq!(converted.list[0].price, 10.0);
+    }
+
+    #[test]
+    fn convert_amounts_flags_missing_rates() {
+        let rates = fetch_rates();
+        let (values, has_missing) = convert_amounts(
+            &[(1.0, "USD".to_string()), (2.0, "ZZZ".to_string())],
+            "USD",
+            &rates,
+        );
+        assert_eq!(values[0], Some(1.0));
+        assert_eq!(values[1], None);
+        assert!(has_missing);
+
+        let (values, has_missing) = convert_amounts(&[(1.0, "USD".to_string())], "USD", &rates);
+        assert_eq!(values[0], Some(1.0));
+        assert!(!has_missing);
+    }
+}

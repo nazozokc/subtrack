@@ -108,7 +108,7 @@ pub fn derive_key_from_passphrase(passphrase: &str) -> Vec<u8> {
     use scrypt::{Params, scrypt as scrypt_kdf};
     let salt_path = config_dir().join(".key.salt");
     let salt = std::fs::read(&salt_path).unwrap_or_else(|_| vec![0u8; SALT_LENGTH]);
-    let params = Params::new(17, 8, 1, 256 * 1024 * 1024).unwrap();
+    let params = Params::new(17, 8, 1, KEY_LENGTH).unwrap();
     let mut key = [0u8; KEY_LENGTH];
     scrypt_kdf(passphrase.as_bytes(), &salt, &params, &mut key).expect("scrypt failed");
     key.to_vec()
@@ -184,4 +184,81 @@ pub fn decrypt_file_if_needed(path: &std::path::Path) -> std::io::Result<Vec<u8>
             .ok_or_else(|| std::io::Error::other("database decryption failed"));
     }
     Ok(raw)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encrypt_decrypt_roundtrip() {
+        let key = vec![7u8; KEY_LENGTH];
+        let plaintext = "subtrack config payload \u{1f389}".as_bytes().to_vec();
+        let sealed = encrypt_buffer(&key, &plaintext);
+
+        // iv + tag + ciphertext layout (iv is random per call)
+        assert!(sealed.len() > IV_LENGTH + TAG_LENGTH);
+        assert_eq!(decrypt_buffer(&key, &sealed).unwrap(), plaintext);
+        // a different key yields an authentication failure, not garbage
+        assert_eq!(decrypt_buffer(&[9u8; KEY_LENGTH], &sealed), None);
+        // too-short buffers cannot even carry iv+tag
+        assert_eq!(decrypt_buffer(&key, &sealed[..12]), None);
+    }
+
+    #[test]
+    fn encryption_uses_a_random_iv() {
+        let key = vec![1u8; KEY_LENGTH];
+        let a = encrypt_buffer(&key, b"x");
+        let b = encrypt_buffer(&key, b"x");
+        assert_ne!(a, b); // fresh non-deterministic iv per call
+    }
+
+    #[test]
+    fn is_encrypted_mirrors_sqlite_magic_check() {
+        assert!(!is_encrypted(b"SQLite format 3\0")); // plaintext SQLite
+        assert!(!is_encrypted(b"tnenottuc")); // too short
+        assert!(is_encrypted(&[0xffu8; 33])); // opaque non-SQLite blob
+    }
+
+    #[test]
+    fn sha256_hex_matches_reference_vectors() {
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn derive_key_from_passphrase_is_deterministic() {
+        let a = derive_key_from_passphrase("hello world");
+        let b = derive_key_from_passphrase("hello world");
+        assert_eq!(a.len(), KEY_LENGTH);
+        assert_eq!(a, b);
+        // never derive the null key
+        assert_ne!(a, vec![0u8; KEY_LENGTH]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_secret_file_sets_owner_only_permissions() {
+        let dir = std::env::temp_dir().join(format!(
+            "subtrack-key-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(".key");
+        write_secret_file(&path, b"k").unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
