@@ -105,7 +105,7 @@ pub fn write_secret_file(path: &std::path::Path, data: &[u8]) -> std::io::Result
 
 /// scrypt(passphrase, salt, 32, N=2^17, r=8, p=1).
 pub fn derive_key_from_passphrase(passphrase: &str) -> Vec<u8> {
-    use scrypt::{Params, scrypt as scrypt_kdf};
+    use scrypt::{scrypt as scrypt_kdf, Params};
     let salt_path = config_dir().join(".key.salt");
     let salt = std::fs::read(&salt_path).unwrap_or_else(|_| vec![0u8; SALT_LENGTH]);
     let params = Params::new(17, 8, 1, KEY_LENGTH).unwrap();
@@ -190,17 +190,15 @@ pub fn decrypt_file_if_needed(path: &std::path::Path) -> std::io::Result<Vec<u8>
 mod tests {
     use super::*;
 
-    /// Cryptographically random test key tagged with a marker byte — avoids
-    /// literal key material (CodeQL "hard-coded cryptographic key").
-    fn seeded_key(marker: u8) -> Vec<u8> {
-        let mut key = generate_key();
-        key[0] = marker;
-        key
+    /// CSPRNG-derived test keys only — literal key material (even one
+    /// constant byte) is flagged by CodeQL as a hard-coded crypto value.
+    fn generate_key() -> Vec<u8> {
+        super::generate_key()
     }
 
     #[test]
     fn encrypt_decrypt_roundtrip() {
-        let key = seeded_key(7);
+        let key = generate_key();
         let plaintext = "subtrack config payload \u{1f389}".as_bytes().to_vec();
         let sealed = encrypt_buffer(&key, &plaintext);
 
@@ -208,14 +206,16 @@ mod tests {
         assert!(sealed.len() > IV_LENGTH + TAG_LENGTH);
         assert_eq!(decrypt_buffer(&key, &sealed).unwrap(), plaintext);
         // a different key yields an authentication failure, not garbage
-        assert_eq!(decrypt_buffer(&seeded_key(9), &sealed), None);
+        let wrong_key = generate_key();
+        assert_ne!(key, wrong_key);
+        assert_eq!(decrypt_buffer(&wrong_key, &sealed), None);
         // too-short buffers cannot even carry iv+tag
         assert_eq!(decrypt_buffer(&key, &sealed[..12]), None);
     }
 
     #[test]
     fn encryption_uses_a_random_iv() {
-        let key = seeded_key(1);
+        let key = generate_key();
         let a = encrypt_buffer(&key, b"x");
         let b = encrypt_buffer(&key, b"x");
         assert_ne!(a, b); // fresh non-deterministic iv per call
