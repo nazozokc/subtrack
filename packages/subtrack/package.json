@@ -62,15 +62,15 @@
     ]
   },
   "devDependencies": {
-    "@secretlint/secretlint-rule-preset-recommend": "^13.0.5",
+    "@secretlint/secretlint-rule-preset-recommend": "^13.0.7",
     "@subtrack/lib": "workspace:*",
-    "@types/node": "^26.4.1",
+    "@types/node": "^26.6.5",
     "@vitest/coverage-v8": "^4.1.11",
     "husky": "^9.1.7",
-    "lint-staged": "^17.4.1",
-    "secretlint": "^13.0.5",
-    "tsdown": "^0.23.0",
-    "tsx": "^4.23.13",
+    "lint-staged": "^17.6.0",
+    "secretlint": "^13.0.7",
+    "tsdown": "^0.23.1",
+    "tsx": "^4.23.15",
     "typescript": "^7",
     "vitest": "^4.1.11"
   }
