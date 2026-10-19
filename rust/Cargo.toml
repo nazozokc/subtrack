@@ -2,6 +2,12 @@
 resolver = "3"
 members = ["crates/subtrack"]
 
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
 [workspace.package]
 edition = "2024"
 license = "MIT"

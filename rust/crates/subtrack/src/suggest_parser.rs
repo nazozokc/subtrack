@@ -4,10 +4,19 @@
 //! receipt → wallet → generic) and returns the first non-null candidate.
 //! JavaScript's `String.match(re)` semantics (first match, capture groups)
 //! map to `Regex::captures`; `String.replace(re, "")` (non-global) maps to
-//! `Regex::replace`. Word boundaries use Rust's Unicode `\b`, which is close
+//! `Regex::replace`. Word boundaries use `\b`, which is close
 //! to JS for the ASCII words used by these parsers.
+//!
+//! The engine is `regex-lite` instead of the `regex` crate: every pattern in
+//! this file (literals, `(?i)`, `\d`/`\s`, character classes, `{m,n}`
+//! quantifiers, alternation, non-greedy repetition) is fully supported by
+//! regex-lite and its engine is far lighter in the shipped binary. JavaScript
+//! `\b` is ASCII-only while regex-lite's boundary derives from `\w`, so the
+//! `guess_cycle` guards that mix Japanese words with `\b` are kept out of
+//! boundary-sensitive positions (verified byte-exact against the golden
+//! fixtures).
 
-use regex::Regex;
+use regex_lite::Regex;
 
 /// Raw email input read from a local file (port of `RawEmail`).
 pub struct RawEmail {
@@ -37,9 +46,19 @@ impl Candidate {
         let mut s = String::new();
         s.push_str(&format!("{}{{\n", base));
         let fields = [
-            format!("{}{}: {}", f, "\"name\"", crate::json::quote_string(&self.name)),
+            format!(
+                "{}{}: {}",
+                f,
+                "\"name\"",
+                crate::json::quote_string(&self.name)
+            ),
             format!("{}{}: {}", f, "\"price\"", crate::json::number(self.price)),
-            format!("{}{}: {}", f, "\"currency\"", crate::json::quote_string(&self.currency)),
+            format!(
+                "{}{}: {}",
+                f,
+                "\"currency\"",
+                crate::json::quote_string(&self.currency)
+            ),
             format!(
                 "{}{}: {}",
                 f,
@@ -49,14 +68,24 @@ impl Candidate {
                     None => "null".to_string(),
                 }
             ),
-            format!("{}{}: {}", f, "\"source\"", crate::json::quote_string(&self.source)),
+            format!(
+                "{}{}: {}",
+                f,
+                "\"source\"",
+                crate::json::quote_string(&self.source)
+            ),
             format!(
                 "{}{}: {}",
                 f,
                 "\"sourceDetail\"",
                 crate::json::quote_string(&self.source_detail)
             ),
-            format!("{}{}: {}", f, "\"confidence\"", crate::json::number(self.confidence)),
+            format!(
+                "{}{}: {}",
+                f,
+                "\"confidence\"",
+                crate::json::number(self.confidence)
+            ),
         ];
         s.push_str(&fields.join(",\n"));
         s.push_str(&format!("\n{}}}", base));
@@ -135,11 +164,7 @@ const BANK_PATTERNS: &[SimplePattern] = &[
 ];
 
 fn parse_bank(email: &RawEmail) -> Option<Candidate> {
-    let text = format!(
-        "{}\n{}",
-        email.subject.as_deref().unwrap_or(""),
-        email.body
-    );
+    let text = format!("{}\n{}", email.subject.as_deref().unwrap_or(""), email.body);
     for p in BANK_PATTERNS {
         let detect = Regex::new(p.detect).ok()?;
         if !detect.is_match(&text) {
@@ -207,11 +232,7 @@ const CARD_PATTERNS: &[SimplePattern] = &[
 ];
 
 fn parse_credit_card(email: &RawEmail) -> Option<Candidate> {
-    let text = format!(
-        "{}\n{}",
-        email.subject.as_deref().unwrap_or(""),
-        email.body
-    );
+    let text = format!("{}\n{}", email.subject.as_deref().unwrap_or(""), email.body);
     let symbol_re = Regex::new(r"[¥$€£]").unwrap();
     for p in CARD_PATTERNS {
         let detect = Regex::new(p.detect).ok()?;
@@ -347,8 +368,7 @@ const RECEIPT_PATTERNS: &[ReceiptPattern] = &[
     },
 ];
 
-const RECEIPT_KEYWORDS: &str =
-    r"(?i)receipt|invoice|payment confirmation|charge|billing|subscription|purchase|receipt|領収書|請求書|支払|購入|ご利用ありがとう|Thank you for your (purchase|payment|order)";
+const RECEIPT_KEYWORDS: &str = r"(?i)receipt|invoice|payment confirmation|charge|billing|subscription|purchase|receipt|領収書|請求書|支払|購入|ご利用ありがとう|Thank you for your (purchase|payment|order)";
 
 fn parse_receipt_service(email: &RawEmail) -> Option<Candidate> {
     let subject = email.subject.as_deref().unwrap_or("");
@@ -454,11 +474,7 @@ const WALLET_PATTERNS: &[SimplePattern] = &[
 ];
 
 fn parse_wallet(email: &RawEmail) -> Option<Candidate> {
-    let text = format!(
-        "{}\n{}",
-        email.subject.as_deref().unwrap_or(""),
-        email.body
-    );
+    let text = format!("{}\n{}", email.subject.as_deref().unwrap_or(""), email.body);
     for p in WALLET_PATTERNS {
         let detect = Regex::new(p.detect).ok()?;
         if !detect.is_match(&text) {
@@ -504,7 +520,8 @@ fn parse_wallet(email: &RawEmail) -> Option<Candidate> {
 
 fn extract_name(email: &RawEmail) -> String {
     let subject = email.subject.as_deref().unwrap_or("");
-    let prefix = Regex::new(r"(?i)^(?:Re|Fwd?|Thank you for your|Receipt|Invoice|Payment|Your)\s*").unwrap();
+    let prefix =
+        Regex::new(r"(?i)^(?:Re|Fwd?|Thank you for your|Receipt|Invoice|Payment|Your)\s*").unwrap();
     let keyword = Regex::new(r"(?i)receipt|payment|invoice|confirmation|notification").unwrap();
     let brackets = Regex::new(r"[\[\]【】「」『』]").unwrap();
     let cleaned = prefix.replace(subject, "").to_string();
@@ -576,7 +593,10 @@ fn extract_price(text: &str) -> Option<(f64, String)> {
 fn guess_cycle(text: &str) -> Option<String> {
     let checks: &[(&str, &str)] = &[
         (r"(?i)\b(monthly|per month|mo|month|月額|毎月)\b", "monthly"),
-        (r"(?i)\b(yearly|annual|per year|yr|年額|年間|毎年)\b", "yearly"),
+        (
+            r"(?i)\b(yearly|annual|per year|yr|年額|年間|毎年)\b",
+            "yearly",
+        ),
         (r"(?i)\b(weekly|per week|毎週)\b", "weekly"),
         (r"(?i)\b(quarterly|四半期)\b", "quarterly"),
     ];
@@ -631,7 +651,11 @@ mod tests {
     #[test]
     fn all_patterns_compile() {
         let mut patterns: Vec<&str> = Vec::new();
-        for p in BANK_PATTERNS.iter().chain(CARD_PATTERNS).chain(WALLET_PATTERNS) {
+        for p in BANK_PATTERNS
+            .iter()
+            .chain(CARD_PATTERNS)
+            .chain(WALLET_PATTERNS)
+        {
             patterns.push(p.detect);
             patterns.push(p.name_re);
             patterns.push(p.amount_re);
@@ -644,15 +668,20 @@ mod tests {
         }
         patterns.push(RECEIPT_KEYWORDS);
         for pat in patterns {
-            assert!(Regex::new(pat).is_ok(), "pattern failed to compile: {}", pat);
+            assert!(
+                Regex::new(pat).is_ok(),
+                "pattern failed to compile: {}",
+                pat
+            );
         }
     }
 
     #[test]
     fn receipt_txt_fixture_yields_no_candidate() {
-        let body = std::fs::read_to_string(
-            concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/inputs/receipt.txt"),
-        )
+        let body = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../fixtures/inputs/receipt.txt"
+        ))
         .expect("read receipt.txt");
         let email = RawEmail {
             subject: None,
