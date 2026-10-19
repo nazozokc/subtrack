@@ -1,16 +1,18 @@
 //! `report` / `yearly` commands — port of `report.ts` (handleReport) + yearly.
 
-use chrono::Datelike;
 use crate::ansi;
 use crate::config::load_config;
-use crate::db::{get_all_price_changes, get_audit_logs_filtered, get_subscriptions, QueryOptions, Subscription};
 use crate::date::{occurrences_per_year, period_factor};
-use crate::fx::{fetch_rates, try_convert, FxRates};
+use crate::db::{
+    QueryOptions, Subscription, get_all_price_changes, get_audit_logs_filtered, get_subscriptions,
+};
+use crate::fx::{FxRates, fetch_rates, try_convert};
 use crate::json::quote_string;
 use crate::logger::{self, fail, log, warn};
 use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
-use crate::timeline::{convert_subs, render_bar_chart, MonthTotal};
+use crate::timeline::{MonthTotal, convert_subs, render_bar_chart};
+use chrono::Datelike;
 
 fn yearly_cost(sub: &Subscription) -> f64 {
     sub.price * occurrences_per_year(&sub.cycle)
@@ -32,7 +34,13 @@ fn calc_yearly_totals(subs: &[Subscription], year: i64) -> Vec<MonthTotal> {
                 continue;
             }
             let created = sub.created_at.as_str();
-            if created.as_bytes().get(..10).map(|b| std::str::from_utf8(b).unwrap_or_default()).unwrap_or_default() > month_end.as_str() {
+            if created
+                .as_bytes()
+                .get(..10)
+                .map(|b| std::str::from_utf8(b).unwrap_or_default())
+                .unwrap_or_default()
+                > month_end.as_str()
+            {
                 continue;
             }
             // Subscription must already exist by the end of the month
@@ -40,7 +48,9 @@ fn calc_yearly_totals(subs: &[Subscription], year: i64) -> Vec<MonthTotal> {
                 continue;
             }
             if sub.status == "cancelled" {
-                let Some(end) = sub.contract_end.as_deref() else { continue };
+                let Some(end) = sub.contract_end.as_deref() else {
+                    continue;
+                };
                 if end < month_start.as_str() {
                     continue;
                 }
@@ -63,7 +73,11 @@ fn calc_top(subs: &[Subscription], n: usize) -> Vec<Subscription> {
         .filter(|s| s.status != "archived")
         .cloned()
         .collect();
-    list.sort_by(|a, b| yearly_cost(b).partial_cmp(&yearly_cost(a)).unwrap_or(std::cmp::Ordering::Equal));
+    list.sort_by(|a, b| {
+        yearly_cost(b)
+            .partial_cmp(&yearly_cost(a))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     list.truncate(n);
     list
 }
@@ -83,18 +97,28 @@ fn calc_cancelled(subs: &[Subscription], year: i64) -> Vec<(String, String)> {
     let prefix = format!("{}-", year);
     let mut results: Vec<(String, String)> = Vec::new();
     for sub in subs {
-        if sub.status == "cancelled" {
-            if let Some(end) = sub.contract_end.as_deref() {
-                if end.starts_with(&prefix) && !results.iter().any(|(n, _)| n == &sub.name) {
-                    results.push((sub.name.clone(), end.to_string()));
-                }
-            }
+        if sub.status == "cancelled"
+            && let Some(end) = sub.contract_end.as_deref()
+            && end.starts_with(&prefix)
+            && !results.iter().any(|(n, _)| n == &sub.name)
+        {
+            results.push((sub.name.clone(), end.to_string()));
         }
     }
-    let entries = get_audit_logs_filtered(Some("subscription.cancel"), None, 1000, 0, Some(&format!("{}-01-01", year)), None);
+    let entries = get_audit_logs_filtered(
+        Some("subscription.cancel"),
+        None,
+        1000,
+        0,
+        Some(&format!("{}-01-01", year)),
+        None,
+    );
     for entry in entries {
         if entry.created_at.starts_with(&prefix) {
-            let name = entry.details.clone().unwrap_or_else(|| format!("#{}", entry.target_id.unwrap_or_default()));
+            let name = entry
+                .details
+                .clone()
+                .unwrap_or_else(|| format!("#{}", entry.target_id.unwrap_or_default()));
             let date = entry.created_at[..10.min(entry.created_at.len())].to_string();
             if !results.iter().any(|(n, _)| n == &name) {
                 results.push((name, date));
@@ -127,7 +151,7 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
         .str("year")
         .and_then(|y| y.parse::<i64>().ok())
         .unwrap_or(today.year() as i64);
-    if year < 1970 || year > 9999 {
+    if !(1970..=9999).contains(&year) {
         fail("year must be a valid year (e.g. 2025)");
         return 1;
     }
@@ -150,8 +174,7 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
         let r = fetch_rates();
         // All-or-nothing conversion: try converting every subscription.
         let all_ok = subs.iter().all(|s| {
-            s.currency == target
-                || try_convert(s.price, &s.currency, &target, &r.rates).is_some()
+            s.currency == target || try_convert(s.price, &s.currency, &target, &r.rates).is_some()
         });
         if all_ok {
             display_subs = convert_subs(&subs, &target, &r);
@@ -221,15 +244,12 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
     if yearly_budget > 0.0 {
         let mut spending = total;
         let mut ccy = chart_ccy.clone();
-        if let (Some(c), Some(r)) = (&chart_ccy, &rates) {
-            if c != &budget_currency {
-                if let Some(converted) =
-                    crate::fx::try_convert(total, c, &budget_currency, &r.rates)
-                {
-                    spending = converted;
-                    ccy = Some(budget_currency.clone());
-                }
-            }
+        if let (Some(c), Some(r)) = (&chart_ccy, &rates)
+            && c != &budget_currency
+            && let Some(converted) = crate::fx::try_convert(total, c, &budget_currency, &r.rates)
+        {
+            spending = converted;
+            ccy = Some(budget_currency.clone());
         }
         if ccy.as_deref() == Some(budget_currency.as_str()) {
             let remaining = yearly_budget - spending;
@@ -262,7 +282,10 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
     }
 
     // ── text output ──
-    log(&ansi::bold(&ansi::cyan(&format!("📊 Subscription Report — {}", year))));
+    log(&ansi::bold(&ansi::cyan(&format!(
+        "📊 Subscription Report — {}",
+        year
+    ))));
     log("");
     log(&ansi::bold("Total spending:"));
     if let Some(c) = &display_currency {
@@ -292,7 +315,9 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
             log(&render_bar_chart(&totals, c));
         }
         None => {
-            log(&ansi::dim("(Monthly chart requires a single currency — use --currency to convert)"));
+            log(&ansi::dim(
+                "(Monthly chart requires a single currency — use --currency to convert)",
+            ));
         }
     }
 
@@ -314,7 +339,10 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
         log(&ansi::bold("Price changes:"));
         for c in &price_changes {
             let date = c.changed_at.chars().take(10).collect::<String>();
-            if let (Some(old), true) = (&c.old_price, c.old_currency.as_deref() == c.new_currency.as_deref()) {
+            if let (Some(old), true) = (
+                &c.old_price,
+                c.old_currency.as_deref() == c.new_currency.as_deref(),
+            ) {
                 let old = *old;
                 if old != c.new_price {
                     let diff = c.new_price - old;
@@ -331,20 +359,20 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
                     continue;
                 }
             }
-            if let Some(old_ccy) = &c.old_currency {
-                if c.new_currency.as_deref() != Some(old_ccy.as_str()) {
-                    let old_price = c.old_price.unwrap_or(c.new_price);
-                    log(&format!(
-                        "  {}  {}: {} ({}) → {} ({})",
-                        ansi::dim(&date),
-                        c.name,
-                        format_price(old_price, old_ccy),
-                        old_ccy,
-                        format_price(c.new_price, c.new_currency.as_deref().unwrap_or("USD")),
-                        c.new_currency.as_deref().unwrap_or("USD"),
-                    ));
-                    continue;
-                }
+            if let Some(old_ccy) = &c.old_currency
+                && c.new_currency.as_deref() != Some(old_ccy.as_str())
+            {
+                let old_price = c.old_price.unwrap_or(c.new_price);
+                log(&format!(
+                    "  {}  {}: {} ({}) → {} ({})",
+                    ansi::dim(&date),
+                    c.name,
+                    format_price(old_price, old_ccy),
+                    old_ccy,
+                    format_price(c.new_price, c.new_currency.as_deref().unwrap_or("USD")),
+                    c.new_currency.as_deref().unwrap_or("USD"),
+                ));
+                continue;
             }
             log(&format!(
                 "  {}  {}: → {}",
@@ -356,10 +384,7 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
     }
 
     log("");
-    log(&format!(
-        "{}",
-        ansi::bold(&format!("Added this year ({}):", added.len()))
-    ));
+    log(&ansi::bold(&format!("Added this year ({}):", added.len())).to_string());
     for s in &added {
         log(&format!(
             "  {} {}  {}/{}  ({})",
@@ -375,10 +400,7 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
     }
 
     log("");
-    log(&format!(
-        "{}",
-        ansi::bold(&format!("Cancelled this year ({}):", cancelled.len()))
-    ));
+    log(&ansi::bold(&format!("Cancelled this year ({}):", cancelled.len())).to_string());
     for (name, date) in &cancelled {
         log(&format!("  {} {}  ({})", ansi::red("-"), name, date));
     }
@@ -389,7 +411,10 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
     if let Some((amount, currency, remaining, over)) = &budget_info {
         log("");
         log(&ansi::bold("Budget:"));
-        log(&format!("  Budget: {}/year", format_price(*amount, currency)));
+        log(&format!(
+            "  Budget: {}/year",
+            format_price(*amount, currency)
+        ));
         if *over {
             log(&format!(
                 "  Over budget: {}",
@@ -403,15 +428,22 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
         }
     } else if yearly_budget > 0.0 {
         log("");
-        log(&ansi::dim("(Cannot compare budget — multiple currencies. Use --currency.)"));
+        log(&ansi::dim(
+            "(Cannot compare budget — multiple currencies. Use --currency.)",
+        ));
     } else {
         log("");
-        log(&ansi::dim("(No budget set — use: subtrack config set yearlyBudget <amount>)"));
+        log(&ansi::dim(
+            "(No budget set — use: subtrack config set yearlyBudget <amount>)",
+        ));
     }
 
     0
 }
 
+/// Serializes the yearly report command output. One argument per JSON
+/// section, mirroring the TS report builder.
+#[allow(clippy::too_many_arguments)]
 fn report_json(
     year: i64,
     total: f64,
@@ -466,7 +498,11 @@ fn report_json(
             "      \"total\": {}\n",
             crate::json::number(round_currency(t.total))
         ));
-        out.push_str(if i + 1 == totals.len() { "    }\n" } else { "    },\n" });
+        out.push_str(if i + 1 == totals.len() {
+            "    }\n"
+        } else {
+            "    },\n"
+        });
     }
     out.push_str("  ],\n");
     out.push_str("  \"top\": [\n");
@@ -478,14 +514,24 @@ fn report_json(
             "      \"yearlyCost\": {},\n",
             crate::json::number(round_currency(yearly_cost(s)))
         ));
-        out.push_str(&format!("      \"currency\": {}\n", quote_string(&s.currency)));
-        out.push_str(if i + 1 == top.len() { "    }\n" } else { "    },\n" });
+        out.push_str(&format!(
+            "      \"currency\": {}\n",
+            quote_string(&s.currency)
+        ));
+        out.push_str(if i + 1 == top.len() {
+            "    }\n"
+        } else {
+            "    },\n"
+        });
     }
     out.push_str("  ],\n");
     out.push_str("  \"priceChanges\": [\n");
     for (i, c) in price_changes.iter().enumerate() {
         out.push_str("    {\n");
-        out.push_str(&format!("      \"subscriptionId\": {},\n", c.subscription_id));
+        out.push_str(&format!(
+            "      \"subscriptionId\": {},\n",
+            c.subscription_id
+        ));
         out.push_str(&format!(
             "      \"subscriptionName\": {},\n",
             quote_string(&c.name)
@@ -497,7 +543,10 @@ fn report_json(
                 None => "null".to_string(),
             }
         ));
-        out.push_str(&format!("      \"newPrice\": {},\n", crate::json::number(c.new_price)));
+        out.push_str(&format!(
+            "      \"newPrice\": {},\n",
+            crate::json::number(c.new_price)
+        ));
         out.push_str(&format!(
             "      \"oldCurrency\": {},\n",
             match &c.old_currency {
@@ -512,8 +561,14 @@ fn report_json(
                 None => "null".to_string(),
             }
         ));
-        out.push_str(&format!("      \"changedAt\": {},\n", quote_string(&c.changed_at)));
-        let diff = if let (Some(old), true) = (&c.old_price, c.old_currency.as_deref() == c.new_currency.as_deref()) {
+        out.push_str(&format!(
+            "      \"changedAt\": {},\n",
+            quote_string(&c.changed_at)
+        ));
+        let diff = if let (Some(old), true) = (
+            &c.old_price,
+            c.old_currency.as_deref() == c.new_currency.as_deref(),
+        ) {
             if *old != c.new_price {
                 Some(round_currency(c.new_price - *old))
             } else {
@@ -529,7 +584,11 @@ fn report_json(
                 None => "null".to_string(),
             }
         ));
-        out.push_str(if i + 1 == price_changes.len() { "    }\n" } else { "    },\n" });
+        out.push_str(if i + 1 == price_changes.len() {
+            "    }\n"
+        } else {
+            "    },\n"
+        });
     }
     out.push_str("  ],\n");
     out.push_str("  \"added\": [\n");
@@ -537,7 +596,10 @@ fn report_json(
         out.push_str("    {\n");
         out.push_str(&format!("      \"id\": {},\n", s.id));
         out.push_str(&format!("      \"name\": {},\n", quote_string(&s.name)));
-        out.push_str(&format!("      \"price\": {},\n", crate::json::number(s.price)));
+        out.push_str(&format!(
+            "      \"price\": {},\n",
+            crate::json::number(s.price)
+        ));
         out.push_str(&format!(
             "      \"currency\": {},\n",
             quote_string(&s.currency)
@@ -547,13 +609,13 @@ fn report_json(
             "      \"createdAt\": {}\n",
             quote_string(&s.created_at)
         ));
-        out.push_str(if i + 1 == added.len() { "    }\n" } else { "    },\n" });
+        out.push_str(if i + 1 == added.len() {
+            "    }\n"
+        } else {
+            "    },\n"
+        });
     }
-    if added.is_empty() {
-        out.push_str("  ],\n");
-    } else {
-        out.push_str("  ],\n");
-    }
+    out.push_str("  ],\n");
     // match golden format for empty arrays
     if cancelled.is_empty() {
         out.push_str("  \"cancelled\": [],\n");
@@ -563,7 +625,11 @@ fn report_json(
             out.push_str("    {\n");
             out.push_str(&format!("      \"name\": {},\n", quote_string(name)));
             out.push_str(&format!("      \"date\": {}\n", quote_string(date)));
-            out.push_str(if i + 1 == cancelled.len() { "    }\n" } else { "    },\n" });
+            out.push_str(if i + 1 == cancelled.len() {
+                "    }\n"
+            } else {
+                "    },\n"
+            });
         }
         out.push_str("  ],\n");
     }
@@ -571,7 +637,10 @@ fn report_json(
     match budget_info {
         Some((amount, currency, remaining, over)) => {
             out.push_str("{\n");
-            out.push_str(&format!("    \"amount\": {},\n", crate::json::number(*amount)));
+            out.push_str(&format!(
+                "    \"amount\": {},\n",
+                crate::json::number(*amount)
+            ));
             out.push_str(&format!("    \"currency\": {},\n", quote_string(currency)));
             out.push_str(&format!(
                 "    \"remaining\": {},\n",

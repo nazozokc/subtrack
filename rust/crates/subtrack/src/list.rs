@@ -3,9 +3,11 @@
 
 use crate::config::load_config;
 use crate::date::{today, today_string};
-use crate::db::{get_llm_usage_total, get_llm_usage_total_by_provider, get_subscriptions, QueryOptions};
+use crate::db::{
+    QueryOptions, get_llm_usage_total, get_llm_usage_total_by_provider, get_subscriptions,
+};
 use crate::display::{show_api_usage, spread_subscription};
-use crate::fx::{fetch_converted_subs, Converted};
+use crate::fx::{Converted, fetch_converted_subs};
 use crate::json::list_json;
 use crate::logger::{fail, info, out_str, success, warn};
 use crate::parser::ParsedArgs;
@@ -34,46 +36,46 @@ fn parse_num(s: &str) -> f64 {
 pub fn run_list(parsed: &ParsedArgs) -> i32 {
     // limit/offset must be integers
     let limit = parsed.str("limit").map(|s| parse_num(&s));
-    if let Some(v) = limit {
-        if v.is_nan() || v < 1.0 || v.fract() != 0.0 {
-            fail("limit must be a positive integer");
-            return 1;
-        }
+    if let Some(v) = limit
+        && (v.is_nan() || v < 1.0 || v.fract() != 0.0)
+    {
+        fail("limit must be a positive integer");
+        return 1;
     }
     let offset = parsed.str("offset").map(|s| parse_num(&s));
-    if let Some(v) = offset {
-        if v.is_nan() || v < 0.0 || v.fract() != 0.0 {
-            fail("offset must be a non-negative integer");
-            return 1;
-        }
+    if let Some(v) = offset
+        && (v.is_nan() || v < 0.0 || v.fract() != 0.0)
+    {
+        fail("offset must be a non-negative integer");
+        return 1;
     }
     // status must be one of the known values
-    if let Some(s) = parsed.str("status") {
-        if !["active", "paused", "cancelled", "archived"].contains(&s.as_str()) {
-            fail("status must be one of: active, paused, cancelled, archived");
-            return 1;
-        }
+    if let Some(s) = parsed.str("status")
+        && !["active", "paused", "cancelled", "archived"].contains(&s.as_str())
+    {
+        fail("status must be one of: active, paused, cancelled, archived");
+        return 1;
     }
     // price bounds
     let min_price = parsed.str("min-price").map(|s| parse_num(&s));
-    if let Some(v) = min_price {
-        if v.is_nan() || v < 0.0 {
-            fail("min-price must be a non-negative number");
-            return 1;
-        }
+    if let Some(v) = min_price
+        && (v.is_nan() || v < 0.0)
+    {
+        fail("min-price must be a non-negative number");
+        return 1;
     }
     let max_price = parsed.str("max-price").map(|s| parse_num(&s));
-    if let Some(v) = max_price {
-        if v.is_nan() || v < 0.0 {
-            fail("max-price must be a non-negative number");
-            return 1;
-        }
+    if let Some(v) = max_price
+        && (v.is_nan() || v < 0.0)
+    {
+        fail("max-price must be a non-negative number");
+        return 1;
     }
-    if let (Some(min), Some(max)) = (min_price, max_price) {
-        if min > max {
-            fail("min-price cannot be greater than max-price");
-            return 1;
-        }
+    if let (Some(min), Some(max)) = (min_price, max_price)
+        && min > max
+    {
+        fail("min-price cannot be greater than max-price");
+        return 1;
     }
 
     let json = parsed.bool("json") == Some(true);
@@ -159,7 +161,9 @@ pub fn handle_list(list: Vec<crate::db::Subscription>, options: HandleOptions) {
                     success("Exchange rates updated");
                     display_list = list;
                     if has_missing {
-                        warn("Some prices could not be converted (missing rate). They are shown in original currency.");
+                        warn(
+                            "Some prices could not be converted (missing rate). They are shown in original currency.",
+                        );
                     }
                 }
                 None => {

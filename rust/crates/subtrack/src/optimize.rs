@@ -2,8 +2,10 @@
 //! + `optimize.ts` (handleOptimize and analyzers).
 
 use crate::ansi;
-use crate::db::{get_all_price_changes, get_subscriptions, QueryOptions, PriceChange, Subscription};
 use crate::date::{period_factor, today};
+use crate::db::{
+    PriceChange, QueryOptions, Subscription, get_all_price_changes, get_subscriptions,
+};
 use crate::fx::{fetch_rates, try_convert};
 use crate::json::{number, quote_string};
 use crate::logger::{self, info, log, out_str};
@@ -46,8 +48,18 @@ struct CancelledSuggestion {
 /// drop tokens ≤2 chars and common plan words.
 fn tokenize_name(name: &str) -> Vec<String> {
     const COMMON: [&str; 12] = [
-        "plan", "pro", "basic", "premium", "standard", "plus", "family", "duo", "student",
-        "enterprise", "business", "personal",
+        "plan",
+        "pro",
+        "basic",
+        "premium",
+        "standard",
+        "plus",
+        "family",
+        "duo",
+        "student",
+        "enterprise",
+        "business",
+        "personal",
     ];
     let cleaned: String = name
         .to_lowercase()
@@ -55,7 +67,7 @@ fn tokenize_name(name: &str) -> Vec<String> {
         .filter(|c| *c != '(' && *c != ')')
         .collect();
     cleaned
-        .split(|c: char| c == ' ' || c == '-')
+        .split([' ', '-'])
         .filter(|t| t.chars().count() > 2 && !COMMON.contains(t))
         .map(|t| t.to_string())
         .collect()
@@ -75,10 +87,7 @@ fn jaccard_similarity(a: &[String], b: &[String]) -> f64 {
     inter as f64 / union.len() as f64
 }
 
-fn analyze_cycle_optimization(
-    subs: &[Subscription],
-    discount_rate: f64,
-) -> Vec<CycleSuggestion> {
+fn analyze_cycle_optimization(subs: &[Subscription], discount_rate: f64) -> Vec<CycleSuggestion> {
     let mut results = Vec::new();
     for sub in subs {
         if sub.status == "cancelled" || sub.status == "paused" {
@@ -159,10 +168,7 @@ fn analyze_duplicates(subs: &[Subscription]) -> Vec<DuplicateSuggestion> {
 }
 
 /// Port of `analyzeInactive`: active subs with no price change for >= 18 months.
-fn analyze_inactive(
-    subs: &[Subscription],
-    all_changes: &[PriceChange],
-) -> Vec<InactiveSuggestion> {
+fn analyze_inactive(subs: &[Subscription], all_changes: &[PriceChange]) -> Vec<InactiveSuggestion> {
     let active: Vec<&Subscription> = subs.iter().filter(|s| s.status == "active").collect();
     let mut last_by_sub: std::collections::HashMap<i64, String> = std::collections::HashMap::new();
     for ch in all_changes {
@@ -282,9 +288,8 @@ pub fn run_optimize(parsed: &ParsedArgs) -> i32 {
     let inactive_suggestions = analyze_inactive(&subs, &all_changes);
     let cancelled_suggestions = analyze_cancelled(&subs);
 
-    let total_yearly_savings = round_currency(
-        cycle_suggestions.iter().map(|c| c.yearly_savings).sum(),
-    );
+    let total_yearly_savings =
+        round_currency(cycle_suggestions.iter().map(|c| c.yearly_savings).sum());
 
     if min_savings > 0.0 && total_yearly_savings < min_savings {
         info(&format!(
@@ -368,15 +373,28 @@ fn render_report(
 
     // Cycle Optimization
     if !cycle.is_empty() {
-        let mut lines: Vec<String> = vec![String::new(), ansi::bold("  Cycle Optimization"), String::new()];
+        let mut lines: Vec<String> = vec![
+            String::new(),
+            ansi::bold("  Cycle Optimization"),
+            String::new(),
+        ];
         let mut total_savings = 0.0_f64;
         for s in cycle {
             lines.push(format!(
                 "    {}  {}{}  {}",
                 s.name,
-                ansi::dim(&format!("{}/mo → ", format_price(s.current_monthly, display_currency))),
-                ansi::green(&format!("{}/mo", format_price(s.suggested_monthly, display_currency))),
-                ansi::green(&format!("(save {}/yr)", format_price(s.yearly_savings, display_currency)))
+                ansi::dim(&format!(
+                    "{}/mo → ",
+                    format_price(s.current_monthly, display_currency)
+                )),
+                ansi::green(&format!(
+                    "{}/mo",
+                    format_price(s.suggested_monthly, display_currency)
+                )),
+                ansi::green(&format!(
+                    "(save {}/yr)",
+                    format_price(s.yearly_savings, display_currency)
+                ))
             ));
             total_savings += s.yearly_savings;
         }
@@ -384,7 +402,10 @@ fn render_report(
             lines.push(format!("    {}", ansi::dim(&"─".repeat(40))));
             lines.push(format!(
                 "    {}",
-                ansi::green(&ansi::bold(&format!("Total savings: {}/yr", format_price(total_savings, display_currency))))
+                ansi::green(&ansi::bold(&format!(
+                    "Total savings: {}/yr",
+                    format_price(total_savings, display_currency)
+                )))
             ));
         }
         sections.push(lines.join("\n"));
@@ -392,7 +413,11 @@ fn render_report(
 
     // Possible Duplicates
     if !duplicates.is_empty() {
-        let mut lines: Vec<String> = vec![String::new(), ansi::bold("  Possible Duplicates"), String::new()];
+        let mut lines: Vec<String> = vec![
+            String::new(),
+            ansi::bold("  Possible Duplicates"),
+            String::new(),
+        ];
         for d in duplicates {
             lines.push(format!("    {}:", ansi::yellow(&d.category)));
             for name in &d.names {
@@ -400,7 +425,10 @@ fn render_report(
             }
             lines.push(format!(
                 "      {}",
-                ansi::dim(&format!("Combined: {}/mo", format_price(d.total_monthly, display_currency)))
+                ansi::dim(&format!(
+                    "Combined: {}/mo",
+                    format_price(d.total_monthly, display_currency)
+                ))
             ));
             lines.push(String::new());
         }
@@ -415,27 +443,10 @@ fn render_report(
             String::new(),
         ];
         for s in inactive {
-            lines.push(format!(
-                "    {}{}  {}",
-                ansi::dim(&format!("#{}", s.id)),
-                s.name,
-                format!("{}/mo", format_price(s.monthly, &s.currency))
-            ));
-        }
-        // NOTE: TS puts a space between name and price; rebuild to match:
-        lines = vec![
-            String::new(),
-            ansi::bold("  Inactive (no price change >18 months)"),
-            String::new(),
-        ];
-        for s in inactive {
-            lines.push(format!(
-                "    {} {}  {}/mo  {}",
-                ansi::dim(&format!("#{}", s.id)),
-                s.name,
-                format_price(s.monthly, &s.currency),
-                ansi::dim(&format!("last change: {}", s.last_changed))
-            ));
+            let id = ansi::dim(&format!("#{}", s.id));
+            let monthly = format_price(s.monthly, &s.currency);
+            let last = ansi::dim(&format!("last change: {}", s.last_changed));
+            lines.push(format!("    {} {}  {}/mo  {}", id, s.name, monthly, last));
         }
         sections.push(lines.join("\n"));
     }
@@ -458,7 +469,10 @@ fn render_report(
         lines.push(format!("    {}", ansi::dim(&"─".repeat(40))));
         lines.push(format!(
             "    {}",
-            ansi::dim(&format!("Previously: {}/mo", format_price(total_monthly, display_currency)))
+            ansi::dim(&format!(
+                "Previously: {}/mo",
+                format_price(total_monthly, display_currency)
+            ))
         ));
         sections.push(lines.join("\n"));
     }

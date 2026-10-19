@@ -22,10 +22,12 @@ pub const CONFIG_MAGIC: &[u8] = b"SUBCCFG\0\0\0\0\0\0\0\0";
 /// DB/config directory: SUBSC_CLI_DB_DIR override, else ~/.config/subtrack.
 pub fn config_dir() -> std::path::PathBuf {
     if let Ok(dir) = std::env::var("SUBSC_CLI_DB_DIR") {
-        return std::path::PathBuf::from(dir)
+        return std::path::PathBuf::from(dir);
     }
     let home = std::env::var("HOME").unwrap_or_default();
-    std::path::PathBuf::from(home).join(".config").join("subtrack")
+    std::path::PathBuf::from(home)
+        .join(".config")
+        .join("subtrack")
 }
 
 /// $HOME (scanner paths are resolved relative to it).
@@ -41,7 +43,7 @@ pub fn has_encryption_key() -> bool {
 /// Raw encryption key: from the passphrase via scrypt, else from `.key`.
 pub fn get_or_create_key() -> std::io::Result<Vec<u8>> {
     if let Ok(passphrase) = std::env::var("SUBSC_CLI_DB_PASSPHRASE") {
-        return Ok(derive_key_from_passphrase(&passphrase))
+        return Ok(derive_key_from_passphrase(&passphrase));
     }
     let key_path = config_dir().join(".key");
     match std::fs::read(&key_path) {
@@ -52,7 +54,7 @@ pub fn get_or_create_key() -> std::io::Result<Vec<u8>> {
                      The key file may be corrupted.",
                     key_content.len(),
                     KEY_LENGTH
-                )))
+                )));
             }
             Ok(key_content)
         }
@@ -63,7 +65,10 @@ pub fn get_or_create_key() -> std::io::Result<Vec<u8>> {
             let key = generate_key();
             write_secret_file(&key_path, &key)?;
             let integrity_path = dir.join(".key.sha256");
-            let _ = write_secret_file(&integrity_path, format!("{}\n", sha256_hex(&key)).as_bytes());
+            let _ = write_secret_file(
+                &integrity_path,
+                format!("{}\n", sha256_hex(&key)).as_bytes(),
+            );
             crate::logger::warn(&format!(
                 "Encryption key created at: {}\n  \
                  !! BACKUP THIS KEY! If lost, your encrypted database cannot be recovered.\n  \
@@ -149,7 +154,9 @@ pub fn decrypt_buffer(key: &[u8], ciphertext: &[u8]) -> Option<Vec<u8>> {
     let mut ct = Vec::with_capacity(data.len() + TAG_LENGTH);
     ct.extend_from_slice(data);
     ct.extend_from_slice(tag);
-    aesgcm(key).decrypt(Nonce::from_slice(iv), ct.as_slice()).ok()
+    aesgcm(key)
+        .decrypt(Nonce::from_slice(iv), ct.as_slice())
+        .ok()
 }
 
 /// True when the buffer does NOT start with the SQLite magic header.
@@ -170,18 +177,18 @@ pub fn sha256_hex(data: &[u8]) -> String {
 pub fn decrypt_file_if_needed(path: &std::path::Path) -> std::io::Result<Vec<u8>> {
     let raw = std::fs::read(path)?;
     if raw.len() < 15 {
-        return Ok(raw)
+        return Ok(raw);
     }
     if raw[..15].eq(CONFIG_MAGIC) {
         let key = get_or_create_key()?;
         return decrypt_buffer(&key, &raw[15..])
-            .ok_or_else(|| std::io::Error::other("config decryption failed"))
+            .ok_or_else(|| std::io::Error::other("config decryption failed"));
     }
     if is_encrypted(&raw) && raw.len() > 32 {
         // DB file (no magic header) — decrypt when it is not plaintext SQLite.
         let key = get_or_create_key()?;
         return decrypt_buffer(&key, &raw)
-            .ok_or_else(|| std::io::Error::other("database decryption failed"))
+            .ok_or_else(|| std::io::Error::other("database decryption failed"));
     }
     Ok(raw)
 }

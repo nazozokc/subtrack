@@ -67,7 +67,11 @@ fn has_positional_args(args: &[ArgSpec]) -> bool {
 
 /// `-s, --name` / `--name` (kebabized when to_kebab).
 fn make_short_long_option_pair(spec: &ArgSpec, name: &str, to_kebab: bool) -> String {
-    let key = if to_kebab { kebabize(name) } else { name.to_string() };
+    let key = if to_kebab {
+        kebabize(name)
+    } else {
+        name.to_string()
+    };
     match spec.short {
         Some(s) => format!("-{}, --{}", s, key),
         None => format!("--{}", key),
@@ -197,7 +201,11 @@ pub fn render_usage(
             let row = if desc.is_empty() {
                 command_str
             } else {
-                format!("{}{}", pad_end(&command_str, symbol_length + MIDDLE_MARGIN), desc)
+                format!(
+                    "{}{}",
+                    pad_end(&command_str, symbol_length + MIDDLE_MARGIN),
+                    desc
+                )
             };
             messages.push(format!("{}{}", " ".repeat(LEFT_MARGIN), row));
         }
@@ -222,8 +230,10 @@ pub fn render_usage(
     // ── ARGUMENTS ──
     if has_positional_args(args) {
         messages.push("ARGUMENTS:".to_string());
-        let positionals: Vec<&ArgSpec> =
-            args.iter().filter(|a| a.kind == ArgKind::Positional).collect();
+        let positionals: Vec<&ArgSpec> = args
+            .iter()
+            .filter(|a| a.kind == ArgKind::Positional)
+            .collect();
         let args_max_length = positionals.iter().map(|a| a.name.len()).max().unwrap_or(0);
         for spec in &positionals {
             let desc = spec.description;
@@ -245,7 +255,11 @@ pub fn render_usage(
             .filter(|a| a.kind != ArgKind::Positional)
             .map(|a| {
                 let key = make_short_long_option_pair(a, a.name, to_kebab);
-                let display = if to_kebab { kebabize(a.name) } else { a.name.to_string() };
+                let display = if to_kebab {
+                    kebabize(a.name)
+                } else {
+                    a.name.to_string()
+                };
                 let key = if a.kind == ArgKind::Boolean {
                     key
                 } else {
@@ -258,8 +272,15 @@ pub fn render_usage(
         let by_name: std::collections::HashMap<&str, &ArgSpec> =
             args.iter().map(|a| (a.name, a)).collect();
         for (raw_name, key) in &options {
-            let desc = by_name.get(raw_name.as_str()).map(|a| a.description).unwrap_or("");
-            let option = format!("{}{}", pad_end(key, options_max_length + MIDDLE_MARGIN), desc);
+            let desc = by_name
+                .get(raw_name.as_str())
+                .map(|a| a.description)
+                .unwrap_or("");
+            let option = format!(
+                "{}{}",
+                pad_end(key, options_max_length + MIDDLE_MARGIN),
+                desc
+            );
             messages.push(format!("{}{}", " ".repeat(LEFT_MARGIN), option));
         }
         messages.push(String::new());

@@ -93,15 +93,14 @@ pub fn open_db() -> std::io::Result<Connection> {
     let open_path = dir.join(".subtrack.open.db");
 
     if let Ok(raw) = std::fs::read(&db_path) {
-        let plain = if raw.len() >= 16 && !raw[..16].eq(crate::crypto::SQLITE_MAGIC)
-            && raw.len() > 32
-        {
-            let key = crate::crypto::get_or_create_key()?;
-            crate::crypto::decrypt_buffer(&key, &raw)
-                .ok_or_else(|| std::io::Error::other("database decryption failed"))?
-        } else {
-            raw
-        };
+        let plain =
+            if raw.len() >= 16 && !raw[..16].eq(crate::crypto::SQLITE_MAGIC) && raw.len() > 32 {
+                let key = crate::crypto::get_or_create_key()?;
+                crate::crypto::decrypt_buffer(&key, &raw)
+                    .ok_or_else(|| std::io::Error::other("database decryption failed"))?
+            } else {
+                raw
+            };
         std::fs::write(&open_path, &plain)?;
     } else {
         std::fs::create_dir_all(&dir)?;
@@ -417,7 +416,10 @@ fn query_subscriptions(
         .prepare(&sql)
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let rows = stmt
-        .query_map(rusqlite::params_from_iter(params.iter()), row_to_subscription)
+        .query_map(
+            rusqlite::params_from_iter(params.iter()),
+            row_to_subscription,
+        )
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut out = Vec::new();
     for r in rows {
@@ -428,7 +430,7 @@ fn query_subscriptions(
 
 fn map_tags(conn: &Connection, subs: &mut [Subscription]) -> std::io::Result<()> {
     if subs.is_empty() {
-        return Ok(())
+        return Ok(());
     }
     let ids: Vec<i64> = subs.iter().map(|s| s.id).collect();
     let placeholders = vec!["?"; ids.len()].join(",");
@@ -446,9 +448,7 @@ fn map_tags(conn: &Connection, subs: &mut [Subscription]) -> std::io::Result<()>
             Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
         })
         .map_err(|e| std::io::Error::other(e.to_string()))?;
-    let pairs: Vec<(i64, String)> = rows
-        .filter_map(|r| r.ok())
-        .collect();
+    let pairs: Vec<(i64, String)> = rows.filter_map(|r| r.ok()).collect();
     let mut tag_map: std::collections::HashMap<i64, Vec<String>> = std::collections::HashMap::new();
     for (id, name) in pairs {
         tag_map.entry(id).or_default().push(name)
@@ -487,7 +487,10 @@ pub fn get_llm_usage_total_by_provider(
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let rows = stmt
         .query_map(params![from, to], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?.round() as i64))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, f64>(1)?.round() as i64,
+            ))
         })
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut out = Vec::new();
@@ -669,7 +672,9 @@ pub fn get_tags_with_count() -> std::io::Result<Vec<(String, i64)>> {
         .prepare(sql)
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let rows = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut out = Vec::new();
     for r in rows {
@@ -734,7 +739,9 @@ pub fn search_subscriptions(
     let pattern = format!("%{}%", query);
     let mut conditions: Vec<&str> = Vec::new();
     let mut params: Vec<rusqlite::types::Value> = Vec::new();
-    let add = |conditions: &mut Vec<&'static str>, params: &mut Vec<rusqlite::types::Value>, cond: &'static str| {
+    let add = |conditions: &mut Vec<&'static str>,
+               params: &mut Vec<rusqlite::types::Value>,
+               cond: &'static str| {
         conditions.push(cond);
         params.push(pattern.clone().into());
     };
@@ -767,7 +774,7 @@ pub fn search_subscriptions(
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let rows = stmt
         .query_map(rusqlite::params_from_iter(params.iter()), |row| {
-            row_to_subscription(&row)
+            row_to_subscription(row)
         })
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut out = Vec::new();
@@ -949,10 +956,8 @@ pub fn get_audit_log_count(action: Option<&str>, from: Option<&str>, to: Option<
     for p in &params {
         bound.push(p.as_ref());
     }
-    match stmt.query_row(bound.as_slice(), |row| row.get::<_, i64>(0)) {
-        Ok(n) => n,
-        Err(_) => 0,
-    }
+    stmt.query_row(bound.as_slice(), |row| row.get::<_, i64>(0))
+        .unwrap_or_default()
 }
 
 /// Price history for one subscription, newest first (port of `getPriceHistory`).
@@ -1079,7 +1084,10 @@ pub fn get_suggestions(status: Option<&str>) -> std::io::Result<Vec<Suggestion>>
     let (sql, out) = match status {
         Some(s) => {
             let mut stmt = conn
-                .prepare(&format!("{} WHERE status = ? ORDER BY created_at DESC", SUGGESTION_SELECT))
+                .prepare(&format!(
+                    "{} WHERE status = ? ORDER BY created_at DESC",
+                    SUGGESTION_SELECT
+                ))
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
             let rows = stmt
                 .query_map(params![s], suggestion_from_row)
@@ -1334,17 +1342,21 @@ pub fn rename_tag(old_name: &str, new_name: &str) -> std::io::Result<bool> {
     }
     let conn = open_db()?;
     let old_id: Option<i64> = conn
-        .query_row("SELECT id FROM tags WHERE name = ?", params![old_name], |r| {
-            r.get(0)
-        })
+        .query_row(
+            "SELECT id FROM tags WHERE name = ?",
+            params![old_name],
+            |r| r.get(0),
+        )
         .ok();
     let Some(old_id) = old_id else {
         return Ok(false);
     };
     let existing: Option<i64> = conn
-        .query_row("SELECT id FROM tags WHERE name = ?", params![new_name], |r| {
-            r.get(0)
-        })
+        .query_row(
+            "SELECT id FROM tags WHERE name = ?",
+            params![new_name],
+            |r| r.get(0),
+        )
         .ok();
     conn.execute_batch("BEGIN TRANSACTION")
         .map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -1383,11 +1395,18 @@ pub fn rename_tag(old_name: &str, new_name: &str) -> std::io::Result<bool> {
 /// Delete a tag and its links. Returns whether the tag existed.
 pub fn remove_tag(conn: &Connection, name: &str, persist: bool) -> std::io::Result<bool> {
     let tag_id: Option<i64> = conn
-        .query_row("SELECT id FROM tags WHERE name = ?", params![name], |r| r.get(0))
+        .query_row("SELECT id FROM tags WHERE name = ?", params![name], |r| {
+            r.get(0)
+        })
         .ok();
-    let Some(tag_id) = tag_id else { return Ok(false) };
-    conn.execute("DELETE FROM subscription_tags WHERE tag_id = ?", params![tag_id])
-        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let Some(tag_id) = tag_id else {
+        return Ok(false);
+    };
+    conn.execute(
+        "DELETE FROM subscription_tags WHERE tag_id = ?",
+        params![tag_id],
+    )
+    .map_err(|e| std::io::Error::other(e.to_string()))?;
     conn.execute("DELETE FROM tags WHERE id = ?", params![tag_id])
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     if persist {
@@ -1417,7 +1436,9 @@ pub fn db_path() -> std::path::PathBuf {
 
 /// Size in bytes of the encrypted database file (`getFileSize`).
 pub fn db_file_size() -> i64 {
-    std::fs::metadata(db_path()).map(|m| m.len() as i64).unwrap_or(0)
+    std::fs::metadata(db_path())
+        .map(|m| m.len() as i64)
+        .unwrap_or(0)
 }
 
 /// `PRAGMA integrity_check` → the reported string (defaults to "ok").
@@ -1451,7 +1472,10 @@ pub fn count_audit_before(before: &str) -> i64 {
 /// Delete audit log entries older than `before`; returns count deleted.
 pub fn prune_audit_logs(conn: &Connection, before: &str, persist: bool) -> std::io::Result<usize> {
     let n = conn
-        .execute("DELETE FROM audit_log WHERE created_at < ?", params![before])
+        .execute(
+            "DELETE FROM audit_log WHERE created_at < ?",
+            params![before],
+        )
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     if n > 0 && persist {
         save_db(conn)?;
@@ -1731,7 +1755,11 @@ pub fn write_subscription(
                 s.price,
                 s.currency,
                 s.cycle,
-                if s.status.is_empty() { "active" } else { &s.status },
+                if s.status.is_empty() {
+                    "active"
+                } else {
+                    &s.status
+                },
                 s.billing_day,
                 crate::date::today_string(),
                 s.notes,
@@ -1756,7 +1784,9 @@ pub fn write_subscription(
             seen.push(tag);
             conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", params![tag])?;
             let tag_id: Option<i64> = conn
-                .query_row("SELECT id FROM tags WHERE name = ?", params![tag], |r| r.get(0))
+                .query_row("SELECT id FROM tags WHERE name = ?", params![tag], |r| {
+                    r.get(0)
+                })
                 .ok();
             if let Some(tag_id) = tag_id {
                 conn.execute(
@@ -1815,7 +1845,11 @@ pub fn update_subscription(
     persist: bool,
 ) -> std::io::Result<bool> {
     let exists: bool = conn
-        .query_row("SELECT 1 FROM subscriptions WHERE id = ?", params![id], |_| Ok(true))
+        .query_row(
+            "SELECT 1 FROM subscriptions WHERE id = ?",
+            params![id],
+            |_| Ok(true),
+        )
         .unwrap_or(false);
     if !exists {
         return Ok(false);
@@ -1826,7 +1860,8 @@ pub fn update_subscription(
             .map(|(c, _)| format!("{} = ?", c))
             .collect::<Vec<_>>()
             .join(", ");
-        let mut params_vec: Vec<rusqlite::types::Value> = sets.iter().map(|(_, v)| v.to_sql()).collect();
+        let mut params_vec: Vec<rusqlite::types::Value> =
+            sets.iter().map(|(_, v)| v.to_sql()).collect();
         params_vec.push(rusqlite::types::Value::Integer(id));
         conn.execute(
             &format!("UPDATE subscriptions SET {} WHERE id = ?", clause),
@@ -1862,7 +1897,9 @@ pub fn set_subscription_tags(
         conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", params![tag])
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         let tag_id: Option<i64> = conn
-            .query_row("SELECT id FROM tags WHERE name = ?", params![tag], |r| r.get(0))
+            .query_row("SELECT id FROM tags WHERE name = ?", params![tag], |r| {
+                r.get(0)
+            })
             .ok();
         if let Some(tag_id) = tag_id {
             conn.execute(
@@ -1879,7 +1916,8 @@ pub fn set_subscription_tags(
 }
 
 /// Delete a subscription by id. Port of `subscriptionRepository.remove`.
-pub fn remove_subscription(conn: &Connection, id: i64, persist: bool) -> std::io::Result<bool> {    let n = conn
+pub fn remove_subscription(conn: &Connection, id: i64, persist: bool) -> std::io::Result<bool> {
+    let n = conn
         .execute("DELETE FROM subscriptions WHERE id = ?", params![id])
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     if n > 0 && persist {
@@ -1971,7 +2009,9 @@ pub fn replace_tags(conn: &Connection, id: i64, tags: &[String]) -> std::io::Res
         conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", params![tag])
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         let tag_id: Option<i64> = conn
-            .query_row("SELECT id FROM tags WHERE name = ?", params![tag], |r| r.get(0))
+            .query_row("SELECT id FROM tags WHERE name = ?", params![tag], |r| {
+                r.get(0)
+            })
             .ok();
         if let Some(tag_id) = tag_id {
             conn.execute(
@@ -1985,6 +2025,11 @@ pub fn replace_tags(conn: &Connection, id: i64, tags: &[String]) -> std::io::Res
 }
 
 /// Insert an LLM usage row. Port of `addLlmUsage`.
+///
+/// The long positional signature mirrors the TS function one-to-one; the
+/// callers are exactly the `usage` command handler and the import path, so
+/// packing the columns into a struct would only move the flat list elsewhere.
+#[allow(clippy::too_many_arguments)]
 pub fn insert_llm_usage(
     conn: &Connection,
     provider: &str,
@@ -2011,6 +2056,9 @@ pub fn insert_llm_usage(
 /// Port of `addLlmUsageFromLog` — insert with fractional-cent cost and dedup by
 /// `generation_id`. Returns `true` when a row was inserted, `false` for a
 /// duplicate.
+///
+/// Same port-fidelity rationale as `insert_llm_usage` for the long signature.
+#[allow(clippy::too_many_arguments)]
 pub fn add_llm_usage_from_log(
     conn: &Connection,
     provider: &str,

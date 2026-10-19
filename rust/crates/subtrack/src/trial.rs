@@ -4,11 +4,11 @@
 use crate::ansi;
 use crate::config::display_theme;
 use crate::date::{days_until, today};
-use crate::db::{get_trials, get_trials_expiring_soon, Trial};
+use crate::db::{Trial, get_trials, get_trials_expiring_soon};
 use crate::logger::{self, info, log};
 use crate::parser::ParsedArgs;
 use crate::price::format_price;
-use crate::table::{calc_column_widths, table_style, zebra_row, ColumnConfig};
+use crate::table::{ColumnConfig, calc_column_widths, table_style, zebra_row};
 
 /// `subtrack trial list` — all trials, any expiry.
 pub fn run_trial_list() -> i32 {
@@ -73,15 +73,14 @@ pub fn run_trial_usage() -> i32 {
 pub fn run_trial_add(parsed: &ParsedArgs) -> i32 {
     use crate::prompts::{prompt_cycle, prompt_select, prompt_string};
     use crate::validation::{
-        is_valid_currency, js_number, validate_expires_at, validate_notes, validate_trial_name,
-        CURRENCY_VALUES,
+        CURRENCY_VALUES, is_valid_currency, js_number, validate_expires_at, validate_notes,
+        validate_trial_name,
     };
 
     let Some(name) = prompt_string(parsed.str("name").as_deref(), validate_trial_name) else {
         return 0;
     };
-    let Some(expires_at) =
-        prompt_string(parsed.str("expiresAt").as_deref(), validate_expires_at)
+    let Some(expires_at) = prompt_string(parsed.str("expiresAt").as_deref(), validate_expires_at)
     else {
         return 0;
     };
@@ -104,9 +103,11 @@ pub fn run_trial_add(parsed: &ParsedArgs) -> i32 {
         None => None,
     };
 
-    let Some(currency) =
-        prompt_select(parsed.str("currency").as_deref(), is_valid_currency, &CURRENCY_VALUES)
-    else {
+    let Some(currency) = prompt_select(
+        parsed.str("currency").as_deref(),
+        is_valid_currency,
+        &CURRENCY_VALUES,
+    ) else {
         return 0;
     };
     let Some(cycle) = prompt_cycle(parsed.str("cycle").as_deref()) else {
@@ -186,7 +187,6 @@ pub fn run_trial_delete(parsed: &ParsedArgs) -> i32 {
     rc
 }
 
-
 fn format_price_or_dash(t: &Trial) -> String {
     match t.price {
         Some(p) => {
@@ -204,14 +204,10 @@ fn trial_status_label(days: i64) -> String {
         "expired".to_string()
     } else if days == 0 {
         "today".to_string()
-    } else if days <= 3 {
-        format!("{}d", days)
-    } else if days <= 7 {
-        format!("{}d", days)
     } else {
         format!("{}d", days)
     };
-    if days < 0 || days == 0 || days <= 3 {
+    if days <= 0 || days <= 3 {
         ansi::red(&body)
     } else if days <= 7 {
         ansi::yellow(&body)

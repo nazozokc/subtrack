@@ -97,9 +97,8 @@ fn read_config() -> Config {
     };
     let obj = json.as_object();
     let get = |k: &str| -> Option<&serde_json::Value> { obj?.get(k) };
-    let get_str = |k: &str| -> Option<String> {
-        get(k).and_then(|v| v.as_str()).map(|s| s.to_string())
-    };
+    let get_str =
+        |k: &str| -> Option<String> { get(k).and_then(|v| v.as_str()).map(|s| s.to_string()) };
     cfg.theme = get_str("theme").unwrap_or_else(|| cfg.theme.clone());
     cfg.default_currency = get_str("defaultCurrency").unwrap_or(cfg.default_currency);
     cfg.monthly_budget = get("monthlyBudget").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -128,8 +127,13 @@ fn read_config() -> Config {
     cfg.date_format = get_str("dateFormat").unwrap_or_else(|| "iso".to_string());
     if let Some(arr) = get("budgets").and_then(|v| v.as_array()) {
         for item in arr {
-            let Some(entry) = item.as_object() else { continue };
-            let name = entry.get("name").and_then(|n| n.as_str()).unwrap_or_default();
+            let Some(entry) = item.as_object() else {
+                continue;
+            };
+            let name = entry
+                .get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or_default();
             if name.is_empty() {
                 continue;
             }
@@ -198,7 +202,11 @@ fn mask_secret(value: &str) -> String {
     if host.is_empty() {
         return "(set)".to_string();
     }
-    let masked_path = if path.is_empty() || path == "/" { "" } else { "/***" };
+    let masked_path = if path.is_empty() || path == "/" {
+        ""
+    } else {
+        "/***"
+    };
     format!("{}://{}{}", scheme, host, masked_path)
 }
 
@@ -343,14 +351,12 @@ pub fn handle_config_set(key: &str, value: &str) -> i32 {
                 _ => bad!("yearlyBudget must be a non-negative number"),
             }
         }
-        "budgets" => {
-            match parse_budgets(value) {
-                Some(entries) => {
-                    raw.insert(key.into(), serde_json::Value::Array(entries));
-                }
-                None => return 1,
+        "budgets" => match parse_budgets(value) {
+            Some(entries) => {
+                raw.insert(key.into(), serde_json::Value::Array(entries));
             }
-        }
+            None => return 1,
+        },
         "theme" => {
             const THEMES: [&str; 4] = ["default", "light", "high-contrast", "none"];
             if !THEMES.contains(&value) {
@@ -584,8 +590,8 @@ pub fn handle_config_reset() -> i32 {
 
 /// Resolve the display theme from config (mirror of getDisplayTheme).
 pub fn display_theme() -> crate::table::Theme {
-    use crate::table::Theme;
     use crate::ansi::is_color_name;
+    use crate::table::Theme;
     let cfg = load_config();
 
     let preset = match cfg.theme.as_str() {

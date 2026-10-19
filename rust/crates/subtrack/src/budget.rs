@@ -1,14 +1,14 @@
 //! `budget` command — port of `budget.ts` (handleBudget / resolveBudget).
 
 use crate::ansi;
-use crate::config::{load_config, BudgetEntry};
-use crate::db::{get_subscriptions, QueryOptions, Subscription};
-use crate::fx::{fetch_rates, try_convert, FxRates};
+use crate::config::{BudgetEntry, load_config};
+use crate::date::period_factor;
+use crate::db::{QueryOptions, Subscription, get_subscriptions};
+use crate::fx::{FxRates, fetch_rates, try_convert};
 use crate::json::quote_string;
 use crate::logger::{self, info, log, warn};
 use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
-use crate::date::period_factor;
 
 /// Resolved budget to compare against (port of `ResolvedBudget`).
 struct ResolvedBudget {
@@ -39,13 +39,13 @@ fn resolve_budget(period: &str, name: Option<&str>) -> Option<ResolvedBudget> {
                 Some(entry.categories.clone())
             },
             period: entry.period.clone(),
-        })
+        });
     }
 
     if period == "yearly" {
         let amount = config
             .yearly_budget
-            .or_else(|| {
+            .or({
                 if config.monthly_budget > 0.0 {
                     Some(config.monthly_budget * 12.0)
                 } else {
@@ -60,9 +60,9 @@ fn resolve_budget(period: &str, name: Option<&str>) -> Option<ResolvedBudget> {
                 currency: config.default_currency,
                 categories: None,
                 period: None,
-            })
+            });
         }
-        return None
+        return None;
     }
 
     if config.monthly_budget > 0.0 {
@@ -72,7 +72,7 @@ fn resolve_budget(period: &str, name: Option<&str>) -> Option<ResolvedBudget> {
             currency: config.default_currency,
             categories: None,
             period: None,
-        })
+        });
     }
     None
 }
@@ -108,7 +108,7 @@ fn calc_sub_total(
     let mut totals: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
     for sub in subs {
         if sub.status == "cancelled" {
-            continue
+            continue;
         }
         let normalized = sub.price * period_factor(&sub.cycle, period);
         match (target_currency, rates) {
@@ -129,8 +129,14 @@ fn calc_sub_total(
 }
 
 pub fn run_budget(parsed: &ParsedArgs) -> i32 {
-    let period = parsed.str("period").unwrap_or_else(|| "monthly".to_string());
-    let period = if period == "yearly" { "yearly" } else { "monthly" };
+    let period = parsed
+        .str("period")
+        .unwrap_or_else(|| "monthly".to_string());
+    let period = if period == "yearly" {
+        "yearly"
+    } else {
+        "monthly"
+    };
     let check = parsed.bool("check") == Some(true);
     let json = parsed.bool("json") == Some(true);
     let name = parsed.str("name").filter(|n| !n.is_empty());
@@ -142,7 +148,9 @@ pub fn run_budget(parsed: &ParsedArgs) -> i32 {
             logger::out_str(&format!(
                 "{{\n  \"set\": false,\n  \"period\": {},\n  \"budgetName\": {}\n}}\n",
                 quote_string(period),
-                name.as_deref().map(quote_string).unwrap_or_else(|| "null".to_string())
+                name.as_deref()
+                    .map(quote_string)
+                    .unwrap_or_else(|| "null".to_string())
             ));
             return 0;
         }
@@ -171,7 +179,11 @@ pub fn run_budget(parsed: &ParsedArgs) -> i32 {
 
     // Named budgets may carry their own period (e.g. yearly vs monthly compare).
     let compare_period = budget.period.clone().unwrap_or_else(|| period.to_string());
-    let compare_period: &str = if compare_period == "yearly" { "yearly" } else { "monthly" };
+    let compare_period: &str = if compare_period == "yearly" {
+        "yearly"
+    } else {
+        "monthly"
+    };
 
     // FX rates fetched when any conversion may be needed.
     let rates = if currency.is_some() || !budget.currency.is_empty() {
@@ -190,10 +202,23 @@ pub fn run_budget(parsed: &ParsedArgs) -> i32 {
         _ => subs,
     };
 
-    let totals = calc_sub_total(&filtered, rates.as_ref(), currency.as_deref(), compare_period);
+    let totals = calc_sub_total(
+        &filtered,
+        rates.as_ref(),
+        currency.as_deref(),
+        compare_period,
+    );
 
-    let period_label = if compare_period == "yearly" { "year" } else { "month" };
-    let period_name = if compare_period == "yearly" { "Yearly" } else { "Monthly" };
+    let period_label = if compare_period == "yearly" {
+        "year"
+    } else {
+        "month"
+    };
+    let period_name = if compare_period == "yearly" {
+        "Yearly"
+    } else {
+        "Monthly"
+    };
 
     // Determine a single comparable (currency, spending) pair.
     let display_currency: Option<String>;
@@ -219,9 +244,7 @@ pub fn run_budget(parsed: &ParsedArgs) -> i32 {
         display_currency = Some(budget.currency.clone());
         spending = sum;
     } else {
-        info(
-            "Cannot compare against budget — multiple currencies. Use --currency to convert.",
-        );
+        info("Cannot compare against budget — multiple currencies. Use --currency to convert.");
         return 0;
     }
     let currency_str = display_currency.as_deref().unwrap_or("USD");
@@ -285,17 +308,17 @@ pub fn run_budget(parsed: &ParsedArgs) -> i32 {
             ansi::green(&format_price(round_currency(remaining), currency_str))
         ));
     }
-    if let Some(cats) = &budget.categories {
-        if !cats.is_empty() {
-            log(&ansi::dim(&format!(
-                "(filtered by categories: {})",
-                cats.join(", ")
-            )));
-        }
+    if let Some(cats) = &budget.categories
+        && !cats.is_empty()
+    {
+        log(&ansi::dim(&format!(
+            "(filtered by categories: {})",
+            cats.join(", ")
+        )));
     }
 
     if check && over {
-        return 1
+        return 1;
     }
     0
 }

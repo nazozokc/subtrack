@@ -435,16 +435,14 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "delete",
         description: "Delete subscriptions",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "id",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Subscription ID(s) to delete (omit for interactive selection)",
-                array: true,
-                required: Some(false),
-            },
-        ],
+        args: &[ArgSpec {
+            name: "id",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Subscription ID(s) to delete (omit for interactive selection)",
+            array: true,
+            required: Some(false),
+        }],
         subcommands: &[],
     },
     CommandDef {
@@ -539,56 +537,49 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "archive",
         description: "Archive a subscription (set status to archived)",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "id",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Subscription ID to archive",
-                array: false,
-                required: None,
-            },
-        ],
+        args: &[ArgSpec {
+            name: "id",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Subscription ID to archive",
+            array: false,
+            required: None,
+        }],
         subcommands: &[],
     },
     CommandDef {
         name: "unarchive",
         description: "Unarchive a subscription (set status back to active)",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "id",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Subscription ID to unarchive",
-                array: false,
-                required: None,
-            },
-        ],
+        args: &[ArgSpec {
+            name: "id",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Subscription ID to unarchive",
+            array: false,
+            required: None,
+        }],
         subcommands: &[],
     },
     CommandDef {
         name: "tags",
         description: "Filter subscriptions by tags (AND logic)",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "names",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Tag names",
-                array: true,
-                required: Some(false),
-            },
-        ],
+        args: &[ArgSpec {
+            name: "names",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Tag names",
+            array: true,
+            required: Some(false),
+        }],
         subcommands: &[],
     },
     CommandDef {
         name: "tag",
         description: "Manage tags",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[72, 75, 71, 74, 73],
     },
     CommandDef {
@@ -643,16 +634,14 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "trial",
         description: "Manage free trials",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[81, 84, 83, 82],
     },
     CommandDef {
         name: "bulk",
         description: "Bulk operations on subscriptions",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[53, 52, 55],
     },
     CommandDef {
@@ -811,16 +800,14 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "summary",
         description: "Show subscription summary statistics",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "json",
-                kind: ArgKind::Boolean,
-                short: Some('j'),
-                description: "Output as JSON",
-                array: false,
-                required: None,
-            },
-        ],
+        args: &[ArgSpec {
+            name: "json",
+            kind: ArgKind::Boolean,
+            short: Some('j'),
+            description: "Output as JSON",
+            array: false,
+            required: None,
+        }],
         subcommands: &[],
     },
     CommandDef {
@@ -1083,8 +1070,7 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "profile",
         description: "Manage filter profiles",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[64, 66, 63, 65, 62],
     },
     CommandDef {
@@ -1171,8 +1157,7 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "audit",
         description: "View and manage the audit log",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[50, 51],
     },
     CommandDef {
@@ -1243,16 +1228,14 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "stats",
         description: "Show database statistics",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "json",
-                kind: ArgKind::Boolean,
-                short: Some('j'),
-                description: "Output as JSON",
-                array: false,
-                required: None,
-            },
-        ],
+        args: &[ArgSpec {
+            name: "json",
+            kind: ArgKind::Boolean,
+            short: Some('j'),
+            description: "Output as JSON",
+            array: false,
+            required: None,
+        }],
         subcommands: &[],
     },
     CommandDef {
@@ -1339,16 +1322,14 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "currency",
         description: "List supported currencies",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "json",
-                kind: ArgKind::Boolean,
-                short: Some('j'),
-                description: "Output as JSON",
-                array: false,
-                required: None,
-            },
-        ],
+        args: &[ArgSpec {
+            name: "json",
+            kind: ArgKind::Boolean,
+            short: Some('j'),
+            description: "Output as JSON",
+            array: false,
+            required: None,
+        }],
         subcommands: &[],
     },
     CommandDef {
@@ -1379,8 +1360,7 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "mcp",
         description: "Start MCP server for AI agent integration (stdio transport)",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[],
     },
     CommandDef {
@@ -1459,24 +1439,21 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "config",
         description: "Manage configuration",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[58, 57, 60, 59],
     },
     CommandDef {
         name: "usage",
         description: "Track LLM API usage costs",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[85, 89, 87, 86, 88, 90, 91],
     },
     CommandDef {
         name: "suggest",
         description: "Manage subscription suggestions",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[69, 70, 67, 68],
     },
     CommandDef {
@@ -1779,8 +1756,7 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "template",
         description: "Manage subscription templates",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[79, 76, 78, 77, 80],
     },
     CommandDef {
@@ -2003,8 +1979,7 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "tag",
         description: "Bulk add/remove tags",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[54, 56],
     },
     CommandDef {
@@ -2059,32 +2034,28 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "get",
         description: "Get a config value",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "key",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Config key",
-                array: false,
-                required: None,
-            },
-        ],
+        args: &[ArgSpec {
+            name: "key",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Config key",
+            array: false,
+            required: None,
+        }],
         subcommands: &[],
     },
     CommandDef {
         name: "list",
         description: "List all config values",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[],
     },
     CommandDef {
         name: "reset",
         description: "Reset config to defaults",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[],
     },
     CommandDef {
@@ -2139,24 +2110,21 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "delete",
         description: "Delete a profile",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "name",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Profile name",
-                array: false,
-                required: None,
-            },
-        ],
+        args: &[ArgSpec {
+            name: "name",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Profile name",
+            array: false,
+            required: None,
+        }],
         subcommands: &[],
     },
     CommandDef {
         name: "list",
         description: "List saved profiles",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[],
     },
     CommandDef {
@@ -2203,48 +2171,42 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "show",
         description: "Show profile details",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "name",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Profile name",
-                array: false,
-                required: Some(false),
-            },
-        ],
+        args: &[ArgSpec {
+            name: "name",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Profile name",
+            array: false,
+            required: Some(false),
+        }],
         subcommands: &[],
     },
     CommandDef {
         name: "switch",
         description: "Switch to a saved profile",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "name",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Profile name",
-                array: false,
-                required: None,
-            },
-        ],
+        args: &[ArgSpec {
+            name: "name",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Profile name",
+            array: false,
+            required: None,
+        }],
         subcommands: &[],
     },
     CommandDef {
         name: "add",
         description: "Add a suggestion as a subscription (non-interactive)",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "id",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Suggestion ID",
-                array: false,
-                required: Some(true),
-            },
-        ],
+        args: &[ArgSpec {
+            name: "id",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Suggestion ID",
+            array: false,
+            required: Some(true),
+        }],
         subcommands: &[],
     },
     CommandDef {
@@ -2299,48 +2261,42 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "view",
         description: "View full details of a suggestion",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "id",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Suggestion ID",
-                array: false,
-                required: Some(true),
-            },
-        ],
+        args: &[ArgSpec {
+            name: "id",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Suggestion ID",
+            array: false,
+            required: Some(true),
+        }],
         subcommands: &[],
     },
     CommandDef {
         name: "delete",
         description: "Delete a tag and its associations",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "name",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Tag name to delete",
-                array: false,
-                required: None,
-            },
-        ],
+        args: &[ArgSpec {
+            name: "name",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Tag name to delete",
+            array: false,
+            required: None,
+        }],
         subcommands: &[],
     },
     CommandDef {
         name: "list",
         description: "List all tags with usage count",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "sort",
-                kind: ArgKind::String,
-                short: None,
-                description: "Sort by: name or count (default: name)",
-                array: false,
-                required: None,
-            },
-        ],
+        args: &[ArgSpec {
+            name: "sort",
+            kind: ArgKind::String,
+            short: None,
+            description: "Sort by: name or count (default: name)",
+            array: false,
+            required: None,
+        }],
         subcommands: &[],
     },
     CommandDef {
@@ -2371,8 +2327,7 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "prune",
         description: "Remove orphaned tags",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[],
     },
     CommandDef {
@@ -2507,16 +2462,14 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "delete",
         description: "Delete a template",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "name",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "",
-                array: false,
-                required: Some(true),
-            },
-        ],
+        args: &[ArgSpec {
+            name: "name",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "",
+            array: false,
+            required: Some(true),
+        }],
         subcommands: &[],
     },
     CommandDef {
@@ -2627,8 +2580,7 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "list",
         description: "List templates",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[],
     },
     CommandDef {
@@ -2739,40 +2691,35 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "delete",
         description: "Delete free trials",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "id",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Trial ID(s) to delete (omit for interactive selection)",
-                array: true,
-                required: Some(false),
-            },
-        ],
+        args: &[ArgSpec {
+            name: "id",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Trial ID(s) to delete (omit for interactive selection)",
+            array: true,
+            required: Some(false),
+        }],
         subcommands: &[],
     },
     CommandDef {
         name: "expiring",
         description: "Show trials expiring within a number of days",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "days",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Number of days (default: 7)",
-                array: false,
-                required: Some(false),
-            },
-        ],
+        args: &[ArgSpec {
+            name: "days",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Number of days (default: 7)",
+            array: false,
+            required: Some(false),
+        }],
         subcommands: &[],
     },
     CommandDef {
         name: "list",
         description: "List all free trials",
         to_kebab: false,
-        args: &[
-        ],
+        args: &[],
         subcommands: &[],
     },
     CommandDef {
@@ -2843,16 +2790,14 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "delete",
         description: "Delete LLM API usage entries",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "id",
-                kind: ArgKind::Positional,
-                short: None,
-                description: "Entry ID(s) to delete (omit for interactive selection)",
-                array: true,
-                required: Some(false),
-            },
-        ],
+        args: &[ArgSpec {
+            name: "id",
+            kind: ArgKind::Positional,
+            short: None,
+            description: "Entry ID(s) to delete (omit for interactive selection)",
+            array: true,
+            required: Some(false),
+        }],
         subcommands: &[],
     },
     CommandDef {
@@ -3082,7 +3027,7 @@ pub static COMMANDS: &[CommandDef] = &[
 ];
 
 /// Top-level subCommands map (index.ts order: name → COMMANDS index).
-pub static TOP_SUBCOMMANDS: &[(&'static str, u16)] = &[
+pub static TOP_SUBCOMMANDS: &[(&str, u16)] = &[
     ("list", 0),
     ("add", 1),
     ("edit", 2),

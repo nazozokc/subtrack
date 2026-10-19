@@ -1,7 +1,10 @@
 //! `history` command — port of `history.ts` (handleHistory).
 
 use crate::ansi;
-use crate::db::{get_all_price_changes, get_price_changes_recent, get_price_history, get_subscription_by_id, PriceChange};
+use crate::db::{
+    PriceChange, get_all_price_changes, get_price_changes_recent, get_price_history,
+    get_subscription_by_id,
+};
 use crate::json::quote_string;
 use crate::logger::{self, fail, info, log};
 use crate::parser::ParsedArgs;
@@ -19,23 +22,23 @@ pub fn format_diff(
         None => "—".to_string(),
     };
     let new_str = format_price(new_price, new_currency);
-    if let Some(oc) = old_currency {
-        if oc != new_currency {
-            return format!("{} ({}) → {} ({})", old_str, oc, new_str, new_currency);
-        }
+    if let Some(oc) = old_currency
+        && oc != new_currency
+    {
+        return format!("{} ({}) → {} ({})", old_str, oc, new_str, new_currency);
     }
-    if let Some(old) = old_price {
-        if old != new_price {
-            let diff = new_price - old;
-            let sign = if diff > 0.0 { "+" } else { "-" };
-            return format!(
-                "{} → {}  ({}{})",
-                old_str,
-                new_str,
-                sign,
-                format_price(diff.abs(), new_currency)
-            );
-        }
+    if let Some(old) = old_price
+        && old != new_price
+    {
+        let diff = new_price - old;
+        let sign = if diff > 0.0 { "+" } else { "-" };
+        return format!(
+            "{} → {}  ({}{})",
+            old_str,
+            new_str,
+            sign,
+            format_price(diff.abs(), new_currency)
+        );
     }
     format!("→ {}", new_str)
 }
@@ -48,7 +51,10 @@ fn display_history(entries: &[PriceChange]) {
     // Group by subscription (preserving order).
     let mut groups: Vec<(i64, String, Vec<PriceChange>)> = Vec::new();
     for e in entries {
-        if let Some(g) = groups.iter_mut().find(|(id, _, _)| *id == e.subscription_id) {
+        if let Some(g) = groups
+            .iter_mut()
+            .find(|(id, _, _)| *id == e.subscription_id)
+        {
             g.2.push(e.clone());
         } else {
             groups.push((e.subscription_id, e.name.clone(), vec![e.clone()]));
@@ -95,7 +101,10 @@ pub fn run_history(parsed: &ParsedArgs) -> i32 {
             out.push_str("  {\n");
             out.push_str(&format!("    \"id\": {},\n", e.id));
             out.push_str(&format!("    \"subscriptionId\": {},\n", e.subscription_id));
-            out.push_str(&format!("    \"subscriptionName\": {},\n", quote_string(&e.name)));
+            out.push_str(&format!(
+                "    \"subscriptionName\": {},\n",
+                quote_string(&e.name)
+            ));
             out.push_str(&format!(
                 "    \"oldPrice\": {},\n",
                 match e.old_price {
@@ -103,7 +112,10 @@ pub fn run_history(parsed: &ParsedArgs) -> i32 {
                     None => "null".to_string(),
                 }
             ));
-            out.push_str(&format!("    \"newPrice\": {},\n", crate::json::number(e.new_price)));
+            out.push_str(&format!(
+                "    \"newPrice\": {},\n",
+                crate::json::number(e.new_price)
+            ));
             out.push_str(&format!(
                 "    \"oldCurrency\": {},\n",
                 match &e.old_currency {
@@ -122,7 +134,11 @@ pub fn run_history(parsed: &ParsedArgs) -> i32 {
                 "    \"changedAt\": {}\n",
                 quote_string(&e.changed_at)
             ));
-            out.push_str(if i + 1 == entries.len() { "  }\n" } else { "  },\n" });
+            out.push_str(if i + 1 == entries.len() {
+                "  }\n"
+            } else {
+                "  },\n"
+            });
         }
         out.push_str("]\n");
         logger::out_str(&out);

@@ -1,8 +1,8 @@
 // Minimal XLSX generator (port of lib/src/xlsx.ts)
 use std::io::Write;
 
-use flate2::write::DeflateEncoder;
 use flate2::Compression;
+use flate2::write::DeflateEncoder;
 
 fn crc32(buf: &[u8]) -> u32 {
     let mut c: u32 = 0xffffffff;
@@ -274,15 +274,15 @@ pub fn generate_xlsx(
         let comp = encoder.finish().unwrap();
         let crc = crc32(raw);
         let offset = outbuf.len() as u32;
-        local_header(
-            name,
+        local_header(name, crc, comp.len() as u32, raw.len() as u32, &mut outbuf);
+        outbuf.extend_from_slice(&comp);
+        entries.push((
+            name.clone(),
             crc,
             comp.len() as u32,
             raw.len() as u32,
-            &mut outbuf,
-        );
-        outbuf.extend_from_slice(&comp);
-        entries.push((name.clone(), crc, comp.len() as u32, raw.len() as u32, offset));
+            offset,
+        ));
     }
 
     let cd_offset = outbuf.len() as u32;

@@ -3,7 +3,7 @@
 //! `promptCycle`). Interactive fallbacks return `None` (no TTY in tests).
 
 use crate::logger::fail;
-use crate::validation::{is_valid_cycle, CYCLE_VALUES};
+use crate::validation::{CYCLE_VALUES, is_valid_cycle};
 
 /// Port of `promptString` when a flag is supplied.
 ///
@@ -31,7 +31,11 @@ pub fn prompt_select(
 ) -> Option<String> {
     let value = flag?;
     if !is_valid(value) {
-        fail(&format!("Invalid \"{}\". Valid: {}", value, values.join(", ")));
+        fail(&format!(
+            "Invalid \"{}\". Valid: {}",
+            value,
+            values.join(", ")
+        ));
         return None;
     }
     Some(value.to_string())

@@ -21,7 +21,7 @@ pub fn run_template_list(parsed: &ParsedArgs) -> i32 {
         let price = template
             .get("price")
             .and_then(|p| p.as_f64())
-            .map(|p| crate::json::number(p))
+            .map(crate::json::number)
             .unwrap_or_else(|| "0".to_string());
         let currency = template
             .get("currency")
@@ -76,7 +76,12 @@ pub fn run_template_use(parsed: &ParsedArgs) -> i32 {
         return 1;
     };
 
-    let str_field = |k: &str| template.get(k).and_then(|v| v.as_str()).map(|s| s.to_string());
+    let str_field = |k: &str| {
+        template
+            .get(k)
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    };
     let sub_name = str_field("name").unwrap_or_else(|| name.clone());
     let price = parsed
         .str("price")
@@ -100,7 +105,11 @@ pub fn run_template_use(parsed: &ParsedArgs) -> i32 {
         None => template
             .get("tags")
             .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
             .unwrap_or_default(),
     };
     let billing_day = parsed
@@ -136,7 +145,9 @@ pub fn run_template_use(parsed: &ParsedArgs) -> i32 {
         status: "active".to_string(),
         billing_day,
         notes: parsed.str("notes").or_else(|| str_field("notes")),
-        payment_method: parsed.str("paymentMethod").or_else(|| str_field("paymentMethod")),
+        payment_method: parsed
+            .str("paymentMethod")
+            .or_else(|| str_field("paymentMethod")),
         contract_start: None,
         contract_end: None,
         auto_renewal: true,
@@ -149,14 +160,7 @@ pub fn run_template_use(parsed: &ParsedArgs) -> i32 {
     };
     match crate::db::write_subscription(&conn, &new, true) {
         Ok(_) => {
-            let _ = crate::db::add_audit_log(
-                &conn,
-                "template.use",
-                None,
-                None,
-                Some(&name),
-                true,
-            );
+            let _ = crate::db::add_audit_log(&conn, "template.use", None, None, Some(&name), true);
             logger::success(&format!("Added subscription from template: {}", name));
             0
         }
@@ -184,10 +188,10 @@ pub fn run_template_edit(parsed: &ParsedArgs) -> i32 {
 
     let mut t = existing.clone();
     t.insert("name".into(), serde_json::Value::String(name.clone()));
-    if let Some(v) = parsed.str("price") {
-        if let Ok(n) = v.trim().parse::<f64>() {
-            t.insert("price".into(), crate::json::num_value(n));
-        }
+    if let Some(v) = parsed.str("price")
+        && let Ok(n) = v.trim().parse::<f64>()
+    {
+        t.insert("price".into(), crate::json::num_value(n));
     }
     for (key, field) in [
         ("currency", "currency"),
@@ -198,10 +202,10 @@ pub fn run_template_edit(parsed: &ParsedArgs) -> i32 {
         ("vendorUrl", "vendorUrl"),
         ("planTier", "planTier"),
     ] {
-        if let Some(v) = parsed.str(field) {
-            if !v.trim().is_empty() {
-                t.insert(key.into(), serde_json::Value::String(v.trim().to_string()));
-            }
+        if let Some(v) = parsed.str(field)
+            && !v.trim().is_empty()
+        {
+            t.insert(key.into(), serde_json::Value::String(v.trim().to_string()));
         }
     }
     if let Some(v) = parsed.str("tags") {
@@ -213,10 +217,10 @@ pub fn run_template_edit(parsed: &ParsedArgs) -> i32 {
             .collect();
         t.insert("tags".into(), serde_json::Value::Array(tags));
     }
-    if let Some(v) = parsed.str("billingDay") {
-        if let Ok(n) = v.trim().parse::<i64>() {
-            t.insert("billingDay".into(), serde_json::Value::Number(n.into()));
-        }
+    if let Some(v) = parsed.str("billingDay")
+        && let Ok(n) = v.trim().parse::<i64>()
+    {
+        t.insert("billingDay".into(), serde_json::Value::Number(n.into()));
     }
 
     if let Err(e) = crate::config::save_config_mut(|raw| {
@@ -268,12 +272,14 @@ pub fn run_template_add(parsed: &ParsedArgs) -> i32 {
         logger::fail(&format!("Invalid cycle: {}", cycle));
         return 1;
     }
-    let billing_day = parsed.str("billingDay").and_then(|v| v.trim().parse::<i64>().ok());
-    if let Some(d) = billing_day {
-        if !(1..=31).contains(&d) {
-            logger::fail("billingDay must be an integer between 1 and 31");
-            return 1;
-        }
+    let billing_day = parsed
+        .str("billingDay")
+        .and_then(|v| v.trim().parse::<i64>().ok());
+    if let Some(d) = billing_day
+        && !(1..=31).contains(&d)
+    {
+        logger::fail("billingDay must be an integer between 1 and 31");
+        return 1;
     }
 
     let mut t = serde_json::Map::new();

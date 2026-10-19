@@ -31,7 +31,7 @@ pub fn run_cleanup(parsed: &ParsedArgs) -> i32 {
         Ok(c) => c,
         Err(e) => {
             fail(&e.to_string());
-            return 1
+            return 1;
         }
     };
 
@@ -43,7 +43,11 @@ pub fn run_cleanup(parsed: &ParsedArgs) -> i32 {
     if json {
         results.push(format!(
             "  \"integrityCheck\": {}",
-            crate::json::quote_string(if integrity_ok { "passed" } else { &check_result })
+            crate::json::quote_string(if integrity_ok {
+                "passed"
+            } else {
+                &check_result
+            })
         ));
     } else if integrity_ok {
         logger::success("Integrity check: passed");
@@ -66,7 +70,7 @@ pub fn run_cleanup(parsed: &ParsedArgs) -> i32 {
             if json {
                 logger::log(&format!("{{\n{}\n}}", results.join(",\n")));
             }
-            return 0
+            return 0;
         }
         let after_size = db::db_file_size();
         let saved = before_size - after_size;

@@ -3,20 +3,25 @@
 
 use chrono::Datelike;
 
-use crate::db::{get_all_price_changes, get_subscriptions, QueryOptions};
 use crate::date::{
-    get_period_date_range, get_previous_period_date_range, period_factor, to_date,
-    SHORT_MONTH_NAMES,
+    SHORT_MONTH_NAMES, get_period_date_range, get_previous_period_date_range, period_factor,
+    to_date,
 };
+use crate::db::{QueryOptions, get_all_price_changes, get_subscriptions};
 use crate::fx::{fetch_rates, try_convert};
 use crate::logger;
 use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
-use crate::table::{calc_column_widths, ColumnConfig, TableBuilder};
+use crate::table::{ColumnConfig, TableBuilder, calc_column_widths};
 use crate::{ansi, json};
 
 const VALID_PERIODS: [&str; 6] = [
-    "weekly", "bi-weekly", "monthly", "quarterly", "semi-annual", "yearly",
+    "weekly",
+    "bi-weekly",
+    "monthly",
+    "quarterly",
+    "semi-annual",
+    "yearly",
 ];
 
 fn period_label(period: &str) -> &'static str {
@@ -70,14 +75,22 @@ fn format_date_range(from: &str, to: &str) -> String {
 /// `$1 (+0.7%)` with the percentage colored red (>= 0) or green (< 0).
 fn fmt_change(current: f64, previous: f64, currency: &str) -> String {
     let diff = current - previous;
-    let pct = if previous > 0.0 { (diff / previous) * 100.0 } else { 0.0 };
+    let pct = if previous > 0.0 {
+        (diff / previous) * 100.0
+    } else {
+        0.0
+    };
     let sign = if diff >= 0.0 { "+" } else { "" };
     let colored = if pct >= 0.0 {
         ansi::red(&format!("{}{:.1}%", sign, pct))
     } else {
         ansi::green(&format!("{}{:.1}%", sign, pct))
     };
-    format!("{} ({})", format_price(round_currency(diff), currency), colored)
+    format!(
+        "{} ({})",
+        format_price(round_currency(diff), currency),
+        colored
+    )
 }
 
 struct CompareRow {
@@ -91,7 +104,12 @@ struct CompareRow {
 }
 
 fn render_compare_table(rows: &[CompareRow], current_label: &str, previous_label: &str) {
-    let headers: Vec<String> = vec!["".into(), current_label.into(), previous_label.into(), "Change".into()];
+    let headers: Vec<String> = vec![
+        "".into(),
+        current_label.into(),
+        previous_label.into(),
+        "Change".into(),
+    ];
     let cfg = ColumnConfig {
         headers,
         min_widths: vec![10, 12, 12, 16],
@@ -100,7 +118,14 @@ fn render_compare_table(rows: &[CompareRow], current_label: &str, previous_label
     };
     let data: Vec<Vec<String>> = rows
         .iter()
-        .map(|r| vec![r.label.clone(), r.current.clone(), r.previous.clone(), r.change.clone()])
+        .map(|r| {
+            vec![
+                r.label.clone(),
+                r.current.clone(),
+                r.previous.clone(),
+                r.change.clone(),
+            ]
+        })
         .collect();
     let col_widths = calc_column_widths(&data, &cfg, 80, 40);
 
@@ -112,7 +137,12 @@ fn render_compare_table(rows: &[CompareRow], current_label: &str, previous_label
         previous_label.to_string(),
         "Change".to_string(),
     ];
-    table.col_aligns = vec!["left".into(), "right".into(), "right".into(), "right".into()];
+    table.col_aligns = vec![
+        "left".into(),
+        "right".into(),
+        "right".into(),
+        "right".into(),
+    ];
 
     for row in rows {
         if row.is_divider {
@@ -133,7 +163,12 @@ fn render_compare_table(rows: &[CompareRow], current_label: &str, previous_label
                 row.change.clone(),
             ]);
         } else {
-            table.push(vec![row.label.clone(), row.current.clone(), row.previous.clone(), row.change.clone()]);
+            table.push(vec![
+                row.label.clone(),
+                row.current.clone(),
+                row.previous.clone(),
+                row.change.clone(),
+            ]);
         }
     }
 
@@ -145,7 +180,9 @@ pub fn run_compare(parsed: &ParsedArgs) -> i32 {
         .str("period")
         .unwrap_or_else(|| "monthly".to_string());
     if !VALID_PERIODS.contains(&period.as_str()) {
-        logger::fail("period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly");
+        logger::fail(
+            "period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly",
+        );
         return 1;
     }
 
@@ -165,10 +202,10 @@ pub fn run_compare(parsed: &ParsedArgs) -> i32 {
     if json_out {
         if subs.is_empty() {
             logger::out_str(&format!(
-            "{{\n  \"period\": {},\n  \"current\": {{}},\n  \"previous\": {{}},\n  \"change\": {{}}\n}}\n",
-            json::quote_string(&period)
-        ));
-        return 0
+                "{{\n  \"period\": {},\n  \"current\": {{}},\n  \"previous\": {{}},\n  \"change\": {{}}\n}}\n",
+                json::quote_string(&period)
+            ));
+            return 0;
         }
         let mut totals: Vec<(&str, f64)> = Vec::new();
         for sub in &subs {
@@ -197,12 +234,12 @@ pub fn run_compare(parsed: &ParsedArgs) -> i32 {
         lines.push_str(&json::number(subs.len() as f64));
         lines.push_str("\n}\n");
         logger::out_str(&lines);
-        return 0
+        return 0;
     }
 
     if subs.is_empty() {
         logger::info("No active subscriptions found — try `subtrack add` or change status");
-        return 0
+        return 0;
     }
 
     let (current_from, current_to) = get_period_date_range(&period);
@@ -211,30 +248,28 @@ pub fn run_compare(parsed: &ParsedArgs) -> i32 {
     let previous_label = format_date_range(&previous_from, &previous_to);
 
     // FX rates only fetched when a target currency is requested.
-    let rates = match &target_currency {
-        Some(_) => Some(fetch_rates()),
-        None => None,
-    };
+    let rates = target_currency.as_ref().map(|_| fetch_rates());
 
     let current_totals = calc_sub_total(&subs, &rates, target_currency.as_deref());
 
     // Previous period — estimate from the most recent price change per sub.
     let all_changes = get_all_price_changes().unwrap_or_default();
-    let mut price_before: std::collections::HashMap<i64, (f64, String)> = std::collections::HashMap::new();
+    let mut price_before: std::collections::HashMap<i64, (f64, String)> =
+        std::collections::HashMap::new();
     for ch in &all_changes {
         if let Some(old_price) = ch.old_price {
-            price_before
-                .entry(ch.subscription_id)
-                .or_insert((
-                    old_price,
-                    ch.old_currency.clone().unwrap_or_else(|| ch.new_currency.clone().unwrap_or_default()),
-                ));
+            price_before.entry(ch.subscription_id).or_insert((
+                old_price,
+                ch.old_currency
+                    .clone()
+                    .unwrap_or_else(|| ch.new_currency.clone().unwrap_or_default()),
+            ));
         }
     }
     let previous_subs: Vec<(f64, String, String)> = subs
         .iter()
         .map(|s| match price_before.get(&s.id) {
-            Some((p, c)) => (p.clone(), c.clone(), s.cycle.clone()),
+            Some((p, c)) => (*p, c.clone(), s.cycle.clone()),
             None => (s.price, s.currency.clone(), s.cycle.clone()),
         })
         .collect();
@@ -289,8 +324,11 @@ pub fn run_compare(parsed: &ParsedArgs) -> i32 {
             is_grand_total: false,
         });
 
-        let cur_api_usd = crate::db::get_llm_usage_total(&current_from, &current_to).unwrap_or(0) as f64 / 100.0;
-        let prev_api_usd = crate::db::get_llm_usage_total(&previous_from, &previous_to).unwrap_or(0) as f64 / 100.0;
+        let cur_api_usd =
+            crate::db::get_llm_usage_total(&current_from, &current_to).unwrap_or(0) as f64 / 100.0;
+        let prev_api_usd = crate::db::get_llm_usage_total(&previous_from, &previous_to).unwrap_or(0)
+            as f64
+            / 100.0;
 
         let (cur_api_display, prev_api_display) = match (&rates, &target_currency) {
             (Some(r), Some(tc)) => {
@@ -371,7 +409,7 @@ fn calc_sub_total(
     let mut totals: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
     for sub in subs {
         if sub.status == "cancelled" {
-            continue
+            continue;
         }
         let normalized = sub.price * period_factor(&sub.cycle, "monthly");
         match target_currency {

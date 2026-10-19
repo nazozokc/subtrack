@@ -1,10 +1,10 @@
 //! `upcoming` command — port of `upcoming.ts` + `domain/billing.ts`
 //! (upcomingWithinDays).
 
-use crate::db::{get_subscriptions, QueryOptions, Subscription};
 use crate::date::{
     calculate_next_billing_inclusive, days_until, format_date, format_short_date, today,
 };
+use crate::db::{QueryOptions, Subscription, get_subscriptions};
 use crate::json::{number, quote_string};
 use crate::logger::{self, log, out_str};
 use crate::parser::ParsedArgs;

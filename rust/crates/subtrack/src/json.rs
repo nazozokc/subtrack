@@ -28,7 +28,7 @@ pub fn quote_string(s: &str) -> String {
 /// JS-style number: integral values print without a decimal point.
 pub fn number(v: f64) -> String {
     if v == 0.0 {
-        return "0".to_string()
+        return "0".to_string();
     }
     if v.is_finite() && v.fract() == 0.0 && v.abs() < 1e21 {
         format!("{}", v as i64)
@@ -73,45 +73,76 @@ pub fn sub_fields(sub: &crate::db::Subscription) -> Vec<String> {
     fields.push(kv("status", string(&sub.status)));
     fields.push(kv(
         "billingDay",
-        sub.billing_day.map(|d| d.to_string()).unwrap_or_else(|| "null".to_string()),
+        sub.billing_day
+            .map(|d| d.to_string())
+            .unwrap_or_else(|| "null".to_string()),
     ));
     fields.push(kv("createdAt", string(&sub.created_at)));
     fields.push(kv(
         "notes",
-        sub.notes.as_deref().map(string).unwrap_or_else(|| "null".to_string()),
+        sub.notes
+            .as_deref()
+            .map(string)
+            .unwrap_or_else(|| "null".to_string()),
     ));
     fields.push(kv(
         "paymentMethod",
-        sub.payment_method.as_deref().map(string).unwrap_or_else(|| "null".to_string()),
+        sub.payment_method
+            .as_deref()
+            .map(string)
+            .unwrap_or_else(|| "null".to_string()),
     ));
     fields.push(kv(
         "contractStart",
-        sub.contract_start.as_deref().map(string).unwrap_or_else(|| "null".to_string()),
+        sub.contract_start
+            .as_deref()
+            .map(string)
+            .unwrap_or_else(|| "null".to_string()),
     ));
     fields.push(kv(
         "contractEnd",
-        sub.contract_end.as_deref().map(string).unwrap_or_else(|| "null".to_string()),
+        sub.contract_end
+            .as_deref()
+            .map(string)
+            .unwrap_or_else(|| "null".to_string()),
     ));
-    fields.push(kv("autoRenewal", if sub.auto_renewal { "true" } else { "false" }.to_string()));
+    fields.push(kv(
+        "autoRenewal",
+        if sub.auto_renewal { "true" } else { "false" }.to_string(),
+    ));
     fields.push(kv(
         "vendorName",
-        sub.vendor_name.as_deref().map(string).unwrap_or_else(|| "null".to_string()),
+        sub.vendor_name
+            .as_deref()
+            .map(string)
+            .unwrap_or_else(|| "null".to_string()),
     ));
     fields.push(kv(
         "vendorUrl",
-        sub.vendor_url.as_deref().map(string).unwrap_or_else(|| "null".to_string()),
+        sub.vendor_url
+            .as_deref()
+            .map(string)
+            .unwrap_or_else(|| "null".to_string()),
     ));
     fields.push(kv(
         "planTier",
-        sub.plan_tier.as_deref().map(string).unwrap_or_else(|| "null".to_string()),
+        sub.plan_tier
+            .as_deref()
+            .map(string)
+            .unwrap_or_else(|| "null".to_string()),
     ));
     fields.push(kv(
         "discountAmount",
-        sub.discount_amount.map(number).unwrap_or_else(|| "null".to_string()),
+        sub.discount_amount
+            .map(number)
+            .unwrap_or_else(|| "null".to_string()),
     ));
     fields.push(kv(
         "discountType",
-        sub.discount_type.as_deref().map(string).unwrap_or_else(|| "null".to_string()),
+        sub.discount_type
+            .as_deref()
+            .map(string)
+            .unwrap_or_else(|| "null".to_string()),
     ));
     fields.push(kv("tags", tags_json(&sub.tags)));
 
@@ -125,17 +156,38 @@ pub fn trial_fields(t: &crate::db::Trial) -> Vec<String> {
         kv("id", t.id.to_string()),
         kv("name", string(&t.name)),
         kv("expiresAt", string(&t.expires_at)),
-        kv("price", t.price.map(number).unwrap_or_else(|| "null".to_string())),
-        kv("currency", t.currency.as_deref().map(string).unwrap_or_else(|| "null".to_string())),
-        kv("cycle", t.cycle.as_deref().map(string).unwrap_or_else(|| "null".to_string())),
-        kv("notes", t.notes.as_deref().map(string).unwrap_or_else(|| "null".to_string())),
+        kv(
+            "price",
+            t.price.map(number).unwrap_or_else(|| "null".to_string()),
+        ),
+        kv(
+            "currency",
+            t.currency
+                .as_deref()
+                .map(string)
+                .unwrap_or_else(|| "null".to_string()),
+        ),
+        kv(
+            "cycle",
+            t.cycle
+                .as_deref()
+                .map(string)
+                .unwrap_or_else(|| "null".to_string()),
+        ),
+        kv(
+            "notes",
+            t.notes
+                .as_deref()
+                .map(string)
+                .unwrap_or_else(|| "null".to_string()),
+        ),
         kv("createdAt", string(&t.created_at)),
     ]
 }
 
 fn tags_json(tags: &[String]) -> String {
     if tags.is_empty() {
-        return "[]".to_string()
+        return "[]".to_string();
     }
     let items: Vec<String> = tags.iter().map(|t| string(t)).collect();
     format!("[\n      {}\n    ]", items.join(",\n      "))

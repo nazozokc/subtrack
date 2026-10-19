@@ -34,21 +34,24 @@ fn validate_rate(rate: f64, currency: &str) {
 }
 
 /// Convert a single price; None when no rate is available.
-pub fn try_convert(
-    price: f64,
-    from: &str,
-    to: &str,
-    rates: &HashMap<String, f64>,
-) -> Option<f64> {
+pub fn try_convert(price: f64, from: &str, to: &str, rates: &HashMap<String, f64>) -> Option<f64> {
     if from == to {
-        return Some(price)
+        return Some(price);
     }
     if let (Some(from_rate), Some(to_rate)) = (rates.get(from), rates.get(to)) {
         validate_rate(*from_rate, from);
         validate_rate(*to_rate, to);
         // Convert via USD base: source → USD → target
-        let in_usd = if from == "USD" { price } else { price / from_rate };
-        return Some(if to == "USD" { in_usd } else { in_usd * to_rate })
+        let in_usd = if from == "USD" {
+            price
+        } else {
+            price / from_rate
+        };
+        return Some(if to == "USD" {
+            in_usd
+        } else {
+            in_usd * to_rate
+        });
     }
     None
 }

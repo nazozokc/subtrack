@@ -6,7 +6,7 @@
 
 use crate::logger::{self, fail, info};
 use crate::parser::ParsedArgs;
-use crate::suggest_parser::{parse_email, Candidate, RawEmail};
+use crate::suggest_parser::{Candidate, RawEmail, parse_email};
 
 const MAX_RECEIPT_SIZE: u64 = 5 * 1024 * 1024;
 
@@ -18,12 +18,11 @@ fn read_receipts(file: &str) -> Result<Vec<RawEmail>, String> {
             meta.len() as f64 / 1024.0 / 1024.0
         ));
     }
-    let text = std::fs::read_to_string(file)
-        .map_err(|_| format!("Cannot read file: {}", file))?;
+    let text = std::fs::read_to_string(file).map_err(|_| format!("Cannot read file: {}", file))?;
     let lower = file.to_lowercase();
     if lower.ends_with(".json") {
-        let parsed: serde_json::Value = serde_json::from_str(&text)
-            .map_err(|e| format!("Invalid JSON: {}", e))?;
+        let parsed: serde_json::Value =
+            serde_json::from_str(&text).map_err(|e| format!("Invalid JSON: {}", e))?;
         let rows: Vec<&serde_json::Value> = match &parsed {
             serde_json::Value::Array(a) => a.iter().collect(),
             _ => vec![&parsed],
@@ -39,20 +38,33 @@ fn read_receipts(file: &str) -> Result<Vec<RawEmail>, String> {
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            let subject = row.get("subject").and_then(|v| v.as_str()).map(|s| s.to_string());
-            let from = row.get("from").and_then(|v| v.as_str()).map(|s| s.to_string());
-            out.push(RawEmail { subject, from, body });
+            let subject = row
+                .get("subject")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let from = row
+                .get("from")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            out.push(RawEmail {
+                subject,
+                from,
+                body,
+            });
         }
         return Ok(out);
     }
     if lower.ends_with(".csv") {
         let lines: Vec<&str> = text
-            .split(|c| c == '\r' || c == '\n')
+            .split(['\r', '\n'])
             .filter(|l| !l.is_empty())
             .skip(1)
             .collect();
         if lines.len() > 10_000 {
-            return Err(format!("CSV file has {} data rows (max 10000)", lines.len()));
+            return Err(format!(
+                "CSV file has {} data rows (max 10000)",
+                lines.len()
+            ));
         }
         let mut out = Vec::new();
         for line in lines {
@@ -60,7 +72,11 @@ fn read_receipts(file: &str) -> Result<Vec<RawEmail>, String> {
             let body = cols.first().cloned().unwrap_or_default();
             let subject = cols.get(1).cloned().filter(|s| !s.is_empty());
             let from = cols.get(2).cloned().filter(|s| !s.is_empty());
-            out.push(RawEmail { subject, from, body });
+            out.push(RawEmail {
+                subject,
+                from,
+                body,
+            });
         }
         return Ok(out);
     }
@@ -140,7 +156,14 @@ pub fn run_receipt(parsed: &ParsedArgs) -> i32 {
         return 1;
     }
     let details = format!("{} receipt candidate(s) imported", candidates.len());
-    let _ = crate::db::add_audit_log(&conn, "suggestion.receipt", None, None, Some(&details), false);
+    let _ = crate::db::add_audit_log(
+        &conn,
+        "suggestion.receipt",
+        None,
+        None,
+        Some(&details),
+        false,
+    );
     if let Err(e) = crate::db::save_db(&conn) {
         fail(&format!("Failed to save receipt candidates: {}", e));
         return 1;

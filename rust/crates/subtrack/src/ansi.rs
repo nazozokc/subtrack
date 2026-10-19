@@ -52,7 +52,6 @@ pub fn is_color_name(name: &str) -> bool {
     matches!(
         name,
         "black"
-
             | "red"
             | "green"
             | "yellow"

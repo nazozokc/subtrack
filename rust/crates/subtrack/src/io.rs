@@ -6,9 +6,9 @@ use crate::logger;
 use crate::parser::ParsedArgs;
 use crate::safe_path::safe_path;
 use crate::validation::{
-    is_valid_cycle, is_valid_currency, is_valid_status, validate_auto_renewal, validate_billing_day,
-    validate_date_string, validate_discount_type, validate_discount_value, validate_name,
-    validate_price, validate_tags,
+    is_valid_currency, is_valid_cycle, is_valid_status, validate_auto_renewal,
+    validate_billing_day, validate_date_string, validate_discount_type, validate_discount_value,
+    validate_name, validate_price, validate_tags,
 };
 
 const MAX_CSV_SIZE: u64 = 10 * 1024 * 1024;
@@ -198,7 +198,10 @@ pub fn run_import(parsed: &ParsedArgs) -> i32 {
             continue;
         }
         if !is_valid_currency(&currency) {
-            logger::warn(&format!("Line {}: invalid currency \"{}\"", line_no, currency));
+            logger::warn(&format!(
+                "Line {}: invalid currency \"{}\"",
+                line_no, currency
+            ));
             failed += 1;
             continue;
         }
@@ -212,47 +215,47 @@ pub fn run_import(parsed: &ParsedArgs) -> i32 {
             failed += 1;
             continue;
         }
-        if let Some(v) = &discount_amount {
-            if let Err(e) = validate_discount_value(v) {
-                logger::warn(&format!("Line {}: {}", line_no, e));
-                failed += 1;
-                continue;
-            }
+        if let Some(v) = &discount_amount
+            && let Err(e) = validate_discount_value(v)
+        {
+            logger::warn(&format!("Line {}: {}", line_no, e));
+            failed += 1;
+            continue;
         }
-        if let Some(v) = &discount_type {
-            if let Err(e) = validate_discount_type(v) {
-                logger::warn(&format!("Line {}: {}", line_no, e));
-                failed += 1;
-                continue;
-            }
+        if let Some(v) = &discount_type
+            && let Err(e) = validate_discount_type(v)
+        {
+            logger::warn(&format!("Line {}: {}", line_no, e));
+            failed += 1;
+            continue;
         }
-        if let Some(v) = &auto_renewal {
-            if let Err(e) = validate_auto_renewal(v) {
-                logger::warn(&format!("Line {}: {}", line_no, e));
-                failed += 1;
-                continue;
-            }
+        if let Some(v) = &auto_renewal
+            && let Err(e) = validate_auto_renewal(v)
+        {
+            logger::warn(&format!("Line {}: {}", line_no, e));
+            failed += 1;
+            continue;
         }
-        if let Some(v) = &contract_start {
-            if let Err(e) = validate_date_string(v) {
-                logger::warn(&format!("Line {}: {}", line_no, e));
-                failed += 1;
-                continue;
-            }
+        if let Some(v) = &contract_start
+            && let Err(e) = validate_date_string(v)
+        {
+            logger::warn(&format!("Line {}: {}", line_no, e));
+            failed += 1;
+            continue;
         }
-        if let Some(v) = &contract_end {
-            if let Err(e) = validate_date_string(v) {
-                logger::warn(&format!("Line {}: {}", line_no, e));
-                failed += 1;
-                continue;
-            }
+        if let Some(v) = &contract_end
+            && let Err(e) = validate_date_string(v)
+        {
+            logger::warn(&format!("Line {}: {}", line_no, e));
+            failed += 1;
+            continue;
         }
-        if let Some(bd) = &billing_day {
-            if let Err(e) = validate_billing_day(bd) {
-                logger::warn(&format!("Line {}: {}", line_no, e));
-                failed += 1;
-                continue;
-            }
+        if let Some(bd) = &billing_day
+            && let Err(e) = validate_billing_day(bd)
+        {
+            logger::warn(&format!("Line {}: {}", line_no, e));
+            failed += 1;
+            continue;
         }
 
         let tags: Vec<String> = tags_str
@@ -266,17 +269,17 @@ pub fn run_import(parsed: &ParsedArgs) -> i32 {
             continue;
         }
 
-        if deduplicate {
-            if let Ok(Some(existing)) = crate::db::find_subscription_by_name(sanitized.trim()) {
-                logger::warn(&format!(
-                    "Line {}: \"{}\" already exists (id={}) — skipping",
-                    line_no,
-                    sanitized.trim(),
-                    existing
-                ));
-                skipped += 1;
-                continue;
-            }
+        if deduplicate
+            && let Ok(Some(existing)) = crate::db::find_subscription_by_name(sanitized.trim())
+        {
+            logger::warn(&format!(
+                "Line {}: \"{}\" already exists (id={}) — skipping",
+                line_no,
+                sanitized.trim(),
+                existing
+            ));
+            skipped += 1;
+            continue;
         }
 
         if dry_run {

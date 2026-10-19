@@ -2,12 +2,15 @@
 //! and `usage-refresh.ts` (refresh; sources absent in the golden env).
 
 use crate::date::get_period_date_range;
-use crate::db::{get_llm_usage, get_llm_usage_token_total, get_llm_usage_total, get_llm_usage_total_by_model, get_llm_usage_total_by_provider};
+use crate::db::{
+    get_llm_usage, get_llm_usage_token_total, get_llm_usage_total, get_llm_usage_total_by_model,
+    get_llm_usage_total_by_provider,
+};
 use crate::json::quote_string;
 use crate::logger::{self, info, log};
 use crate::parser::ParsedArgs;
 use crate::price::{format_usd_cost, format_usd_cost_f, group_whole};
-use crate::table::{calc_column_widths, table_style, zebra_row, ColumnConfig};
+use crate::table::{ColumnConfig, calc_column_widths, table_style, zebra_row};
 
 const VALID_PERIODS: [&str; 6] = [
     "weekly",
@@ -27,7 +30,7 @@ pub fn validate_usage_tokens(parsed: &ParsedArgs) -> Result<(Option<i64>, Option
             _ => {
                 return Err(
                     "Invalid --limit. Enter a positive integer (e.g. --limit 200)".to_string(),
-                )
+                );
             }
         },
         None => None,
@@ -37,8 +40,9 @@ pub fn validate_usage_tokens(parsed: &ParsedArgs) -> Result<(Option<i64>, Option
             Ok(n) if n >= 0 => Some(n),
             _ => {
                 return Err(
-                    "Invalid --offset. Enter a non-negative integer (e.g. --offset 100)".to_string(),
-                )
+                    "Invalid --offset. Enter a non-negative integer (e.g. --offset 100)"
+                        .to_string(),
+                );
             }
         },
         None => None,
@@ -103,10 +107,18 @@ fn render_usage_table(entries: &[crate::db::LlmUsage]) {
         return;
     }
 
-    let headers: Vec<String> = ["Provider", "Model", "Input", "Output", "Cost", "Date", "Description"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+    let headers: Vec<String> = [
+        "Provider",
+        "Model",
+        "Input",
+        "Output",
+        "Cost",
+        "Date",
+        "Description",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
     let min_widths: Vec<i64> = vec![10, 20, 10, 10, 10, 12, 15];
     let max_widths: Vec<i64> = vec![20, 50, 14, 14, 14, 12, 60];
 
@@ -134,7 +146,11 @@ fn render_usage_table(entries: &[crate::db::LlmUsage]) {
         String::new(),
         format_usd_cost_f(total_cost, 2),
         String::new(),
-        format!("({} entr{})", entries.len(), if entries.len() == 1 { "y" } else { "ies" }),
+        format!(
+            "({} entr{})",
+            entries.len(),
+            if entries.len() == 1 { "y" } else { "ies" }
+        ),
     ]);
 
     let config = ColumnConfig {
@@ -189,9 +205,13 @@ fn render_usage_table(entries: &[crate::db::LlmUsage]) {
 // ── total ────────────────────────────────────────────────
 
 pub fn run_usage_total(parsed: &ParsedArgs) -> i32 {
-    let period = parsed.str("period").unwrap_or_else(|| "monthly".to_string());
+    let period = parsed
+        .str("period")
+        .unwrap_or_else(|| "monthly".to_string());
     if !VALID_PERIODS.contains(&period.as_str()) {
-        logger::fail("period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly");
+        logger::fail(
+            "period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly",
+        );
         return 1;
     }
 
@@ -272,10 +292,7 @@ pub fn run_usage_total(parsed: &ParsedArgs) -> i32 {
             ));
         }
     }
-    log(&format!(
-        "  {}",
-        crate::table::divider(20, &theme)
-    ));
+    log(&format!("  {}", crate::table::divider(20, &theme)));
     log(&format!(
         "  Tokens: {} in / {} out",
         group_whole(input_tokens),
@@ -302,7 +319,10 @@ pub fn run_usage_refresh() -> i32 {
                 home.join(".opencode/opencode.sqlite"),
             ],
         ),
-        ("Claude Code session files", vec![home.join(".claude/projects")]),
+        (
+            "Claude Code session files",
+            vec![home.join(".claude/projects")],
+        ),
         ("Codex CLI DB", vec![home.join(".codex/state_5.sqlite")]),
         (
             "Cursor DB",
@@ -353,49 +373,47 @@ pub fn run_usage_add(parsed: &ParsedArgs) -> i32 {
         match js_number(&cost) {
             Some(n) if n.is_finite() && n >= 0.0 => {}
             _ => {
-                logger::fail(
-                    "Invalid cost. Enter a non-negative number (e.g. 0.50 for 50 cents)",
-                );
+                logger::fail("Invalid cost. Enter a non-negative number (e.g. 0.50 for 50 cents)");
                 return 1;
             }
         }
     }
 
-    if let Some(provider) = parsed.str("provider") {
-        if !LLM_PROVIDERS.contains(&provider.as_str()) {
-            logger::fail(&format!(
-                "Invalid provider \"{}\". Use one of: openai, anthropic, google-ai, mistral, \
+    if let Some(provider) = parsed.str("provider")
+        && !LLM_PROVIDERS.contains(&provider.as_str())
+    {
+        logger::fail(&format!(
+            "Invalid provider \"{}\". Use one of: openai, anthropic, google-ai, mistral, \
 groq, together, deepseek, cohere, or omit for interactive.",
-                provider
-            ));
-            return 1;
-        }
+            provider
+        ));
+        return 1;
     }
 
-    if let Some(model) = parsed.str("model") {
-        if let Err(e) = validate_model_name(&model) {
-            logger::fail(&e);
-            return 1;
-        }
+    if let Some(model) = parsed.str("model")
+        && let Err(e) = validate_model_name(&model)
+    {
+        logger::fail(&e);
+        return 1;
     }
 
-    if let Some(v) = parsed.str("inputTokens") {
-        if let Err(e) = validate_tokens(&v) {
-            logger::fail(&e);
-            return 1;
-        }
+    if let Some(v) = parsed.str("inputTokens")
+        && let Err(e) = validate_tokens(&v)
+    {
+        logger::fail(&e);
+        return 1;
     }
-    if let Some(v) = parsed.str("outputTokens") {
-        if let Err(e) = validate_tokens(&v) {
-            logger::fail(&e);
-            return 1;
-        }
+    if let Some(v) = parsed.str("outputTokens")
+        && let Err(e) = validate_tokens(&v)
+    {
+        logger::fail(&e);
+        return 1;
     }
-    if let Some(v) = parsed.str("date") {
-        if let Err(e) = validate_date(&v) {
-            logger::fail(&e);
-            return 1;
-        }
+    if let Some(v) = parsed.str("date")
+        && let Err(e) = validate_date(&v)
+    {
+        logger::fail(&e);
+        return 1;
     }
 
     // Non-interactive success path: all required flags supplied.
@@ -421,9 +439,7 @@ groq, together, deepseek, cohere, or omit for interactive.",
         .str("outputTokens")
         .and_then(|v| v.trim().parse::<i64>().ok())
         .unwrap_or(0);
-    let date = parsed
-        .str("date")
-        .unwrap_or_else(|| crate::date::today_string());
+    let date = parsed.str("date").unwrap_or_else(crate::date::today_string);
     let cost_cents = parsed
         .str("cost")
         .and_then(|v| js_number(&v))
@@ -648,11 +664,17 @@ fn parse_response_json(obj: &serde_json::Value) -> Option<ParsedLogEntry> {
         .filter(|s| !s.is_empty())?;
 
     let is_openrouter = usage.get("cost").map(|v| v.is_number()).unwrap_or(false);
-    let is_openai =
-        !is_openrouter && usage.get("prompt_tokens").map(|v| v.is_number()).unwrap_or(false);
+    let is_openai = !is_openrouter
+        && usage
+            .get("prompt_tokens")
+            .map(|v| v.is_number())
+            .unwrap_or(false);
     let is_anthropic = !is_openrouter
         && !is_openai
-        && usage.get("input_tokens").map(|v| v.is_number()).unwrap_or(false);
+        && usage
+            .get("input_tokens")
+            .map(|v| v.is_number())
+            .unwrap_or(false);
 
     if is_openrouter {
         let (provider, model_name) = match model.find('/') {
@@ -721,7 +743,10 @@ fn load_pricing_cache() -> Option<serde_json::Map<String, serde_json::Value>> {
     value.as_object().cloned()
 }
 
-fn lookup_model_key(cache: &serde_json::Map<String, serde_json::Value>, model: &str) -> Option<String> {
+fn lookup_model_key(
+    cache: &serde_json::Map<String, serde_json::Value>,
+    model: &str,
+) -> Option<String> {
     if cache.contains_key(model) {
         return Some(model.to_string());
     }
@@ -734,17 +759,8 @@ fn lookup_model_key(cache: &serde_json::Map<String, serde_json::Value>, model: &
     None
 }
 
-fn calculate_cost_cents(
-    pricing: &serde_json::Value,
-    input_tokens: i64,
-    output_tokens: i64,
-) -> f64 {
-    let get = |k: &str| -> f64 {
-        pricing
-            .get(k)
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0)
-    };
+fn calculate_cost_cents(pricing: &serde_json::Value, input_tokens: i64, output_tokens: i64) -> f64 {
+    let get = |k: &str| -> f64 { pricing.get(k).and_then(|v| v.as_f64()).unwrap_or(0.0) };
     let input_cost = get("input_cost_per_token") * input_tokens as f64;
     let output_cost = get("output_cost_per_token") * output_tokens as f64;
     let reasoning_cost = get("output_cost_per_reasoning_token") * output_tokens as f64;
@@ -785,20 +801,24 @@ pub fn run_usage_import(parsed: &ParsedArgs) -> i32 {
             );
             return 1;
         };
-        if let Ok(meta) = std::fs::metadata(&safe_file) {
-            if meta.len() > MAX_USAGE_FILE_BYTES {
-                logger::fail(&format!(
-                    "File too large ({:.1} MB). Maximum: {} MB",
-                    meta.len() as f64 / 1024.0 / 1024.0,
-                    MAX_USAGE_FILE_BYTES / 1024 / 1024
-                ));
-                return 1;
-            }
+        if let Ok(meta) = std::fs::metadata(&safe_file)
+            && meta.len() > MAX_USAGE_FILE_BYTES
+        {
+            logger::fail(&format!(
+                "File too large ({:.1} MB). Maximum: {} MB",
+                meta.len() as f64 / 1024.0 / 1024.0,
+                MAX_USAGE_FILE_BYTES / 1024 / 1024
+            ));
+            return 1;
         }
         match std::fs::read_to_string(&safe_file) {
             Ok(c) => c,
             Err(e) => {
-                logger::fail(&format!("Cannot read file: {} — {}", safe_file.display(), e));
+                logger::fail(&format!(
+                    "Cannot read file: {} — {}",
+                    safe_file.display(),
+                    e
+                ));
                 return 1;
             }
         }
@@ -876,15 +896,16 @@ pub fn run_usage_import(parsed: &ParsedArgs) -> i32 {
         };
 
         let mut cost_cents = entry.cost_cents;
-        if cost_cents.is_none() {
-            if let Some(cache) = &cache {
-                if let Some(model_key) = lookup_model_key(cache, &entry.model) {
-                    if let Some(pricing) = cache.get(&model_key) {
-                        cost_cents =
-                            Some(calculate_cost_cents(pricing, entry.input_tokens, entry.output_tokens));
-                    }
-                }
-            }
+        if cost_cents.is_none()
+            && let Some(cache) = &cache
+            && let Some(model_key) = lookup_model_key(cache, &entry.model)
+            && let Some(pricing) = cache.get(&model_key)
+        {
+            cost_cents = Some(calculate_cost_cents(
+                pricing,
+                entry.input_tokens,
+                entry.output_tokens,
+            ));
         }
 
         let Some(cost) = cost_cents else {

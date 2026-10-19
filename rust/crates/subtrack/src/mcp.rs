@@ -36,7 +36,9 @@ const MAX_BULK_AFFECTED: usize = 1_000;
 // ── JSON helpers (JS JSON.stringify semantics) ───────────
 
 fn opt_str(v: &Option<String>) -> String {
-    v.as_deref().map(js_str).unwrap_or_else(|| "null".to_string())
+    v.as_deref()
+        .map(js_str)
+        .unwrap_or_else(|| "null".to_string())
 }
 
 fn opt_num(v: Option<f64>) -> String {
@@ -44,7 +46,8 @@ fn opt_num(v: Option<f64>) -> String {
 }
 
 fn opt_i64(v: Option<i64>) -> String {
-    v.map(|x| x.to_string()).unwrap_or_else(|| "null".to_string())
+    v.map(|x| x.to_string())
+        .unwrap_or_else(|| "null".to_string())
 }
 
 fn arr_strings(v: &[String]) -> String {
@@ -140,7 +143,11 @@ const TOOLS: &[ToolDef] = &[
         name: "list_subscriptions",
         description: "List all subscriptions",
         props: &[
-            ("sort", "string", "Sort field: name, price, currency, cycle, status"),
+            (
+                "sort",
+                "string",
+                "Sort field: name, price, currency, cycle, status",
+            ),
             ("desc", "boolean", "Sort descending"),
             ("limit", "number", "Max entries to return (default: all)"),
             ("offset", "number", "Skip the first N entries (for paging)"),
@@ -169,9 +176,17 @@ const TOOLS: &[ToolDef] = &[
         description: "Add a new subscription",
         props: &[
             ("name", "string", "Subscription name"),
-            ("price", "number", "Price in major currency units (e.g. 14.99 USD)"),
+            (
+                "price",
+                "number",
+                "Price in major currency units (e.g. 14.99 USD)",
+            ),
             ("currency", "string", "Currency code (e.g. USD, JPY)"),
-            ("cycle", "string", "Billing cycle: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly"),
+            (
+                "cycle",
+                "string",
+                "Billing cycle: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly",
+            ),
             ("tags", "string", "Comma-separated tags"),
             ("billingDay", "number", "Billing day of month (1-31)"),
             ("status", "string", "Status: active, paused, cancelled"),
@@ -219,7 +234,11 @@ const TOOLS: &[ToolDef] = &[
         props: &[
             ("id", "number", "Subscription ID to edit"),
             ("name", "string", "New name"),
-            ("price", "number", "New price in major currency units (e.g. 14.99 USD)"),
+            (
+                "price",
+                "number",
+                "New price in major currency units (e.g. 14.99 USD)",
+            ),
             ("currency", "string", "New currency code"),
             ("cycle", "string", "New billing cycle"),
             ("status", "string", "New status: active, paused, cancelled"),
@@ -249,9 +268,17 @@ const TOOLS: &[ToolDef] = &[
         name: "get_forecast",
         description: "Get spending forecast for upcoming months",
         props: &[
-            ("months", "number", "Number of months to forecast (default: 12)"),
+            (
+                "months",
+                "number",
+                "Number of months to forecast (default: 12)",
+            ),
             ("currency", "string", "Convert all to target currency"),
-            ("cancel", "string", "Comma-separated subscription names to exclude from forecast"),
+            (
+                "cancel",
+                "string",
+                "Comma-separated subscription names to exclude from forecast",
+            ),
         ],
         required: &[],
     },
@@ -259,7 +286,11 @@ const TOOLS: &[ToolDef] = &[
         name: "compare",
         description: "Compare subscription spending between current and previous period",
         props: &[
-            ("period", "string", "Period to compare: monthly (default), yearly, quarterly"),
+            (
+                "period",
+                "string",
+                "Period to compare: monthly (default), yearly, quarterly",
+            ),
             ("currency", "string", "Convert all to target currency"),
         ],
         required: &[],
@@ -268,20 +299,52 @@ const TOOLS: &[ToolDef] = &[
         name: "bulk_operations",
         description: "Perform bulk operations on subscriptions matching filters",
         props: &[
-            ("action", "string", "Action: status, delete, tag_add, tag_remove"),
-            ("status", "string", "Target status for 'status' action: active, paused, cancelled"),
-            ("tag_name", "string", "Tag name for tag_add / tag_remove actions"),
-            ("filter_tag", "string", "Only affect subscriptions with this tag"),
-            ("filter_status", "string", "Only affect subscriptions with this status"),
-            ("filter_name", "string", "Only affect subscriptions whose name contains this"),
-            ("confirm", "boolean", "Must be true to perform a destructive bulk action"),
+            (
+                "action",
+                "string",
+                "Action: status, delete, tag_add, tag_remove",
+            ),
+            (
+                "status",
+                "string",
+                "Target status for 'status' action: active, paused, cancelled",
+            ),
+            (
+                "tag_name",
+                "string",
+                "Tag name for tag_add / tag_remove actions",
+            ),
+            (
+                "filter_tag",
+                "string",
+                "Only affect subscriptions with this tag",
+            ),
+            (
+                "filter_status",
+                "string",
+                "Only affect subscriptions with this status",
+            ),
+            (
+                "filter_name",
+                "string",
+                "Only affect subscriptions whose name contains this",
+            ),
+            (
+                "confirm",
+                "boolean",
+                "Must be true to perform a destructive bulk action",
+            ),
         ],
         required: &["action"],
     },
     ToolDef {
         name: "get_trials",
         description: "Get trial periods",
-        props: &[("expiring_soon", "number", "Filter trials expiring within N days")],
+        props: &[(
+            "expiring_soon",
+            "number",
+            "Filter trials expiring within N days",
+        )],
         required: &[],
     },
     ToolDef {
@@ -293,15 +356,27 @@ const TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "get_tag_subscriptions",
         description: "Get subscriptions matching one or more tags (AND logic)",
-        props: &[("tag", "string", "Comma-separated tag names (all must match)")],
+        props: &[(
+            "tag",
+            "string",
+            "Comma-separated tag names (all must match)",
+        )],
         required: &["tag"],
     },
     ToolDef {
         name: "get_usage_total",
         description: "Get aggregated LLM API usage for a date range (cost, tokens, provider/model breakdown)",
         props: &[
-            ("from", "string", "Start date YYYY-MM-DD (default: current month)"),
-            ("to", "string", "End date YYYY-MM-DD (default: current month)"),
+            (
+                "from",
+                "string",
+                "Start date YYYY-MM-DD (default: current month)",
+            ),
+            (
+                "to",
+                "string",
+                "End date YYYY-MM-DD (default: current month)",
+            ),
         ],
         required: &[],
     },
@@ -357,14 +432,24 @@ fn tools_json() -> String {
 
 #[derive(Clone, Copy)]
 enum Rule {
-    Str { max_len: usize, enum_vals: &'static [&'static str] },
-    Num { min: f64, max: f64, integer: bool },
+    Str {
+        max_len: usize,
+        enum_vals: &'static [&'static str],
+    },
+    Num {
+        min: f64,
+        max: f64,
+        integer: bool,
+    },
     Bool,
 }
 
 impl Rule {
     const fn s(max_len: usize) -> Self {
-        Rule::Str { max_len, enum_vals: &[] }
+        Rule::Str {
+            max_len,
+            enum_vals: &[],
+        }
     }
     const fn se(max_len: usize, enum_vals: &'static [&'static str]) -> Self {
         Rule::Str { max_len, enum_vals }
@@ -377,7 +462,14 @@ impl Rule {
     }
 }
 
-const CYCLE_ENUM: &[&str] = &["weekly", "bi-weekly", "monthly", "quarterly", "semi-annual", "yearly"];
+const CYCLE_ENUM: &[&str] = &[
+    "weekly",
+    "bi-weekly",
+    "monthly",
+    "quarterly",
+    "semi-annual",
+    "yearly",
+];
 const STATUS_ENUM: &[&str] = &["active", "paused", "cancelled", "archived"];
 const BULK_ACTION_ENUM: &[&str] = &["status", "delete", "tag_add", "tag_remove"];
 
@@ -453,10 +545,7 @@ fn schema_for(name: &str) -> Vec<(&'static str, Rule)> {
         "get_trials" => vec![("expiring_soon", Rule::n(0.0, 3_650.0, true))],
         "list_tags" => vec![],
         "get_tag_subscriptions" => vec![("tag", Rule::s(200))],
-        "get_usage_total" => vec![
-            ("from", Rule::s(10)),
-            ("to", Rule::s(10)),
-        ],
+        "get_usage_total" => vec![("from", Rule::s(10)), ("to", Rule::s(10))],
         "list_usage" => vec![
             ("provider", Rule::s(50)),
             ("from", Rule::s(10)),
@@ -467,7 +556,10 @@ fn schema_for(name: &str) -> Vec<(&'static str, Rule)> {
     }
 }
 
-fn validate_args(args: &serde_json::Map<String, serde_json::Value>, schema: &[(&str, Rule)]) -> Option<String> {
+fn validate_args(
+    args: &serde_json::Map<String, serde_json::Value>,
+    schema: &[(&str, Rule)],
+) -> Option<String> {
     for (key, rules) in schema {
         let value = match args.get(*key) {
             Some(v) if !v.is_null() => v,
@@ -517,10 +609,14 @@ fn num_arg(v: f64) -> String {
     number(v)
 }
 
-fn validate_tool_call(name: &str, args: Option<&serde_json::Map<String, serde_json::Value>>) -> Option<String> {
+fn validate_tool_call(
+    name: &str,
+    args: Option<&serde_json::Map<String, serde_json::Value>>,
+) -> Option<String> {
     let empty = serde_json::Map::new();
     let obj = args.unwrap_or(&empty);
-    let raw = serde_json::to_string(&serde_json::Value::Object(obj.clone())).unwrap_or_else(|_| "{}".to_string());
+    let raw = serde_json::to_string(&serde_json::Value::Object(obj.clone()))
+        .unwrap_or_else(|_| "{}".to_string());
     if raw.chars().count() > MAX_REQUEST_SIZE {
         return Some(format!(
             "Request too large ({} bytes, max {})",
@@ -529,10 +625,10 @@ fn validate_tool_call(name: &str, args: Option<&serde_json::Map<String, serde_js
         ));
     }
     let schema = schema_for(name);
-    if !schema.is_empty() {
-        if let Some(err) = validate_args(obj, &schema) {
-            return Some(format!("Validation error: {}", err));
-        }
+    if !schema.is_empty()
+        && let Some(err) = validate_args(obj, &schema)
+    {
+        return Some(format!("Validation error: {}", err));
     }
     None
 }
@@ -546,10 +642,16 @@ struct Resp {
 
 impl Resp {
     fn ok(text: impl Into<String>) -> Self {
-        Resp { text: text.into(), is_error: false }
+        Resp {
+            text: text.into(),
+            is_error: false,
+        }
     }
     fn err(text: impl Into<String>) -> Self {
-        Resp { text: text.into(), is_error: true }
+        Resp {
+            text: text.into(),
+            is_error: true,
+        }
     }
     fn to_json(&self) -> String {
         let content = format!(
@@ -566,7 +668,10 @@ impl Resp {
 
 // ── argument accessors ───────────────────────────────────
 
-fn arg_str<'a>(args: Option<&'a serde_json::Map<String, serde_json::Value>>, k: &str) -> Option<&'a str> {
+fn arg_str<'a>(
+    args: Option<&'a serde_json::Map<String, serde_json::Value>>,
+    k: &str,
+) -> Option<&'a str> {
     args.and_then(|m| m.get(k)).and_then(|v| v.as_str())
 }
 
@@ -635,8 +740,18 @@ fn handle_search_subscriptions(args: Option<&serde_json::Map<String, serde_json:
 }
 
 fn handle_add_subscription(args: Option<&serde_json::Map<String, serde_json::Value>>) -> Resp {
-    let (name, price, currency, cycle) = match (arg_str(args, "name"), arg_present(args, "price"), arg_str(args, "currency"), arg_str(args, "cycle")) {
-        (Some(n), true, Some(c), Some(cy)) if !n.is_empty() => (n.to_string(), arg_num(args, "price").unwrap_or(f64::NAN), c.to_string(), cy.to_string()),
+    let (name, price, currency, cycle) = match (
+        arg_str(args, "name"),
+        arg_present(args, "price"),
+        arg_str(args, "currency"),
+        arg_str(args, "cycle"),
+    ) {
+        (Some(n), true, Some(c), Some(cy)) if !n.is_empty() => (
+            n.to_string(),
+            arg_num(args, "price").unwrap_or(f64::NAN),
+            c.to_string(),
+            cy.to_string(),
+        ),
         _ => return Resp::err("name, price, currency, and cycle are required"),
     };
 
@@ -668,7 +783,12 @@ fn handle_add_subscription(args: Option<&serde_json::Map<String, serde_json::Val
     }
 
     let tags: Vec<String> = arg_str(args, "tags")
-        .map(|t| t.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+        .map(|t| {
+            t.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
         .unwrap_or_default();
     if tags.len() > MAX_NEW_TAGS {
         return Resp::err(format!("Maximum {} tags allowed", MAX_NEW_TAGS));
@@ -706,7 +826,8 @@ fn handle_add_subscription(args: Option<&serde_json::Map<String, serde_json::Val
         currency,
         cycle,
         status,
-        billing_day: arg_present(args, "billingDay").then(|| arg_num(args, "billingDay").unwrap_or(0.0) as i64),
+        billing_day: arg_present(args, "billingDay")
+            .then(|| arg_num(args, "billingDay").unwrap_or(0.0) as i64),
         notes: arg_str(args, "notes").map(|s| s.to_string()),
         payment_method: arg_str(args, "paymentMethod").map(|s| s.to_string()),
         auto_renewal: true,
@@ -737,12 +858,18 @@ fn handle_delete_subscription(args: Option<&serde_json::Map<String, serde_json::
     }
 }
 
+/// Per-tag aggregate: `name → (count, [(currency, monthly), ...])`.
+type McpMonthlyByTag = Vec<(String, i64, Vec<(String, f64)>)>;
+
 fn mcp_summary_json(subs: &[Subscription]) -> String {
     let mut monthly_by_currency: Vec<(String, f64)> = Vec::new();
-    let mut monthly_by_tag: Vec<(String, i64, Vec<(String, f64)>)> = Vec::new();
+    let mut monthly_by_tag: McpMonthlyByTag = Vec::new();
     for sub in subs {
         let monthly = sub.price * crate::date::period_factor(&sub.cycle, "monthly");
-        match monthly_by_currency.iter_mut().find(|(c, _)| *c == sub.currency) {
+        match monthly_by_currency
+            .iter_mut()
+            .find(|(c, _)| *c == sub.currency)
+        {
             Some((_, v)) => *v += monthly,
             None => monthly_by_currency.push((sub.currency.clone(), monthly)),
         }
@@ -952,35 +1079,72 @@ fn handle_edit_subscription(args: Option<&serde_json::Map<String, serde_json::Va
 
     let mut sets: Vec<(&str, SqlValue)> = Vec::new();
     if arg_present(args, "name") {
-        sets.push(("name", SqlValue::Text(arg_str(args, "name").unwrap_or("").to_string())));
+        sets.push((
+            "name",
+            SqlValue::Text(arg_str(args, "name").unwrap_or("").to_string()),
+        ));
     }
     if arg_present(args, "price") {
-        sets.push(("price", SqlValue::Real(arg_num(args, "price").unwrap_or(0.0))));
+        sets.push((
+            "price",
+            SqlValue::Real(arg_num(args, "price").unwrap_or(0.0)),
+        ));
     }
     if arg_present(args, "currency") {
-        sets.push(("currency", SqlValue::Text(arg_str(args, "currency").unwrap_or("").to_string())));
+        sets.push((
+            "currency",
+            SqlValue::Text(arg_str(args, "currency").unwrap_or("").to_string()),
+        ));
     }
     if arg_present(args, "cycle") {
-        sets.push(("cycle", SqlValue::Text(arg_str(args, "cycle").unwrap_or("").to_string())));
+        sets.push((
+            "cycle",
+            SqlValue::Text(arg_str(args, "cycle").unwrap_or("").to_string()),
+        ));
     }
     if arg_present(args, "status") {
-        sets.push(("status", SqlValue::Text(arg_str(args, "status").unwrap_or("").to_string())));
+        sets.push((
+            "status",
+            SqlValue::Text(arg_str(args, "status").unwrap_or("").to_string()),
+        ));
     }
     if arg_present(args, "billingDay") {
-        sets.push(("billing_day", SqlValue::Int(arg_num(args, "billingDay").unwrap_or(0.0) as i64)));
+        sets.push((
+            "billing_day",
+            SqlValue::Int(arg_num(args, "billingDay").unwrap_or(0.0) as i64),
+        ));
     }
     if arg_present(args, "paymentMethod") {
         let pm = arg_str(args, "paymentMethod").unwrap_or("");
-        sets.push(("payment_method", if pm.is_empty() { SqlValue::Null } else { SqlValue::Text(pm.to_string()) }));
+        sets.push((
+            "payment_method",
+            if pm.is_empty() {
+                SqlValue::Null
+            } else {
+                SqlValue::Text(pm.to_string())
+            },
+        ));
     }
     if arg_present(args, "notes") {
         let n = arg_str(args, "notes").unwrap_or("");
-        sets.push(("notes", if n.is_empty() { SqlValue::Null } else { SqlValue::Text(n.to_string()) }));
+        sets.push((
+            "notes",
+            if n.is_empty() {
+                SqlValue::Null
+            } else {
+                SqlValue::Text(n.to_string())
+            },
+        ));
     }
 
     let tags_arg = if arg_present(args, "tags") {
         let tags: Vec<String> = arg_str(args, "tags")
-            .map(|t| t.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+            .map(|t| {
+                t.split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            })
             .unwrap_or_default();
         if tags.len() > MAX_NEW_TAGS {
             return Resp::err(format!("Maximum {} tags allowed", MAX_NEW_TAGS));
@@ -1004,10 +1168,10 @@ fn handle_edit_subscription(args: Option<&serde_json::Map<String, serde_json::Va
     if !success {
         return Resp::err(format!("Subscription with id {} not found", id));
     }
-    if let Some(tags) = tags_arg {
-        if let Err(e) = db::set_subscription_tags(&conn, id, &tags, false) {
-            return Resp::err(e.to_string());
-        }
+    if let Some(tags) = tags_arg
+        && let Err(e) = db::set_subscription_tags(&conn, id, &tags, false)
+    {
+        return Resp::err(e.to_string());
     }
     if let Err(e) = db::save_db(&conn) {
         return Resp::err(e.to_string());
@@ -1027,13 +1191,12 @@ fn handle_get_history(args: Option<&serde_json::Map<String, serde_json::Value>>)
         Ok(e) => e,
         Err(e) => return Resp::err(e.to_string()),
     };
-    if id.is_none() {
-        if let Some(days) = days {
-            if days > 0 {
-                let cutoff = crate::date::today_string_days_ago(days);
-                entries.retain(|c| c.changed_at.as_str() >= cutoff.as_str());
-            }
-        }
+    if id.is_none()
+        && let Some(days) = days
+        && days > 0
+    {
+        let cutoff = crate::date::today_string_days_ago(days);
+        entries.retain(|c| c.changed_at.as_str() >= cutoff.as_str());
     }
     let items: Vec<String> = entries.iter().map(price_change_compact).collect();
     Resp::ok(format!("[{}]", items.join(",")))
@@ -1075,7 +1238,12 @@ fn handle_get_forecast(args: Option<&serde_json::Map<String, serde_json::Value>>
     let months = arg_num(args, "months").unwrap_or(12.0) as i64;
     let target = arg_str(args, "currency").map(|s| s.to_string());
     let cancel_names: Vec<String> = arg_str(args, "cancel")
-        .map(|t| t.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+        .map(|t| {
+            t.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
         .unwrap_or_default();
 
     let rates = target.as_ref().map(|_| crate::fx::fetch_rates());
@@ -1094,10 +1262,10 @@ fn handle_get_forecast(args: Option<&serde_json::Map<String, serde_json::Value>>
     for sub in &active {
         let monthly = sub.price * crate::date::period_factor(&sub.cycle, "monthly");
         let mut monthly_converted_raw: Option<f64> = None;
-        if let (Some(tc), Some(r)) = (&target, &rates) {
-            if let Some(c) = crate::fx::try_convert(monthly, &sub.currency, tc, &r.rates) {
-                monthly_converted_raw = Some(c);
-            }
+        if let (Some(tc), Some(r)) = (&target, &rates)
+            && let Some(c) = crate::fx::try_convert(monthly, &sub.currency, tc, &r.rates)
+        {
+            monthly_converted_raw = Some(c);
         }
         raw_total += monthly_converted_raw.unwrap_or(monthly);
         let mut fields = vec![
@@ -1105,10 +1273,16 @@ fn handle_get_forecast(args: Option<&serde_json::Map<String, serde_json::Value>>
             format!("\"price\":{}", number(sub.price)),
             format!("\"currency\":{}", js_str(&sub.currency)),
             format!("\"cycle\":{}", js_str(&sub.cycle)),
-            format!("\"monthly\":{}", number(crate::price::round_currency(monthly))),
+            format!(
+                "\"monthly\":{}",
+                number(crate::price::round_currency(monthly))
+            ),
         ];
         if let Some(c) = monthly_converted_raw {
-            fields.push(format!("\"monthlyConverted\":{}", number(crate::price::round_currency(c))));
+            fields.push(format!(
+                "\"monthlyConverted\":{}",
+                number(crate::price::round_currency(c))
+            ));
         }
         entries.push(format!("{{{}}}", fields.join(",")));
     }
@@ -1139,7 +1313,13 @@ fn compare_totals(
             for c in &changes {
                 if let Some(old) = c.old_price {
                     m.entry(c.subscription_id).or_insert_with(|| {
-                        (old, c.old_currency.clone().or_else(|| c.new_currency.clone()).unwrap_or_default())
+                        (
+                            old,
+                            c.old_currency
+                                .clone()
+                                .or_else(|| c.new_currency.clone())
+                                .unwrap_or_default(),
+                        )
                     });
                 }
             }
@@ -1181,7 +1361,9 @@ fn compare_totals(
 
 fn handle_compare(args: Option<&serde_json::Map<String, serde_json::Value>>) -> Resp {
     let period = arg_str(args, "period").unwrap_or("monthly").to_string();
-    if crate::date::cycle_days(&period).is_some() || !crate::validation::CYCLE_VALUES.contains(&period.as_str()) {
+    if crate::date::cycle_days(&period).is_some()
+        || !crate::validation::CYCLE_VALUES.contains(&period.as_str())
+    {
         return Resp::err(format!("Invalid period: {}", period));
     }
     let target = arg_str(args, "currency").map(|s| s.to_string());
@@ -1205,8 +1387,16 @@ fn handle_compare(args: Option<&serde_json::Map<String, serde_json::Value>>) -> 
     let rows: Vec<String> = currencies
         .iter()
         .map(|c| {
-            let cur = current.iter().find(|(k, _)| k == c).map(|(_, v)| *v).unwrap_or(0.0);
-            let prev = previous.iter().find(|(k, _)| k == c).map(|(_, v)| *v).unwrap_or(0.0);
+            let cur = current
+                .iter()
+                .find(|(k, _)| k == c)
+                .map(|(_, v)| *v)
+                .unwrap_or(0.0);
+            let prev = previous
+                .iter()
+                .find(|(k, _)| k == c)
+                .map(|(_, v)| *v)
+                .unwrap_or(0.0);
             format!(
                 "{{\"currency\":{},\"current\":{},\"previous\":{}}}",
                 js_str(c),
@@ -1218,12 +1408,24 @@ fn handle_compare(args: Option<&serde_json::Map<String, serde_json::Value>>) -> 
 
     let grand_current: f64 = currencies
         .iter()
-        .map(|c| current.iter().find(|(k, _)| k == c).map(|(_, v)| *v).unwrap_or(0.0))
+        .map(|c| {
+            current
+                .iter()
+                .find(|(k, _)| k == c)
+                .map(|(_, v)| *v)
+                .unwrap_or(0.0)
+        })
         .map(crate::price::round_currency)
         .sum();
     let grand_previous: f64 = currencies
         .iter()
-        .map(|c| previous.iter().find(|(k, _)| k == c).map(|(_, v)| *v).unwrap_or(0.0))
+        .map(|c| {
+            previous
+                .iter()
+                .find(|(k, _)| k == c)
+                .map(|(_, v)| *v)
+                .unwrap_or(0.0)
+        })
         .map(crate::price::round_currency)
         .sum();
     let change = grand_current - grand_previous;
@@ -1236,7 +1438,10 @@ fn handle_compare(args: Option<&serde_json::Map<String, serde_json::Value>>) -> 
     let body = format!(
         "\"period\":{},\"currency\":{},\"rows\":[{}],\"grandTotal\":{{\"current\":{},\"previous\":{},\"change\":{},\"changePercent\":{}}}",
         js_str(&period),
-        target.as_deref().map(js_str).unwrap_or_else(|| "null".to_string()),
+        target
+            .as_deref()
+            .map(js_str)
+            .unwrap_or_else(|| "null".to_string()),
         rows.join(","),
         number(grand_current),
         number(grand_previous),
@@ -1283,7 +1488,10 @@ fn handle_bulk_operations(args: Option<&serde_json::Map<String, serde_json::Valu
     }
 
     let affected: Vec<Subscription> = if action == "status" {
-        matched.into_iter().filter(|s| s.status != "cancelled").collect()
+        matched
+            .into_iter()
+            .filter(|s| s.status != "cancelled")
+            .collect()
     } else {
         matched
     };
@@ -1316,7 +1524,12 @@ fn handle_bulk_operations(args: Option<&serde_json::Map<String, serde_json::Valu
                 ));
             }
             for id in &affected_ids {
-                match db::update_subscription(&conn, *id, &[("status", SqlValue::Text(target_status.clone()))], false) {
+                match db::update_subscription(
+                    &conn,
+                    *id,
+                    &[("status", SqlValue::Text(target_status.clone()))],
+                    false,
+                ) {
                     Ok(true) => result_count += 1,
                     Ok(false) => {}
                     Err(e) => report(*id, &mut errors, e.to_string()),
@@ -1346,7 +1559,11 @@ fn handle_bulk_operations(args: Option<&serde_json::Map<String, serde_json::Valu
             for s in &affected {
                 if !s.tags.contains(&tag_name) {
                     if s.tags.len() >= MAX_TAG_COUNT {
-                        report(s.id, &mut errors, format!("Maximum {} tags allowed", MAX_TAG_COUNT));
+                        report(
+                            s.id,
+                            &mut errors,
+                            format!("Maximum {} tags allowed", MAX_TAG_COUNT),
+                        );
                         continue;
                     }
                     let mut tags = s.tags.clone();
@@ -1374,7 +1591,8 @@ fn handle_bulk_operations(args: Option<&serde_json::Map<String, serde_json::Valu
             }
             for s in &affected {
                 if s.tags.contains(&tag_name) {
-                    let tags: Vec<String> = s.tags.iter().filter(|t| **t != tag_name).cloned().collect();
+                    let tags: Vec<String> =
+                        s.tags.iter().filter(|t| **t != tag_name).cloned().collect();
                     match db::set_subscription_tags(&conn, s.id, &tags, false) {
                         Ok(_) => result_count += 1,
                         Err(e) => report(s.id, &mut errors, e.to_string()),
@@ -1386,7 +1604,7 @@ fn handle_bulk_operations(args: Option<&serde_json::Map<String, serde_json::Valu
             return Resp::err(format!(
                 "Unknown bulk action: {}. Use: status, delete, tag_add, tag_remove",
                 action
-            ))
+            ));
         }
     }
 
@@ -1397,9 +1615,15 @@ fn handle_bulk_operations(args: Option<&serde_json::Map<String, serde_json::Valu
     let filters = format!(
         "{{{} }}",
         [
-            filter_tag.as_ref().map(|t| format!("\"tag\":{}", js_str(t))),
-            filter_status.as_ref().map(|s| format!("\"status\":{}", js_str(s))),
-            filter_name.as_ref().map(|n| format!("\"name\":{}", js_str(n))),
+            filter_tag
+                .as_ref()
+                .map(|t| format!("\"tag\":{}", js_str(t))),
+            filter_status
+                .as_ref()
+                .map(|s| format!("\"status\":{}", js_str(s))),
+            filter_name
+                .as_ref()
+                .map(|n| format!("\"name\":{}", js_str(n))),
         ]
         .into_iter()
         .flatten()
@@ -1463,7 +1687,11 @@ fn handle_get_tag_subscriptions(args: Option<&serde_json::Map<String, serde_json
     if names.is_empty() {
         return Resp::err("tag is required");
     }
-    let opts = db::QueryOptions { tags: names, include_archived: true, ..Default::default() };
+    let opts = db::QueryOptions {
+        tags: names,
+        include_archived: true,
+        ..Default::default()
+    };
     match db::get_subscriptions(&opts) {
         Ok(subs) => Resp::ok(subs_compact(&subs)),
         Err(e) => Resp::err(e.to_string()),
@@ -1472,7 +1700,10 @@ fn handle_get_tag_subscriptions(args: Option<&serde_json::Map<String, serde_json
 
 fn handle_get_usage_total(args: Option<&serde_json::Map<String, serde_json::Value>>) -> Resp {
     let (from, to) = if arg_present(args, "from") && arg_present(args, "to") {
-        (arg_str(args, "from").unwrap_or("").to_string(), arg_str(args, "to").unwrap_or("").to_string())
+        (
+            arg_str(args, "from").unwrap_or("").to_string(),
+            arg_str(args, "to").unwrap_or("").to_string(),
+        )
     } else {
         crate::date::get_period_date_range("monthly")
     };
@@ -1561,7 +1792,10 @@ fn call_tool(name: &str, args: Option<&serde_json::Map<String, serde_json::Value
 // ── JSON-RPC envelope ────────────────────────────────────
 
 fn send_result(id: &str, result: &str) -> String {
-    format!("{{\"jsonrpc\":\"2.0\",\"id\":{},\"result\":{}}}", id, result)
+    format!(
+        "{{\"jsonrpc\":\"2.0\",\"id\":{},\"result\":{}}}",
+        id, result
+    )
 }
 
 fn send_error(id: &str, code: i64, message: &str) -> String {
@@ -1602,23 +1836,25 @@ struct Server {
 
 impl Server {
     fn new() -> Self {
-        Server { initialized: false, out: Vec::new(), deferred: Vec::new() }
+        Server {
+            initialized: false,
+            out: Vec::new(),
+            deferred: Vec::new(),
+        }
     }
 
     fn handle_message(&mut self, msg: &serde_json::Value) {
         let m = match msg.as_object() {
             Some(o) => o,
             None => {
-                self.out.push(send_error("null", ERR_INVALID_REQUEST, "Invalid Request"));
+                self.out
+                    .push(send_error("null", ERR_INVALID_REQUEST, "Invalid Request"));
                 return;
             }
         };
 
         let id = m.get("id");
-        let is_notification = match id {
-            None | Some(serde_json::Value::Null) => true,
-            _ => false,
-        };
+        let is_notification = matches!(id, None | Some(serde_json::Value::Null));
         if is_notification {
             return;
         }
@@ -1626,13 +1862,15 @@ impl Server {
         let method = match m.get("method").and_then(|v| v.as_str()) {
             Some(s) => s,
             None => {
-                self.out.push(send_error("null", ERR_INVALID_REQUEST, "Invalid Request"));
+                self.out
+                    .push(send_error("null", ERR_INVALID_REQUEST, "Invalid Request"));
                 return;
             }
         };
         let id_v = id.unwrap();
         if !id_v.is_number() && !id_v.is_string() {
-            self.out.push(send_error("null", ERR_INVALID_REQUEST, "Invalid Request"));
+            self.out
+                .push(send_error("null", ERR_INVALID_REQUEST, "Invalid Request"));
             return;
         }
         let id_str = id_to_string(id_v);
@@ -1873,10 +2111,10 @@ fn is_content_length_line(s: &str) -> bool {
 fn parse_content_length(headers: &str) -> Option<usize> {
     for line in headers.lines() {
         let lower = line.to_lowercase();
-        if let Some(rest) = lower.strip_prefix("content-length:") {
-            if let Ok(n) = rest.trim().parse::<usize>() {
-                return Some(n);
-            }
+        if let Some(rest) = lower.strip_prefix("content-length:")
+            && let Ok(n) = rest.trim().parse::<usize>()
+        {
+            return Some(n);
         }
     }
     None

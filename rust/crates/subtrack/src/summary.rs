@@ -1,6 +1,6 @@
 //! `summary` command — port of `payment.ts` (calcSummary + showSummary).
 
-use crate::db::{get_subscriptions, QueryOptions, Subscription};
+use crate::db::{QueryOptions, Subscription, get_subscriptions};
 use crate::json::{number, quote_string, sub_json};
 use crate::logger::{log, out_str};
 use crate::parser::ParsedArgs;
@@ -32,7 +32,10 @@ fn calc_summary(subs: &[Subscription]) -> Summary {
     for sub in subs {
         let monthly = sub.price * crate::date::period_factor(&sub.cycle, "monthly");
 
-        match monthly_by_currency.iter_mut().find(|(c, _)| *c == sub.currency) {
+        match monthly_by_currency
+            .iter_mut()
+            .find(|(c, _)| *c == sub.currency)
+        {
             Some((_, v)) => *v += monthly,
             None => monthly_by_currency.push((sub.currency.clone(), monthly)),
         }
@@ -211,12 +214,18 @@ fn summary_json(subs: &[Subscription], data: &Summary) -> String {
             )
         })
         .collect();
-    f.push(kv("monthlyByTag", format!("{{\n{}\n  }}", tags.join(",\n"))));
+    f.push(kv(
+        "monthlyByTag",
+        format!("{{\n{}\n  }}", tags.join(",\n")),
+    ));
 
     if let Some(idx) = data.most_expensive {
         // `sub_json` already uses the 2-space object body indentation this
         // nesting level needs; only drop its leading first-line indent.
-        f.push(kv("mostExpensive", sub_json(&subs[idx]).trim_start().to_string()));
+        f.push(kv(
+            "mostExpensive",
+            sub_json(&subs[idx]).trim_start().to_string(),
+        ));
     }
 
     format!("{{\n  {}\n}}", f.join(",\n  "))

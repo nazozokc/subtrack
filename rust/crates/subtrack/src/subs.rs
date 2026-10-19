@@ -12,10 +12,10 @@ use crate::logger::{self, fail, info};
 use crate::parser::ParsedArgs;
 use crate::prompts::{prompt_cycle, prompt_select, prompt_string};
 use crate::validation::{
-    is_valid_currency, is_valid_status, validate_billing_day, validate_date_string,
-    validate_discount_type, validate_discount_value, validate_name, validate_notes,
-    validate_payment_method, validate_plan_tier, validate_price, validate_vendor_name,
-    validate_vendor_url, CURRENCY_VALUES, STATUS_VALUES,
+    CURRENCY_VALUES, STATUS_VALUES, is_valid_currency, is_valid_status, validate_billing_day,
+    validate_date_string, validate_discount_type, validate_discount_value, validate_name,
+    validate_notes, validate_payment_method, validate_plan_tier, validate_price,
+    validate_vendor_name, validate_vendor_url,
 };
 
 fn parse_id(value: Option<String>) -> Option<i64> {
@@ -30,11 +30,11 @@ fn opt_text(
 ) -> Result<(), ()> {
     if let Some(raw) = parsed.str(key) {
         let trimmed = raw.trim();
-        if !trimmed.is_empty() {
-            if let Err(msg) = validate(trimmed) {
-                fail(&msg);
-                return Err(());
-            }
+        if !trimmed.is_empty()
+            && let Err(msg) = validate(trimmed)
+        {
+            fail(&msg);
+            return Err(());
         }
     }
     Ok(())
@@ -70,11 +70,11 @@ pub fn run_add(parsed: &ParsedArgs) -> i32 {
     }
     if let Some(raw) = parsed.str("billingDay") {
         let trimmed = raw.trim();
-        if !trimmed.is_empty() {
-            if let Err(e) = validate_billing_day(trimmed) {
-                fail(&e);
-                return 1;
-            }
+        if !trimmed.is_empty()
+            && let Err(e) = validate_billing_day(trimmed)
+        {
+            fail(&e);
+            return 1;
         }
     }
     if opt_text(parsed, "vendorName", validate_vendor_name).is_err() {
@@ -97,11 +97,11 @@ pub fn run_add(parsed: &ParsedArgs) -> i32 {
     }
     if let Some(raw) = parsed.str("discountType") {
         let trimmed = raw.trim();
-        if !trimmed.is_empty() {
-            if let Err(e) = validate_discount_type(trimmed) {
-                fail(&e);
-                return 1;
-            }
+        if !trimmed.is_empty()
+            && let Err(e) = validate_discount_type(trimmed)
+        {
+            fail(&e);
+            return 1;
         }
     }
     if let Some(v) = parsed.str("autoRenewal") {
@@ -113,8 +113,11 @@ pub fn run_add(parsed: &ParsedArgs) -> i32 {
     }
 
     // status (last)
-    let Some(status) = prompt_select(parsed.str("status").as_deref(), is_valid_status, &STATUS_VALUES)
-    else {
+    let Some(status) = prompt_select(
+        parsed.str("status").as_deref(),
+        is_valid_status,
+        &STATUS_VALUES,
+    ) else {
         return 0;
     };
 
@@ -217,9 +220,23 @@ pub fn run_edit(parsed: &ParsedArgs) -> i32 {
 
     // hasFlags: any of the editable flags present.
     let flag_keys = [
-        "name", "price", "currency", "cycle", "status", "billingDay", "tags", "notes",
-        "paymentMethod", "vendorName", "vendorUrl", "planTier", "discountAmount",
-        "discountType", "contractStart", "contractEnd", "autoRenewal",
+        "name",
+        "price",
+        "currency",
+        "cycle",
+        "status",
+        "billingDay",
+        "tags",
+        "notes",
+        "paymentMethod",
+        "vendorName",
+        "vendorUrl",
+        "planTier",
+        "discountAmount",
+        "discountType",
+        "contractStart",
+        "contractEnd",
+        "autoRenewal",
     ];
     let has_flags = flag_keys
         .iter()
@@ -230,7 +247,11 @@ pub fn run_edit(parsed: &ParsedArgs) -> i32 {
             sub.name,
             crate::price::format_price(sub.price, &sub.currency),
             sub.cycle,
-            if sub.tags.is_empty() { "no tags".to_string() } else { sub.tags.join(", ") }
+            if sub.tags.is_empty() {
+                "no tags".to_string()
+            } else {
+                sub.tags.join(", ")
+            }
         ));
         return 0;
     }
@@ -255,7 +276,10 @@ pub fn run_edit(parsed: &ParsedArgs) -> i32 {
     if let Some(v) = parsed.str("price") {
         match validate_price(&v) {
             Ok(()) => {
-                sets.push(("price", SqlValue::Real(v.trim().parse::<f64>().unwrap_or(0.0))));
+                sets.push((
+                    "price",
+                    SqlValue::Real(v.trim().parse::<f64>().unwrap_or(0.0)),
+                ));
                 changed_keys.push("price");
             }
             Err(e) => {
@@ -406,7 +430,10 @@ pub fn run_edit(parsed: &ParsedArgs) -> i32 {
             fail(&format!("Invalid autoRenewal: {}", e));
             return 1;
         }
-        sets.push(("auto_renewal", SqlValue::Int(if v == "true" { 1 } else { 0 })));
+        sets.push((
+            "auto_renewal",
+            SqlValue::Int(if v == "true" { 1 } else { 0 }),
+        ));
         changed_keys.push("autoRenewal");
     }
 
@@ -421,17 +448,19 @@ pub fn run_edit(parsed: &ParsedArgs) -> i32 {
         .str("price")
         .and_then(|v| v.trim().parse::<f64>().ok())
         .unwrap_or(sub.price);
-    let new_currency = parsed.str("currency").unwrap_or_else(|| sub.currency.clone());
+    let new_currency = parsed
+        .str("currency")
+        .unwrap_or_else(|| sub.currency.clone());
 
     if let Err(e) = crate::db::update_subscription(&conn, sub.id, &sets, false) {
         fail(&format!("Failed to edit subscription: {}", e));
         return 1;
     }
-    if let Some(tags) = &new_tags {
-        if let Err(e) = crate::db::replace_tags(&conn, sub.id, tags) {
-            fail(&format!("Failed to edit subscription: {}", e));
-            return 1;
-        }
+    if let Some(tags) = &new_tags
+        && let Err(e) = crate::db::replace_tags(&conn, sub.id, tags)
+    {
+        fail(&format!("Failed to edit subscription: {}", e));
+        return 1;
     }
     // Record price history when price or currency changed.
     if sub.price != new_price || sub.currency != new_currency {
@@ -542,7 +571,9 @@ pub fn run_clone(parsed: &ParsedArgs) -> i32 {
         }
     };
 
-    let new_name = parsed.str("name").unwrap_or_else(|| format!("{} (copy)", sub.name));
+    let new_name = parsed
+        .str("name")
+        .unwrap_or_else(|| format!("{} (copy)", sub.name));
     let mut price = sub.price;
     if let Some(v) = parsed.str("price") {
         if let Err(e) = validate_price(&v) {
@@ -609,10 +640,16 @@ pub fn run_clone(parsed: &ParsedArgs) -> i32 {
                 "subscription.clone",
                 Some("subscription"),
                 Some(new_id),
-                Some(&format!("Cloned from #{} \"{}\" → \"{}\"", id, sub.name, new_name)),
+                Some(&format!(
+                    "Cloned from #{} \"{}\" → \"{}\"",
+                    id, sub.name, new_name
+                )),
                 true,
             );
-            logger::success(&format!("Cloned: \"{}\" → \"{}\" (id={})", sub.name, new_name, new_id));
+            logger::success(&format!(
+                "Cloned: \"{}\" → \"{}\" (id={})",
+                sub.name, new_name, new_id
+            ));
             0
         }
         Err(e) => {
@@ -640,7 +677,10 @@ pub fn run_unarchive(parsed: &ParsedArgs) -> i32 {
         }
     };
     if sub.status != "archived" {
-        info(&format!("\"{}\" is not archived (status: {})", sub.name, sub.status));
+        info(&format!(
+            "\"{}\" is not archived (status: {})",
+            sub.name, sub.status
+        ));
         return 0;
     }
     let conn = match crate::db::open_db() {
@@ -736,10 +776,11 @@ fn change_status(parsed: &ParsedArgs, target: &str) -> i32 {
     let force = parsed.bool("force").unwrap_or(false);
     let mut pending: Vec<i64> = Vec::new();
     for id in &ids {
-        if let Ok(Some(sub)) = get_subscription_by_id(*id) {
-            if sub.status != target && sub.status != "archived" {
-                pending.push(*id);
-            }
+        if let Ok(Some(sub)) = get_subscription_by_id(*id)
+            && sub.status != target
+            && sub.status != "archived"
+        {
+            pending.push(*id);
         }
     }
     if pending.is_empty() {
@@ -775,7 +816,11 @@ fn change_status(parsed: &ParsedArgs, target: &str) -> i32 {
         }
         let _ = crate::db::add_audit_log(
             &conn,
-            if target == "active" { "subscription.resume" } else { "subscription.pause" },
+            if target == "active" {
+                "subscription.resume"
+            } else {
+                "subscription.pause"
+            },
             Some("subscription"),
             Some(*id),
             Some(&name),
@@ -818,7 +863,10 @@ pub fn run_renew(parsed: &ParsedArgs) -> i32 {
             fail(&format!("Invalid price: {}", e));
             return 1;
         }
-        sets.push(("price", SqlValue::Real(price.trim().parse::<f64>().unwrap_or(sub.price))));
+        sets.push((
+            "price",
+            SqlValue::Real(price.trim().parse::<f64>().unwrap_or(sub.price)),
+        ));
     }
     if let Some(currency) = parsed.str("currency") {
         if !is_valid_currency(&currency) {
@@ -859,7 +907,10 @@ pub fn run_renew(parsed: &ParsedArgs) -> i32 {
         }
     }
     if let Some(v) = parsed.str("autoRenewal") {
-        sets.push(("auto_renewal", SqlValue::Int(if v == "true" { 1 } else { 0 })));
+        sets.push((
+            "auto_renewal",
+            SqlValue::Int(if v == "true" { 1 } else { 0 }),
+        ));
     }
 
     let conn = match crate::db::open_db() {
@@ -875,7 +926,9 @@ pub fn run_renew(parsed: &ParsedArgs) -> i32 {
                 .str("price")
                 .and_then(|v| v.trim().parse::<f64>().ok())
                 .unwrap_or(sub.price);
-            let new_currency = parsed.str("currency").unwrap_or_else(|| sub.currency.clone());
+            let new_currency = parsed
+                .str("currency")
+                .unwrap_or_else(|| sub.currency.clone());
             let _ = crate::db::write_price_history(
                 &conn,
                 id,
@@ -1014,20 +1067,22 @@ pub fn run_cancel(parsed: &ParsedArgs) -> i32 {
     );
     let _ = crate::db::save_db(&conn);
     logger::success(&format!("Cancelled: \"{}\"", sub.name));
-    info(&format!("Remove it permanently with: subtrack delete {}", id));
+    info(&format!(
+        "Remove it permanently with: subtrack delete {}",
+        id
+    ));
     0
 }
 
 /// Validate an optional notes/discount flag value (used by add side effects).
 #[allow(dead_code)]
 fn apply_opt(parsed: &ParsedArgs, key: &str, f: fn(&str) -> Result<(), String>) -> i32 {
-    if let Some(raw) = parsed.str(key) {
-        if !raw.trim().is_empty() {
-            if let Err(e) = f(raw.trim()) {
-                fail(&e);
-                return 1;
-            }
-        }
+    if let Some(raw) = parsed.str(key)
+        && !raw.trim().is_empty()
+        && let Err(e) = f(raw.trim())
+    {
+        fail(&e);
+        return 1;
     }
     0
 }

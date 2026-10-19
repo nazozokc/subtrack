@@ -1,10 +1,8 @@
 //! `notify` command — port of `notify.ts` (upcoming-bill notifications).
 
 use crate::config::load_config;
-use crate::db::{get_subscriptions, QueryOptions, Subscription};
-use crate::date::{
-    calculate_next_billing_inclusive, format_date, format_short_date, today,
-};
+use crate::date::{calculate_next_billing_inclusive, format_date, format_short_date, today};
+use crate::db::{QueryOptions, Subscription, get_subscriptions};
 use crate::json::quote_string;
 use crate::logger::{self, log, out_str};
 use crate::parser::ParsedArgs;
@@ -20,13 +18,14 @@ fn calc_upcoming(days: i64) -> Vec<(Subscription, NaiveDate)> {
         })
         .unwrap_or_default();
     if subs.is_empty() {
-        return Vec::new()
+        return Vec::new();
     }
     let now = today();
     let end = now + chrono::Duration::days(days);
     let mut entries: Vec<(usize, NaiveDate)> = Vec::new();
     for (idx, sub) in subs.iter().enumerate() {
-        let next = calculate_next_billing_inclusive(sub.billing_day, &sub.created_at, &sub.cycle, now);
+        let next =
+            calculate_next_billing_inclusive(sub.billing_day, &sub.created_at, &sub.cycle, now);
         if next >= now && next <= end {
             entries.push((idx, next));
         }
@@ -60,14 +59,26 @@ pub fn run_notify(parsed: &ParsedArgs) -> i32 {
     if parsed.bool("json") == Some(true) {
         let mut out = String::from("{\n  \"days\": ");
         out.push_str(&crate::json::number(days as f64));
-        out.push_str(&format!(",\n  \"count\": {},\n  \"entries\": [\n", entries.len()));
+        out.push_str(&format!(
+            ",\n  \"count\": {},\n  \"entries\": [\n",
+            entries.len()
+        ));
         for (i, (sub, next)) in entries.iter().enumerate() {
             out.push_str("    {\n");
             out.push_str(&format!("      \"name\": {},\n", quote_string(&sub.name)));
-            out.push_str(&format!("      \"price\": {},\n", crate::json::number(sub.price)));
-            out.push_str(&format!("      \"currency\": {},\n", quote_string(&sub.currency)));
+            out.push_str(&format!(
+                "      \"price\": {},\n",
+                crate::json::number(sub.price)
+            ));
+            out.push_str(&format!(
+                "      \"currency\": {},\n",
+                quote_string(&sub.currency)
+            ));
             out.push_str(&format!("      \"cycle\": {},\n", quote_string(&sub.cycle)));
-            out.push_str(&format!("      \"nextDate\": {},\n", quote_string(&format_date(*next))));
+            out.push_str(&format!(
+                "      \"nextDate\": {},\n",
+                quote_string(&format_date(*next))
+            ));
             if sub.tags.is_empty() {
                 out.push_str("      \"tags\": []\n");
             } else {
@@ -78,19 +89,26 @@ pub fn run_notify(parsed: &ParsedArgs) -> i32 {
                 }
                 out.push_str("      ]\n");
             }
-            out.push_str(if i + 1 == entries.len() { "    }\n" } else { "    },\n" });
+            out.push_str(if i + 1 == entries.len() {
+                "    }\n"
+            } else {
+                "    },\n"
+            });
         }
         out.push_str("  ]\n}\n");
         out_str(&out);
-        return 0
+        return 0;
     }
 
     if entries.is_empty() {
         if parsed.bool("dry-run") != Some(true) {
-            return 0 // no notification needed
+            return 0; // no notification needed
         }
-        logger::info(&format!("No upcoming bills in the next {}", days_label(days)));
-        return 0
+        logger::info(&format!(
+            "No upcoming bills in the next {}",
+            days_label(days)
+        ));
+        return 0;
     }
 
     if parsed.bool("dry-run") == Some(true) {
@@ -110,7 +128,7 @@ pub fn run_notify(parsed: &ParsedArgs) -> i32 {
                 sub.cycle
             ));
         }
-        return 0
+        return 0;
     }
 
     let channels: Vec<String> = match parsed.str("channel") {
@@ -135,17 +153,19 @@ pub fn run_notify(parsed: &ParsedArgs) -> i32 {
     0
 }
 
-fn send_os_notification(
-    entries: &[(Subscription, NaiveDate)],
-    days: i64,
-) {
+fn send_os_notification(entries: &[(Subscription, NaiveDate)], days: i64) {
     let count = entries.len();
     let mut message: String;
     if count <= 5 {
         message = entries
             .iter()
             .map(|(sub, _)| {
-                format!("{}: {}/{}", sub.name, format_price(sub.price, &sub.currency), sub.cycle)
+                format!(
+                    "{}: {}/{}",
+                    sub.name,
+                    format_price(sub.price, &sub.currency),
+                    sub.cycle
+                )
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -154,7 +174,12 @@ fn send_os_notification(
         message = shown
             .iter()
             .map(|(sub, _)| {
-                format!("{}: {}/{}", sub.name, format_price(sub.price, &sub.currency), sub.cycle)
+                format!(
+                    "{}: {}/{}",
+                    sub.name,
+                    format_price(sub.price, &sub.currency),
+                    sub.cycle
+                )
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -181,7 +206,7 @@ fn send_slack_notification(
         logger::warn(
             "Slack notification configured but no slackWebhook set. Use: subtrack config set slackWebhook https://hooks.slack.com/services/...",
         );
-        return
+        return;
     };
     let attachments: Vec<String> = entries
         .iter()
@@ -223,7 +248,7 @@ fn send_webhook_notification(
         logger::warn(
             "Webhook configured but no webhookUrl set. Use: subtrack config set webhookUrl https://example.com/hook",
         );
-        return
+        return;
     };
     let entries_json: Vec<String> = entries
         .iter()
@@ -244,7 +269,7 @@ fn send_webhook_notification(
         entries_json.join(",")
     );
     match http_post(url, &payload) {
-        Some(status) if status >= 200 && status < 300 => {
+        Some(status) if (200..300).contains(&status) => {
             logger::success("Webhook notification sent");
         }
         Some(status) => logger::warn(&format!(
@@ -265,21 +290,25 @@ fn escape_json(s: &str) -> String {
 fn http_post(url: &str, payload: &str) -> Option<i64> {
     let out = std::process::Command::new("curl")
         .args([
-            "-s", "-o", "/dev/null", "-w", "%{http_code}",
-            "-X", "POST",
-            "-H", "Content-Type: application/json",
-            "--max-time", "10",
-            "-d", payload,
+            "-s",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "-X",
+            "POST",
+            "-H",
+            "Content-Type: application/json",
+            "--max-time",
+            "10",
+            "-d",
+            payload,
             url,
         ])
         .output()
         .ok()?;
     let code: i64 = std::str::from_utf8(&out.stdout).ok()?.trim().parse().ok()?;
-    if code == 0 {
-        None
-    } else {
-        Some(code)
-    }
+    if code == 0 { None } else { Some(code) }
 }
 
 fn status_text(status: i64) -> &'static str {

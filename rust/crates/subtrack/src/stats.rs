@@ -78,9 +78,7 @@ fn collect_stats() -> std::io::Result<Stats> {
         }
     }
 
-    let count_of = |sql: &str| -> i64 {
-        conn.query_row(sql, [], |r| r.get(0)).unwrap_or(0)
-    };
+    let count_of = |sql: &str| -> i64 { conn.query_row(sql, [], |r| r.get(0)).unwrap_or(0) };
 
     let db_path = crate::crypto::config_dir().join("subtrack.db");
     let db_size_bytes = std::fs::metadata(&db_path).map(|m| m.len()).unwrap_or(0);
@@ -98,7 +96,10 @@ fn collect_stats() -> std::io::Result<Stats> {
         price_min: if price_rows.is_empty() {
             0.0
         } else {
-            price_rows.iter().map(|(p, _)| *p).fold(f64::INFINITY, f64::min)
+            price_rows
+                .iter()
+                .map(|(p, _)| *p)
+                .fold(f64::INFINITY, f64::min)
         },
         price_max: if price_rows.is_empty() {
             0.0
@@ -151,7 +152,10 @@ pub fn run_stats(parsed: &ParsedArgs) -> i32 {
             stats.currencies.join(", ")
         ));
     }
-    log(&format!("  Database size:   {}", format_bytes(stats.db_size_bytes)));
+    log(&format!(
+        "  Database size:   {}",
+        format_bytes(stats.db_size_bytes)
+    ));
     0
 }
 

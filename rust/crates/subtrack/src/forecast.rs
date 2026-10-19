@@ -4,13 +4,13 @@
 use crate::ansi;
 use crate::config::display_theme;
 use crate::date::period_factor;
-use crate::db::{get_subscriptions, QueryOptions, Subscription};
-use crate::fx::{try_convert, FxRates};
+use crate::db::{QueryOptions, Subscription, get_subscriptions};
+use crate::fx::{FxRates, try_convert};
 use crate::json::{number, quote_string};
 use crate::logger::{self, info, log, out_str};
 use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
-use crate::table::{calc_column_widths, section_title, table_style, zebra_row, ColumnConfig};
+use crate::table::{ColumnConfig, calc_column_widths, section_title, table_style, zebra_row};
 
 struct ForecastEntry {
     name: String,
@@ -67,12 +67,16 @@ pub fn run_forecast(parsed: &ParsedArgs) -> i32 {
                 return 1;
             }
         };
-        let add_currency = parsed.str("addCurrency").unwrap_or_else(|| "USD".to_string());
+        let add_currency = parsed
+            .str("addCurrency")
+            .unwrap_or_else(|| "USD".to_string());
         if !is_valid_currency(&add_currency) {
             logger::fail(&format!("Invalid addCurrency: \"{}\"", add_currency));
             return 1;
         }
-        let add_cycle = parsed.str("addCycle").unwrap_or_else(|| "monthly".to_string());
+        let add_cycle = parsed
+            .str("addCycle")
+            .unwrap_or_else(|| "monthly".to_string());
         if !is_valid_cycle(&add_cycle) {
             logger::fail(&format!("Invalid addCycle: \"{}\"", add_cycle));
             return 1;
@@ -87,7 +91,10 @@ pub fn run_forecast(parsed: &ParsedArgs) -> i32 {
             return 1;
         }
     };
-    let list: Vec<Subscription> = subs.into_iter().filter(|s| s.status != "cancelled").collect();
+    let list: Vec<Subscription> = subs
+        .into_iter()
+        .filter(|s| s.status != "cancelled")
+        .collect();
 
     let mut entries: Vec<ForecastEntry> = list
         .iter()
@@ -123,11 +130,14 @@ pub fn run_forecast(parsed: &ParsedArgs) -> i32 {
     // Calculate totals
     let mut groups: Vec<(String, Group)> = Vec::new();
     for entry in entries {
-        let ccy = target_currency.clone().unwrap_or_else(|| entry.currency.clone());
+        let ccy = target_currency
+            .clone()
+            .unwrap_or_else(|| entry.currency.clone());
         let slot = groups.iter_mut().find(|(c, _)| *c == ccy);
         let monthly = if let (Some(tc), Some(rates)) = (target_currency.as_deref(), &rates) {
             if tc != entry.currency {
-                try_convert(entry.monthly, &entry.currency, tc, &rates.rates).unwrap_or(entry.monthly)
+                try_convert(entry.monthly, &entry.currency, tc, &rates.rates)
+                    .unwrap_or(entry.monthly)
             } else {
                 entry.monthly
             }
@@ -287,7 +297,7 @@ pub fn run_forecast(parsed: &ParsedArgs) -> i32 {
             let saved_total = removed_monthly * months as f64;
             let new_monthly = grand_monthly - saved_monthly;
             let new_total = grand_total - saved_total;
-            let plural = if months == 1 { "month" } else { "month" };
+            let plural = "month";
             log("");
             log(&ansi::dim(&format!(
                 "Without {}: {} /{} ({} /{}) {}",
@@ -365,7 +375,25 @@ fn forecast_json(
 }
 
 fn is_valid_currency(s: &str) -> bool {
-    matches!(s, "USD" | "JPY" | "EUR" | "GBP" | "CAD" | "AUD" | "NZD" | "CHF" | "CNY" | "KRW" | "INR" | "SEK" | "NOK" | "DKK" | "SGD" | "HKD")
+    matches!(
+        s,
+        "USD"
+            | "JPY"
+            | "EUR"
+            | "GBP"
+            | "CAD"
+            | "AUD"
+            | "NZD"
+            | "CHF"
+            | "CNY"
+            | "KRW"
+            | "INR"
+            | "SEK"
+            | "NOK"
+            | "DKK"
+            | "SGD"
+            | "HKD"
+    )
 }
 
 fn is_valid_cycle(s: &str) -> bool {

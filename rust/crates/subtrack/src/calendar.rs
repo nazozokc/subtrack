@@ -3,11 +3,11 @@
 
 use chrono::Datelike;
 
-use crate::db::{get_subscriptions, QueryOptions};
 use crate::date::{
     add_day_periods, clamp_day, cycle_days, date_with_clamped_day, days_in_month, div_ceil_js,
     is_day_cycle, to_date, whole_days_between,
 };
+use crate::db::{QueryOptions, get_subscriptions};
 use crate::fx::{fetch_rates, try_convert};
 use crate::logger;
 use crate::parser::ParsedArgs;
@@ -15,8 +15,18 @@ use crate::price::{format_price, round_currency};
 use crate::{ansi, json};
 
 const MONTH_NAMES: [&str; 12] = [
-    "January", "February", "March", "April", "May", "June", "July", "August", "September",
-    "October", "November", "December",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
 ];
 
 /// Billing days of a subscription within a given month (1-31).
@@ -28,9 +38,13 @@ fn billing_days_in_month(sub: &crate::db::Subscription, year: i32, month: u32) -
 
     if is_day_cycle(&sub.cycle) || sub.cycle == "weekly" || sub.cycle == "bi-weekly" {
         let days = cycle_days(&sub.cycle)
-            .or(if sub.cycle == "weekly" { Some(7) } else { Some(14) })
+            .or(if sub.cycle == "weekly" {
+                Some(7)
+            } else {
+                Some(14)
+            })
             .unwrap_or(7);
-        return day_cycle_days_in_month(anchor_date, day, days, year, month)
+        return day_cycle_days_in_month(anchor_date, day, days, year, month);
     }
     match sub.cycle.as_str() {
         "monthly" => vec![clamped_day],
@@ -121,8 +135,10 @@ pub(crate) fn calc_calendar_entries(month: u32, year: i32) -> Vec<CalendarEntry>
 }
 
 fn superscript(n: u32) -> String {
-    let sup_map: [&str; 10] = ["\u{2070}", "\u{00B9}", "\u{00B2}", "\u{00B3}", "\u{2074}",
-        "\u{2075}", "\u{2076}", "\u{2077}", "\u{2078}", "\u{2079}"];
+    let sup_map: [&str; 10] = [
+        "\u{2070}", "\u{00B9}", "\u{00B2}", "\u{00B3}", "\u{2074}", "\u{2075}", "\u{2076}",
+        "\u{2077}", "\u{2078}", "\u{2079}",
+    ];
     n.to_string()
         .chars()
         .map(|c| sup_map[(c.to_digit(10).unwrap_or(0)) as usize])
@@ -164,7 +180,10 @@ pub fn run_calendar(parsed: &ParsedArgs) -> i32 {
             out.push_str("[\n");
             for (i, entry) in entries.iter().enumerate() {
                 out.push_str("  {\n");
-                out.push_str(&format!("    \"day\": {},\n", json::number(entry.day as f64)));
+                out.push_str(&format!(
+                    "    \"day\": {},\n",
+                    json::number(entry.day as f64)
+                ));
                 out.push_str("    \"subs\": [\n");
                 for (j, sub) in entry.subs.iter().enumerate() {
                     out.push_str("      {\n");
@@ -184,23 +203,36 @@ pub fn run_calendar(parsed: &ParsedArgs) -> i32 {
                         "        \"status\": {},\n",
                         json::quote_string(&sub.status)
                     ));
-                    out.push_str(&format!("        \"id\": {}\n", json::number(sub.id as f64)));
-                    out.push_str(if j + 1 == entry.subs.len() { "      }\n" } else { "      },\n" });
+                    out.push_str(&format!(
+                        "        \"id\": {}\n",
+                        json::number(sub.id as f64)
+                    ));
+                    out.push_str(if j + 1 == entry.subs.len() {
+                        "      }\n"
+                    } else {
+                        "      },\n"
+                    });
                 }
-                out.push_str(if i + 1 == entries.len() { "    ]\n  }\n" } else { "    ]\n  },\n" });
+                out.push_str(if i + 1 == entries.len() {
+                    "    ]\n  }\n"
+                } else {
+                    "    ]\n  },\n"
+                });
             }
             out.push_str("]\n");
         }
         logger::out_str(&out);
-        return 0
+        return 0;
     }
 
-    let entry_map: std::collections::HashMap<u32, &Vec<CalendarSub>> = entries
-        .iter()
-        .map(|e| (e.day, &e.subs))
-        .collect();
+    let entry_map: std::collections::HashMap<u32, &Vec<CalendarSub>> =
+        entries.iter().map(|e| (e.day, &e.subs)).collect();
 
-    logger::log(&ansi::bold(&format!("      {} {}", MONTH_NAMES[(month - 1) as usize], year)));
+    logger::log(&ansi::bold(&format!(
+        "      {} {}",
+        MONTH_NAMES[(month - 1) as usize],
+        year
+    )));
     logger::log(&ansi::dim(" Su Mo Tu We Th Fr Sa"));
 
     let first_day = chrono::NaiveDate::from_ymd_opt(year, month, 1)
@@ -219,7 +251,7 @@ pub fn run_calendar(parsed: &ParsedArgs) -> i32 {
         if let Some(subs) = day_entries {
             let n = subs.len();
             let label = if n > 1 {
-                format!("{}{}", day.to_string(), superscript(n as u32))
+                format!("{}{}", day, superscript(n as u32))
             } else {
                 format!("{:>2}", day)
             };
@@ -241,7 +273,7 @@ pub fn run_calendar(parsed: &ParsedArgs) -> i32 {
 
     if entries.is_empty() {
         logger::info("No billing events this month");
-        return 0
+        return 0;
     }
 
     logger::log(&ansi::bold("Billing events:"));

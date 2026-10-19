@@ -1,10 +1,10 @@
 //! CLI bootstrap — port of `packages/subtrack/src/cli/index.ts` (the `cli()`
 //! function) and the version fast path + lazy banner logic of `src/index.ts`.
 
-use crate::commands::{CommandDef, COMMANDS, TOP_SUBCOMMANDS};
-use crate::help::{render_usage, ArgKind, ArgSpec, CallMode};
+use crate::commands::{COMMANDS, CommandDef, TOP_SUBCOMMANDS};
+use crate::help::{ArgKind, ArgSpec, CallMode, render_usage};
 use crate::logger::{self};
-use crate::parser::{resolve_args, tokenize, ParsedArgs, Token};
+use crate::parser::{ParsedArgs, Token, resolve_args, tokenize};
 use crate::router::{get_command_positionals, resolve_command};
 
 pub const NAME: &str = "subtrack";
@@ -89,8 +89,13 @@ pub fn run(args: &[String]) -> i32 {
         }
         None => (NAME, entry_desc(), false),
     };
-    let parsed: ParsedArgs =
-        resolve_args(args, &specs, resolved.depth, to_kebab, resolved.unknown_name.is_none());
+    let parsed: ParsedArgs = resolve_args(
+        args,
+        &specs,
+        resolved.depth,
+        to_kebab,
+        resolved.unknown_name.is_none(),
+    );
 
     // ── 5. version ──
     if parsed.bool("version") == Some(true) {
@@ -205,9 +210,9 @@ pub fn run(args: &[String]) -> i32 {
             "upcoming" => crate::upcoming::run_upcoming(&parsed),
             "payment" => crate::payment::run_payment(&parsed),
             "config list" => crate::config::handle_config_list(),
-            "config get" => crate::config::handle_config_get(
-                &parsed.str("key").unwrap_or_default(),
-            ),
+            "config get" => {
+                crate::config::handle_config_get(&parsed.str("key").unwrap_or_default())
+            }
             "usage list" => crate::usage::run_usage_list(&parsed),
             "usage total" => crate::usage::run_usage_total(&parsed),
             "usage refresh" => crate::usage::run_usage_refresh(),
@@ -253,7 +258,7 @@ pub fn run(args: &[String]) -> i32 {
                 print_root_header();
             }
             0
-        },
+        }
     };
     if code != 0 {
         crate::set_exit_code(1);
@@ -268,8 +273,15 @@ fn print_root_header() {
         Err(_) => return,
     };
     let total_all = subs.len();
-    let active: Vec<_> = subs.iter().filter(|s| s.status != "cancelled").cloned().collect();
-    logger::log(&format!("\x1b[1m\x1b[36msubtrack v{}\x1b[39m\x1b[22m", VERSION));
+    let active: Vec<_> = subs
+        .iter()
+        .filter(|s| s.status != "cancelled")
+        .cloned()
+        .collect();
+    logger::log(&format!(
+        "\x1b[1m\x1b[36msubtrack v{}\x1b[39m\x1b[22m",
+        VERSION
+    ));
     logger::log(&format!(
         "\x1b[2m  {} subscriptions · {}\x1b[22m",
         total_all,
@@ -287,14 +299,15 @@ fn print_root_header() {
         let days = 7i64;
         let (entries, _) = crate::upcoming::upcoming_with_currency_internal(&active, days, None);
         if !entries.is_empty() {
-            let mut totals: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+            let mut totals: std::collections::HashMap<String, f64> =
+                std::collections::HashMap::new();
             for entry in &entries {
                 let sub = &active[entry.idx];
                 *totals.entry(sub.currency.clone()).or_insert(0.0) += entry.amount;
             }
             let mut parts2: Vec<String> = Vec::new();
             let mut sorted2: Vec<_> = totals.iter().collect();
-            sorted2.sort_by(|a,b| a.0.cmp(b.0));
+            sorted2.sort_by(|a, b| a.0.cmp(b.0));
             for (ccy, total) in &sorted2 {
                 parts2.push(crate::price::format_price(**total, ccy));
             }

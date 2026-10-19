@@ -151,13 +151,10 @@ fn restore_from_file(file_path: &std::path::Path, force: bool) {
         return;
     }
 
-    let subs = crate::db::get_subscriptions(&crate::db::QueryOptions::default()).unwrap_or_default();
+    let subs =
+        crate::db::get_subscriptions(&crate::db::QueryOptions::default()).unwrap_or_default();
     let n = subs.len();
-    let details = format!(
-        "Restored {} subscriptions from {}",
-        n,
-        basename(file_path)
-    );
+    let details = format!("Restored {} subscriptions from {}", n, basename(file_path));
     if let Ok(conn) = crate::db::open_db() {
         let _ = crate::db::add_audit_log(&conn, "backup.restore", None, None, Some(&details), true);
     }
@@ -193,7 +190,10 @@ pub fn run_backup(parsed: &ParsedArgs) -> i32 {
             return 0;
         }
     } else if !dest.is_dir() {
-        logger::fail(&format!("Backup destination must be a directory: {}", dest.display()));
+        logger::fail(&format!(
+            "Backup destination must be a directory: {}",
+            dest.display()
+        ));
         return 0;
     }
 
@@ -250,7 +250,10 @@ pub fn run_restore(parsed: &ParsedArgs) -> i32 {
 
     let backups = get_backup_files(&search_dir);
     if backups.is_empty() {
-        logger::info(&format!("No backup files found in: {}", search_dir.display()));
+        logger::info(&format!(
+            "No backup files found in: {}",
+            search_dir.display()
+        ));
         return 0;
     }
 

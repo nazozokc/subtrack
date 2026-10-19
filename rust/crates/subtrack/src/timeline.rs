@@ -1,15 +1,15 @@
 //! `timeline` command — port of `timeline.ts` (handleTimeline + charts).
 //! `render_bar_chart` is shared with report.ts.
 
-use chrono::Datelike;
 use crate::ansi;
-use crate::db::{get_subscriptions, QueryOptions, Subscription};
 use crate::date::{period_factor, today};
-use crate::fx::{fetch_rates, FxRates};
+use crate::db::{QueryOptions, Subscription, get_subscriptions};
+use crate::fx::{FxRates, fetch_rates};
+use crate::json::quote_string;
 use crate::logger::{self, fail, info, log};
 use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
-use crate::json::quote_string;
+use chrono::Datelike;
 
 const SHORT_MONTH_NAMES: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
@@ -28,7 +28,8 @@ pub fn convert_subs(subs: &[Subscription], target: &str, rates: &FxRates) -> Vec
     subs.iter()
         .map(|s| {
             let mut c = s.clone();
-            if let Some(converted) = crate::fx::try_convert(s.price, &s.currency, target, &rates.rates)
+            if let Some(converted) =
+                crate::fx::try_convert(s.price, &s.currency, target, &rates.rates)
             {
                 c.price = round_currency(converted);
                 c.currency = target.to_string();
@@ -96,7 +97,11 @@ fn calc_monthly_totals_by_category(
         if sub.status == "cancelled" {
             continue;
         }
-        let cat = sub.tags.first().cloned().unwrap_or_else(|| "Other".to_string());
+        let cat = sub
+            .tags
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "Other".to_string());
         if !cat_set.contains(&cat) {
             cat_set.push(cat);
         }
@@ -127,9 +132,14 @@ fn calc_monthly_totals_by_category(
             if sub.created_at.as_str() > end.as_str() {
                 continue;
             }
-            let cat = sub.tags.first().cloned().unwrap_or_else(|| "Other".to_string());
+            let cat = sub
+                .tags
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "Other".to_string());
             if let Some(idx) = cat_data.iter().position(|cd| cd.category == cat) {
-                cat_data[idx].months[i as usize] += sub.price * period_factor(&sub.cycle, "monthly");
+                cat_data[idx].months[i as usize] +=
+                    sub.price * period_factor(&sub.cycle, "monthly");
             }
         }
     }
@@ -180,7 +190,11 @@ pub fn render_bar_chart(totals: &[MonthTotal], currency: &str) -> String {
 }
 
 /// Port of `renderCategoryChart`.
-fn render_category_chart(totals: &[MonthTotal], cat_data: &[CategoryMonth], currency: &str) -> String {
+fn render_category_chart(
+    totals: &[MonthTotal],
+    cat_data: &[CategoryMonth],
+    currency: &str,
+) -> String {
     let mut lines: Vec<String> = Vec::new();
 
     lines.push(ansi::bold("Monthly spending by category"));
@@ -218,8 +232,11 @@ fn render_category_chart(totals: &[MonthTotal], cat_data: &[CategoryMonth], curr
 }
 
 pub fn run_timeline(parsed: &ParsedArgs) -> i32 {
-    let months = parsed.str("months").and_then(|m| m.parse::<i64>().ok()).unwrap_or(12);
-    if months < 1 || months > 120 {
+    let months = parsed
+        .str("months")
+        .and_then(|m| m.parse::<i64>().ok())
+        .unwrap_or(12);
+    if !(1..=120).contains(&months) {
         fail("months must be a positive integer (max 120)");
         return 1;
     }
@@ -240,12 +257,12 @@ pub fn run_timeline(parsed: &ParsedArgs) -> i32 {
     subs.retain(|s| s.status != "cancelled");
 
     let mut display_currency = "USD".to_string();
-    if let Some(currency) = parsed.str("currency") {
-        if !currency.is_empty() {
-            display_currency = currency.clone();
-            let rates = fetch_rates();
-            subs = convert_subs(&subs, &display_currency, &rates);
-        }
+    if let Some(currency) = parsed.str("currency")
+        && !currency.is_empty()
+    {
+        display_currency = currency.clone();
+        let rates = fetch_rates();
+        subs = convert_subs(&subs, &display_currency, &rates);
     }
 
     let ccy = display_currency.clone();
@@ -263,7 +280,10 @@ pub fn run_timeline(parsed: &ParsedArgs) -> i32 {
         let mut out = String::from("{\n");
         out.push_str(&format!("  \"months\": {},\n", months));
         out.push_str(&format!("  \"currency\": {},\n", quote_string(&ccy)));
-        out.push_str(&format!("  \"total\": {},\n", crate::json::number(round_currency(total))));
+        out.push_str(&format!(
+            "  \"total\": {},\n",
+            crate::json::number(round_currency(total))
+        ));
         out.push_str(&format!(
             "  \"average\": {},\n",
             crate::json::number(round_currency(average))
@@ -272,8 +292,15 @@ pub fn run_timeline(parsed: &ParsedArgs) -> i32 {
         for (i, t) in totals.iter().enumerate() {
             out.push_str("    {\n");
             out.push_str(&format!("      \"month\": {},\n", quote_string(&t.label)));
-            out.push_str(&format!("      \"total\": {}\n", crate::json::number(round_currency(t.total))));
-            out.push_str(if i + 1 == totals.len() { "    }\n" } else { "    },\n" });
+            out.push_str(&format!(
+                "      \"total\": {}\n",
+                crate::json::number(round_currency(t.total))
+            ));
+            out.push_str(if i + 1 == totals.len() {
+                "    }\n"
+            } else {
+                "    },\n"
+            });
         }
         out.push_str("  ]");
         if categories {

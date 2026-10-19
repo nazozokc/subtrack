@@ -74,8 +74,11 @@ fn snapshot(dir: &Path) -> HashMap<String, Vec<u8>> {
         return out;
     }
     fn walk(dir: &Path, base: &Path, out: &mut HashMap<String, Vec<u8>>) {
-        let mut entries: Vec<_> = fs::read_dir(dir).unwrap().collect::<Result<_, _>>().unwrap();
-        entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+        let mut entries: Vec<_> = fs::read_dir(dir)
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        entries.sort_by_key(|a| a.file_name());
         for e in entries {
             let rel = base.join(e.file_name()).display().to_string();
             if e.file_type().unwrap().is_dir() {
@@ -92,7 +95,10 @@ fn snapshot(dir: &Path) -> HashMap<String, Vec<u8>> {
 /// Deterministic, minimal env: nothing inherited but PATH (harness contract).
 fn case_env(db_dir: &Path, home: &Path) -> HashMap<String, String> {
     [
-        ("PATH", std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".into())),
+        (
+            "PATH",
+            std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".into()),
+        ),
         ("HOME", home.display().to_string()),
         ("TZ", "UTC".into()),
         ("LC_ALL", "C.utf8".into()),
@@ -128,13 +134,16 @@ fn normalize(text: &[u8], case_root: &Path) -> Vec<u8> {
     for (from, to) in [
         (case_root.display().to_string(), "{WORK}"),
         (FIXTURES.to_string(), "{FIXTURES}"),
-        (Path::new(FIXTURES).join("../..").display().to_string(), "{REPO}"),
+        (
+            Path::new(FIXTURES).join("../..").display().to_string(),
+            "{REPO}",
+        ),
     ] {
         s = s.replace(&from, to);
     }
     // Version, boundary-safe: not adjacent to a digit or `.` (regex look-around
     // is unsupported, so check the boundaries by hand).
-    let version_re = Regex::new(&format!(r"{}", regex::escape(VERSION))).unwrap();
+    let version_re = Regex::new(&regex::escape(VERSION)).unwrap();
     let boundary_ok = |b: Option<u8>| b.map(|c| !c.is_ascii_digit() && c != b'.').unwrap_or(true);
     let mut out = String::with_capacity(s.len());
     let mut last = 0;
@@ -151,7 +160,8 @@ fn normalize(text: &[u8], case_root: &Path) -> Vec<u8> {
     out.push_str(&s[last..]);
     let mut s = out;
     let datetime_re =
-        Regex::new(r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?").unwrap();
+        Regex::new(r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?")
+            .unwrap();
     s = datetime_re.replace_all(&s, "{DATETIME}").into_owned();
     let date_re = Regex::new(r"\d{4}-\d{2}-\d{2}").unwrap();
     s = date_re.replace_all(&s, "{DATE}").into_owned();
@@ -177,13 +187,22 @@ fn run_case(
         cmd.args(argv)
             .current_dir(cwd)
             .envs(env)
-            .stdin(if case.stdin { Stdio::piped() } else { Stdio::null() })
+            .stdin(if case.stdin {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         let mut child = cmd.spawn().expect("spawn subtrack binary");
         if case.stdin {
             use std::io::Write;
-            child.stdin.take().unwrap().write_all(MCP_STDIN.as_bytes()).unwrap();
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(MCP_STDIN.as_bytes())
+                .unwrap();
         }
         let out = child.wait_with_output().unwrap();
         if separator {
@@ -238,7 +257,12 @@ fn db_snapshot(path: &Path) -> String {
         .unwrap()
         .map(|r| r.unwrap())
     {
-        out.push_str(&format!("{}|{}|{}\n", row.0, row.1, row.2.unwrap_or_default()));
+        out.push_str(&format!(
+            "{}|{}|{}\n",
+            row.0,
+            row.1,
+            row.2.unwrap_or_default()
+        ));
     }
     let names: Vec<String> = conn
         .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
@@ -386,7 +410,10 @@ fn backup_snapshot(env: &HashMap<String, String>, cwd: &Path, dest: &Path) -> St
 fn check_files(case: &Case, cwd: &Path, case_root: &Path) -> Vec<String> {
     let baseline = snapshot(&Path::new(FIXTURES).join("inputs"));
     let produced = snapshot(cwd);
-    let golden_dir = Path::new(FIXTURES).join("goldens").join(&case.group).join(format!("{}.files", case.id));
+    let golden_dir = Path::new(FIXTURES)
+        .join("goldens")
+        .join(&case.group)
+        .join(format!("{}.files", case.id));
 
     let stamp_re = Regex::new(r"\d{8}_\d{6}").unwrap();
     let mut problems = Vec::new();
@@ -404,7 +431,9 @@ fn check_files(case: &Case, cwd: &Path, case_root: &Path) -> Vec<String> {
         let golden = match fs::read(&golden_path) {
             Ok(g) => g,
             Err(_) => {
-                problems.push(format!("unexpected output file: {rel} (no golden {golden_path:?})"));
+                problems.push(format!(
+                    "unexpected output file: {rel} (no golden {golden_path:?})"
+                ));
                 continue;
             }
         };
@@ -480,10 +509,24 @@ fn goldens_match_ts_reference() {
         let (exits, stdout, stderr) = run_case(case, step_base, &case_root.join("cwd"), &env);
         let want_exits = &case.exits;
         let (want_out, want_err) = (
-            fs::read(goldens_dir.join(&case.group).join(format!("{}.stdout", case.id))).unwrap(),
-            fs::read(goldens_dir.join(&case.group).join(format!("{}.stderr", case.id))).unwrap(),
+            fs::read(
+                goldens_dir
+                    .join(&case.group)
+                    .join(format!("{}.stdout", case.id)),
+            )
+            .unwrap(),
+            fs::read(
+                goldens_dir
+                    .join(&case.group)
+                    .join(format!("{}.stderr", case.id)),
+            )
+            .unwrap(),
         );
-        let got_out = if case.binary { stdout } else { normalize(&stdout, &case_root) };
+        let got_out = if case.binary {
+            stdout
+        } else {
+            normalize(&stdout, &case_root)
+        };
         let got_err = normalize(&stderr, &case_root);
 
         let mut problems = Vec::new();
@@ -527,13 +570,20 @@ fn goldens_match_ts_reference() {
     fs::create_dir_all(pop_root.join("home")).unwrap();
     copy_db("populated", &pop_root.join("db"));
     let pop_env = case_env(&pop_root.join("db"), &pop_root.join("home"));
-    let pop_snap = backup_snapshot(&pop_env, &pop_root.join("cwd"), &root.join("parity/pop-backup"));
+    let pop_snap = backup_snapshot(
+        &pop_env,
+        &pop_root.join("cwd"),
+        &root.join("parity/pop-backup"),
+    );
     if seed_snap == pop_snap {
         println!("OK   parity: seed chain == fixtures/dbs/populated");
     } else {
         failures += 1;
         let diff = snapshot_diff(&seed_snap, &pop_snap);
-        println!("FAIL parity: seed chain != fixtures/dbs/populated ({} differing line(s))", diff.len());
+        println!(
+            "FAIL parity: seed chain != fixtures/dbs/populated ({} differing line(s))",
+            diff.len()
+        );
         for line in diff.iter().take(40) {
             println!("{line}");
         }

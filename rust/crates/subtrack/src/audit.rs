@@ -6,7 +6,7 @@ use crate::json::quote_string;
 use crate::logger::{self, info, log};
 use crate::parser::ParsedArgs;
 use crate::table::{
-    calc_column_widths, default_theme, table_style, zebra_row, ColumnConfig, TableBuilder,
+    ColumnConfig, TableBuilder, calc_column_widths, default_theme, table_style, zebra_row,
 };
 
 const ACTION_LABELS: &[(&str, &str)] = &[
@@ -58,12 +58,17 @@ fn format_timestamp(ts: &str) -> String {
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
     if ts.len() < 16 {
-        return ts.to_string()
+        return ts.to_string();
     }
     let month: usize = ts[5..7].parse().unwrap_or(1);
     let day = &ts[8..10];
     let time = &ts[11..16];
-    format!("{} {} {}", MONTHS.get(month - 1).copied().unwrap_or("Jan"), day, time)
+    format!(
+        "{} {} {}",
+        MONTHS.get(month - 1).copied().unwrap_or("Jan"),
+        day,
+        time
+    )
 }
 
 pub fn run_audit(parsed: &ParsedArgs, depth: usize, path: &[String]) -> i32 {
@@ -76,7 +81,7 @@ pub fn run_audit(parsed: &ParsedArgs, depth: usize, path: &[String]) -> i32 {
     let to = parsed.str("to").filter(|a| !a.is_empty());
 
     if path.last().map(|s| s.as_str()) == Some("prune") && path.len() >= 2 {
-        return run_audit_prune(parsed)
+        return run_audit_prune(parsed);
     }
 
     list(&action, limit, json, &from, &to);
@@ -90,7 +95,13 @@ fn list(
     from: &Option<String>,
     to: &Option<String>,
 ) {
-    let entries = db::get_audit_logs(action.as_deref(), limit.unwrap_or(50), 0, from.as_deref(), to.as_deref());
+    let entries = db::get_audit_logs(
+        action.as_deref(),
+        limit.unwrap_or(50),
+        0,
+        from.as_deref(),
+        to.as_deref(),
+    );
     let total = db::get_audit_log_count(action.as_deref(), from.as_deref(), to.as_deref());
 
     if json {
@@ -101,27 +112,42 @@ fn list(
             out.push_str(&format!("    \"action\": {},\n", quote_string(&e.action)));
             out.push_str(&format!(
                 "    \"targetType\": {},\n",
-                e.target_type.as_deref().map(quote_string).unwrap_or_else(|| "null".to_string())
+                e.target_type
+                    .as_deref()
+                    .map(quote_string)
+                    .unwrap_or_else(|| "null".to_string())
             ));
             out.push_str(&format!(
                 "    \"targetId\": {},\n",
-                e.target_id.map(|v| v.to_string()).unwrap_or_else(|| "null".to_string())
+                e.target_id
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "null".to_string())
             ));
             out.push_str(&format!(
                 "    \"details\": {},\n",
-                e.details.as_deref().map(quote_string).unwrap_or_else(|| "null".to_string())
+                e.details
+                    .as_deref()
+                    .map(quote_string)
+                    .unwrap_or_else(|| "null".to_string())
             ));
-            out.push_str(&format!("    \"createdAt\": {}\n", quote_string(&e.created_at)));
-            out.push_str(if i + 1 == entries.len() { "  }\n" } else { "  },\n" });
+            out.push_str(&format!(
+                "    \"createdAt\": {}\n",
+                quote_string(&e.created_at)
+            ));
+            out.push_str(if i + 1 == entries.len() {
+                "  }\n"
+            } else {
+                "  },\n"
+            });
         }
         out.push_str("]\n");
         logger::out_str(&out);
-        return
+        return;
     }
 
     if entries.is_empty() {
         info("No audit log entries found");
-        return
+        return;
     }
 
     let min_widths: Vec<i64> = vec![6, 14, 18, 30];
@@ -143,7 +169,11 @@ fn list(
                 e.details
                     .as_deref()
                     .map(|d| {
-                        if d.len() > 60 { format!("{}...", &d[..57]) } else { d.to_string() }
+                        if d.len() > 60 {
+                            format!("{}...", &d[..57])
+                        } else {
+                            d.to_string()
+                        }
                     })
                     .unwrap_or_default(),
             ]
@@ -153,7 +183,12 @@ fn list(
     let col_widths = calc_column_widths(
         &rows,
         &ColumnConfig {
-            headers: vec!["ID".to_string(), "Action".to_string(), "Target".to_string(), "Details".to_string()],
+            headers: vec![
+                "ID".to_string(),
+                "Action".to_string(),
+                "Target".to_string(),
+                "Details".to_string(),
+            ],
             min_widths,
             max_widths,
             min_avail: None,
@@ -165,8 +200,18 @@ fn list(
     let theme = default_theme();
     let mut table = TableBuilder::new(table_style(&theme));
     table.col_widths = col_widths;
-    table.head = vec!["ID".to_string(), "Action".to_string(), "Target".to_string(), "Details".to_string()];
-    table.col_aligns = vec!["right".to_string(), "left".to_string(), "left".to_string(), "left".to_string()];
+    table.head = vec![
+        "ID".to_string(),
+        "Action".to_string(),
+        "Target".to_string(),
+        "Details".to_string(),
+    ];
+    table.col_aligns = vec![
+        "right".to_string(),
+        "left".to_string(),
+        "left".to_string(),
+        "left".to_string(),
+    ];
 
     let raw: Vec<Vec<String>> = rows.clone();
     for (i, row) in raw.iter().enumerate() {
@@ -196,7 +241,10 @@ fn list(
 }
 
 fn run_audit_prune(parsed: &ParsedArgs) -> i32 {
-    let days = parsed.str("days").and_then(|d| d.parse::<i64>().ok()).unwrap_or(90);
+    let days = parsed
+        .str("days")
+        .and_then(|d| d.parse::<i64>().ok())
+        .unwrap_or(90);
     let force = parsed.bool("force") == Some(true);
     let before = (chrono::Utc::now() - chrono::Duration::days(days))
         .format("%Y-%m-%d %H:%M:%S")
@@ -205,7 +253,7 @@ fn run_audit_prune(parsed: &ParsedArgs) -> i32 {
     let count = db::count_audit_before(&before);
     if count == 0 {
         info(&format!("No audit log entries older than {} days", days));
-        return 0
+        return 0;
     }
     if !force {
         logger::warn(&format!(
@@ -214,13 +262,13 @@ fn run_audit_prune(parsed: &ParsedArgs) -> i32 {
             if count != 1 { "ies" } else { "y" },
             days
         ));
-        return 0
+        return 0;
     }
     let conn = match db::open_db() {
         Ok(c) => c,
         Err(e) => {
             logger::fail(&e.to_string());
-            return 1
+            return 1;
         }
     };
     let deleted = db::prune_audit_logs(&conn, &before, true).unwrap_or(0);

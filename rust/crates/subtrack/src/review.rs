@@ -1,6 +1,6 @@
 //! `review` command — port of `review.ts` (handleReview).
 
-use crate::db::{get_subscriptions, get_trials_expiring_soon, QueryOptions};
+use crate::db::{QueryOptions, get_subscriptions, get_trials_expiring_soon};
 use crate::logger;
 use crate::parser::ParsedArgs;
 
@@ -47,7 +47,7 @@ pub fn run_review(parsed: &ParsedArgs) -> i32 {
         Ok(s) => s,
         Err(e) => {
             logger::fail(&e.to_string());
-            return 0
+            return 0;
         }
     };
 
@@ -69,10 +69,10 @@ pub fn run_review(parsed: &ParsedArgs) -> i32 {
         if d >= 0 && d <= bill_days {
             reasons.push(format!("bill due {}", next.format("%Y-%m-%d")));
         }
-        if let Some(end) = &sub.contract_end {
-            if end.as_str() <= contract_end.as_str() {
-                reasons.push(format!("contract ends {}", end));
-            }
+        if let Some(end) = &sub.contract_end
+            && end.as_str() <= contract_end.as_str()
+        {
+            reasons.push(format!("contract ends {}", end));
         }
         if !reasons.is_empty() {
             let reason = reasons.join(", ");
@@ -94,7 +94,7 @@ pub fn run_review(parsed: &ParsedArgs) -> i32 {
         Ok(t) => t,
         Err(e) => {
             logger::fail(&e.to_string());
-            return 0
+            return 0;
         }
     };
     for trial in &trials {
@@ -118,19 +118,23 @@ pub fn run_review(parsed: &ParsedArgs) -> i32 {
             .map(|it| format!("  {{\n    {}\n  }}", it.fields.join(",\n    ")))
             .collect();
         logger::out_str(&format!("[\n{}\n]\n", rendered.join(",\n")));
-        return 0
+        return 0;
     }
 
     if items.is_empty() {
         logger::info("Nothing needs review");
-        return 0
+        return 0;
     }
 
     // The reference prints the first item and then blocks on an interactive
     // select; with a non-TTY stdin the prompt aborts (ExitPromptError), which
     // the runner treats as a clean exit. Reproduce that here.
     let item = &items[0];
-    logger::log(&format!("{} — {}", crate::ansi::bold(&item.name), item.reason));
+    logger::log(&format!(
+        "{} — {}",
+        crate::ansi::bold(&item.name),
+        item.reason
+    ));
     0
 }
 

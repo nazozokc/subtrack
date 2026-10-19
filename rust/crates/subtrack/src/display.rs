@@ -8,26 +8,26 @@ use crate::db::Subscription;
 use crate::logger;
 use crate::price::{format_price, format_usd_cost, round_currency};
 use crate::table::{
-    calc_column_widths, section_title, status_color, table_style, zebra_row, ColumnConfig,
-    TableBuilder,
+    ColumnConfig, TableBuilder, calc_column_widths, section_title, status_color, table_style,
+    zebra_row,
 };
 
 fn next_billing_cell(sub: &Subscription) -> String {
     if sub.status == "cancelled" || sub.status == "archived" {
-        return "-".to_string()
+        return "-".to_string();
     }
     let now = today();
     let next = calculate_next_billing(sub.billing_day, &sub.created_at, &sub.cycle, now);
     let days = days_until(next);
     if days <= 0 {
-        return ansi::bold(&ansi::cyan("today"))
+        return ansi::bold(&ansi::cyan("today"));
     }
     let label = format_short_date(next);
     if days <= 3 {
-        return ansi::red(&label)
+        return ansi::red(&label);
     }
     if days <= 7 {
-        return ansi::yellow(&label)
+        return ansi::yellow(&label);
     }
     ansi::dim(&label)
 }
@@ -135,31 +135,43 @@ fn pick_config(
 ) -> (Vec<String>, Vec<i64>, Vec<i64>) {
     if show_notes && show_method && show_contract && show_vendor {
         (
-            config_headers(&["name", "status", "cycle", "next", "tags", "method", "contract", "renewal", "vendor", "plan", "notes", "price"]),
+            config_headers(&[
+                "name", "status", "cycle", "next", "tags", "method", "contract", "renewal",
+                "vendor", "plan", "notes", "price",
+            ]),
             vec![8, 8, 6, 8, 8, 10, 18, 6, 10, 8, 15, 8],
             vec![30, 12, 20, 10, 50, 30, 30, 10, 30, 20, 50, 20],
         )
     } else if show_contract && show_vendor {
         (
-            config_headers(&["name", "status", "cycle", "next", "tags", "contract", "renewal", "vendor", "plan", "price"]),
+            config_headers(&[
+                "name", "status", "cycle", "next", "tags", "contract", "renewal", "vendor", "plan",
+                "price",
+            ]),
             vec![10, 8, 6, 8, 8, 18, 6, 10, 8, 8],
             vec![40, 12, 20, 10, 60, 30, 10, 30, 20, 20],
         )
     } else if show_contract {
         (
-            config_headers(&["name", "status", "cycle", "next", "tags", "contract", "renewal", "price"]),
+            config_headers(&[
+                "name", "status", "cycle", "next", "tags", "contract", "renewal", "price",
+            ]),
             vec![10, 8, 6, 8, 8, 18, 6, 8],
             vec![40, 12, 20, 10, 60, 30, 10, 20],
         )
     } else if show_vendor {
         (
-            config_headers(&["name", "status", "cycle", "next", "tags", "vendor", "plan", "price"]),
+            config_headers(&[
+                "name", "status", "cycle", "next", "tags", "vendor", "plan", "price",
+            ]),
             vec![10, 8, 6, 8, 8, 10, 8, 8],
             vec![40, 12, 20, 10, 60, 30, 20, 20],
         )
     } else if show_notes && show_method {
         (
-            config_headers(&["name", "status", "cycle", "next", "tags", "method", "notes", "price"]),
+            config_headers(&[
+                "name", "status", "cycle", "next", "tags", "method", "notes", "price",
+            ]),
             vec![10, 8, 6, 8, 8, 10, 15, 8],
             vec![40, 12, 20, 10, 60, 30, 50, 20],
         )
@@ -225,7 +237,7 @@ pub fn render_table(
 
     for (i, row) in rows.iter().enumerate() {
         // Total rows are marked by three leading empty cells.
-        let is_total = row.get(0).map(|c| c.is_empty()).unwrap_or(false)
+        let is_total = row.first().map(|c| c.is_empty()).unwrap_or(false)
             && row.get(1).map(|c| c.is_empty()).unwrap_or(false)
             && row.get(2).map(|c| c.is_empty()).unwrap_or(false);
         if is_total {
@@ -371,10 +383,7 @@ pub fn show_api_usage(total: i64, by_provider: &[(String, i64)], period_label: &
     table.col_aligns = vec!["left".to_string(), "right".to_string()];
 
     for (provider, cost) in by_provider {
-        table.push(vec![
-            provider.clone(),
-            format_usd_cost(*cost, 2),
-        ])
+        table.push(vec![provider.clone(), format_usd_cost(*cost, 2)])
     }
     table.push(vec![
         ansi::bold(&ansi::yellow("Total")),

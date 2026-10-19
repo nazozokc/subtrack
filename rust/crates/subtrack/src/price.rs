@@ -35,16 +35,12 @@ pub fn group_whole(n: i64) -> String {
     let digits = abs.to_string();
     let mut out = String::new();
     for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
             out.push(',')
         }
         out.push(c)
     }
-    if neg {
-        format!("-{}", out)
-    } else {
-        out
-    }
+    if neg { format!("-{}", out) } else { out }
 }
 
 /// Format a price in a currency, mimicking en-US `Intl.NumberFormat`

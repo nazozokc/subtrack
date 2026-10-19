@@ -60,7 +60,10 @@ pub fn run_changes(parsed: &ParsedArgs) -> i32 {
                 && (to.is_none() || date.as_str() <= cutoff_to.as_str())
         })
         .map(|e| {
-            let old = e.old_price.map(|p| format!("{}", p)).unwrap_or_else(|| "—".to_string());
+            let old = e
+                .old_price
+                .map(|p| format!("{}", p))
+                .unwrap_or_else(|| "—".to_string());
             let new = format!("{}", e.new_price);
             ChangeEntry::Price {
                 date: e.changed_at,
@@ -108,7 +111,11 @@ pub fn run_changes(parsed: &ParsedArgs) -> i32 {
                     out.push_str(&format!("    \"details\": {}\n", quote_string(details)));
                 }
             }
-            out.push_str(if i + 1 == merged.len() { "  }\n" } else { "  },\n" });
+            out.push_str(if i + 1 == merged.len() {
+                "  }\n"
+            } else {
+                "  },\n"
+            });
         }
         out.push_str("]\n");
         logger::out_str(&out);

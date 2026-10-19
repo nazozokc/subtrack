@@ -1,7 +1,7 @@
 //! `dedupe` command (reads) — port of `dedupe.ts` (handleDedupe).
 
 use crate::ansi;
-use crate::db::{get_subscriptions, QueryOptions, Subscription};
+use crate::db::{QueryOptions, Subscription, get_subscriptions};
 use crate::json::quote_string;
 use crate::logger::{self, fail, info, log};
 use crate::parser::ParsedArgs;
@@ -35,7 +35,11 @@ fn levenshtein(a: &str, b: &str) -> usize {
     for i in 1..=m {
         curr[0] = i;
         for j in 1..=n {
-            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+            let cost = if a_chars[i - 1] == b_chars[j - 1] {
+                0
+            } else {
+                1
+            };
             curr[j] = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);
@@ -75,7 +79,10 @@ pub fn run_dedupe(parsed: &ParsedArgs) -> i32 {
             return 1;
         }
     };
-    let subs: Vec<Subscription> = subs.into_iter().filter(|s| s.status != "cancelled").collect();
+    let subs: Vec<Subscription> = subs
+        .into_iter()
+        .filter(|s| s.status != "cancelled")
+        .collect();
 
     // Find pairs i < j.
     let mut pairs: Vec<(usize, usize, f64, bool)> = Vec::new();
@@ -84,9 +91,8 @@ pub fn run_dedupe(parsed: &ParsedArgs) -> i32 {
             let a = &subs[i];
             let b = &subs[j];
             let name_score = similarity(&a.name, &b.name);
-            let vendor_url_match = a.vendor_url.is_some()
-                && b.vendor_url.is_some()
-                && a.vendor_url == b.vendor_url;
+            let vendor_url_match =
+                a.vendor_url.is_some() && b.vendor_url.is_some() && a.vendor_url == b.vendor_url;
             let score = if vendor_url_match {
                 name_score.max(0.9)
             } else {
@@ -108,18 +114,37 @@ pub fn run_dedupe(parsed: &ParsedArgs) -> i32 {
             out.push_str("    \"a\": {\n");
             out.push_str(&format!("      \"id\": {},\n", a.id));
             out.push_str(&format!("      \"name\": {},\n", quote_string(&a.name)));
-            out.push_str(&format!("      \"price\": {},\n", crate::json::number(a.price)));
-            out.push_str(&format!("      \"currency\": {}\n", quote_string(&a.currency)));
+            out.push_str(&format!(
+                "      \"price\": {},\n",
+                crate::json::number(a.price)
+            ));
+            out.push_str(&format!(
+                "      \"currency\": {}\n",
+                quote_string(&a.currency)
+            ));
             out.push_str("    },\n");
             out.push_str("    \"b\": {\n");
             out.push_str(&format!("      \"id\": {},\n", b.id));
             out.push_str(&format!("      \"name\": {},\n", quote_string(&b.name)));
-            out.push_str(&format!("      \"price\": {},\n", crate::json::number(b.price)));
-            out.push_str(&format!("      \"currency\": {}\n", quote_string(&b.currency)));
+            out.push_str(&format!(
+                "      \"price\": {},\n",
+                crate::json::number(b.price)
+            ));
+            out.push_str(&format!(
+                "      \"currency\": {}\n",
+                quote_string(&b.currency)
+            ));
             out.push_str("    },\n");
-            out.push_str(&format!("    \"score\": {},\n", crate::json::number(trim_score(*score))));
+            out.push_str(&format!(
+                "    \"score\": {},\n",
+                crate::json::number(trim_score(*score))
+            ));
             out.push_str(&format!("    \"vendorUrlMatch\": {}\n", vend));
-            out.push_str(if k + 1 == pairs.len() { "  }\n" } else { "  },\n" });
+            out.push_str(if k + 1 == pairs.len() {
+                "  }\n"
+            } else {
+                "  },\n"
+            });
         }
         out.push_str("]\n");
         logger::out_str(&out);
@@ -131,7 +156,10 @@ pub fn run_dedupe(parsed: &ParsedArgs) -> i32 {
         return 0;
     }
 
-    log(&ansi::bold(&format!("Potential duplicates (threshold: {}):", threshold)));
+    log(&ansi::bold(&format!(
+        "Potential duplicates (threshold: {}):",
+        threshold
+    )));
     log("");
     for (i, j, score, vend) in &pairs {
         let a = &subs[*i];
@@ -175,6 +203,5 @@ pub fn run_dedupe(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `Number(p.score.toFixed(3))`.
 fn trim_score(score: f64) -> f64 {
-    let scaled = (score * 1000.0).round() / 1000.0;
-    scaled
+    (score * 1000.0).round() / 1000.0
 }

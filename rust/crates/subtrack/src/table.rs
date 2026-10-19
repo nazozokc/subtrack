@@ -146,7 +146,11 @@ fn sgr_codes(str: &str) -> Vec<i64> {
                 let code = if body.is_empty() {
                     0
                 } else {
-                    body.split(';').next().unwrap_or("0").parse::<i64>().unwrap_or(0)
+                    body.split(';')
+                        .next()
+                        .unwrap_or("0")
+                        .parse::<i64>()
+                        .unwrap_or(0)
                 };
                 out.push(code);
                 i = j + 1;
@@ -232,22 +236,26 @@ fn truncate_width_ansi(str: &str, max_width: i64) -> (String, BTreeSet<i64>) {
         if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
             let mut j = i + 2;
             let mut body = String::new();
-while j < bytes.len() {
-        if bytes[j] == b'm' {
-            break;
-        }
-        body.push(bytes[j] as char);
-        j += 1
-    }
-    if j < bytes.len()
-        && bytes[j] == b'm'
-        && body.chars().all(|c| c.is_ascii_digit() || c == ';')
-    {
-        out.push_str(&str[i..=j]);
+            while j < bytes.len() {
+                if bytes[j] == b'm' {
+                    break;
+                }
+                body.push(bytes[j] as char);
+                j += 1
+            }
+            if j < bytes.len()
+                && bytes[j] == b'm'
+                && body.chars().all(|c| c.is_ascii_digit() || c == ';')
+            {
+                out.push_str(&str[i..=j]);
                 let code = if body.is_empty() {
                     0
                 } else {
-                    body.split(';').next().unwrap_or("0").parse::<i64>().unwrap_or(0)
+                    body.split(';')
+                        .next()
+                        .unwrap_or("0")
+                        .parse::<i64>()
+                        .unwrap_or(0)
                 };
                 apply_sgr(&mut state, code);
                 i = j + 1;
@@ -269,7 +277,7 @@ while j < bytes.len() {
 /// Truncate to a visible width, appending "…" when content is cut.
 pub fn truncate(str: &str, desired_length: i64, truncate_char: &str) -> String {
     if strlen(str) <= desired_length {
-        return str.to_string()
+        return str.to_string();
     }
     let (text, state) = truncate_width_ansi(str, desired_length - strlen(truncate_char));
     format!("{}{}{}", text, close_codes(&state), truncate_char)
@@ -314,12 +322,14 @@ fn wrap_on_words(max_length: i64, input: &str) -> Vec<String> {
     let mut line: Vec<String> = Vec::new();
     let mut line_length: i64 = 0;
     let mut whitespace: Option<&str> = None;
-    let word_count = (split.len() + 1) / 2;
+    let word_count = split.len().div_ceil(2);
     for i in 0..word_count {
         let word = split.get(i * 2).map(|s| s.as_str()).unwrap_or("");
         let mut new_length = line_length + strlen(word);
-        if line_length > 0 && whitespace.is_some() {
-            new_length += strlen(whitespace.unwrap())
+        if line_length > 0
+            && let Some(ws) = whitespace
+        {
+            new_length += strlen(ws);
         }
         if new_length > max_length {
             if line_length != 0 {
@@ -354,10 +364,10 @@ fn wrap_chars(max_length: i64, input: &str) -> Vec<String> {
         // word piece
         if !line.is_empty() {
             // carrying whitespace from previous piece in JS: split[i-1]
-            if i >= 1 {
-                if let Some(prev) = split.get(i - 1) {
-                    line.push_str(prev)
-                }
+            if i >= 1
+                && let Some(prev) = split.get(i - 1)
+            {
+                line.push_str(prev)
             }
         }
         line.push_str(piece);
@@ -502,7 +512,7 @@ pub fn divider(length: usize, theme: &Theme) -> String {
         && theme.zebra.is_none()
         && theme.accent.is_none();
     if plain {
-        return "─".repeat(length)
+        return "─".repeat(length);
     }
     format!("\x1b[2m{}\x1b[0m", "─".repeat(length))
 }
@@ -531,6 +541,13 @@ fn is_span_row(row: &[String], col_count: usize) -> bool {
 /// separator characters between columns.
 fn span_inner_width(widths: &[i64]) -> i64 {
     widths.iter().sum::<i64>() + (widths.len() as i64 - 1)
+}
+
+/// Port of the TS class's `toString()` — `.to_string()` via `Display`.
+impl std::fmt::Display for TableBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.render())
+    }
 }
 
 impl TableBuilder {
@@ -582,7 +599,7 @@ impl TableBuilder {
         }
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn render(&self) -> String {
         let mut all_rows: Vec<&Vec<String>> = Vec::new();
         if !self.head.is_empty() {
             all_rows.push(&self.head)
@@ -591,7 +608,7 @@ impl TableBuilder {
             all_rows.push(r)
         }
         if all_rows.is_empty() {
-            return String::new()
+            return String::new();
         }
         let col_count = all_rows.iter().map(|r| r.len()).max().unwrap_or(0);
 
@@ -633,7 +650,7 @@ impl TableBuilder {
         let heights: Vec<usize> = (0..all_rows.len())
             .map(|y| {
                 if is_span_row(all_rows[y], col_count) {
-                    return 1
+                    return 1;
                 }
                 (0..all_rows[y].len())
                     .map(|x| cell_lines[y][x].len())
@@ -644,9 +661,9 @@ impl TableBuilder {
             .collect();
 
         let mut out: Vec<String> = Vec::new();
-        for y in 0..all_rows.len() {
+        for (y, height) in heights.iter().enumerate() {
             out.push(self.draw_border(&widths, y, false));
-            for line_num in 0..heights[y] {
+            for line_num in 0..*height {
                 out.push(self.draw_line(&cell_lines, &widths, y, line_num, col_count))
             }
         }
@@ -656,14 +673,20 @@ impl TableBuilder {
 
     fn draw_border(&self, widths: &[i64], row_index: usize, bottom: bool) -> String {
         let top_row = !bottom && row_index == 0;
-        let line_char = if bottom { "bottom" } else if top_row { "top" } else { "mid" };
+        let line_char = if bottom {
+            "bottom"
+        } else if top_row {
+            "top"
+        } else {
+            "mid"
+        };
         let cols = widths.len();
         // A mid border drawn directly above a full-width span row uses
         // `┴` junctions (mirror of cli-table3 colSpan row borders).
         let above_span = !bottom && !top_row && self.is_span_row_at(row_index, cols);
 
         let mut out = String::new();
-        for x in 0..cols {
+        for (x, width) in widths.iter().enumerate() {
             if bottom {
                 out.push(if x == 0 {
                     self.char("bottom-left")
@@ -671,7 +694,11 @@ impl TableBuilder {
                     self.char("bottom-mid")
                 })
             } else if x == 0 {
-                out.push(if top_row { self.char("top-left") } else { self.char("left-mid") })
+                out.push(if top_row {
+                    self.char("top-left")
+                } else {
+                    self.char("left-mid")
+                })
             } else {
                 out.push(if top_row {
                     self.char("top-mid")
@@ -681,7 +708,10 @@ impl TableBuilder {
                     self.char("mid-mid")
                 })
             }
-            out.push_str(&repeat(&self.char(line_char).to_string(), widths[x].max(0) as usize))
+            out.push_str(&repeat(
+                &self.char(line_char).to_string(),
+                (*width).max(0) as usize,
+            ))
         }
         out.push(if bottom {
             self.char("bottom-right")
@@ -692,7 +722,7 @@ impl TableBuilder {
         });
 
         if !self.style.border[0].is_empty() {
-            return format!("{}{}{}", self.style.border[0], out, self.style.border[1])
+            return format!("{}{}{}", self.style.border[0], out, self.style.border[1]);
         }
         out
     }
@@ -723,17 +753,22 @@ impl TableBuilder {
             };
             let line = cell_lines[y][0].get(line_num).cloned().unwrap_or_default();
             let span_width = span_inner_width(widths);
-            let content = pad(&line, span_width - padding_left - padding_right, ' ', "left");
+            let content = pad(
+                &line,
+                span_width - padding_left - padding_right,
+                ' ',
+                "left",
+            );
             out.push_str(&colorize(self.char("left").to_string()));
             out.push_str(&" ".repeat(padding_left as usize));
             out.push_str(&content);
             out.push_str(&" ".repeat(padding_right as usize));
             out.push_str(&colorize(self.char("right").to_string()));
-            return out
+            return out;
         }
 
-        for x in 0..col_count {
-            let content_width = widths[x] - padding_left - padding_right;
+        for (x, col_width) in widths.iter().enumerate().take(col_count) {
+            let content_width = *col_width - padding_left - padding_right;
             let lines = cell_lines[y].get(x).cloned().unwrap_or_default();
             let line = if line_num < lines.len() {
                 lines[line_num].as_str()
@@ -754,7 +789,10 @@ impl TableBuilder {
                     s
                 }
             };
-            let left = colorize(self.char(if x == 0 { "left" } else { "middle" }).to_string());
+            let left = colorize(
+                self.char(if x == 0 { "left" } else { "middle" })
+                    .to_string(),
+            );
             let padding = " ".repeat(padding_left as usize);
             let right_padding = " ".repeat(padding_right as usize);
             let right = if x + 1 == col_count {
@@ -765,12 +803,7 @@ impl TableBuilder {
 
             let mut formatted = format!("{}{}{}", padding, content, right_padding);
             if is_head && !self.style.head[0].is_empty() {
-                formatted = format!(
-                    "{}{}{}",
-                    self.style.head[0],
-                    formatted,
-                    self.style.head[1]
-                )
+                formatted = format!("{}{}{}", self.style.head[0], formatted, self.style.head[1])
             }
             out.push_str(&left);
             out.push_str(&formatted);
@@ -799,8 +832,8 @@ pub fn calc_column_widths(
     term_width: i64,
     table_min_width: i64,
 ) -> Vec<i64> {
-    let avail = (config.min_avail.unwrap_or(table_min_width.max(40)))
-        .max(term_width - BORDER_AND_PADDING);
+    let avail =
+        (config.min_avail.unwrap_or(table_min_width.max(40))).max(term_width - BORDER_AND_PADDING);
 
     let weights: Vec<i64> = config
         .headers
@@ -844,7 +877,8 @@ pub fn calc_column_widths(
     while diff > 0 && iterations < 100 {
         let mut idx: Option<usize> = None;
         for i in 0..widths.len() {
-            if widths[i] > config.min_widths[i] && (idx.is_none() || widths[i] > widths[idx.unwrap()])
+            if widths[i] > config.min_widths[i]
+                && (idx.is_none() || widths[i] > widths[idx.unwrap()])
             {
                 idx = Some(i)
             }
@@ -859,7 +893,8 @@ pub fn calc_column_widths(
     while diff < 0 && iterations < 100 {
         let mut idx: Option<usize> = None;
         for i in 0..widths.len() {
-            if widths[i] < config.max_widths[i] && (idx.is_none() || weights[i] > weights[idx.unwrap()])
+            if widths[i] < config.max_widths[i]
+                && (idx.is_none() || weights[i] > weights[idx.unwrap()])
             {
                 idx = Some(i)
             }

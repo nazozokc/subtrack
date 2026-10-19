@@ -55,11 +55,15 @@ pub fn run_currency(parsed: &ParsedArgs) -> i32 {
             out.push_str("  {\n");
             out.push_str(&format!("    \"name\": {},\n", quote_string(name)));
             out.push_str(&format!("    \"value\": {}\n", quote_string(value)));
-            out.push_str(if i + 1 == CURRENCY_CHOICES.len() { "  }\n" } else { "  },\n" });
+            out.push_str(if i + 1 == CURRENCY_CHOICES.len() {
+                "  }\n"
+            } else {
+                "  },\n"
+            });
         }
         out.push_str("]\n");
         logger::out_str(&out);
-        return 0
+        return 0;
     }
 
     let theme = crate::config::display_theme();
@@ -67,6 +71,9 @@ pub fn run_currency(parsed: &ParsedArgs) -> i32 {
     for (value, name) in CURRENCY_CHOICES {
         log(&format!("  {:<5} {}", value, name));
     }
-    log(&format!("\n{} currencies supported", CURRENCY_CHOICES.len()));
+    log(&format!(
+        "\n{} currencies supported",
+        CURRENCY_CHOICES.len()
+    ));
     0
 }

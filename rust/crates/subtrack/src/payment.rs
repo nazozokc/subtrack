@@ -1,10 +1,10 @@
 //! `payment` command — port of `payment.ts` (showPayment + handlePayment).
 
-use crate::db::{
-    get_llm_usage_total, get_llm_usage_total_by_provider, get_subscriptions, QueryOptions,
-    Subscription,
-};
 use crate::date::{get_period_date_range, period_factor};
+use crate::db::{
+    QueryOptions, Subscription, get_llm_usage_total, get_llm_usage_total_by_provider,
+    get_subscriptions,
+};
 use crate::json::{number, quote_string};
 use crate::logger::{self, info, log, warn};
 use crate::parser::ParsedArgs;
@@ -48,7 +48,9 @@ pub fn run_payment(parsed: &ParsedArgs) -> i32 {
         .str("period")
         .unwrap_or_else(|| "monthly".to_string());
     if !VALID_PERIODS.contains(&period.as_str()) {
-        logger::fail("period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly");
+        logger::fail(
+            "period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly",
+        );
         return 1;
     }
 
@@ -130,12 +132,8 @@ fn show_payment(
         let sub_total: f64 = converted.iter().map(|v| v.unwrap_or(0.0)).sum();
 
         if include_api && api_total > 0 {
-            let api_converted = crate::fx::try_convert(
-                api_total as f64 / 100.0,
-                "USD",
-                target,
-                &rates.rates,
-            );
+            let api_converted =
+                crate::fx::try_convert(api_total as f64 / 100.0, "USD", target, &rates.rates);
             if api_converted.is_none() {
                 warn("Could not convert API cost to target currency");
             }
@@ -205,11 +203,7 @@ fn show_payment(
                 .map(|(ccy, t)| format_price(round_currency(*t), ccy))
                 .collect::<Vec<_>>()
                 .join(" + ");
-            log(&format!(
-                "  {} {}/{fp}",
-                pad_end(&method, 16),
-                price_str
-            ));
+            log(&format!("  {} {}/{fp}", pad_end(&method, 16), price_str));
         }
     }
 
@@ -339,7 +333,11 @@ fn payment_json(
             if !slot.currencies.contains(&currency_for) {
                 slot.currencies.push(currency_for.clone());
             }
-            match slot.by_currency.iter_mut().find(|(c, _)| *c == currency_for) {
+            match slot
+                .by_currency
+                .iter_mut()
+                .find(|(c, _)| *c == currency_for)
+            {
                 Some((_, t)) => *t += amount,
                 None => slot.by_currency.push((currency_for, amount)),
             }
@@ -373,7 +371,10 @@ fn payment_json(
             format!("    {{\n      {}\n    }}", f.join(",\n      "))
         })
         .collect();
-    out.push(kv("subscriptions", format!("[\n{}\n  ]", subs_json.join(",\n"))));
+    out.push(kv(
+        "subscriptions",
+        format!("[\n{}\n  ]", subs_json.join(",\n")),
+    ));
 
     if api && api_total > 0 {
         let providers: Vec<String> = api_by_provider

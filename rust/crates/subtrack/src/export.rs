@@ -2,7 +2,7 @@
 //! formats: json, csv, md, excel and ics.
 
 use crate::date::{calculate_next_billing_inclusive, today};
-use crate::db::{get_subscriptions, QueryOptions, Subscription};
+use crate::db::{QueryOptions, Subscription, get_subscriptions};
 use crate::json::{list_json, number};
 use crate::logger::{self, log, success};
 use crate::parser::ParsedArgs;
@@ -45,10 +45,7 @@ pub fn run_export(parsed: &ParsedArgs, depth: usize) -> i32 {
     };
 
     if let Some(status) = parsed.str("status") {
-        let statuses: Vec<String> = status
-            .split(',')
-            .map(|s| s.trim().to_lowercase())
-            .collect();
+        let statuses: Vec<String> = status.split(',').map(|s| s.trim().to_lowercase()).collect();
         list.retain(|s| statuses.contains(&s.status));
     }
 
@@ -86,8 +83,8 @@ pub fn run_export(parsed: &ParsedArgs, depth: usize) -> i32 {
             let _ = h.write_all(&buf);
             let _ = h.flush();
             return 0;
-        },
-        _ => return 0
+        }
+        _ => return 0,
     };
 
     // `consola.log(content)` — content already ends in "\n" for json.
@@ -108,7 +105,6 @@ pub fn run_export(parsed: &ParsedArgs, depth: usize) -> i32 {
     }
     0
 }
-
 
 pub(crate) fn export_json(subs: &[Subscription]) -> String {
     format!("{}\n\n", list_json(subs))
@@ -206,12 +202,15 @@ fn escape_csv(value: &str) -> String {
         .collect();
 
     let trimmed = cleaned.trim_start();
-    if let Some(first) = trimmed.chars().next() {
-        if matches!(first, '=' | '+' | '-' | '@' | '\t' | '\r') {
-            cleaned = format!("\t{}", cleaned);
-        }
+    if let Some(first) = trimmed.chars().next()
+        && matches!(first, '=' | '+' | '-' | '@' | '\t' | '\r')
+    {
+        cleaned = format!("\t{}", cleaned);
     }
-    if cleaned.contains('"') || cleaned.contains(',') || cleaned.contains('\n') || cleaned.contains('\r')
+    if cleaned.contains('"')
+        || cleaned.contains(',')
+        || cleaned.contains('\n')
+        || cleaned.contains('\r')
     {
         return format!("\"{}\"", cleaned.replace('"', "\"\""));
     }
@@ -265,8 +264,6 @@ pub(crate) fn export_csv(subs: &[Subscription]) -> String {
     format!("\u{FEFF}{}", body)
 }
 
-
-
 fn export_excel(subs: &[Subscription]) -> Vec<u8> {
     let headers = vec![
         "ID".to_string(),
@@ -310,7 +307,11 @@ fn export_excel(subs: &[Subscription]) -> Vec<u8> {
             crate::xlsx::Cell::Text(s.created_at.clone()),
             crate::xlsx::Cell::Text(s.contract_start.clone().unwrap_or_default()),
             crate::xlsx::Cell::Text(s.contract_end.clone().unwrap_or_default()),
-            crate::xlsx::Cell::Text(if s.auto_renewal { "Yes".into() } else { "No".into() }),
+            crate::xlsx::Cell::Text(if s.auto_renewal {
+                "Yes".into()
+            } else {
+                "No".into()
+            }),
             crate::xlsx::Cell::Text(s.vendor_name.clone().unwrap_or_default()),
             crate::xlsx::Cell::Text(s.vendor_url.clone().unwrap_or_default()),
             crate::xlsx::Cell::Text(s.plan_tier.clone().unwrap_or_default()),
@@ -336,7 +337,7 @@ fn export_excel(subs: &[Subscription]) -> Vec<u8> {
                     max_length = len;
                 }
             }
-            (max_length + 2).max(10).min(50)
+            (max_length + 2).clamp(10, 50)
         })
         .collect();
 
@@ -344,19 +345,25 @@ fn export_excel(subs: &[Subscription]) -> Vec<u8> {
 }
 
 fn ics_escape(v: &str) -> String {
-    v.replace('\\', "\\\\").replace(';', "\\;").replace(',', "\\,").replace('\n', "\\n").replace('\r', "\\r")
+    v.replace('\\', "\\\\")
+        .replace(';', "\\;")
+        .replace(',', "\\,")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
 }
 
 /// Port of `buildIcs` (export.ts) — one VEVENT per non-cancelled
 /// subscription, DTSTART set to its next billing date.
 fn export_ics(subs: &[Subscription]) -> String {
     let now = today();
-    let mut body = String::from("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//subtrack//subtrack//EN\r\n");
+    let mut body =
+        String::from("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//subtrack//subtrack//EN\r\n");
     for sub in subs {
         if sub.status == "cancelled" {
             continue;
         }
-        let start = calculate_next_billing_inclusive(sub.billing_day, &sub.created_at, &sub.cycle, now);
+        let start =
+            calculate_next_billing_inclusive(sub.billing_day, &sub.created_at, &sub.cycle, now);
         let start_str = start.format("%Y%m%d").to_string();
         let rrule = match sub.cycle.as_str() {
             "weekly" => "FREQ=WEEKLY",
@@ -389,4 +396,3 @@ fn export_ics(subs: &[Subscription]) -> String {
     body.push_str("END:VCALENDAR\r\n");
     format!("{}\n", body)
 }
-

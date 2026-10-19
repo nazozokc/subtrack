@@ -237,11 +237,7 @@ fn create_required_positionals_after<'a>(args: &'a [ArgSpec<'a>]) -> HashMap<&'a
         }
         required_after.insert(spec.name, minimum_required);
         minimum_required += if spec.array {
-            if spec.required == Some(true) {
-                1
-            } else {
-                0
-            }
+            if spec.required == Some(true) { 1 } else { 0 }
         } else if should_require_missing_single_positional(spec) {
             1
         } else {
@@ -488,12 +484,14 @@ pub fn resolve_args(
             if spec.array {
                 let available = positional_tokens.len().saturating_sub(positionals_count);
                 if available > 0 {
-                    let required_after = required_positionals_after.get(spec.name).copied().unwrap_or(0);
+                    let required_after = required_positionals_after
+                        .get(spec.name)
+                        .copied()
+                        .unwrap_or(0);
                     let to_consume = available.saturating_sub(required_after);
                     if to_consume > 0 {
                         let end = positionals_count + to_consume;
-                        let slice: Vec<String> =
-                            positional_tokens[positionals_count..end].to_vec();
+                        let slice: Vec<String> = positional_tokens[positionals_count..end].to_vec();
                         values.insert(spec.name.to_string(), ArgValue::StrArray(slice));
                         positionals_count = end;
                     } else if spec.required == Some(true) {
@@ -511,7 +509,10 @@ pub fn resolve_args(
                 }
             } else {
                 let positional = positional_tokens.get(positionals_count).cloned();
-                let required_after = required_positionals_after.get(spec.name).copied().unwrap_or(0);
+                let required_after = required_positionals_after
+                    .get(spec.name)
+                    .copied()
+                    .unwrap_or(0);
                 if let Some(p) = positional {
                     let still_available = positional_tokens.len().saturating_sub(positionals_count);
                     if still_available > required_after {
@@ -552,8 +553,8 @@ pub fn resolve_args(
                 continue;
             }
             if spec.kind == ArgKind::Boolean {
-                let value = negated_boolean_option_names.get(&t.name)
-                    != Some(&spec.name.to_string());
+                let value =
+                    negated_boolean_option_names.get(&t.name) != Some(&spec.name.to_string());
                 values.insert(spec.name.to_string(), ArgValue::Bool(value));
             } else if let Some(v) = &t.value {
                 if !v.is_empty() {

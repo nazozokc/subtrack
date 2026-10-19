@@ -305,7 +305,12 @@ pub fn run_bulk_tag_remove(parsed: &ParsedArgs) -> i32 {
         }
     };
     for sub in &list {
-        let new_tags: Vec<String> = sub.tags.iter().filter(|t| *t != &tag_name).cloned().collect();
+        let new_tags: Vec<String> = sub
+            .tags
+            .iter()
+            .filter(|t| *t != &tag_name)
+            .cloned()
+            .collect();
         if let Err(e) = db::set_subscription_tags(&conn, sub.id, &new_tags, false) {
             logger::fail(&format!("Failed to update subscription: {}", e));
             return 1;

@@ -10,10 +10,10 @@ pub const SHORT_MONTH_NAMES: [&str; 12] = [
 /// Today as a NaiveDate. When SUBTRACK_TODAY=YYYY-MM-DD is set (Rust-only
 /// harness env), that value is used instead of the real clock.
 pub fn today() -> NaiveDate {
-    if let Ok(v) = std::env::var("SUBTRACK_TODAY") {
-        if let Ok(d) = NaiveDate::parse_from_str(&v, "%Y-%m-%d") {
-            return d;
-        }
+    if let Ok(v) = std::env::var("SUBTRACK_TODAY")
+        && let Ok(d) = NaiveDate::parse_from_str(&v, "%Y-%m-%d")
+    {
+        return d;
     }
     Local::now().date_naive()
 }
@@ -40,7 +40,11 @@ pub fn format_short_date(d: NaiveDate) -> String {
 
 /// Days in a month. `month` is 1-12 (human convention).
 pub fn days_in_month(year: i32, month: u32) -> u32 {
-    let (y, m) = if month == 12 { (year + 1, 1) } else { (year, month + 1) };
+    let (y, m) = if month == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month + 1)
+    };
     let first_next = NaiveDate::from_ymd_opt(y, m, 1).unwrap();
     (first_next - chrono::Duration::days(1)).day()
 }
@@ -117,12 +121,11 @@ pub fn occurrences_per_year(cycle: &str) -> f64 {
 
 /// Days of a day-based cycle ("3d" → 3), or None.
 pub fn cycle_days(cycle: &str) -> Option<i64> {
-    if let Some(rest) = cycle.strip_suffix('d') {
-        if let Ok(n) = rest.parse::<i64>() {
-            if (1..=365).contains(&n) {
-                return Some(n)
-            }
-        }
+    if let Some(rest) = cycle.strip_suffix('d')
+        && let Ok(n) = rest.parse::<i64>()
+        && (1..=365).contains(&n)
+    {
+        return Some(n);
     }
     None
 }
@@ -219,8 +222,18 @@ pub fn get_previous_period_date_range(period: &str) -> (String, String) {
             let prev_mon = this_mon - chrono::Duration::days(7);
             let prev_sun = this_mon - chrono::Duration::days(1);
             (
-                format!("{:04}-{:02}-{:02}", prev_mon.year(), prev_mon.month(), prev_mon.day()),
-                format!("{:04}-{:02}-{:02}", prev_sun.year(), prev_sun.month(), prev_sun.day()),
+                format!(
+                    "{:04}-{:02}-{:02}",
+                    prev_mon.year(),
+                    prev_mon.month(),
+                    prev_mon.day()
+                ),
+                format!(
+                    "{:04}-{:02}-{:02}",
+                    prev_sun.year(),
+                    prev_sun.month(),
+                    prev_sun.day()
+                ),
             )
         }
         "bi-weekly" => {
@@ -230,8 +243,18 @@ pub fn get_previous_period_date_range(period: &str) -> (String, String) {
             let prev_start = this_mon - chrono::Duration::days(14);
             let prev_end = this_mon - chrono::Duration::days(1);
             (
-                format!("{:04}-{:02}-{:02}", prev_start.year(), prev_start.month(), prev_start.day()),
-                format!("{:04}-{:02}-{:02}", prev_end.year(), prev_end.month(), prev_end.day()),
+                format!(
+                    "{:04}-{:02}-{:02}",
+                    prev_start.year(),
+                    prev_start.month(),
+                    prev_start.day()
+                ),
+                format!(
+                    "{:04}-{:02}-{:02}",
+                    prev_end.year(),
+                    prev_end.month(),
+                    prev_end.day()
+                ),
             )
         }
         "quarterly" => {
@@ -322,7 +345,7 @@ fn next_date_for_cycle_impl(
                 }
             }
         };
-        return next_day_cycle_date(anchor_date, anchor_day, days, from_date, strict)
+        return next_day_cycle_date(anchor_date, anchor_day, days, from_date, strict);
     }
     let ge = |candidate: NaiveDate| {
         if strict {
@@ -333,8 +356,7 @@ fn next_date_for_cycle_impl(
     };
     match cycle {
         "monthly" => {
-            let candidate =
-                date_with_clamped_day(from_date.year(), from_date.month0(), anchor_day);
+            let candidate = date_with_clamped_day(from_date.year(), from_date.month0(), anchor_day);
             if ge(candidate) {
                 return candidate;
             }
@@ -385,26 +407,36 @@ pub fn calculate_next_billing_inclusive(
     next_date_for_cycle_inclusive(day, anchor_date, cycle, from_date)
 }
 /// JS Math.ceil(a / b) for i64 (ceil of a possibly-negative fraction).
+///
+/// Mirrors JS semantics exactly (division truncates toward zero, ceiling
+/// rounds toward +inf). All call sites pass `b > 0`, but the function keeps
+/// the general mapping:
+/// - exact quotient (`a % b == 0`) yields `a / b`
+/// - negative dividends already truncate toward zero, so `a / b` *is* ceil
+/// - positive remainder of a positive dividend needs one extra unit
 pub fn div_ceil_js(a: i64, b: i64) -> i64 {
-    if a % b == 0 {
-        a / b
-    } else if a < 0 {
-        a / b
-    } else {
-        a / b + 1
-    }
+    let q = a / b;
+    if a % b == 0 || a < 0 { q } else { q + 1 }
 }
 
 /// Today minus `days`, formatted YYYY-MM-DD (UTC).
 pub fn today_string_days_ago(days: i64) -> String {
-    (today() - chrono::Duration::days(days)).format("%Y-%m-%d").to_string()
+    (today() - chrono::Duration::days(days))
+        .format("%Y-%m-%d")
+        .to_string()
 }
 
 /// Last day of 0-based month `month0` as "YYYY-MM-DD" (new Date(y, m+1, 0)).
 pub fn last_day_of_month_string(year: i64, month0: i64) -> String {
-    let (ny, nm) = if month0 + 1 == 12 { (year + 1, 1) } else { (year, month0 + 2) };
+    let (ny, nm) = if month0 + 1 == 12 {
+        (year + 1, 1)
+    } else {
+        (year, month0 + 2)
+    };
     match chrono::NaiveDate::from_ymd_opt(ny as i32, nm as u32, 1) {
-        Some(d) => (d - chrono::Duration::days(1)).format("%Y-%m-%d").to_string(),
+        Some(d) => (d - chrono::Duration::days(1))
+            .format("%Y-%m-%d")
+            .to_string(),
         None => format!("{:04}-12-31", year),
     }
 }

@@ -4,9 +4,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::commands::{CommandDef, COMMANDS, TOP_SUBCOMMANDS};
+use crate::commands::{COMMANDS, CommandDef, TOP_SUBCOMMANDS};
 use crate::help::ArgKind;
-use crate::parser::{tokenize, Token};
+use crate::parser::{Token, tokenize};
 
 /// Error thrown for an unknown subcommand. `message` mirrors gunshi's
 /// `CommandNotFoundError: Command not found: <name>` rendering.
@@ -48,7 +48,10 @@ fn command_ref(idx: usize) -> &'static CommandDef {
 
 /// Entry subcommand map: name → COMMANDS index.
 fn entry_map() -> HashMap<&'static str, usize> {
-    TOP_SUBCOMMANDS.iter().map(|(n, i)| (*n, *i as usize)).collect()
+    TOP_SUBCOMMANDS
+        .iter()
+        .map(|(n, i)| (*n, *i as usize))
+        .collect()
 }
 
 /// Extract only command-path positionals from raw argv. Option values are
@@ -78,7 +81,11 @@ pub fn get_command_positionals(argv: &[String]) -> Vec<String> {
     }
 
     for (_, idx) in TOP_SUBCOMMANDS {
-        visit(command_ref(*idx as usize), &mut value_long_names, &mut value_short_names);
+        visit(
+            command_ref(*idx as usize),
+            &mut value_long_names,
+            &mut value_short_names,
+        );
     }
 
     let mut positionals: Vec<String> = Vec::new();
@@ -86,7 +93,12 @@ pub fn get_command_positionals(argv: &[String]) -> Vec<String> {
     for token in tokenize(argv) {
         match token {
             Token::Terminator => break,
-            Token::Option { name, raw_name, inline_value, .. } => {
+            Token::Option {
+                name,
+                raw_name,
+                inline_value,
+                ..
+            } => {
                 let takes_value = if raw_name.starts_with("--") {
                     value_long_names.contains(&name)
                 } else {

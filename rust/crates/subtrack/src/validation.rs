@@ -28,9 +28,7 @@ pub const CYCLE_VALUES: [&str; 6] = [
 
 /// Port of `isValidCurrency` (uppercase 3-letter code within the choice list).
 pub fn is_valid_currency(v: &str) -> bool {
-    v.len() == 3
-        && v.bytes().all(|b| b.is_ascii_uppercase())
-        && CURRENCY_VALUES.contains(&v)
+    v.len() == 3 && v.bytes().all(|b| b.is_ascii_uppercase()) && CURRENCY_VALUES.contains(&v)
 }
 
 /// Port of `isValidCycle` (named preset, or an `Nd` day cycle).
@@ -64,7 +62,10 @@ pub fn validate_price(v: &str) -> Result<(), String> {
     if v.trim().is_empty() {
         return Err("Please enter a valid number".to_string());
     }
-    let n: f64 = v.trim().parse().map_err(|_| "Please enter a valid non-negative number".to_string())?;
+    let n: f64 = v
+        .trim()
+        .parse()
+        .map_err(|_| "Please enter a valid non-negative number".to_string())?;
     if !n.is_finite() || n < 0.0 {
         return Err("Please enter a valid non-negative number".to_string());
     }

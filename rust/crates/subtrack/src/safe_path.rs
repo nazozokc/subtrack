@@ -4,10 +4,7 @@ use std::path::{Component, Path, PathBuf};
 
 /// Default trusted base directories: home and temp.
 pub fn default_bases() -> Vec<PathBuf> {
-    vec![
-        crate::crypto::home_dir(),
-        std::env::temp_dir(),
-    ]
+    vec![crate::crypto::home_dir(), std::env::temp_dir()]
 }
 
 /// Port of `safePath` (requires the path to exist).

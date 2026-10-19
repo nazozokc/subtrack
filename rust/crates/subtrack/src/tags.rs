@@ -1,7 +1,7 @@
 //! `tags` / `tag list` commands — port of `commands/tag.ts` (tagsCommand,
 //! tagListCmd) + `subscription/core.ts` handleTags + `tag.ts` handleTagList.
 
-use crate::db::{get_subscriptions, get_tags_with_count, QueryOptions};
+use crate::db::{QueryOptions, get_subscriptions, get_tags_with_count};
 use crate::display::spread_subscription;
 use crate::logger::{self, fail, info, out_str};
 use crate::parser::ParsedArgs;
@@ -31,11 +31,12 @@ pub fn run_tags(parsed: &ParsedArgs) -> i32 {
 /// `subtrack tag list [--sort name|count]` — name + usage count.
 pub fn run_tag_list(parsed: &ParsedArgs) -> i32 {
     let sort = parsed.str("sort");
-    if let Some(s) = &sort {
-        if s != "name" && s != "count" {
-            fail("sort must be one of: name, count");
-            return 1;
-        }
+    if let Some(s) = &sort
+        && s != "name"
+        && s != "count"
+    {
+        fail("sort must be one of: name, count");
+        return 1;
     }
     let mut tags = match get_tags_with_count() {
         Ok(v) => v,
@@ -53,17 +54,16 @@ pub fn run_tag_list(parsed: &ParsedArgs) -> i32 {
         info("No tags found");
         return 0;
     }
-    let max_name_len = tags
-        .iter()
-        .map(|(n, _)| n.len())
-        .max()
-        .unwrap_or(0)
-        .max(4);
+    let max_name_len = tags.iter().map(|(n, _)| n.len()).max().unwrap_or(0).max(4);
     let mut out = String::new();
-    out.push_str(&format!("{}{}\n", "Name".pad_end(max_name_len), "  Subscriptions"));
+    out.push_str(&format!(
+        "{}{}\n",
+        "Name".pad_end(max_name_len),
+        "  Subscriptions"
+    ));
     out.push_str(&format!("{}\n", "─".repeat(max_name_len + 14)));
     for (name, count) in &tags {
-        out.push_str(&format!("{}{}\n", name.pad_end(max_name_len), format!("  {}", count)));
+        out.push_str(&format!("{}  {}\n", name.pad_end(max_name_len), count));
     }
     out_str(&out);
     0
@@ -200,10 +200,7 @@ pub fn run_tag_rename(parsed: &ParsedArgs) -> i32 {
     }
     match crate::db::rename_tag(&old_name, &new_name) {
         Ok(true) => {
-            crate::logger::success(&format!(
-                "Renamed tag: \"{}\" → \"{}\"",
-                old_name, new_name
-            ));
+            crate::logger::success(&format!("Renamed tag: \"{}\" → \"{}\"", old_name, new_name));
             0
         }
         Ok(false) => {

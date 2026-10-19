@@ -1,17 +1,17 @@
 //! CLI entry — port of `src/index.ts` main + cli bootstrap.
 
 mod analytics;
-mod budget;
-mod audit;
 mod ansi;
+mod audit;
 mod backup;
+mod budget;
 mod bulk;
 mod calendar;
 mod changes;
 mod check;
+mod cleanup;
 mod cli;
 mod commands;
-mod cleanup;
 mod compare;
 mod config;
 mod crypto;
@@ -32,11 +32,11 @@ mod logger;
 mod maintenance;
 mod mcp;
 mod notify;
-mod parser;
 mod optimize;
+mod parser;
 mod payment;
-mod profile;
 mod price;
+mod profile;
 mod prompts;
 mod receipt;
 mod report;
@@ -49,8 +49,8 @@ mod subs;
 mod suggest;
 mod suggest_parser;
 mod summary;
-mod tags;
 mod table;
+mod tags;
 mod templates;
 mod timeline;
 mod trial;
@@ -89,10 +89,5 @@ pub fn run(args: Vec<std::ffi::OsString>) -> i32 {
     let code = cli::run(&args);
     let exit = EXIT_CODE.load(Ordering::SeqCst);
     flush();
-    if exit != 0 {
-        exit
-    } else {
-        code
-    }
+    if exit != 0 { exit } else { code }
 }
-

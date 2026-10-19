@@ -1,7 +1,7 @@
 //! `check` command — port of `diagnostics.ts` (handleCheck).
 
 use crate::date::today_string;
-use crate::db::{get_subscriptions, QueryOptions};
+use crate::db::{QueryOptions, get_subscriptions};
 use crate::json::quote_string;
 use crate::logger::{self, log, success};
 use crate::parser::ParsedArgs;
@@ -53,25 +53,25 @@ pub fn run_check(parsed: &ParsedArgs) -> i32 {
                 id: Some(sub.id),
             });
         }
-        if let (Some(cs), Some(ce)) = (&sub.contract_start, &sub.contract_end) {
-            if cs.as_str() > ce.as_str() {
-                findings.push(Finding {
-                    code: "invalid-contract-range",
-                    severity: "error",
-                    message: format!("{} contract start is after contract end", sub.name),
-                    id: Some(sub.id),
-                });
-            }
+        if let (Some(cs), Some(ce)) = (&sub.contract_start, &sub.contract_end)
+            && cs.as_str() > ce.as_str()
+        {
+            findings.push(Finding {
+                code: "invalid-contract-range",
+                severity: "error",
+                message: format!("{} contract start is after contract end", sub.name),
+                id: Some(sub.id),
+            });
         }
-        if let Some(ce) = &sub.contract_end {
-            if ce.as_str() < today.as_str() {
-                findings.push(Finding {
-                    code: "expired-contract",
-                    severity: "warning",
-                    message: format!("{} contract ended on {}", sub.name, ce),
-                    id: Some(sub.id),
-                });
-            }
+        if let Some(ce) = &sub.contract_end
+            && ce.as_str() < today.as_str()
+        {
+            findings.push(Finding {
+                code: "expired-contract",
+                severity: "warning",
+                message: format!("{} contract ended on {}", sub.name, ce),
+                id: Some(sub.id),
+            });
         }
     }
 

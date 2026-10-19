@@ -123,7 +123,11 @@ pub fn run_suggest_list(parsed: &ParsedArgs) -> i32 {
                     None => "null".to_string(),
                 }
             ));
-            out.push_str(if i + 1 == suggestions.len() { "  }\n" } else { "  },\n" });
+            out.push_str(if i + 1 == suggestions.len() {
+                "  }\n"
+            } else {
+                "  },\n"
+            });
         }
         out.push_str("]\n");
         logger::out_str(&out);
@@ -139,7 +143,10 @@ pub fn run_suggest_list(parsed: &ParsedArgs) -> i32 {
         return 0;
     }
 
-    log(&ansi::bold(&ansi::cyan(&format!("── Suggestions ({}) ──", suggestions.len()))));
+    log(&ansi::bold(&ansi::cyan(&format!(
+        "── Suggestions ({}) ──",
+        suggestions.len()
+    ))));
     log("");
     for s in &suggestions {
         let price_str = match (s.price, &s.currency) {
@@ -193,8 +200,15 @@ pub fn run_suggest_view(parsed: &ParsedArgs) -> i32 {
         (Some(p), Some(c)) => format_price(p, c),
         _ => "N/A".to_string(),
     };
-    log(&ansi::bold(&ansi::cyan(&format!("── Suggestion #{} ──", suggestion.id))));
-    log(&format!("  {}       {}", ansi::bold("Name:"), suggestion.name));
+    log(&ansi::bold(&ansi::cyan(&format!(
+        "── Suggestion #{} ──",
+        suggestion.id
+    ))));
+    log(&format!(
+        "  {}       {}",
+        ansi::bold("Name:"),
+        suggestion.name
+    ));
     log(&format!(
         "  {}      {}{}",
         ansi::bold("Price:"),
@@ -217,16 +231,27 @@ pub fn run_suggest_view(parsed: &ParsedArgs) -> i32 {
     log(&format!(
         "  {}     {}",
         ansi::bold("Source:"),
-        suggestion.source_detail.as_deref().unwrap_or(&suggestion.source)
+        suggestion
+            .source_detail
+            .as_deref()
+            .unwrap_or(&suggestion.source)
     ));
     log(&format!(
-        "  {} {}",
+        "  {} {}%",
         ansi::bold("Confidence:"),
-        format!("{}%", (suggestion.confidence * 100.0).round() as i64)
+        (suggestion.confidence * 100.0).round() as i64
     ));
-    log(&format!("  {}     {}", ansi::bold("Status:"), suggestion.status));
+    log(&format!(
+        "  {}     {}",
+        ansi::bold("Status:"),
+        suggestion.status
+    ));
     if let Some(m) = suggestion.matched_sub_id {
-        log(&format!("  {}   subscription #{}", ansi::bold("Added as:"), m));
+        log(&format!(
+            "  {}   subscription #{}",
+            ansi::bold("Added as:"),
+            m
+        ));
     }
     if let Some(c) = &suggestion.created_at {
         log(&format!("  {}   {}", ansi::bold("Created:"), c));
@@ -344,7 +369,10 @@ pub fn run_suggest_dismiss(parsed: &ParsedArgs) -> i32 {
             0
         }
         Ok(false) => {
-            logger::fail(&format!("Suggestion #{} not found or already processed.", id));
+            logger::fail(&format!(
+                "Suggestion #{} not found or already processed.",
+                id
+            ));
             1
         }
         Err(e) => {
