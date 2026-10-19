@@ -39,7 +39,7 @@ This provides `node`, `pnpm`, `typescript`, `typos`, `rustc`, `cargo`, `rustfmt`
 
 | Category | Choice |
 |----------|--------|
-| Language | Rust 2024 edition, workspace pinned to 1.98.0 (`rust/rust-toolchain.toml`) |
+| Language | Rust 2024 edition, workspace pinned to 1.98.0 (`rust-toolchain.toml`) |
 | CLI framework | Self-contained (`src/cli.rs`, `src/parser.rs`, `src/router.rs`, `src/help.rs`) |
 | Database | SQLite via `rusqlite` (bundled, no system libsqlite) |
 | Dates | `chrono` |
@@ -88,7 +88,6 @@ Make sure all checks pass and CI is green.
 subtrack/
 ├── rust/                          # Rust implementation
 │   ├── Cargo.toml                 # Workspace (crates: ["crates/subtrack"], edition 2024)
-│   ├── rust-toolchain.toml        # Pinned toolchain (1.98.0, clippy/rustfmt)
 │   ├── crates/subtrack/           # The CLI crate
 │   │   ├── src/
 │   │   │   ├── main.rs            # Entry point
@@ -132,6 +131,7 @@ subtrack/
 │   └── subtrack-win32-arm64/
 ├── docs/                          # Documentation site (VitePress)
 ├── scripts/                       # set-version.mjs, verify-native-package.mjs
+├── rust-toolchain.toml            # Pinned Rust toolchain (1.98.0, clippy/rustfmt)
 ├── flake.nix                      # Nix devShell
 ├── package.json                   # pnpm build / test / lint:security / format / clean
 └── pnpm-workspace.yaml

@@ -75,8 +75,14 @@ jobs:
 
       - name: Add Rust target
         shell: bash
-        # Keep the toolchain in sync with rust-toolchain.toml.
-        run: rustup target add --toolchain 1.98.0 "${{ matrix.target }}"
+        # Read the channel from rust-toolchain.toml (repo root) so the target
+        # is added to the same toolchain the build resolves (single source of
+        # truth, rustup auto-installs it if missing).
+        run: |
+          toolchain="$(awk -F'"' '/^channel/{print $2; exit}' rust-toolchain.toml)"
+          echo "Using toolchain $toolchain from rust-toolchain.toml"
+          rustup toolchain install "$toolchain"
+          rustup target add --toolchain "$toolchain" "${{ matrix.target }}"
 
       - name: Resolve version
         id: version

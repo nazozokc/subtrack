@@ -31,6 +31,25 @@ updates:
           - "patch"
           - "minor"
 
+  - package-ecosystem: "cargo"
+    directory: "/rust"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    labels:
+      - "dependencies"
+      - "rust"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore"
+    groups:
+      rust-dependencies:
+        update-types:
+          - "patch"
+          - "minor"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

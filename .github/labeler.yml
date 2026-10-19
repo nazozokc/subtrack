@@ -1,6 +1,11 @@
 subtrack:
   - changed-files:
       - any-glob-to-any-file: packages/subtrack/**
+      - any-glob-to-any-file: packages/subtrack-*/**
+
+rust:
+  - changed-files:
+      - any-glob-to-any-file: rust/**
 
 docs:
   - changed-files:
@@ -14,5 +19,9 @@ ci:
 dependencies:
   - changed-files:
       - any-glob-to-any-file: packages/subtrack/package.json
+      - any-glob-to-any-file: packages/subtrack-*/package.json
       - any-glob-to-any-file: package.json
       - any-glob-to-any-file: pnpm-lock.yaml
+      - any-glob-to-any-file: rust/**/Cargo.toml
+      - any-glob-to-any-file: rust/Cargo.lock
+      - any-glob-to-any-file: rust/rust-toolchain.toml

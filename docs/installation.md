@@ -48,12 +48,11 @@ Note that `npx` will download the package on every first run, so global install 
 
 ## Build from source
 
-The Rust workspace lives under `rust/` in the monorepo. Building requires a Rust toolchain (the pinned version is read from `rust/rust-toolchain.toml`):
+The Rust workspace lives under `rust/` in the monorepo. Building requires a Rust toolchain (the pinned channel comes from `rust-toolchain.toml` at the repository root):
 
 ```bash
-cd rust
-rustup install     # installs the pinned toolchain from rust-toolchain.toml
-cargo build --release
+rustup install     # installs the pinned channel from rust-toolchain.toml
+cargo build --release --manifest-path rust/Cargo.toml
 ```
 
 The binary is written to `rust/target/release/subtrack`. To use it with the npm launcher (or in place of a downloaded platform binary), point the launcher at it with the `SUBTRACK_BINARY` environment variable, or add it to your `PATH` directly:

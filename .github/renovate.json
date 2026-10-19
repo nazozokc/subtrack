@@ -4,10 +4,9 @@
     "config:recommended",
     "npm:unpublishSafe",
     ":pinAllExceptPeerDependencies",
-    ":disableRateLimiting",
-    "helpers:disableTypesNodeMajority"
+    ":disableRateLimiting"
   ],
-  "enabledManagers": ["npm", "github-actions"],
+  "enabledManagers": ["npm", "github-actions", "cargo"],
   "schedule": ["before 9am on monday"],
   "timezone": "Asia/Tokyo",
   "minimumReleaseAge": "14 days",
@@ -56,42 +55,18 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Group vitest and related packages",
-      "matchPackageNames": ["vitest"],
-      "groupName": "vitest",
+      "description": "Group and auto-merge minor/patch Rust crate updates",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "rust crates",
       "automerge": true
     },
     {
-      "description": "Group build tooling",
-      "matchPackageNames": ["tsdown", "tsx"],
-      "groupName": "build tooling",
-      "automerge": true
-    },
-    {
-      "description": "Group SvelteKit documentation dependencies",
-      "matchPackageNames": [
-        "@sveltejs/kit",
-        "@sveltejs/adapter-static",
-        "svelte",
-        "vite",
-        "mdsvex"
-      ],
-      "groupName": "docs (SvelteKit)",
-      "labels": ["dependencies", "docs"]
-    },
-    {
-      "description": "Group CLI utilities (currently: consola, picocolors, cli-table3)",
-      "matchDepTypes": ["dependencies"],
-      "matchPackageNames": ["consola", "picocolors", "cli-table3"],
-      "groupName": "CLI utilities",
-      "automerge": true
-    },
-    {
-      "description": "Group and auto-merge type definition packages",
-      "matchPackageNames": ["@types/node"],
-      "groupName": "type definitions",
-      "automerge": true,
-      "labels": ["dependencies", "types"]
+      "description": "Major Rust crate updates require dashboard approval",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "rust crate major updates",
+      "dependencyDashboardApproval": true
     },
     {
       "description": "Group and auto-merge GitHub Actions updates",
@@ -101,21 +76,9 @@
       "automerge": true
     },
     {
-      "description": "gunshi (CLI framework) — major updates require review",
-      "matchPackageNames": ["gunshi"],
-      "labels": ["dependencies", "cli"],
-      "dependencyDashboardApproval": true
-    },
-    {
       "description": "Silence engine requirement bumps",
       "matchDepTypes": ["engines"],
       "enabled": false
-    },
-    {
-      "description": "Auto-approve typescript major updates if CI passes",
-      "matchPackageNames": ["typescript"],
-      "matchUpdateTypes": ["major"],
-      "dependencyDashboardApproval": true
     }
   ],
   "vulnerabilityAlerts": {

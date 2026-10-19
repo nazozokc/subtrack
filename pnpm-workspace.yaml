@@ -12,7 +12,8 @@ allowBuilds:
 # Force brace-expansion, js-yaml, nanoid, postcss to patched versions to
 # pass pnpm audit --audit-level=high (via secretlint / vitepress / vitest)
 #
-# Force vite and esbuild to patched versions (via vitepress)
+# Force vite, esbuild, vue and source-map-js to patched versions
+# (via vitepress)
 overrides:
   brace-expansion: ">=5.0.9"
   js-yaml: ">=5.2.2"
@@ -20,3 +21,5 @@ overrides:
   postcss: ">=8.5.18"
   vite: ">=6.4.3 <8"
   esbuild: ">=0.24.3"
+  vue: ">=3.5.42"
+  source-map-js: ">=1.2.2"
