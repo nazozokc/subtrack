@@ -16,32 +16,31 @@ Without a backup, the data cannot be recovered — the database is stored locall
 
 **Recommendation:** Set up regular automated backups via cron or Task Scheduler. See the [Data & Storage](/data) page for details.
 
-## Why is there no banner or version header when I pipe the output?
+## Why is there a `subtrack (v…)` header line in my piped output?
 
-By design. The startup header and the notification banner are printed only when stdout is a TTY, so redirecting or piping produces clean output:
+Every printout starts with a `subtrack (subtrack vX.Y.Z)` header line on stdout. Pass `-j, --json` to get clean, machine-readable output (the `mcp` command is always silent):
 
 ```bash
-subtrack list > subs.txt
 subtrack list --json | jq '.[0].name'
 ```
 
-This also makes piped commands faster: the banner's extra database queries are skipped entirely.
+There is no pre-command notification banner.
 
 ## A flag I passed had no effect. Why?
 
-subtrack silently ignores unknown flags instead of erroring, so a typo fails quietly. Two naming styles are in use and they are not interchangeable:
+subtrack rejects unknown flags with an error and exit code 1 — e.g. `✖ --min-pricee: Unknown option '--min-pricee'` — so typos fail loudly rather than being dropped. If a flag *exists* but had no effect, the two naming styles are likely at play, and they are not interchangeable:
 
 | Command group | Style | Example |
 |---------------|-------|---------|
 | `usage add` / `usage edit` | kebab-case | `subtrack usage add --input-tokens 500` |
 | `add`, `edit`, `forecast`, `renew`, `template` | camelCase | `subtrack forecast --addName "New Service"` |
-| `list`, `import`, `receipt` | camelCase | `subtrack list --min-price 500` |
+| `list`, `import`, `receipt` | kebab-case | `subtrack list --min-price 500` |
 
 Check `subtrack <command> --help` for the authoritative list.
 
 ## Can I add support for more currencies?
 
-The `Currency` type now accepts any ISO 4217 3-letter code, so all currencies supported by [open.er-api.com](https://open.er-api.com) work out of the box. The interactive prompt provides a curated list of 37 commonly used currencies. If you need a currency not in the list, use the `--currency` flag directly with any valid code.
+The `Currency` type now accepts any ISO 4217 3-letter code, so all currencies supported by [open.er-api.com](https://open.er-api.com) work out of the box. Run `subtrack currency` for the curated list of 37 commonly used currencies. If you need a currency not in the list, use the `--currency` flag directly with any valid code.
 
 ## Does subtrack work offline?
 
@@ -51,15 +50,13 @@ When offline, `--currency` falls back to per-currency display without conversion
 
 ## How do I restore from a backup?
 
-Use the `restore` command for interactive or direct restore:
+Restore from a specific backup file — pass `--force` to proceed (without it the command takes no action):
 
 ```bash
-# Interactive: select from available backups
-subtrack restore
-
-# Direct restore from a specific file
-subtrack restore ~/backups/subtrack_20260617_143000.db.gz
+subtrack restore ~/backups/subtrack_20260617_143000.db.gz --force
 ```
+
+Before restoring, the current database is automatically backed up (timestamped `_before_restore.db.enc`, encrypted) as a safety measure.
 
 Alternatively, copy the backup file manually:
 
@@ -68,7 +65,7 @@ cp ~/backups/subtrack_20260617_143000.db.gz ~/.config/subtrack/subtrack.db.gz
 gunzip -k ~/.config/subtrack/subtrack.db.gz
 ```
 
-The `restore` command automatically backs up your current data before restoring. Ensure no subtrack processes are running during the restore — the database is flushed to disk after each command.
+Ensure no subtrack processes are running during the restore — the database is flushed to disk after each command.
 
 ## Is my data sent anywhere?
 
@@ -86,7 +83,7 @@ Yes. Use `subtrack backup --encrypt` to create an encrypted backup. Encrypted ba
 
 ## Can I use subtrack in Docker or CI?
 
-Yes. subtrack is a standard Node.js CLI tool and works in any environment with Node.js 22+. For Docker:
+Yes. subtrack is installed like any Node.js package (the npm launcher runs a native Rust binary; the Linux binaries are statically linked, so they work on any glibc or musl distribution). For Docker:
 
 ```dockerfile
 FROM node:22-alpine
@@ -98,7 +95,7 @@ Use `SUBSC_CLI_DB_DIR` to control where the database is stored in containerized 
 
 ## How does LLM API cost tracking work?
 
-The `subtrack usage` command uses [LiteLLM](https://github.com/BerriAI/litellm) pricing data to automatically calculate costs based on model name and token counts. Pricing is cached locally for 24 hours and can be refreshed with `subtrack usage refresh`. If a model is not found in the cache, it falls back to the LiteLLM Model Catalog API, then prompts for manual cost input.
+The `subtrack usage` command uses [LiteLLM](https://github.com/BerriAI/litellm) pricing data to automatically calculate costs based on model name and token counts. Pricing is cached locally for 24 hours and can be refreshed with `subtrack usage refresh`. If a model is not found in the cache (and the LiteLLM Model Catalog API), the command exits with an error instructing you to pass `--cost` for a manual price.
 
 API costs are stored in USD cents (as a real number, allowing fractional cents for precise billing) and can be included in payment totals with `subtrack payment --api`.
 
@@ -110,7 +107,7 @@ Model pricing is fetched from the [LiteLLM GitHub repository](https://github.com
 
 Yes! Each subscription has a `status` field: `active`, `paused`, `cancelled`, or `archived`. Paused subscriptions are preserved in the database but excluded from payment totals, analytics, and upcoming bills. This is useful for subscriptions you want to keep for reference but aren't currently paying for.
 
-Use `subtrack edit <id> --status paused` (or `subtrack pause <id>`), and edit interactively to select the `status` field.
+Use `subtrack edit <id> --status paused` (or `subtrack pause <id>`).
 
 ## What is the billing day for?
 
@@ -164,7 +161,7 @@ MCP (Model Context Protocol) is a standard that allows AI assistants to interact
 
 ## How do I search for subscriptions?
 
-Use `subtrack search <query>` to search by name, notes, or tags. You can restrict search scope with `--names`, `--notes`, or `--tags`. Without a query, it opens an interactive search prompt.
+Use `subtrack search <query>` to search by name, notes, or tags. You can restrict search scope with `--names`, `--notes`, or `--tags`.
 
 ## What are trial periods?
 
@@ -220,4 +217,4 @@ Use `subtrack maintenance` to run an integrity check (default) and optionally VA
 
 ## How many currencies does subtrack support?
 
-subtrack supports 37 currencies in the interactive prompt, and any ISO 4217 3-letter code via the `--currency` flag. View the full list with `subtrack currency`.
+subtrack supports 37 built-in currencies (view with `subtrack currency`), and any ISO 4217 3-letter code via the `--currency` flag.

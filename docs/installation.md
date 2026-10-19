@@ -1,11 +1,22 @@
 ---
 title: Installation
-description: Install subtrack via npm, pnpm, or build from source.
+description: Install subtrack via npm, pnpm, or build the Rust binary from source.
 ---
 
 ## Requirements
 
-**subtrack** requires **Node.js 22 or later**. It is a pure Node.js package and does not require any system-level dependencies.
+**subtrack** is a native Rust binary distributed through npm. The npm package (`subtrack`) contains a small Node.js launcher that runs the platform binary, so Node.js **22.5+** is required to launch it. The binary itself is self-contained — Linux builds are statically linked (musl) and work on any glibc or musl distribution, including Alpine.
+
+Prebuilt binaries are provided for:
+
+| Platform | Package |
+|----------|---------|
+| Linux x64 | `@subtrack/subtrack-linux-x64` |
+| Linux arm64 | `@subtrack/subtrack-linux-arm64` |
+| macOS x64 (Intel) | `@subtrack/subtrack-darwin-x64` |
+| macOS arm64 (Apple Silicon) | `@subtrack/subtrack-darwin-arm64` |
+| Windows x64 | `@subtrack/subtrack-win32-x64` |
+| Windows arm64 | `@subtrack/subtrack-win32-arm64` |
 
 ## Install via npm (recommended)
 
@@ -37,17 +48,20 @@ Note that `npx` will download the package on every first run, so global install 
 
 ## Build from source
 
-Clone the repository and build locally:
+The Rust workspace lives under `rust/` in the monorepo. Building requires a Rust toolchain (the pinned version is read from `rust/rust-toolchain.toml`):
 
 ```bash
-git clone https://github.com/nazozokc/subtrack.git
-cd subtrack
-pnpm install
-pnpm build
-pnpm link --global
+cd rust
+rustup install     # installs the pinned toolchain from rust-toolchain.toml
+cargo build --release
 ```
 
-This links the `subtrack` command to your global `node_modules`. Re-run `pnpm link --global` after pulling updates.
+The binary is written to `rust/target/release/subtrack`. To use it with the npm launcher (or in place of a downloaded platform binary), point the launcher at it with the `SUBTRACK_BINARY` environment variable, or add it to your `PATH` directly:
+
+```bash
+export SUBTRACK_BINARY=$PWD/rust/target/release/subtrack
+SUBTRACK_BINARY=$PWD/rust/target/release/subtrack subtrack list
+```
 
 <div class="callout info">
   <strong>💡 Tip:</strong> Run <code>subtrack --help</code> after installation to verify everything works.

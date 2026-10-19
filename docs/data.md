@@ -144,7 +144,7 @@ All mutating operations (add, edit, delete, clone, archive, import, bulk operati
 
 ## Prices use major currency units
 
-Subscription prices are represented in major currency units (for example, `14.99` USD). They are validated and displayed with the appropriate currency symbol and decimal places using `Intl.NumberFormat`. LLM usage costs are the exception: `llm_usage.cost` is stored in USD cents.
+Subscription prices are represented in major currency units (for example, `14.99` USD). They are validated and displayed with the appropriate currency symbol and decimal places. LLM usage costs are the exception: `llm_usage.cost` is stored in USD cents.
 
 ## Encryption
 
@@ -189,17 +189,14 @@ If no destination is specified, backups are saved to `~/.config/subtrack/backups
 
 ## Restore from backup
 
-Use the `restore` command to restore from a backup. Without arguments, it interactively lists available backups:
+Use the `restore` command to restore from a backup. The backup file must be given explicitly, and `--force` is required to proceed — without it the command takes no action and the current database is left unchanged:
 
 ```bash
-# Interactive: select from available backups
-subtrack restore
-
 # Restore from a specific file
-subtrack restore ~/backups/subtrack_20260617_143000.db.gz
+subtrack restore ~/backups/subtrack_20260617_143000.db.gz --force
 ```
 
-Before restoring, the current database is automatically backed up as a safety measure. You can also restore manually:
+Before restoring, the current database is automatically backed up as a safety measure (timestamped with `_before_restore.db.enc` suffix, encrypted). You can also restore manually:
 
 ```bash
 # Stop subtrack (close all running instances)

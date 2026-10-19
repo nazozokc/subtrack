@@ -7,13 +7,18 @@ Practical workflows for managing your subscriptions with subtrack.
 
 ## First-time setup & adding subscriptions
 
-After installation, start by adding your subscriptions. The interactive mode guides you through each field:
+After installation, start by adding your subscriptions. Each subscription needs a name, price, currency, billing cycle, and status:
 
 ```bash
-subtrack add
+subtrack add \
+  --name Netflix \
+  --price 14.99 \
+  --currency USD \
+  --cycle monthly \
+  --status active
 ```
 
-You'll be prompted for: name, price, currency, billing cycle, and tags. Once added, verify with:
+Once added, verify with:
 
 ```bash
 subtrack list
@@ -27,24 +32,19 @@ subtrack add \
   --price 1980 \
   --currency JPY \
   --cycle monthly \
+  --status active \
   --tags "video,entertainment"
 ```
 
 ## Editing subscriptions
 
-Update existing subscriptions with `subtrack edit`. Run it interactively to pick a subscription and choose which fields to change:
-
-```bash
-subtrack edit
-```
-
-For non-interactive use, specify the subscription ID and the fields to update:
+Update existing subscriptions with `subtrack edit`. Specify the subscription ID and the fields to update — only the passed fields change:
 
 ```bash
 subtrack edit 3 --price 2500 --tags "video,entertainment,4k"
 ```
 
-To see subscription IDs, run `subtrack list`.
+To see subscription IDs, run `subtrack list`. Editing without an ID — or without any field flag — takes no action.
 
 ### Managing status and billing day
 
@@ -83,16 +83,16 @@ subtrack renew 3 --price 1980 --contractEnd 2027-08-31
 
 ## Cancelling with the guided checklist
 
-`subtrack cancel` walks through optional data export, alternative-service checks, a cancellation-date note, and a final confirmation. The subscription is marked `cancelled` (not deleted) and written to the audit log.
+`subtrack cancel` reviews the cancellation steps (optional data export, alternative-service checks, a cancellation-date note, and a final confirmation) and aborts without changes until you pass `--force`. With `--force`, the subscription is marked `cancelled` (not deleted) and written to the audit log.
 
 ```bash
-# Guided cancellation
+# Preview the cancellation without changing anything
 subtrack cancel 3
 
-# Non-interactive (cron / scripting)
+# Cancel immediately (cron / scripting)
 subtrack cancel 3 --force
 
-# Inspect what would be cancelled without changing anything
+# Inspect the target subscription as JSON (no changes made)
 subtrack cancel 3 --json
 ```
 
@@ -319,10 +319,6 @@ subtrack can track LLM API usage costs alongside subscription costs. This is use
 ### Adding usage entries
 
 ```bash
-# Interactive mode
-subtrack usage add
-
-# Non-interactive
 subtrack usage add \
   --provider openai \
   --model gpt-4o \
@@ -332,7 +328,7 @@ subtrack usage add \
   --description "Code review"
 ```
 
-Cost is automatically calculated using LiteLLM pricing data. If a model is not recognized, you'll be prompted to enter the cost manually.
+Cost is automatically calculated using LiteLLM pricing data. If the model has no known pricing (or you are offline), pass `--cost` explicitly — for example `--cost 0.50` for 50 USD cents.
 
 ### Listing and filtering
 
@@ -395,9 +391,6 @@ subtrack usage refresh
 Quickly find subscriptions by name, notes, or tags:
 
 ```bash
-# Search interactively
-subtrack search
-
 # Search by keyword
 subtrack search netflix
 
@@ -544,8 +537,8 @@ subtrack profile save work --tag work --status active
 # Switch to work profile
 subtrack profile switch work
 
-# See everything again (clear profile)
-# (restart subtrack or use subtrack list without profile)
+# Deactivate it again (also clears it when active)
+subtrack profile delete work
 
 # List saved profiles
 subtrack profile list
