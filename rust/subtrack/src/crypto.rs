@@ -93,14 +93,22 @@ fn generate_key() -> Vec<u8> {
 /// Write a file with owner-only (0o600) permissions.
 pub fn write_secret_file(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
-    let mut f = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)?;
-    f.write_all(data)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)?;
+        f.write_all(data)
+    }
+    #[cfg(not(unix))]
+    {
+        let mut f = std::fs::File::create(path)?;
+        f.write_all(data)
+    }
 }
 
 /// scrypt(passphrase, salt, 32, N=2^17, r=8, p=1).
