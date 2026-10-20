@@ -15,5 +15,8 @@ coverage/
 # local overrides
 .envrc.local
 
+# native binaries (built and staged into the platform packages during release)
+packages/subtrack-*/bin/
+
 # images (do not ignore)
 !*.png

@@ -19,12 +19,153 @@ jobs:
       contents: read
     uses: ./.github/workflows/app-ci.yml
 
-  publish:
+  # Builds one native binary per platform/arch and stages it into the matching
+  # platform package (packages/subtrack-<os>-<arch>/bin/) before uploading it as
+  # a tarball artifact. Linux binaries are static musl so they run on any glibc
+  # or musl distro; the Windows and macOS x64 legs cross-compile from the arm64
+  # hosted runners using rustup's prebuilt targets.
+  build-native-packages:
+    name: build ${{ matrix.platform }}-${{ matrix.arch }}
     needs: ci
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            target: aarch64-unknown-linux-musl
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+            target: aarch64-apple-darwin
+          - os: macos-14
+            platform: darwin
+            arch: x64
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            platform: win32
+            arch: x64
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            platform: win32
+            arch: arm64
+            target: aarch64-pc-windows-msvc
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install musl toolchain
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Add Rust target
+        shell: bash
+        # Read the channel from rust-toolchain.toml (repo root) so the target
+        # is added to the same toolchain the build resolves (single source of
+        # truth, rustup auto-installs it if missing).
+        run: |
+          toolchain="$(awk -F'"' '/^channel/{print $2; exit}' rust-toolchain.toml)"
+          echo "Using toolchain $toolchain from rust-toolchain.toml"
+          rustup toolchain install "$toolchain"
+          rustup target add --toolchain "$toolchain" "${{ matrix.target }}"
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            version="${{ github.event.release.tag_name }}"
+            version="${version#v}"
+          else
+            version="$(node -p "require('./packages/subtrack/package.json').version")"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building subtrack $version for ${{ matrix.platform }}-${{ matrix.arch }}"
+
+      - name: Build (linux)
+        if: matrix.platform == 'linux'
+        shell: bash
+        env:
+          SUBTRACK_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          triple="${{ matrix.target }}"
+          export "CC_${triple//-/_}=musl-gcc"
+          export "AR_${triple//-/_}=ar"
+          export "CARGO_TARGET_${triple//-/_}_LINKER=musl-gcc"
+          cargo build --release --locked \
+            --manifest-path rust/Cargo.toml \
+            --bin subtrack \
+            --target "$triple"
+
+      - name: Build (macOS / Windows)
+        if: matrix.platform != 'linux'
+        shell: bash
+        env:
+          SUBTRACK_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cargo build --release --locked \
+            --manifest-path rust/Cargo.toml \
+            --bin subtrack \
+            --target "${{ matrix.target }}"
+
+      - name: Verify version
+        shell: bash
+        run: |
+          bin="rust/target/${{ matrix.target }}/release/subtrack"
+          if [ "${{ matrix.platform }}" = "win32" ]; then bin="$bin.exe"; fi
+          reported="$("$bin" --version)"
+          echo "$bin reports $reported"
+          test "$reported" = "${{ steps.version.outputs.version }}"
+
+      - name: Verify Linux binary is static
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          bin="rust/target/${{ matrix.target }}/release/subtrack"
+          file "$bin"
+          ldd "$bin" 2>&1 | tee "$RUNNER_TEMP/ldd.txt" || true
+          grep -Eiq 'not a dynamic executable|statically linked' "$RUNNER_TEMP/ldd.txt"
+
+      - name: Stage native package
+        shell: bash
+        run: |
+          pkg="packages/subtrack-${{ matrix.platform }}-${{ matrix.arch }}"
+          bin="rust/target/${{ matrix.target }}/release/subtrack"
+          mkdir -p "$pkg/bin"
+          if [ "${{ matrix.platform }}" = "win32" ]; then
+            cp "$bin.exe" "$pkg/bin/subtrack.exe"
+          else
+            cp "$bin" "$pkg/bin/subtrack"
+            chmod 755 "$pkg/bin/subtrack"
+          fi
+          tar -cf "subtrack-native-${{ matrix.platform }}-${{ matrix.arch }}.tar" "$pkg/bin"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: subtrack-native-${{ matrix.platform }}-${{ matrix.arch }}
+          path: subtrack-native-${{ matrix.platform }}-${{ matrix.arch }}.tar
+          if-no-files-found: error
+
+  publish:
+    name: publish to npm
+    needs: build-native-packages
     runs-on: ubuntu-latest
     permissions:
-      attestations: write
       contents: write
       id-token: write
     steps:
@@ -45,63 +186,40 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: pnpm
 
-      - name: Validate version tag
-        if: github.event_name == 'release'
-        working-directory: ./packages/subtrack
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: subtrack-native-*
+          path: ${{ runner.temp }}/native-packages
+          merge-multiple: true
+
+      - name: Restore native package binaries
         run: |
-          TAG_NAME="${{ github.event.release.tag_name }}"
-          TAG_VERSION="${TAG_NAME#v}"
-          PKG_VERSION=$(node -p "require('./package.json').version")
+          for archive in "$RUNNER_TEMP"/native-packages/*.tar; do
+            tar -xf "$archive"
+          done
 
-          # Must be valid semver
-          if ! echo "$TAG_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
-            echo "❌ Invalid semver: $TAG_VERSION"
-            exit 1
-          fi
-
-          # Package version must match tag (or be incremented from it)
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "⚠  Package version ($PKG_VERSION) differs from tag ($TAG_VERSION) — will overwrite"
-          fi
-
-          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
-          echo "✅ Version: $TAG_VERSION"
+      - name: Resolve version
         id: version
-
-      - name: Verify signed tag
-        if: github.event_name == 'release'
-        continue-on-error: true
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          SIGNATURE=$(git tag -v "$TAG" 2>&1 || true)
-          if echo "$SIGNATURE" | grep -q "error:"; then
-            echo "⚠  Tag $TAG is not signed. Consider signing with: git tag -s <tag>"
-          elif echo "$SIGNATURE" | grep -q "Good signature"; then
-            echo "✅ Tag $TAG has a valid signature"
+          if [ "${{ github.event_name }}" = "release" ]; then
+            version="${{ github.event.release.tag_name }}"
+            version="${version#v}"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
           else
-            echo "⚠  Tag verification ambiguous for $TAG"
-            echo "$SIGNATURE" | head -5
+            echo "version=$(node -p "require('./packages/subtrack/package.json').version")" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set package.json version from tag
-        if: github.event_name == 'release'
-        working-directory: ./packages/subtrack
-        run: |
-          node -e "
-            const fs = require('fs')
-            const pkg = require('./package.json')
-            pkg.version = '${{ steps.version.outputs.version }}'
-            fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n')
-          "
+      - name: Set package versions
+        run: node scripts/set-version.mjs "${{ steps.version.outputs.version }}"
 
       - run: pnpm install --frozen-lockfile
 
-      # Generate npm-shrinkwrap.json for reproducible installs
-      - name: Generate shrinkwrap
-        working-directory: ./packages/subtrack
-        run: npm shrinkwrap
-
-      - run: pnpm build
+      - name: Verify native packages are staged
+        run: |
+          set -eu
+          for dir in packages/subtrack-*/; do
+            test -n "$(ls -A "$dir/bin")" || { echo "::error::$dir/bin is empty"; exit 1; }
+          done
 
       - name: Generate SBOM
         uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
@@ -110,42 +228,14 @@ jobs:
           artifact-name: subtrack-sbom-${{ steps.version.outputs.version || 'dev' }}
           format: spdx-json
 
-      - name: Verify build
-        working-directory: ./packages/subtrack
-        run: |
-          test -f dist/index.mjs
-          test -f npm-shrinkwrap.json
-          node -e "
-            const bytes = require('fs').readFileSync('dist/index.mjs').length;
-            const tag = '${{ steps.version.outputs.version }}';
-            console.log('📦 subtrack v' + tag + ' | dist/index.mjs (' + (bytes / 1024).toFixed(1) + ' KB)');
-          "
-
-      - name: Attest build provenance
-        if: github.event_name == 'release'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: packages/subtrack/dist/index.mjs,packages/subtrack/npm-shrinkwrap.json
-
       - name: Dry run publish
-        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry-run == true)
-        working-directory: ./packages/subtrack
-        run: pnpm publish --no-git-checks --provenance --dry-run
+        if: github.event_name == 'release' || inputs.dry-run == true
+        run: |
+          pnpm -r --filter './packages/subtrack*' publish \
+            --no-git-checks --provenance --access public --dry-run
 
       - name: Publish to npm
-        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry-run == false)
-        working-directory: ./packages/subtrack
-        run: pnpm publish --no-git-checks --provenance
-
-      - name: Upload release asset
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        working-directory: ./packages/subtrack
+        if: github.event_name == 'release' || inputs.dry-run == false
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          # Attach SBOM and build provenance
-          gh release upload "$TAG" \
-            dist/index.mjs#subtrack.mjs \
-            npm-shrinkwrap.json#npm-shrinkwrap.json
-          echo "✅ Uploaded assets to $TAG"
+          pnpm -r --filter './packages/subtrack*' publish \
+            --no-git-checks --provenance --access public

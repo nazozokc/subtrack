@@ -6,3 +6,7 @@ extend-exclude = ["pnpm-lock.yaml", "dist/"]
 cristal = "cristal"
 # custom day-based billing cycles ("3d" = every N days) — false positive for "And"
 Nd = "Nd"
+# Rust crate name (flate2 crate, tokenizes as "flate"+"2", not the word "flate")
+flate = "flate"
+# shorthand identifiers for input/output tokens in usage.rs
+ot = "ot"

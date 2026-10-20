@@ -18,7 +18,7 @@ hero:
 
 features:
   - title: CLI-first
-    details: Full CLI for scripting and automation, plus an interactive menu for exploring your subscriptions.
+    details: Full CLI for scripting and automation. Every command runs from flags and safe defaults — no menus required.
   - title: Local SQLite
     details: All data is stored locally. No servers, no accounts, no telemetry.
   - title: Currency Conversion
@@ -32,7 +32,7 @@ features:
 subtrack list
 
 # Add a subscription
-subtrack add --name Netflix --price 1999 --currency USD --cycle monthly
+subtrack add --name Netflix --price 1999 --currency USD --cycle monthly --status active
 
 # Show monthly payment total
 subtrack payment
@@ -40,7 +40,7 @@ subtrack payment
 # Show upcoming bills
 subtrack upcoming
 
-# Run `subtrack` alone to open the interactive menu
+# Run `subtrack` alone for an overview of your data
 subtrack
 ```
 

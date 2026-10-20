@@ -139,7 +139,7 @@ subtrack does not use configuration files (`.subtrackrc`, `subtrack.json`, etc.)
 
 ### Supported currencies (37)
 
-The interactive prompt provides a curated list of 37 currencies. The `--currency` flag accepts any valid ISO 4217 3-letter code supported by [open.er-api.com](https://open.er-api.com).
+The curated list contains 37 currencies — view it with `subtrack currency`. The `--currency` flag accepts any valid ISO 4217 3-letter code supported by [open.er-api.com](https://open.er-api.com).
 
 ```
 AED  ARS  AUD  BRL  CAD  CHF  CLP  CNY  COP  CZK
@@ -160,4 +160,4 @@ subtrack currency
 weekly  bi-weekly  monthly  quarterly  semi-annual  yearly
 ```
 
-Custom day-based cycles are also supported: use `Nd` (e.g. `3d` for a 3-day trial cycle, 1–365 days) via the `--cycle` flag or the "custom (every N days)" entry in the interactive prompt. Displayed as "every N days".
+Custom day-based cycles are also supported: use `Nd` (e.g. `3d` for a 3-day trial cycle, 1–365 days) via the `--cycle` flag. Displayed as "every N days".

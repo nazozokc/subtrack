@@ -3,14 +3,14 @@ title: Commands
 description: Full reference for all subtrack CLI commands.
 ---
 
-subtrack provides the following commands. Most support both interactive and non-interactive modes.
+subtrack provides the following 50 commands. Every command runs non-interactively from flags and positional arguments — guided prompt flows (the guided checklist, checkbox deletion, the bare `subtrack` menu) are not part of the native binary. See [Scripting notes](#scripting-notes).
 
 ## Scripting notes
 
-- **Piped output is clean.** The notification banner and the `subtrack (subtrack vX.Y.Z)` header are printed only when stdout is a TTY, so `subtrack list > out.txt` and `subtrack list | jq` produce machine-readable output without stripping anything.
-- **JSON mode never prompts.** Passing `-j, --json` (or `SUBSC_CLI_DB_DIR` pointing at a fresh directory) is enough to keep a command non-interactive.
+- **Output is deterministic.** The `subtrack (subtrack vX.Y.Z)` header line is printed to stdout on every run; passing `-j, --json` (or running `subtrack mcp`) suppresses it for machine-readable output. There is no pre-command notification banner.
+- **No interactive mode.** Commands take flags and positionals directly. When required input is missing, the command either exits 0 taking no action (e.g. bare `subtrack add`, `edit`, `delete`, `restore`, `search`) or prints the pending preview and aborts without changes (e.g. `cancel` without `--force`).
 - **Exit codes for automation.** `budget --check` exits 1 when over budget; `check --strict` exits 1 when data problems are found.
-- **Unknown flags are ignored.** A typo like `--inputTokens` (correct form: `--input-tokens`) does not error out — it is silently dropped. Always confirm against `subtrack <command> --help`.
+- **Unknown flags fail loudly.** A misspelled option aborts with an error and exit code 1: `subtrack list --min-pricee 500` → `✖ --min-pricee: Unknown option '--min-pricee'`. Typos are never silently dropped.
 
 <details>
 <summary><strong>Quick navigation</strong></summary>
@@ -68,9 +68,10 @@ subtrack provides the following commands. Most support both interactive and non-
 
 ::: tip Not listed here?
 `subtrack <command> --help` is always authoritative. Option names are
-case-sensitive and unknown flags are silently ignored, so copy-paste errors
-fail quietly. Common traps: `usage` uses kebab-case (`--input-tokens`), while
-`add` / `edit` / `forecast` use camelCase (`--billingDay`, `--addName`).
+case-sensitive, and unknown flags abort with an error (exit 1) instead of
+being dropped, so copy-paste mistakes fail loudly. Common traps:
+`usage` uses kebab-case (`--input-tokens`), while `add` / `edit` / `forecast`
+use camelCase (`--billingDay`, `--addName`).
 :::
 
 </details>
@@ -90,8 +91,8 @@ Lists all subscriptions in a formatted table. Subscriptions are grouped by curre
 | `--contract` | Show contract dates column |
 | `--vendor` | Show vendor column |
 | `--status <status>` | Filter by status: `active`, `paused`, `cancelled`, `archived` |
-| `--min-price <n>` | Filter by minimum price (smallest currency unit) |
-| `--max-price <n>` | Filter by maximum price (smallest currency unit) |
+| `--min-price <n>` | Filter by minimum price (major currency units, e.g. `14.99`) |
+| `--max-price <n>` | Filter by maximum price (major currency units, e.g. `14.99`) |
 | `-j, --json` | Output as JSON |
 | `--tags <tags>` | Comma-separated tag names to filter by (AND logic) |
 | `--limit <n>` | Max number of items to show |
@@ -150,13 +151,13 @@ When `--api` is used, LLM API usage costs for the current month are fetched from
 
 ## `add`
 
-Adds a new subscription. Without flags, prompts for all fields interactively. Providing all flags skips prompts entirely (useful for scripts).
+Adds a new subscription. Requires at least `--name`, `--price`, `--currency`, `--cycle`, and `--status` — if any of these is missing, the command exits 0 without creating anything (no interactive prompts in this release). Providing all flags also skips further prompts in every environment (useful for scripts).
 
 | Option | Description |
 |--------|-------------|
 | `--name <name>` | Subscription name (max 100 characters) |
 | `--price <price>` | Payment amount in major currency units — non-negative, max 99,999,999 |
-| `--currency <C>` | Currency code (ISO 4217). Accepts any 3-letter code; interactive mode provides a curated list |
+| `--currency <C>` | Currency code (ISO 4217). Accepts any 3-letter code; run `subtrack currency` for the curated list of 37 |
 | `--cycle <cycle>` | Billing cycle. One of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly, or `Nd` for a custom day count (e.g. `3d`, 1–365) |
 | `--tags <tags>` | Comma-separated tags (max 10 tags, each max 50 characters) |
 | `--status <status>` | Subscription status: `active`, `paused`, `cancelled` (default: `active`) |
@@ -174,19 +175,22 @@ Adds a new subscription. Without flags, prompts for all fields interactively. Pr
 ### Examples
 
 ```bash
-# Interactive mode
-subtrack add
-
-# Fully non-interactive (skips confirmation)
+# Fully non-interactive
 subtrack add \
   --name Spotify \
   --price 980 \
   --currency JPY \
   --cycle monthly \
+  --status active \
   --tags music
 
-# Partial flags — missing fields are prompted
-subtrack add --name Netflix
+# Minimal form: only the required flags
+subtrack add \
+  --name Netflix \
+  --price 14.99 \
+  --currency USD \
+  --cycle monthly \
+  --status active
 
 # Tags with existing tag autocomplete
 subtrack add --name "AWS" --price 50 --currency USD --cycle monthly
@@ -218,11 +222,11 @@ subtrack add \
 
 ## `edit`
 
-Edits an existing subscription. Without flags, interactively selects a subscription and fields to change. Flags can be used for non-interactive partial updates.
+Edits an existing subscription. `[id]` selects the target subscription; only the fields passed as flags are changed.
 
 | Option | Description |
 |--------|-------------|
-| `[id]` | Subscription ID (optional). If omitted, prompts for selection |
+| `[id]` | Subscription ID (required for any changes — without ID the command exits 0 and does nothing) |
 | `--name <name>` | New subscription name |
 | `--price <price>` | New payment amount |
 | `--currency <C>` | New currency code |
@@ -243,9 +247,6 @@ Edits an existing subscription. Without flags, interactively selects a subscript
 ### Examples
 
 ```bash
-# Interactive: select subscription, then pick fields to edit
-subtrack edit
-
 # Edit a specific subscription by ID
 subtrack edit 3
 
@@ -268,22 +269,19 @@ subtrack edit 3 --billingDay ""
 subtrack edit 3 --paymentMethod paypal
 ```
 
-Without flags, `edit` shows a multi-select of fields to change. Each selected field is prompted with the current value as default.
+Without any field flags, `edit <id>` prints the subscription's current values and exits without changing anything.
 
 ## `delete [ids...]`
 
-Shows an interactive checkbox list of all subscriptions. Select one or more to delete. Confirmation is required before deletion.
-
-You can also specify subscription IDs as positional arguments for non-interactive deletion.
+Deletes one or more subscriptions by ID. Deletion is immediate — no confirmation step — and recorded in the audit log. Without IDs, the command exits 0 and does nothing.
 
 ### Examples
 
 ```bash
-# Interactive: checkbox selection
-subtrack delete
-
-# Non-interactive: delete by ID(s)
+# Delete one subscription by ID
 subtrack delete 3
+
+# Delete several subscriptions
 subtrack delete 2 5 7
 ```
 
@@ -682,31 +680,22 @@ subtrack backup --encrypt
 
 ## `restore [file]`
 
-Restores the database from a backup file. If no file is specified, shows an interactive list of available backups from the default backup directory (`~/.config/subtrack/backups/`).
+Restores the database from a backup file. Pass `--force` to proceed — without it the command takes no action and the current database is left unchanged.
 
-Before restoring, the current database is automatically backed up (timestamped with `_before_restore.db.gz` suffix) as a safety measure.
+Before restoring, the current database is automatically backed up as a safety measure (timestamped with `_before_restore.db.enc` suffix, encrypted).
 
 Each backup has a SHA-256 hash sidecar file (`<backup>.sha256`) for integrity verification. The restore command checks this hash before proceeding and warns if it doesn't match.
 
 | Option | Description |
 |--------|-------------|
 | `-f, --force` | Skip confirmation prompt and hash check warnings |
-| `--dir <path>` | Scan a custom directory for backup files |
+| `--dir <dir>` | Directory to scan for backup files |
 
 ### Examples
 
 ```bash
-# Interactive: select a backup from the default directory
-subtrack restore
-
-# Restore from a specific file
-subtrack restore ~/backups/subtrack_20260617_143000.db.gz
-
-# Force restore without confirmation
+# Restore from a specific file (confirmation step skipped)
 subtrack restore ~/backups/subtrack_20260617_143000.db.gz --force
-
-# List backups from a custom directory
-subtrack restore --dir ~/custom-backups
 ```
 
 ## `config`
@@ -801,7 +790,7 @@ Tracks LLM API usage costs. Costs are auto-calculated from model pricing when av
 
 ### `usage add`
 
-Records an LLM API usage entry. Without flags, prompts for all fields interactively.
+Records an LLM API usage entry. Requires `--provider`, `--model`, `--input-tokens`, and `--output-tokens` (+ `--cost` when no pricing can be resolved — see below).
 
 | Option | Description |
 |--------|-------------|
@@ -814,9 +803,6 @@ Records an LLM API usage entry. Without flags, prompts for all fields interactiv
 | `--cost <amount>` | Total cost in USD (e.g. `0.50` for 50 cents; overrides auto-pricing) |
 
 ```bash
-# Interactive mode
-subtrack usage add
-
 # Non-interactive
 subtrack usage add \
   --provider openai \
@@ -835,7 +821,7 @@ subtrack usage add \
   --cost 0.15
 ```
 
-Cost is calculated automatically via the LiteLLM pricing cache (fetched from GitHub, cached for 24 hours). If pricing is not found, the tool falls back to querying the LiteLLM Model Catalog API, then prompts for manual cost input. Use `--cost` to override auto-pricing entirely.
+Cost is calculated automatically via the LiteLLM pricing cache (fetched from GitHub, cached for 24 hours). If no pricing can be resolved for the model (unknown to the cache/catalog, or offline), the command fails with an error instructing you to pass `--cost`. Use `--cost` to override auto-pricing entirely.
 
 ### `usage list`
 
@@ -894,13 +880,7 @@ subtrack usage edit 7 --description ""
 
 ### `usage delete`
 
-Interactively selects and deletes LLM API usage entries.
-
-```bash
-subtrack usage delete
-```
-
-Multi-select via checkbox → confirm → batch delete. You can also pass entry IDs directly:
+Deletes one or more usage entries by ID in a single batch.
 
 ```bash
 subtrack usage delete 3 5 7
@@ -959,9 +939,6 @@ subtrack usage refresh --from 2026-01-01 --to 2026-06-30
 
 # Scan all available history
 subtrack usage refresh --all
-
-# Force-refresh pricing cache only (no scanner data import)
-# (This is the default behavior of the old refresh — pricing is auto-refreshed daily)
 ```
 
 ### `usage total`
@@ -997,7 +974,7 @@ Searches subscriptions by name, notes, or tags. Useful for quickly finding subsc
 
 | Option | Description |
 |--------|-------------|
-| `[query]` | Search query (omit for interactive prompt) |
+| `[query]` | Search query (required to return results — without it the command does nothing) |
 | `--names` | Search in names only |
 | `--notes` | Search in notes only |
 | `--tags` | Search in tags only |
@@ -1006,9 +983,6 @@ Searches subscriptions by name, notes, or tags. Useful for quickly finding subsc
 ### Examples
 
 ```bash
-# Interactive search
-subtrack search
-
 # Search by keyword
 subtrack search netflix
 
@@ -1044,7 +1018,7 @@ Shows trials expiring within the given number of days (default: 7).
 
 ### `trial delete [ids...]`
 
-Deletes trial entries (interactive checkbox selection when no IDs given).
+Deletes trial entries (one or more IDs; batch deletion with multiple IDs).
 
 ```bash
 # Add a trial
@@ -1064,8 +1038,8 @@ subtrack trial expiring
 # Trials expiring within 30 days
 subtrack trial expiring 30
 
-# Delete trials (interactive)
-subtrack trial delete
+# Delete trials by ID
+subtrack trial delete 1 2
 ```
 
 ## `bulk`
@@ -1534,7 +1508,7 @@ subtrack dedupe merge <keepId> <removeId>
 
 ## `cancel <id>`
 
-Cancels a subscription with a guided checklist: optional data export, alternative-service check, cancellation-date note, and a final confirmation. The subscription is marked `cancelled` (not deleted), `contractEnd` is set to today when unset, and the cancellation is written to the audit log.
+Cancels a subscription. Without `--force`, the command prints the cancellation preview — the guided checklist steps (optional data export, alternative-service check, cancellation-date note, final confirmation) — and aborts without changes. With `--force` it skips the checklist, marks the subscription `cancelled` (not deleted), sets `contractEnd` to today when unset, and writes the audit log.
 
 | Option | Description |
 |--------|-------------|
@@ -1542,12 +1516,13 @@ Cancels a subscription with a guided checklist: optional data export, alternativ
 | `-j, --json` | Output subscription info as JSON (no changes made) |
 
 ```bash
+# Preview the cancellation without changing anything
 subtrack cancel 3
 
-# Non-interactive (cron / scripting)
+# Cancel immediately (cron / scripting)
 subtrack cancel 3 --force
 
-# Inspect what would be cancelled without changing anything
+# Inspect the target subscription as JSON (no changes made)
 subtrack cancel 3 --json
 ```
 
@@ -1680,7 +1655,7 @@ subtrack changes --id 3 --json
 
 ## `receipt <file>`
 
-Imports subscription candidates from a receipt file. Use `--dryRun` to inspect without writing, or `--review` to review candidates interactively.
+Imports subscription candidates from a receipt file. Use `--dryRun` to inspect without writing, or `--review` to print the review listing.
 
 | Argument | Description |
 |----------|-------------|
@@ -1689,7 +1664,7 @@ Imports subscription candidates from a receipt file. Use `--dryRun` to inspect w
 | Option | Description |
 |--------|-------------|
 | `--dryRun` | Parse without writing candidates |
-| `--review` | Review candidates interactively before writing |
+| `--review` | Print the review listing before writing |
 | `-j, --json` | Output as JSON |
 
 ```bash
@@ -1767,7 +1742,7 @@ Manages subscription suggestions — candidates detected by the scanner (for exa
 
 | Option | Description |
 |--------|-------------|
-| `[id]` | Suggestion ID (interactive prompt when omitted) |
+| `[id]` | Suggestion ID (required, or use `--all`) |
 | `--all` | Dismiss all pending suggestions |
 
 ```bash
