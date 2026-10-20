@@ -268,7 +268,10 @@ fn version_and_help_output() {
     let out = env.run(&["--version"]);
     assert_eq!(out.status.code(), Some(0));
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("10"), "version: {stdout}");
+    assert!(
+        stdout.contains(env!("CARGO_PKG_VERSION")),
+        "version: {stdout}"
+    );
     assert!(stdout.contains('.'), "version: {stdout}");
 
     let out = env.run(&["--help"]);
