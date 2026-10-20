@@ -23,12 +23,12 @@ const require = createRequire(import.meta.url);
 
 /** @type {Readonly<Record<string, string>>} */
 const NATIVE_PACKAGES = {
-	"linux-x64": "@subtrack/subtrack-linux-x64",
-	"linux-arm64": "@subtrack/subtrack-linux-arm64",
-	"darwin-x64": "@subtrack/subtrack-darwin-x64",
-	"darwin-arm64": "@subtrack/subtrack-darwin-arm64",
-	"win32-x64": "@subtrack/subtrack-win32-x64",
-	"win32-arm64": "@subtrack/subtrack-win32-arm64",
+  "linux-x64": "@subtrack/subtrack-linux-x64",
+  "linux-arm64": "@subtrack/subtrack-linux-arm64",
+  "darwin-x64": "@subtrack/subtrack-darwin-x64",
+  "darwin-arm64": "@subtrack/subtrack-darwin-arm64",
+  "win32-x64": "@subtrack/subtrack-win32-x64",
+  "win32-arm64": "@subtrack/subtrack-win32-arm64",
 };
 
 /**
@@ -37,7 +37,7 @@ const NATIVE_PACKAGES = {
  * @returns {string | undefined}
  */
 function getNativePackageName(platform, arch) {
-	return NATIVE_PACKAGES[`${platform}-${arch}`];
+  return NATIVE_PACKAGES[`${platform}-${arch}`];
 }
 
 /**
@@ -45,7 +45,7 @@ function getNativePackageName(platform, arch) {
  * @returns {string}
  */
 function getNativeBinarySubpath(platform = process.platform) {
-	return platform === "win32" ? "bin/subtrack.exe" : "bin/subtrack";
+  return platform === "win32" ? "bin/subtrack.exe" : "bin/subtrack";
 }
 
 /**
@@ -53,20 +53,20 @@ function getNativeBinarySubpath(platform = process.platform) {
  * @returns {string | undefined}
  */
 function resolveNativeBinary({
-	arch = process.arch,
-	platform = process.platform,
-	resolvePath = (id) => require.resolve(id),
+  arch = process.arch,
+  platform = process.platform,
+  resolvePath = (id) => require.resolve(id),
 } = {}) {
-	const packageName = getNativePackageName(platform, arch);
-	if (packageName == null) {
-		return undefined;
-	}
+  const packageName = getNativePackageName(platform, arch);
+  if (packageName == null) {
+    return undefined;
+  }
 
-	try {
-		return resolvePath(`${packageName}/${getNativeBinarySubpath(platform)}`);
-	} catch {
-		return undefined;
-	}
+  try {
+    return resolvePath(`${packageName}/${getNativeBinarySubpath(platform)}`);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -74,25 +74,25 @@ function resolveNativeBinary({
  * @returns {CliRuntime}
  */
 function resolveCliRuntime({
-	argv,
-	arch = process.arch,
-	nativeBinaryPath = resolveNativeBinary({ arch }),
-	platform = process.platform,
-	env = process.env,
+  argv,
+  arch = process.arch,
+  nativeBinaryPath = resolveNativeBinary({ arch }),
+  platform = process.platform,
+  env = process.env,
 }) {
-	// Local development / nix: point at a freshly built binary directly.
-	const override = env.SUBTRACK_BINARY;
-	if (override != null && override !== "") {
-		return { args: argv, command: override };
-	}
+  // Local development / nix: point at a freshly built binary directly.
+  const override = env.SUBTRACK_BINARY;
+  if (override != null && override !== "") {
+    return { args: argv, command: override };
+  }
 
-	if (nativeBinaryPath != null) {
-		return { args: argv, command: nativeBinaryPath };
-	}
+  if (nativeBinaryPath != null) {
+    return { args: argv, command: nativeBinaryPath };
+  }
 
-	return {
-		errorMessage: `subtrack native binary is not available for ${platform}-${arch}. Reinstall subtrack so optional native dependencies are installed.\n`,
-	};
+  return {
+    errorMessage: `subtrack native binary is not available for ${platform}-${arch}. Reinstall subtrack so optional native dependencies are installed.\n`,
+  };
 }
 
 /**
@@ -100,7 +100,7 @@ function resolveCliRuntime({
  * @returns {string}
  */
 function errorMessage(error) {
-	return error instanceof Error ? error.message : String(error);
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -108,45 +108,49 @@ function errorMessage(error) {
  * @returns {string | undefined}
  */
 function ensureNativeBinaryExecutable({
-	binaryPath,
-	chmodPath = chmodSync,
-	platform = process.platform,
-	statPath = statSync,
+  binaryPath,
+  chmodPath = chmodSync,
+  platform = process.platform,
+  statPath = statSync,
 }) {
-	if (platform === "win32") {
-		return undefined;
-	}
+  if (platform === "win32") {
+    return undefined;
+  }
 
-	try {
-		const mode = statPath(binaryPath).mode;
-		if ((mode & 0o111) !== 0) {
-			return undefined;
-		}
-		chmodPath(binaryPath, 0o755);
-		return undefined;
-	} catch (error) {
-		return `subtrack native binary is not executable: ${errorMessage(error)}\n`;
-	}
+  try {
+    const mode = statPath(binaryPath).mode;
+    if ((mode & 0o111) !== 0) {
+      return undefined;
+    }
+    chmodPath(binaryPath, 0o755);
+    return undefined;
+  } catch (error) {
+    return `subtrack native binary is not executable: ${errorMessage(error)}\n`;
+  }
 }
 
 /**
  * @param {MainModuleOptions} options
  * @returns {boolean}
  */
-function isMainModule({ argvEntry = process.argv[1], moduleUrl, realpathPath = realpathSync }) {
-	if (argvEntry == null) {
-		return false;
-	}
+function isMainModule({
+  argvEntry = process.argv[1],
+  moduleUrl,
+  realpathPath = realpathSync,
+}) {
+  if (argvEntry == null) {
+    return false;
+  }
 
-	const modulePath = fileURLToPath(moduleUrl);
-	try {
-		if (realpathPath(modulePath) === realpathPath(argvEntry)) {
-			return true;
-		}
-	} catch {
-		// Paths could not be real-pathed (missing entry point); compare raws below.
-	}
-	return toComparablePath(modulePath) === toComparablePath(argvEntry);
+  const modulePath = fileURLToPath(moduleUrl);
+  try {
+    if (realpathPath(modulePath) === realpathPath(argvEntry)) {
+      return true;
+    }
+  } catch {
+    // Paths could not be real-pathed (missing entry point); compare raws below.
+  }
+  return toComparablePath(modulePath) === toComparablePath(argvEntry);
 }
 
 /**
@@ -157,10 +161,10 @@ function isMainModule({ argvEntry = process.argv[1], moduleUrl, realpathPath = r
  * @returns {string}
  */
 function toComparablePath(filePath) {
-	if (process.platform !== "win32") {
-		return filePath;
-	}
-	return filePath.replace(/^\/([A-Za-z]:)/, "$1").replaceAll("/", "\\");
+  if (process.platform !== "win32") {
+    return filePath;
+  }
+  return filePath.replace(/^\/([A-Za-z]:)/, "$1").replaceAll("/", "\\");
 }
 
 /**
@@ -168,11 +172,11 @@ function toComparablePath(filePath) {
  * @returns {NodeJS.Signals[]}
  */
 function getForwardedSignals(platform = process.platform) {
-	if (platform === "win32") {
-		return ["SIGINT", "SIGBREAK", "SIGHUP"];
-	}
+  if (platform === "win32") {
+    return ["SIGINT", "SIGBREAK", "SIGHUP"];
+  }
 
-	return ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"];
+  return ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"];
 }
 
 /**
@@ -180,46 +184,46 @@ function getForwardedSignals(platform = process.platform) {
  * @returns {NativeSpawner}
  */
 function createNativeSpawner({
-	platform = process.platform,
-	signalSource = process,
-	spawnProcess = spawn,
+  platform = process.platform,
+  signalSource = process,
+  spawnProcess = spawn,
 } = {}) {
-	const forwardedSignals = getForwardedSignals(platform);
+  const forwardedSignals = getForwardedSignals(platform);
 
-	return async (command, args) =>
-		new Promise((resolve) => {
-			const child = spawnProcess(command, args, { stdio: "inherit" });
-			const signalHandlers = new Map();
-			const cleanup = () => {
-				for (const [signal, handler] of signalHandlers) {
-					signalSource.off(signal, handler);
-				}
-				signalHandlers.clear();
-			};
-			/**
-			 * @param {NodeJS.Signals} signal
-			 */
-			const handleSignal = (signal) => {
-				child.kill(signal);
-			};
+  return async (command, args) =>
+    new Promise((resolve) => {
+      const child = spawnProcess(command, args, { stdio: "inherit" });
+      const signalHandlers = new Map();
+      const cleanup = () => {
+        for (const [signal, handler] of signalHandlers) {
+          signalSource.off(signal, handler);
+        }
+        signalHandlers.clear();
+      };
+      /**
+       * @param {NodeJS.Signals} signal
+       */
+      const handleSignal = (signal) => {
+        child.kill(signal);
+      };
 
-			child.on("error", (error) => {
-				cleanup();
-				resolve({ error, signal: null, status: null });
-			});
-			child.on("exit", (status, signal) => {
-				cleanup();
-				resolve({ signal, status });
-			});
+      child.on("error", (error) => {
+        cleanup();
+        resolve({ error, signal: null, status: null });
+      });
+      child.on("exit", (status, signal) => {
+        cleanup();
+        resolve({ signal, status });
+      });
 
-			for (const signal of forwardedSignals) {
-				const handler = () => handleSignal(signal);
-				try {
-					signalSource.on(signal, handler);
-					signalHandlers.set(signal, handler);
-				} catch {}
-			}
-		});
+      for (const signal of forwardedSignals) {
+        const handler = () => handleSignal(signal);
+        try {
+          signalSource.on(signal, handler);
+          signalHandlers.set(signal, handler);
+        } catch {}
+      }
+    });
 }
 
 /**
@@ -228,41 +232,43 @@ function createNativeSpawner({
  * @returns {Promise<number>}
  */
 async function runCli(argv, spawnNative = createNativeSpawner()) {
-	const runtime = resolveCliRuntime({ argv });
-	if ("errorMessage" in runtime) {
-		process.stderr.write(runtime.errorMessage);
-		return 1;
-	}
+  const runtime = resolveCliRuntime({ argv });
+  if ("errorMessage" in runtime) {
+    process.stderr.write(runtime.errorMessage);
+    return 1;
+  }
 
-	const executableError = ensureNativeBinaryExecutable({ binaryPath: runtime.command });
-	if (executableError != null) {
-		process.stderr.write(executableError);
-		return 1;
-	}
+  const executableError = ensureNativeBinaryExecutable({
+    binaryPath: runtime.command,
+  });
+  if (executableError != null) {
+    process.stderr.write(executableError);
+    return 1;
+  }
 
-	const result = await spawnNative(runtime.command, runtime.args);
-	if (result.error != null) {
-		process.stderr.write(`${result.error.message}\n`);
-		return 1;
-	}
-	if (result.signal != null) {
-		process.kill(process.pid, result.signal);
-		return 1;
-	}
-	return result.status ?? 1;
+  const result = await spawnNative(runtime.command, runtime.args);
+  if (result.error != null) {
+    process.stderr.write(`${result.error.message}\n`);
+    return 1;
+  }
+  if (result.signal != null) {
+    process.kill(process.pid, result.signal);
+    return 1;
+  }
+  return result.status ?? 1;
 }
 
 if (isMainModule({ moduleUrl: import.meta.url })) {
-	process.exitCode = await runCli(process.argv.slice(2));
+  process.exitCode = await runCli(process.argv.slice(2));
 }
 
 export {
-	createNativeSpawner,
-	ensureNativeBinaryExecutable,
-	getNativeBinarySubpath,
-	getNativePackageName,
-	isMainModule,
-	resolveCliRuntime,
-	resolveNativeBinary,
-	runCli,
+  createNativeSpawner,
+  ensureNativeBinaryExecutable,
+  getNativeBinarySubpath,
+  getNativePackageName,
+  isMainModule,
+  resolveCliRuntime,
+  resolveNativeBinary,
+  runCli,
 };
