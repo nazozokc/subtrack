@@ -64,6 +64,10 @@ fn ask(message: &str) -> Option<String> {
     }
 }
 
+fn finish_only(message: &str) {
+    out(&format!("{} {}\n", ansi::green("\u{2714}"), message));
+}
+
 fn finish(message: &str, value: &str) {
     out(&format!(
         "{} {} {}\n",
@@ -116,7 +120,7 @@ pub fn input(message: &str, default: Option<&str>, validate: Option<Validator>) 
             continue;
         }
 
-        finish(message, &value);
+        finish_only(message);
         return Some(value);
     }
 }
