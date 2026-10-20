@@ -5,35 +5,35 @@ description: Install subtrack via npm, pnpm, or build the Rust binary from sourc
 
 ## Requirements
 
-**subtrack** is a native Rust binary distributed through npm. The npm package (`subtrack`) contains a small Node.js launcher that runs the platform binary, so Node.js **22.5+** is required to launch it. The binary itself is self-contained — Linux builds are statically linked (musl) and work on any glibc or musl distribution, including Alpine.
+**subtrack** is a native Rust binary distributed through npm. The npm package (`@subtrack-org/subtrack`) contains a small Node.js launcher that runs the platform binary, so Node.js **22.5+** is required to launch it. The binary itself is self-contained — Linux builds are statically linked (musl) and work on any glibc or musl distribution, including Alpine.
 
 Prebuilt binaries are provided for:
 
 | Platform | Package |
 |----------|---------|
-| Linux x64 | `@subtrack/subtrack-linux-x64` |
-| Linux arm64 | `@subtrack/subtrack-linux-arm64` |
-| macOS x64 (Intel) | `@subtrack/subtrack-darwin-x64` |
-| macOS arm64 (Apple Silicon) | `@subtrack/subtrack-darwin-arm64` |
-| Windows x64 | `@subtrack/subtrack-win32-x64` |
-| Windows arm64 | `@subtrack/subtrack-win32-arm64` |
+| Linux x64 | `@subtrack-org/subtrack-linux-x64` |
+| Linux arm64 | `@subtrack-org/subtrack-linux-arm64` |
+| macOS x64 (Intel) | `@subtrack-org/subtrack-darwin-x64` |
+| macOS arm64 (Apple Silicon) | `@subtrack-org/subtrack-darwin-arm64` |
+| Windows x64 | `@subtrack-org/subtrack-win32-x64` |
+| Windows arm64 | `@subtrack-org/subtrack-win32-arm64` |
 
 ## Install via npm (recommended)
 
 ```bash
-npm install -g subtrack
+npm install -g @subtrack-org/subtrack
 ```
 
 ## Install via pnpm
 
 ```bash
-pnpm add -g subtrack
+pnpm add -g @subtrack-org/subtrack
 ```
 
 ## Install via bun
 
 ```bash
-bun add -g subtrack
+bun add -g @subtrack-org/subtrack
 ```
 
 ## Run with npx (no install)
@@ -41,7 +41,7 @@ bun add -g subtrack
 If you prefer not to install globally, use `npx`:
 
 ```bash
-npx subtrack list
+npx @subtrack-org/subtrack list
 ```
 
 Note that `npx` will download the package on every first run, so global install is recommended for regular use.

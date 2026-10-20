@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 
 import {
+	NATIVE_PACKAGES,
 	createNativeSpawner,
 	ensureNativeBinaryExecutable,
 	getNativeBinarySubpath,
@@ -16,14 +17,22 @@ import {
 	runCli,
 } from "../src/launcher.mjs";
 
+test("NATIVE_PACKAGES fully matches the optionalDependencies declared in package.json", () => {
+	const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+	const expected = Object.fromEntries(
+		Object.keys(manifest.optionalDependencies).map((name) => [name.replace(/^@[^/]+\/subtrack-/, ""), name]),
+	);
+	assert.deepEqual(NATIVE_PACKAGES, expected);
+});
+
 test("getNativePackageName maps every supported platform/arch", () => {
 	const expected = {
-		"linux-x64": "@subtrack/subtrack-linux-x64",
-		"linux-arm64": "@subtrack/subtrack-linux-arm64",
-		"darwin-x64": "@subtrack/subtrack-darwin-x64",
-		"darwin-arm64": "@subtrack/subtrack-darwin-arm64",
-		"win32-x64": "@subtrack/subtrack-win32-x64",
-		"win32-arm64": "@subtrack/subtrack-win32-arm64",
+		"linux-x64": "@subtrack-org/subtrack-linux-x64",
+		"linux-arm64": "@subtrack-org/subtrack-linux-arm64",
+		"darwin-x64": "@subtrack-org/subtrack-darwin-x64",
+		"darwin-arm64": "@subtrack-org/subtrack-darwin-arm64",
+		"win32-x64": "@subtrack-org/subtrack-win32-x64",
+		"win32-arm64": "@subtrack-org/subtrack-win32-arm64",
 	};
 	for (const [key, name] of Object.entries(expected)) {
 		const [platform, arch] = key.split("-");
@@ -49,8 +58,8 @@ test("resolveNativeBinary resolves the platform package path", () => {
 			return `/fake/${id}`;
 		},
 	});
-	assert.equal(path, "/fake/@subtrack/subtrack-win32-arm64/bin/subtrack.exe");
-	assert.deepEqual(seen, ["@subtrack/subtrack-win32-arm64/bin/subtrack.exe"]);
+	assert.equal(path, "/fake/@subtrack-org/subtrack-win32-arm64/bin/subtrack.exe");
+	assert.deepEqual(seen, ["@subtrack-org/subtrack-win32-arm64/bin/subtrack.exe"]);
 });
 
 test("resolveNativeBinary returns undefined when unsupported or missing", () => {

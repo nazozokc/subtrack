@@ -21,15 +21,22 @@ const require = createRequire(import.meta.url);
 /** @typedef {{ kill: (signal: NodeJS.Signals) => unknown; on: import("node:events").EventEmitter["on"] }} NativeChild */
 /** @typedef {(command: string, args: string[], options: { stdio: "inherit" }) => NativeChild} NativeSpawnProcess */
 
-/** @type {Readonly<Record<string, string>>} */
-const NATIVE_PACKAGES = {
-  "linux-x64": "@subtrack/subtrack-linux-x64",
-  "linux-arm64": "@subtrack/subtrack-linux-arm64",
-  "darwin-x64": "@subtrack/subtrack-darwin-x64",
-  "darwin-arm64": "@subtrack/subtrack-darwin-arm64",
-  "win32-x64": "@subtrack/subtrack-win32-x64",
-  "win32-arm64": "@subtrack/subtrack-win32-arm64",
-};
+const NATIVE_PACKAGE_SCOPE = "@subtrack-org";
+const NATIVE_PLATFORM_ARCHES = [
+  "linux-x64",
+  "linux-arm64",
+  "darwin-x64",
+  "darwin-arm64",
+  "win32-x64",
+  "win32-arm64",
+];
+
+/**
+ * @type {Readonly<Record<string, string>>}
+ */
+const NATIVE_PACKAGES = Object.fromEntries(
+  NATIVE_PLATFORM_ARCHES.map((platformArch) => [platformArch, `${NATIVE_PACKAGE_SCOPE}/subtrack-${platformArch}`]),
+);
 
 /**
  * @param {string} platform
@@ -263,6 +270,7 @@ if (isMainModule({ moduleUrl: import.meta.url })) {
 }
 
 export {
+  NATIVE_PACKAGES,
   createNativeSpawner,
   ensureNativeBinaryExecutable,
   getNativeBinarySubpath,
