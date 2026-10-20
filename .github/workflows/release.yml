@@ -128,9 +128,17 @@ jobs:
         run: |
           bin="rust/target/${{ matrix.target }}/release/subtrack"
           if [ "${{ matrix.platform }}" = "win32" ]; then bin="$bin.exe"; fi
-          reported="$("$bin" --version)"
-          echo "$bin reports $reported"
-          test "$reported" = "${{ steps.version.outputs.version }}"
+          version="${{ steps.version.outputs.version }}"
+          if [ "${{ matrix.target }}" = "aarch64-pc-windows-msvc" ]; then
+            # x64 Windows runners cannot execute ARM64 binaries, so verify the
+            # baked-in version literal instead of running the binary.
+            grep -qaF -- "$version" "$bin"
+            echo "verified version literal $version in $bin"
+          else
+            reported="$("$bin" --version)"
+            echo "$bin reports $reported"
+            test "$reported" = "$version"
+          fi
 
       - name: Verify Linux binary is static
         if: matrix.platform == 'linux'
