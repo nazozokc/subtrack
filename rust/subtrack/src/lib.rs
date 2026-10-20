@@ -31,6 +31,7 @@ mod list;
 mod logger;
 mod maintenance;
 mod mcp;
+mod menu;
 mod notify;
 mod optimize;
 mod parser;

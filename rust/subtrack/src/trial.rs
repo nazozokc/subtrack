@@ -72,9 +72,7 @@ pub fn run_trial_usage() -> i32 {
 /// Port of `handleTrialAdd` (validation + persistence).
 pub fn run_trial_add(parsed: &ParsedArgs) -> i32 {
     use crate::prompts::{prompt_currency, prompt_cycle, prompt_optional, prompt_string};
-    use crate::validation::{
-        validate_expires_at, validate_notes, validate_trial_name,
-    };
+    use crate::validation::{validate_expires_at, validate_notes, validate_trial_name};
 
     let Some(name) = prompt_string(
         parsed.str("name").as_deref(),

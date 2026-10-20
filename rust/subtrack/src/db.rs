@@ -1483,35 +1483,6 @@ pub fn prune_audit_logs(conn: &Connection, before: &str, persist: bool) -> std::
     Ok(n)
 }
 
-/// Fetch a single LLM usage row by id.
-pub fn get_llm_usage_by_id(id: i64) -> std::io::Result<Option<LlmUsage>> {
-    let conn = open_db()?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, provider, model, input_tokens, output_tokens, cost, date, description \
-             FROM llm_usage WHERE id = ? LIMIT 1",
-        )
-        .map_err(|e| std::io::Error::other(e.to_string()))?;
-    let mut rows = stmt
-        .query_map(params![id], |row| {
-            Ok(LlmUsage {
-                id: row.get(0)?,
-                provider: row.get(1)?,
-                model: row.get(2)?,
-                input_tokens: row.get(3)?,
-                output_tokens: row.get(4)?,
-                cost: row.get::<_, f64>(5)?,
-                date: row.get(6)?,
-                description: row.get(7)?,
-            })
-        })
-        .map_err(|e| std::io::Error::other(e.to_string()))?;
-    match rows.next() {
-        Some(r) => Ok(Some(r.map_err(|e| std::io::Error::other(e.to_string()))?)),
-        None => Ok(None),
-    }
-}
-
 /// Delete an LLM usage row by id; returns false when no row matched.
 pub fn remove_llm_usage(id: i64) -> std::io::Result<bool> {
     let conn = open_db()?;
@@ -2051,6 +2022,42 @@ pub fn insert_llm_usage(
         save_db(conn)?;
     }
     Ok(())
+}
+
+/// Update an `llm_usage` row with the given column/value pairs.
+pub fn update_llm_usage(
+    conn: &Connection,
+    id: i64,
+    sets: &[(&str, SqlValue)],
+    persist: bool,
+) -> std::io::Result<bool> {
+    let exists: bool = conn
+        .query_row("SELECT 1 FROM llm_usage WHERE id = ?", params![id], |_| {
+            Ok(true)
+        })
+        .unwrap_or(false);
+    if !exists {
+        return Ok(false);
+    }
+    if !sets.is_empty() {
+        let clause = sets
+            .iter()
+            .map(|(c, _)| format!("{} = ?", c))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut params_vec: Vec<rusqlite::types::Value> =
+            sets.iter().map(|(_, v)| v.to_sql()).collect();
+        params_vec.push(rusqlite::types::Value::Integer(id));
+        conn.execute(
+            &format!("UPDATE llm_usage SET {} WHERE id = ?", clause),
+            rusqlite::params_from_iter(params_vec),
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    }
+    if persist {
+        save_db(conn)?;
+    }
+    Ok(true)
 }
 
 /// Port of `addLlmUsageFromLog` — insert with fractional-cent cost and dedup by

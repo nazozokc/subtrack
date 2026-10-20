@@ -55,23 +55,12 @@ fn out(text: &str) {
     let _ = handle.flush();
 }
 
-fn question(message: &str) {
-    out(&format!("{} {}\n", ansi::cyan("?"), message));
-}
-
 fn ask(message: &str) -> Option<String> {
-    out(&format!(
-        "{} {} \u{203a} ",
-        ansi::cyan("?"),
-        message
-    ));
+    out(&format!("{} {} \u{203a} ", ansi::cyan("?"), message));
     let mut line = String::new();
     match io::stdin().lock().read_line(&mut line) {
         Ok(0) | Err(_) => None,
-        Ok(_) => Some(
-            line.trim_end_matches(['\r', '\n'])
-                .to_string(),
-        ),
+        Ok(_) => Some(line.trim_end_matches(['\r', '\n']).to_string()),
     }
 }
 
@@ -94,11 +83,9 @@ fn cancel(message: &str) {
 /// failures re-ask instead of aborting. `None` means EOF with no default, so
 /// the caller can abort the workflow quietly (matching the piped-in behavior
 /// of the TypeScript implementation).
-pub fn input(
-    message: &str,
-    default: Option<&str>,
-    validate: Option<fn(&str) -> Result<(), String>>,
-) -> Option<String> {
+pub type Validator = fn(&str) -> Result<(), String>;
+
+pub fn input(message: &str, default: Option<&str>, validate: Option<Validator>) -> Option<String> {
     if !interactive() {
         return default.map(|d| d.to_string());
     }
@@ -122,11 +109,11 @@ pub fn input(
             answer
         };
 
-        if let Some(check) = validate {
-            if let Err(error) = check(&value) {
-                cancel(&error);
-                continue;
-            }
+        if let Some(check) = validate
+            && let Err(error) = check(&value)
+        {
+            cancel(&error);
+            continue;
         }
 
         finish(message, &value);
@@ -149,13 +136,12 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
     }
 
     for (index, choice) in choices.iter().enumerate() {
-        let marker = if Some(index) == default { " (default)" } else { "" };
-        out(&format!(
-            "  {:>2}) {}{}\n",
-            index + 1,
-            choice.label,
-            marker
-        ));
+        let marker = if Some(index) == default {
+            " (default)"
+        } else {
+            ""
+        };
+        out(&format!("  {:>2}) {}{}\n", index + 1, choice.label, marker));
     }
 
     let hint = match default {
@@ -271,9 +257,9 @@ pub fn checkbox(message: &str, choices: &[Choice]) -> Option<Vec<String>> {
                 }
             } else {
                 let needle = part.to_lowercase();
-                choices.iter().find(|c| {
-                    c.value.to_lowercase() == needle || c.label.to_lowercase() == needle
-                })
+                choices
+                    .iter()
+                    .find(|c| c.value.to_lowercase() == needle || c.label.to_lowercase() == needle)
             };
             match found {
                 Some(choice) => {

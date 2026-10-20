@@ -8,7 +8,7 @@
 
 use crate::logger::fail;
 use crate::prompt::{self, Choice};
-use crate::validation::{is_valid_cycle, validate_cycle_days, CYCLE_VALUES};
+use crate::validation::{CYCLE_VALUES, is_valid_cycle, validate_cycle_days};
 
 /// Port of `promptString`.
 pub fn prompt_string(
@@ -53,37 +53,6 @@ pub fn prompt_select(
         return None;
     }
     Some(index)
-}
-
-/// Port of `promptSelect` for choices that carry a human-readable label.
-pub fn prompt_select_labelled(
-    flag: Option<&str>,
-    message: &str,
-    choices: &[(&str, &str)],
-    is_valid: fn(&str) -> bool,
-) -> Option<String> {
-    if let Some(value) = flag {
-        if !is_valid(value) {
-            let valid: Vec<&str> = choices.iter().map(|(_, v)| *v).collect();
-            fail(&format!(
-                "Invalid \"{}\". Valid: {}",
-                value,
-                valid.join(", ")
-            ));
-            return None;
-        }
-        return Some(value.to_string());
-    }
-
-    let entries: Vec<Choice> = choices
-        .iter()
-        .map(|(label, value)| Choice::new(label, value))
-        .collect();
-    let value = prompt::select(message, &entries, None)?;
-    if !is_valid(&value) {
-        return None;
-    }
-    Some(value)
 }
 
 /// Port of `promptCycle` — named presets or a custom `Nd` day cycle.

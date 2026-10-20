@@ -66,6 +66,27 @@ impl Env {
         self.run_with_stdin(args, "")
     }
 
+    /// Run with prompts forced on (the child's stdin is still a pipe).
+    fn run_interactive(&self, args: &[&str], input: &str) -> Output {
+        let mut cmd = Command::new(BIN);
+        cmd.args(args);
+        for (k, v) in self.envs() {
+            cmd.env(k, v);
+        }
+        cmd.env("SUBTRACK_ASSUME_TTY", "1");
+        cmd.stdin(std::process::Stdio::piped());
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        let mut child = cmd.spawn().expect("spawn subtrack");
+        child
+            .stdin
+            .as_mut()
+            .expect("open subtrack stdin")
+            .write_all(input.as_bytes())
+            .ok();
+        child.wait_with_output().expect("collect subtrack output")
+    }
+
     fn text(&self, args: &[&str]) -> String {
         let out = self.run(args);
         let mut s = String::from_utf8_lossy(&out.stdout).into_owned();
@@ -297,4 +318,43 @@ fn mcp_tools_list_probe() {
     assert!(stdout.contains("\"tools\""), "mcp output: {stdout}");
     assert!(stdout.contains("list_subscriptions"), "mcp tool: {stdout}");
     assert!(stdout.contains("subtrack-mcp"), "mcp server info: {stdout}");
+}
+
+#[test]
+fn edit_prompts_for_id_field_and_value() {
+    let env = Env::new("edit-prompts");
+    seed(&env);
+    // 1) pick the first subscription, 2) pick the "name" field by value,
+    // 3) enter the new name.
+    let out = env.run_interactive(&["edit"], "1\nname\nNetflix Plus\n");
+    assert!(out.status.success());
+    let text = env.text(&["list"]);
+    assert!(text.contains("Netflix Plus"), "output: {text}");
+    assert!(!text.contains("  Netflix "), "output: {text}");
+}
+
+#[test]
+fn delete_prompts_for_selection_and_confirmation() {
+    let env = Env::new("delete-prompts");
+    seed(&env);
+    let out = env.run_interactive(&["delete"], "1\ny\n");
+    assert!(out.status.success());
+    let text = env.text(&["list"]);
+    assert!(!text.contains("Netflix"), "output: {text}");
+    assert!(text.contains("Spotify"), "output: {text}");
+}
+
+#[test]
+fn bare_invocation_shows_menu() {
+    let env = Env::new("menu");
+    seed(&env);
+    // Choose "List subscriptions", then EOF exits the menu loop.
+    let out = env.run_interactive(&[], "1\n");
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("What would you like to do?"),
+        "output: {text}"
+    );
+    assert!(text.contains("Netflix"), "output: {text}");
 }

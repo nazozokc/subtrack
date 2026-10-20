@@ -24,6 +24,34 @@ impl Filters {
     fn is_empty(&self) -> bool {
         self.tag.is_none() && self.status.is_none() && self.name.is_none()
     }
+
+    /// Prompt for filters when none were supplied on the command line.
+    fn prompt() -> Option<Filters> {
+        let mut filters = Filters {
+            tag: None,
+            status: None,
+            name: None,
+        };
+        let tag = crate::prompt::input("Tag filter (optional, empty to skip)", Some(""), None)?;
+        if !tag.trim().is_empty() {
+            filters.tag = Some(tag.trim().to_string());
+        }
+        let statuses = [
+            crate::prompt::Choice::plain("any"),
+            crate::prompt::Choice::plain("active"),
+            crate::prompt::Choice::plain("paused"),
+            crate::prompt::Choice::plain("cancelled"),
+        ];
+        let status = crate::prompt::select("Status filter", &statuses, Some(0))?;
+        if status != "any" {
+            filters.status = Some(status);
+        }
+        let name = crate::prompt::input("Name contains (optional, empty to skip)", Some(""), None)?;
+        if !name.trim().is_empty() {
+            filters.name = Some(name.trim().to_string());
+        }
+        Some(filters)
+    }
 }
 
 /// Port of `getFilteredSubscriptions`.
@@ -59,8 +87,15 @@ fn should_proceed(message: &str, count: usize, force: bool) -> bool {
     if force {
         return true;
     }
-    // `confirm` falls back to its default (false) in a non-interactive shell.
-    let _ = message;
+    let question = format!(
+        "{} {} subscription{}?",
+        message,
+        count,
+        if count > 1 { "s" } else { "" }
+    );
+    if crate::prompt::confirm(&question, false) == Some(true) {
+        return true;
+    }
     info("Cancelled");
     false
 }
@@ -76,10 +111,15 @@ pub fn run_bulk_status(parsed: &ParsedArgs) -> i32 {
         return 1;
     }
 
-    let filters = Filters::from_args(parsed);
+    let mut filters = Filters::from_args(parsed);
     if filters.is_empty() {
-        // Interactive filter prompt — aborts cleanly without a TTY.
-        return 0;
+        if !crate::prompt::interactive() {
+            return 0;
+        }
+        match Filters::prompt() {
+            Some(f) => filters = f,
+            None => return 0,
+        }
     }
 
     let list = match get_filtered(&filters) {
@@ -139,9 +179,15 @@ pub fn run_bulk_status(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `handleBulkDelete`.
 pub fn run_bulk_delete(parsed: &ParsedArgs) -> i32 {
-    let filters = Filters::from_args(parsed);
+    let mut filters = Filters::from_args(parsed);
     if filters.is_empty() {
-        return 0;
+        if !crate::prompt::interactive() {
+            return 0;
+        }
+        match Filters::prompt() {
+            Some(f) => filters = f,
+            None => return 0,
+        }
     }
 
     let list = match get_filtered(&filters) {
@@ -191,9 +237,18 @@ pub fn run_bulk_delete(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `handleBulkTagAdd`.
 pub fn run_bulk_tag_add(parsed: &ParsedArgs) -> i32 {
-    let Some(raw_tag) = parsed.str("add") else {
-        logger::fail("Tag name is required");
-        return 1;
+    let raw_tag = match parsed.str("add") {
+        Some(v) => v,
+        None if crate::prompt::interactive() => {
+            match crate::prompt::input("Tag name", None, None) {
+                Some(v) => v,
+                None => return 0,
+            }
+        }
+        None => {
+            logger::fail("Tag name is required");
+            return 1;
+        }
     };
     let tag_name = raw_tag.trim().to_string();
     if tag_name.is_empty() {
@@ -201,9 +256,15 @@ pub fn run_bulk_tag_add(parsed: &ParsedArgs) -> i32 {
         return 1;
     }
 
-    let filters = Filters::from_args(parsed);
+    let mut filters = Filters::from_args(parsed);
     if filters.is_empty() {
-        return 0;
+        if !crate::prompt::interactive() {
+            return 0;
+        }
+        match Filters::prompt() {
+            Some(f) => filters = f,
+            None => return 0,
+        }
     }
 
     let list = match get_filtered(&filters) {
@@ -266,9 +327,18 @@ pub fn run_bulk_tag_add(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `handleBulkTagRemove`.
 pub fn run_bulk_tag_remove(parsed: &ParsedArgs) -> i32 {
-    let Some(raw_tag) = parsed.str("remove") else {
-        logger::fail("Tag name is required");
-        return 1;
+    let raw_tag = match parsed.str("remove") {
+        Some(v) => v,
+        None if crate::prompt::interactive() => {
+            match crate::prompt::input("Tag name", None, None) {
+                Some(v) => v,
+                None => return 0,
+            }
+        }
+        None => {
+            logger::fail("Tag name is required");
+            return 1;
+        }
     };
     let tag_name = raw_tag.trim().to_string();
     if tag_name.is_empty() {
@@ -276,9 +346,15 @@ pub fn run_bulk_tag_remove(parsed: &ParsedArgs) -> i32 {
         return 1;
     }
 
-    let filters = Filters::from_args(parsed);
+    let mut filters = Filters::from_args(parsed);
     if filters.is_empty() {
-        return 0;
+        if !crate::prompt::interactive() {
+            return 0;
+        }
+        match Filters::prompt() {
+            Some(f) => filters = f,
+            None => return 0,
+        }
     }
 
     let list = match get_filtered(&filters) {

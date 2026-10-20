@@ -16,8 +16,8 @@ use crate::prompts::{
 use crate::validation::{
     STATUS_VALUES, is_valid_currency, is_valid_status, validate_billing_day, validate_date_string,
     validate_discount_type, validate_discount_value, validate_name, validate_notes,
-    validate_payment_method, validate_plan_tier, validate_price, validate_tags, validate_vendor_name,
-    validate_vendor_url,
+    validate_payment_method, validate_plan_tier, validate_price, validate_tags,
+    validate_vendor_name, validate_vendor_url,
 };
 
 fn parse_id(value: Option<String>) -> Option<i64> {
@@ -38,7 +38,7 @@ fn resolve_id(
         ..Default::default()
     })
     .ok()?;
-    let filtered: Vec<_> = all.into_iter().filter(|s| filter(s)).collect();
+    let filtered: Vec<_> = all.into_iter().filter(filter).collect();
     if filtered.is_empty() {
         info("No matching subscriptions found");
         return None;
@@ -63,11 +63,9 @@ fn resolve_id(
             )
         })
         .collect();
-    crate::prompt::select(message, &choices, None)?.parse::<i64>().ok()
-}
-
-fn any_sub(_: &crate::db::Subscription) -> bool {
-    true
+    crate::prompt::select(message, &choices, None)?
+        .parse::<i64>()
+        .ok()
 }
 
 fn not_cancelled(sub: &crate::db::Subscription) -> bool {
@@ -80,24 +78,6 @@ fn archived(sub: &crate::db::Subscription) -> bool {
 
 fn not_archived(sub: &crate::db::Subscription) -> bool {
     sub.status != "archived"
-}
-
-/// Validate an optional free-text flag; empty values are ignored.
-fn opt_text(
-    parsed: &ParsedArgs,
-    key: &str,
-    validate: fn(&str) -> Result<(), String>,
-) -> Result<(), ()> {
-    if let Some(raw) = parsed.str(key) {
-        let trimmed = raw.trim();
-        if !trimmed.is_empty()
-            && let Err(msg) = validate(trimmed)
-        {
-            fail(&msg);
-            return Err(());
-        }
-    }
-    Ok(())
 }
 
 /// `subtrack add` — port of `resolveAddOptions` (flags + interactive fallback).
@@ -714,10 +694,7 @@ fn interactive_edit(id: i64) -> i32 {
             "tags",
         ),
         Choice::new(
-            &format!(
-                "notes ({})",
-                sub.notes.as_deref().unwrap_or("not set")
-            ),
+            &format!("notes ({})", sub.notes.as_deref().unwrap_or("not set")),
             "notes",
         ),
         Choice::new(
@@ -763,7 +740,10 @@ fn interactive_edit(id: i64) -> i32 {
             "contractEnd",
         ),
         Choice::new(
-            &format!("auto renew ({})", if sub.auto_renewal { "yes" } else { "no" }),
+            &format!(
+                "auto renew ({})",
+                if sub.auto_renewal { "yes" } else { "no" }
+            ),
             "autoRenewal",
         ),
         Choice::new(
@@ -812,22 +792,18 @@ fn interactive_edit(id: i64) -> i32 {
     for field in fields {
         match field.as_str() {
             "name" => {
-                let Some(v) = prompt::input(
-                    "New name",
-                    Some(sub.name.as_str()),
-                    Some(validate_name),
-                ) else {
+                let Some(v) =
+                    prompt::input("New name", Some(sub.name.as_str()), Some(validate_name))
+                else {
                     return 0;
                 };
                 values.insert("name".to_string(), ArgValue::Str(v));
             }
             "price" => {
                 let default = format!("{}", sub.price);
-                let Some(v) = prompt::input(
-                    "New price",
-                    Some(default.as_str()),
-                    Some(validate_price),
-                ) else {
+                let Some(v) =
+                    prompt::input("New price", Some(default.as_str()), Some(validate_price))
+                else {
                     return 0;
                 };
                 values.insert("price".to_string(), ArgValue::Str(v));
@@ -850,8 +826,7 @@ fn interactive_edit(id: i64) -> i32 {
                 values.insert("cycle".to_string(), ArgValue::Str(v));
             }
             "status" => {
-                let entries: Vec<Choice> =
-                    STATUS_VALUES.iter().map(|v| Choice::plain(v)).collect();
+                let entries: Vec<Choice> = STATUS_VALUES.iter().map(|v| Choice::plain(v)).collect();
                 let default = entries.iter().position(|c| c.value == sub.status);
                 let Some(v) = prompt::select("New status", &entries, default) else {
                     return 0;
@@ -859,10 +834,7 @@ fn interactive_edit(id: i64) -> i32 {
                 values.insert("status".to_string(), ArgValue::Str(v));
             }
             "billingDay" => {
-                let default = sub
-                    .billing_day
-                    .map(|d| d.to_string())
-                    .unwrap_or_default();
+                let default = sub.billing_day.map(|d| d.to_string()).unwrap_or_default();
                 let Some(v) = prompt::input(
                     "New billing day (1-31, empty to clear)",
                     Some(default.as_str()),
@@ -1413,8 +1385,8 @@ fn change_status(parsed: &ParsedArgs, target: &str) -> i32 {
         info("No subscriptions need changing");
         return 0;
     }
-    if !force {
-        if crate::prompt::confirm(
+    if !force
+        && crate::prompt::confirm(
             &format!(
                 "Update {} subscription{} to \"{}\"?",
                 pending.len(),
@@ -1423,10 +1395,9 @@ fn change_status(parsed: &ParsedArgs, target: &str) -> i32 {
             ),
             false,
         ) != Some(true)
-        {
-            info("Cancelled");
-            return 0;
-        }
+    {
+        info("Cancelled");
+        return 0;
     }
     let conn = match crate::db::open_db() {
         Ok(c) => c,
