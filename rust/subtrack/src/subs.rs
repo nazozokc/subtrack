@@ -16,7 +16,7 @@ use crate::prompts::{
 use crate::validation::{
     STATUS_VALUES, is_valid_currency, is_valid_status, validate_billing_day, validate_date_string,
     validate_discount_type, validate_discount_value, validate_name, validate_notes,
-    validate_payment_method, validate_plan_tier, validate_price, validate_vendor_name,
+    validate_payment_method, validate_plan_tier, validate_price, validate_tags, validate_vendor_name,
     validate_vendor_url,
 };
 

@@ -416,36 +416,110 @@ groq, together, deepseek, cohere, or omit for interactive.",
         return 1;
     }
 
-    // Non-interactive success path: all required flags supplied.
-    let (Some(provider), Some(model)) = (parsed.str("provider"), parsed.str("model")) else {
-        return 0;
+    // Interactive fallback: prompt for anything not supplied as a flag.
+    let provider = match parsed.str("provider") {
+        Some(p) => p,
+        None if crate::prompt::interactive() => {
+            let entries: Vec<crate::prompt::Choice> = LLM_PROVIDERS
+                .iter()
+                .map(|p| crate::prompt::Choice::plain(p))
+                .collect();
+            let Some(p) = crate::prompt::select("Provider", &entries, Some(0)) else {
+                return 0;
+            };
+            p
+        }
+        None => return 0,
+    };
+    let model = match parsed.str("model") {
+        Some(m) => m,
+        None if crate::prompt::interactive() => {
+            match crate::prompt::input("Model (e.g. gpt-4o)", Some(""), Some(validate_model_name))
+            {
+                Some(m) => m,
+                None => return 0,
+            }
+        }
+        None => return 0,
     };
     // Without an explicit --cost we would look the model up in the LiteLLM
-    // pricing cache; it is unavailable in this environment, so fail as the
-    // reference does when no pricing can be resolved.
-    let cost_flag = parsed.str("cost");
-    if cost_flag.is_none() {
-        logger::fail(&format!(
-            "Could not find pricing for \"{}\". Provide --cost to set cost manually (e.g. --cost 0.50 for 50 cents).",
-            model
-        ));
-        return 1;
-    }
-    let input_tokens = parsed
-        .str("inputTokens")
-        .and_then(|v| v.trim().parse::<i64>().ok())
-        .unwrap_or(0);
-    let output_tokens = parsed
-        .str("outputTokens")
-        .and_then(|v| v.trim().parse::<i64>().ok())
-        .unwrap_or(0);
-    let date = parsed.str("date").unwrap_or_else(crate::date::today_string);
-    let cost_cents = parsed
-        .str("cost")
-        .and_then(|v| js_number(&v))
-        .map(|n| (n * 100.0).round() as i64)
-        .unwrap_or(0);
-    let description = parsed.str("description");
+    // pricing cache; it is unavailable in this environment, so prompt for it
+    // when interactive and otherwise fail as the reference does.
+    let cost_cents = match parsed.str("cost") {
+        Some(raw) => js_number(&raw)
+            .map(|n| (n * 100.0).round() as i64)
+            .unwrap_or(0),
+        None if crate::prompt::interactive() => {
+            let Some(raw) = crate::prompt::input(
+                "Cost (USD, e.g. 0.50)",
+                Some("0.00"),
+                Some(validate_cost_input),
+            ) else {
+                return 0;
+            };
+            js_number(raw.trim())
+                .map(|n| (n * 100.0).round() as i64)
+                .unwrap_or(0)
+        }
+        None => {
+            logger::fail(&format!(
+                "Could not find pricing for \"{}\". Provide --cost to set cost manually (e.g. --cost 0.50 for 50 cents).",
+                model
+            ));
+            return 1;
+        }
+    };
+    let input_tokens = match parsed.str("inputTokens") {
+        Some(v) => v.trim().parse::<i64>().unwrap_or(0),
+        None if crate::prompt::interactive() => {
+            match crate::prompt::input("Input tokens", Some("0"), Some(validate_tokens)) {
+                Some(v) => v.trim().parse::<i64>().unwrap_or(0),
+                None => return 0,
+            }
+        }
+        None => 0,
+    };
+    let output_tokens = match parsed.str("outputTokens") {
+        Some(v) => v.trim().parse::<i64>().unwrap_or(0),
+        None if crate::prompt::interactive() => {
+            match crate::prompt::input("Output tokens", Some("0"), Some(validate_tokens)) {
+                Some(v) => v.trim().parse::<i64>().unwrap_or(0),
+                None => return 0,
+            }
+        }
+        None => 0,
+    };
+    let date = match parsed.str("date") {
+        Some(v) => v,
+        None if crate::prompt::interactive() => {
+            let today = crate::date::today_string();
+            match crate::prompt::input(
+                "Date (YYYY-MM-DD)",
+                Some(today.as_str()),
+                Some(validate_date),
+            ) {
+                Some(v) if !v.trim().is_empty() => v,
+                Some(_) => today,
+                None => return 0,
+            }
+        }
+        None => crate::date::today_string(),
+    };
+    let description = match parsed.str("description") {
+        Some(v) => Some(v),
+        None if crate::prompt::interactive() => {
+            let Some(v) = crate::prompt::input("Description (optional)", Some(""), None) else {
+                return 0;
+            };
+            let trimmed = v.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        None => None,
+    };
 
     let conn = match crate::db::open_db() {
         Ok(c) => c,
@@ -490,6 +564,13 @@ groq, together, deepseek, cohere, or omit for interactive.",
         date
     ));
     0
+}
+
+fn validate_cost_input(value: &str) -> Result<(), String> {
+    match crate::validation::js_number(value.trim()) {
+        Some(n) if n.is_finite() && n >= 0.0 => Ok(()),
+        _ => Err("Enter a non-negative number (e.g. 0.50 for 50 cents)".to_string()),
+    }
 }
 
 /// Port of `handleUsageEdit` (`usage-edit.ts`).
@@ -602,7 +683,57 @@ pub fn run_usage_delete(parsed: &ParsedArgs) -> i32 {
         }
     }
     if ids.is_empty() {
-        return 0;
+        let entries = match crate::db::get_llm_usage(None, None, None, None, Some(50), None) {
+            Ok(v) => v,
+            Err(e) => {
+                logger::fail(&format!("Failed to read usage entries: {}", e));
+                return 1;
+            }
+        };
+        if entries.is_empty() {
+            info("No usage entries found — try `subtrack usage add`");
+            return 0;
+        }
+        let choices: Vec<crate::prompt::Choice> = entries
+            .iter()
+            .map(|u| {
+                crate::prompt::Choice::new(
+                    &format!(
+                        "#{} {}/{} — {} on {}",
+                        u.id,
+                        u.provider,
+                        u.model,
+                        crate::price::format_usd_cost_f(u.cost, 4),
+                        u.date
+                    ),
+                    &u.id.to_string(),
+                )
+            })
+            .collect();
+        let Some(selected) = crate::prompt::checkbox("select usage entries to delete", &choices)
+        else {
+            return 0;
+        };
+        if selected.is_empty() {
+            info("Cancelled");
+            return 0;
+        }
+        ids = selected
+            .iter()
+            .filter_map(|v| v.trim().parse::<i64>().ok())
+            .collect();
+        if crate::prompt::confirm(
+            &format!(
+                "Delete {} usage entr{}?",
+                ids.len(),
+                if ids.len() > 1 { "ies" } else { "y" }
+            ),
+            false,
+        ) != Some(true)
+        {
+            info("Cancelled");
+            return 0;
+        }
     }
     let mut rc = 0;
     for id in ids {
