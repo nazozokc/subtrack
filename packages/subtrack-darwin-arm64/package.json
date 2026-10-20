@@ -1,5 +1,5 @@
 {
-  "name": "@subtrack/subtrack-darwin-arm64",
+  "name": "@subtrack-org/subtrack-darwin-arm64",
   "version": "12.0.0",
   "description": "Native subtrack binary for macOS arm64",
   "license": "MIT",

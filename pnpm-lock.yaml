@@ -26,22 +26,22 @@ importers:
 
   packages/subtrack:
     optionalDependencies:
-      '@subtrack/subtrack-darwin-arm64':
+      '@subtrack-org/subtrack-darwin-arm64':
         specifier: workspace:*
         version: link:../subtrack-darwin-arm64
-      '@subtrack/subtrack-darwin-x64':
+      '@subtrack-org/subtrack-darwin-x64':
         specifier: workspace:*
         version: link:../subtrack-darwin-x64
-      '@subtrack/subtrack-linux-arm64':
+      '@subtrack-org/subtrack-linux-arm64':
         specifier: workspace:*
         version: link:../subtrack-linux-arm64
-      '@subtrack/subtrack-linux-x64':
+      '@subtrack-org/subtrack-linux-x64':
         specifier: workspace:*
         version: link:../subtrack-linux-x64
-      '@subtrack/subtrack-win32-arm64':
+      '@subtrack-org/subtrack-win32-arm64':
         specifier: workspace:*
         version: link:../subtrack-win32-arm64
-      '@subtrack/subtrack-win32-x64':
+      '@subtrack-org/subtrack-win32-x64':
         specifier: workspace:*
         version: link:../subtrack-win32-x64
 
