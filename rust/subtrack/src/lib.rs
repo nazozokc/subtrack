@@ -37,6 +37,7 @@ mod parser;
 mod payment;
 mod price;
 mod profile;
+mod prompt;
 mod prompts;
 mod receipt;
 mod report;
