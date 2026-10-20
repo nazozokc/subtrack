@@ -11,5 +11,20 @@
     "lint:security": "pnpm -r lint:security",
     "format": "nix fmt",
     "clean": "pnpm -r exec rm -rf dist node_modules"
+  },
+  "workspaces": [
+    "packages/subtrack",
+    "packages/subtrack-*",
+    "docs"
+  ],
+  "overrides": {
+    "brace-expansion": ">=5.0.9",
+    "js-yaml": ">=5.2.2",
+    "nanoid": ">=3.3.18",
+    "postcss": ">=8.5.18",
+    "vite": ">=6.4.3 <8",
+    "esbuild": ">=0.24.3",
+    "vue": ">=3.5.42",
+    "source-map-js": ">=1.2.2"
   }
 }
