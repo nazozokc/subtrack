@@ -45,7 +45,7 @@ subtrack takes supply chain security seriously:
 - **OSV-Scanner**: Scheduled CI runs Google's OSV-Scanner against all dependencies to detect known vulnerabilities across open source databases.
 - **Renovate bot**: Dependencies are updated with a 7-day minimum release age to detect malicious releases before they reach this project. Renovate PRs are only auto-approved when auto-merge is enabled (skipping major/dashboard-approval updates). OSV vulnerability alerts are enabled in the dependency dashboard.
 - **Dependabot**: Defense-in-depth alongside Renovate — catches vulnerabilities faster via GitHub Advisory Database integration.
-- **Lockfile**: A `pnpm-lock.yaml` is committed and verified with `--frozen-lockfile` in CI. An `npm-shrinkwrap.json` is generated at publish time for downstream reproducability.
+- **Lockfile**: A `pnpm-lock.yaml` is committed and verified with `--frozen-lockfile` in CI. An `npm-shrinkwrap.json` is generated at publish time for downstream reproducibility.
 - **Limited build scripts**: Only `esbuild` is permitted to run install scripts (`allowBuilds` in `pnpm-workspace.yaml`).
 - **Harden-Runner**: Every CI workflow uses `step-security/harden-runner` (pinned to v2.19.4 SHA) for runtime egress monitoring and threat detection.
 - **CodeQL**: Static analysis runs on every push and PR.
