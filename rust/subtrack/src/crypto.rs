@@ -113,7 +113,7 @@ pub fn write_secret_file(path: &std::path::Path, data: &[u8]) -> std::io::Result
 
 /// scrypt(passphrase, salt, 32, N=2^17, r=8, p=1).
 pub fn derive_key_from_passphrase(passphrase: &str) -> Vec<u8> {
-    use scrypt::{scrypt as scrypt_kdf, Params};
+    use scrypt::{Params, scrypt as scrypt_kdf};
     let salt_path = config_dir().join(".key.salt");
     let salt = std::fs::read(&salt_path).unwrap_or_else(|_| vec![0u8; SALT_LENGTH]);
     let params = Params::new(17, 8, 1).unwrap();
