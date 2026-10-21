@@ -23,12 +23,12 @@ const require = createRequire(import.meta.url);
 
 const NATIVE_PACKAGE_SCOPE = "@subtrack-org";
 const NATIVE_PLATFORM_ARCHES = [
-  "subtrack-linux-x64",
-  "subtrack-linux-arm64",
-  "subtrack-darwin-x64",
-  "subtrack-darwin-arm64",
-  "subtrack-win32-x64",
-  "subtrack-win32-arm64",
+  "linux-x64",
+  "linux-arm64",
+  "darwin-x64",
+  "darwin-arm64",
+  "win32-x64",
+  "win32-arm64",
 ];
 
 /**
