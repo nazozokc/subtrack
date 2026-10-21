@@ -5,8 +5,8 @@ use crate::ansi;
 use crate::date::{period_factor, today};
 use crate::db::{QueryOptions, Subscription, get_subscriptions};
 use crate::fx::{FxRates, fetch_rates};
-use crate::json::quote_string;
-use crate::logger::{self, fail, info, log};
+use crate::json::num_value;
+use crate::logger::{self, fail, info, log, warn};
 use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
 use chrono::Datelike;
@@ -158,7 +158,7 @@ pub fn render_bar_chart(totals: &[MonthTotal], currency: &str) -> String {
     let label_width = 4;
     let mut lines: Vec<String> = Vec::new();
 
-    lines.push(ansi::bold("Monthly spending"));
+    lines.push(ansi::bold(&format!("Monthly spending ({currency})")));
     lines.push("─".repeat(bar_width + label_width + 16));
     lines.push(String::new());
 
@@ -197,7 +197,9 @@ fn render_category_chart(
 ) -> String {
     let mut lines: Vec<String> = Vec::new();
 
-    lines.push(ansi::bold("Monthly spending by category"));
+    lines.push(ansi::bold(&format!(
+        "Monthly spending by category ({currency})"
+    )));
     lines.push(String::new());
 
     let max_cat_total = cat_data
@@ -250,92 +252,145 @@ pub fn run_timeline(parsed: &ParsedArgs) -> i32 {
     };
 
     if subs.is_empty() {
-        info("No subscriptions found");
+        info("No subscriptions found — try `subtrack add`");
         return 0;
     }
 
     subs.retain(|s| s.status != "cancelled");
 
-    let mut display_currency = "USD".to_string();
-    if let Some(currency) = parsed.str("currency")
-        && !currency.is_empty()
+    // Never sum different currencies. With `--currency` every row is
+    // converted to that target; without it, each currency gets its own chart.
+    let groups: Vec<(String, Vec<Subscription>)> = match parsed
+        .str("currency")
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
     {
-        display_currency = currency.clone();
-        let rates = fetch_rates();
-        subs = convert_subs(&subs, &display_currency, &rates);
+        Some(target) => {
+            let rates = fetch_rates();
+            let converted = crate::fx::try_convert_subs(&subs, &target, &rates);
+            if converted.has_missing {
+                warn(&format!(
+                    "Some prices could not be converted to {}; they are excluded from the timeline",
+                    target
+                ));
+            }
+            let list: Vec<Subscription> = converted
+                .list
+                .into_iter()
+                .filter(|s| s.currency == target)
+                .collect();
+            vec![(target.to_string(), list)]
+        }
+        None => crate::fx::group_by_currency(&subs),
+    };
+
+    let groups: Vec<(String, Vec<Subscription>)> = groups
+        .into_iter()
+        .filter(|(_, subs)| !subs.is_empty())
+        .collect();
+    if groups.is_empty() {
+        info("No subscriptions to include in the timeline — try `subtrack add`");
+        return 0;
     }
 
-    let ccy = display_currency.clone();
     let categories = parsed.bool("categories") == Some(true);
     let json = parsed.bool("json") == Some(true);
 
     if json {
-        let totals = calc_monthly_totals(&subs, months);
-        let total: f64 = totals.iter().map(|t| t.total).sum();
-        let average = if totals.is_empty() {
-            0.0
+        let out = if groups.len() == 1 {
+            let (ccy, group_subs) = &groups[0];
+            let (totals, cat_data) = calc_monthly_totals_by_category(group_subs, months);
+            timeline_value(
+                months,
+                ccy,
+                &totals,
+                categories.then_some(cat_data.as_slice()),
+            )
         } else {
-            total / totals.len() as f64
+            let entries: Vec<serde_json::Value> = groups
+                .iter()
+                .map(|(ccy, group_subs)| {
+                    let (totals, cat_data) = calc_monthly_totals_by_category(group_subs, months);
+                    timeline_value(
+                        months,
+                        ccy,
+                        &totals,
+                        categories.then_some(cat_data.as_slice()),
+                    )
+                })
+                .collect();
+            serde_json::json!({
+                "months": months,
+                "currency": serde_json::Value::Null,
+                "currencies": entries,
+            })
         };
-        let mut out = String::from("{\n");
-        out.push_str(&format!("  \"months\": {},\n", months));
-        out.push_str(&format!("  \"currency\": {},\n", quote_string(&ccy)));
-        out.push_str(&format!(
-            "  \"total\": {},\n",
-            crate::json::number(round_currency(total))
+        logger::out_str(&format!(
+            "{}\n",
+            serde_json::to_string_pretty(&out).unwrap_or_default()
         ));
-        out.push_str(&format!(
-            "  \"average\": {},\n",
-            crate::json::number(round_currency(average))
-        ));
-        out.push_str("  \"entries\": [\n");
-        for (i, t) in totals.iter().enumerate() {
-            out.push_str("    {\n");
-            out.push_str(&format!("      \"month\": {},\n", quote_string(&t.label)));
-            out.push_str(&format!(
-                "      \"total\": {}\n",
-                crate::json::number(round_currency(t.total))
-            ));
-            out.push_str(if i + 1 == totals.len() {
-                "    }\n"
-            } else {
-                "    },\n"
-            });
-        }
-        out.push_str("  ]");
-        if categories {
-            let (_, cat_data) = calc_monthly_totals_by_category(&subs, months);
-            out.push_str(",\n  \"categories\": {\n");
-            for (i, cd) in cat_data.iter().enumerate() {
-                let values: Vec<String> = cd
-                    .months
-                    .iter()
-                    .map(|v| crate::json::number(round_currency(*v)))
-                    .collect();
-                out.push_str(&format!(
-                    "    {}: [{}]",
-                    quote_string(&cd.category),
-                    values.join(", ")
-                ));
-                out.push_str(if i + 1 == cat_data.len() { "\n" } else { ",\n" });
-            }
-            out.push_str("  }\n");
-        } else {
-            out.push('\n');
-        }
-        out.push_str("}\n");
-        logger::out_str(&out);
         return 0;
     }
 
-    if categories {
-        let (totals, cat_data) = calc_monthly_totals_by_category(&subs, months);
-        log(&render_bar_chart(&totals, &ccy));
-        log("");
-        log(&render_category_chart(&totals, &cat_data, &ccy));
-    } else {
-        let totals = calc_monthly_totals(&subs, months);
-        log(&render_bar_chart(&totals, &ccy));
+    for (i, (ccy, group_subs)) in groups.iter().enumerate() {
+        if i > 0 {
+            log("");
+        }
+        if categories {
+            let (totals, cat_data) = calc_monthly_totals_by_category(group_subs, months);
+            log(&render_bar_chart(&totals, ccy));
+            log("");
+            log(&render_category_chart(&totals, &cat_data, ccy));
+        } else {
+            let totals = calc_monthly_totals(group_subs, months);
+            log(&render_bar_chart(&totals, ccy));
+        }
     }
     0
+}
+
+fn timeline_value(
+    months: i64,
+    currency: &str,
+    totals: &[MonthTotal],
+    cat_data: Option<&[CategoryMonth]>,
+) -> serde_json::Value {
+    let total: f64 = totals.iter().map(|t| t.total).sum();
+    let average = if totals.is_empty() {
+        0.0
+    } else {
+        total / totals.len() as f64
+    };
+    let entries: Vec<serde_json::Value> = totals
+        .iter()
+        .map(|t| {
+            serde_json::json!({
+                "month": t.label,
+                "total": num_value(round_currency(t.total)),
+            })
+        })
+        .collect();
+    let mut value = serde_json::json!({
+        "months": months,
+        "currency": currency,
+        "total": num_value(round_currency(total)),
+        "average": num_value(round_currency(average)),
+        "entries": entries,
+    });
+    if let Some(cats) = cat_data {
+        let mut map = serde_json::Map::new();
+        for cd in cats {
+            map.insert(
+                cd.category.clone(),
+                serde_json::Value::Array(
+                    cd.months
+                        .iter()
+                        .map(|v| num_value(round_currency(*v)))
+                        .collect(),
+                ),
+            );
+        }
+        value["categories"] = serde_json::Value::Object(map);
+    }
+    value
 }

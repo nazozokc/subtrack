@@ -22,9 +22,12 @@ const VALID_PERIODS: [&str; 6] = [
 
 fn fmt_period(period: &str) -> &str {
     match period {
+        "weekly" => "week",
+        "bi-weekly" => "2 weeks",
         "monthly" => "month",
-        "bi-weekly" => "bi-week",
+        "quarterly" => "quarter",
         "semi-annual" => "6 months",
+        "yearly" => "year",
         other => other,
     }
 }

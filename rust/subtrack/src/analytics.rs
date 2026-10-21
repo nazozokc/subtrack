@@ -5,9 +5,9 @@ use crate::ansi;
 use crate::config::load_config;
 use crate::date::period_factor;
 use crate::db::{QueryOptions, Subscription, get_subscriptions};
-use crate::fx::try_convert;
+use crate::fx::{try_convert, try_convert_subs};
 use crate::json::{number, quote_string, sub_json};
-use crate::logger::{self, log, out_str};
+use crate::logger::{self, log, out_str, warn};
 use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
 use std::collections::BTreeMap;
@@ -15,15 +15,17 @@ use std::collections::BTreeMap;
 /// Per-tag aggregate: `name → (count, [(currency, monthly), ...])` in
 /// first-seen insertion order (JS object semantics).
 type ByTag = Vec<(String, (i64, Vec<(String, f64)>))>;
+/// (currency, subscription) pairs; comparing raw prices across currencies is
+/// meaningless, so each currency gets its own "most expensive" entry.
+type MostExpensive<'a> = Vec<(String, &'a Subscription)>;
+type SummaryResult<'a> = (i64, BTreeMap<String, f64>, ByTag, MostExpensive<'a>);
 
 /// Port of `calcSummary`. Tag/currency maps keep first-seen insertion order
 /// (JS object semantics), so multi-currency joins print in sub order.
-fn calc_summary(
-    subs: &[Subscription],
-) -> (i64, BTreeMap<String, f64>, ByTag, Option<&Subscription>) {
+fn calc_summary(subs: &[Subscription]) -> SummaryResult<'_> {
     let mut by_currency: BTreeMap<String, f64> = BTreeMap::new();
     let mut by_tag: ByTag = Vec::new();
-    let mut most_expensive: Option<&Subscription> = None;
+    let mut most_expensive: MostExpensive<'_> = Vec::new();
 
     for sub in subs {
         let monthly = sub.price * period_factor(&sub.cycle, "monthly");
@@ -40,10 +42,19 @@ fn calc_summary(
                 None => by_tag.push((tag.clone(), (1, vec![(sub.currency.clone(), monthly)]))),
             }
         }
-        if most_expensive.is_none_or(|me| sub.price > me.price) {
-            most_expensive = Some(sub)
+        match most_expensive
+            .iter_mut()
+            .find(|(currency, _)| *currency == sub.currency)
+        {
+            Some((_, current)) => {
+                if sub.price > current.price {
+                    *current = sub;
+                }
+            }
+            None => most_expensive.push((sub.currency.clone(), sub)),
         }
     }
+    most_expensive.sort_by(|a, b| a.0.cmp(&b.0));
     (subs.len() as i64, by_currency, by_tag, most_expensive)
 }
 
@@ -67,12 +78,31 @@ fn show_analytics(parsed: &ParsedArgs) -> i32 {
     }
 
     let config = load_config();
-    let (total_count, _by_currency, by_tag, most_expensive) = calc_summary(&list);
-
     let target_currency = parsed.str("currency");
+    let rates = target_currency.as_ref().map(|_| crate::fx::fetch_rates());
+    let mut display_list = list.clone();
+    if let Some(target) = target_currency.as_deref() {
+        let rates = rates.as_ref().expect("rates fetched for target currency");
+        let converted = try_convert_subs(&list, target, rates);
+        if converted.has_missing {
+            warn(&format!(
+                "Some prices could not be converted to {}; they are excluded from analytics",
+                target
+            ));
+        }
+        display_list = converted
+            .list
+            .into_iter()
+            .filter(|s| s.currency == target)
+            .collect();
+    }
+    let total_count = list.len();
+    let (_, _, by_tag, most_expensive) = calc_summary(&display_list);
+
     let is_yearly = parsed.str("period").as_deref() == Some("yearly");
     let mult: f64 = if is_yearly { 12.0 } else { 1.0 };
     let period_label = if is_yearly { "Yearly" } else { "Monthly" };
+    let period_unit = if is_yearly { "year" } else { "month" };
 
     // Header
     log(&ansi::bold("Subscription Analytics"));
@@ -105,40 +135,37 @@ fn show_analytics(parsed: &ParsedArgs) -> i32 {
         ));
     }
 
-    if let Some(me) = most_expensive {
-        log(&format!(
-            "  Most expensive:       {} ({}/{})",
-            ansi::bold(&me.name),
-            format_price(me.price, &me.currency),
-            me.cycle
-        ));
+    match most_expensive.as_slice() {
+        [] => {}
+        [(_, me)] => {
+            log(&format!(
+                "  Most expensive:       {} ({}/{})",
+                ansi::bold(&me.name),
+                format_price(me.price, &me.currency),
+                crate::date::format_cycle(&me.cycle)
+            ));
+        }
+        most => {
+            log(&ansi::bold("  Most expensive by currency:"));
+            for (currency, me) in most {
+                log(&format!(
+                    "    {}  {} ({}/{})",
+                    currency,
+                    ansi::bold(&me.name),
+                    format_price(me.price, &me.currency),
+                    crate::date::format_cycle(&me.cycle)
+                ));
+            }
+        }
     }
 
     // Spending (per currency, optionally converted to target)
     log("");
     log(&ansi::bold(&format!("{} spending:", period_label)));
-    let rates = if target_currency.is_some() {
-        Some(crate::fx::fetch_rates())
-    } else {
-        None
-    };
     let mut spending: BTreeMap<String, f64> = BTreeMap::new();
-    for sub in &list {
+    for sub in &display_list {
         let monthly = sub.price * period_factor(&sub.cycle, "monthly");
-        let ccy = target_currency
-            .as_deref()
-            .unwrap_or(&sub.currency)
-            .to_string();
-        let amount = if let (Some(tc), Some(rates)) = (target_currency.as_deref(), &rates) {
-            if tc != sub.currency {
-                try_convert(monthly, &sub.currency, tc, &rates.rates).unwrap_or(monthly)
-            } else {
-                monthly
-            }
-        } else {
-            monthly
-        };
-        *spending.entry(ccy).or_insert(0.0) += amount * mult;
+        *spending.entry(sub.currency.clone()).or_insert(0.0) += monthly * mult;
     }
     for (ccy, total) in &spending {
         log(&format!(
@@ -253,7 +280,7 @@ fn show_analytics(parsed: &ParsedArgs) -> i32 {
                 "  {} {}/{} ({} sub{})",
                 pad_end(tag, 16),
                 price_str,
-                period_label.to_lowercase(),
+                period_unit,
                 count,
                 if *count > 1 { "s" } else { "" }
             ));
@@ -284,12 +311,30 @@ fn analytics_json(parsed: &ParsedArgs) -> i32 {
         .filter(|s| s.status != "cancelled")
         .cloned()
         .collect();
-    let (total_count, by_currency, by_tag, most_expensive) = calc_summary(&list);
+    let target_currency = parsed.str("currency");
+    let mut display_list = list.clone();
+    if let Some(target) = target_currency.as_deref() {
+        let rates = crate::fx::fetch_rates();
+        let converted = try_convert_subs(&list, target, &rates);
+        if converted.has_missing {
+            warn(&format!(
+                "Some prices could not be converted to {}; they are excluded from analytics",
+                target
+            ));
+        }
+        display_list = converted
+            .list
+            .into_iter()
+            .filter(|s| s.currency == target)
+            .collect();
+    }
+    let total_count = list.len();
+    let (_, by_currency, by_tag, most_expensive) = calc_summary(&display_list);
 
     // monthlyByCurrency (insertion order preserved by BTreeMap? — no;
-    // calcSummary keeps insertion order; re-derive in list order).
+    // calcSummary keeps insertion order; re-derive in display order).
     let mut ccy_order: Vec<String> = Vec::new();
-    for sub in &list {
+    for sub in &display_list {
         if !ccy_order.contains(&sub.currency) {
             ccy_order.push(sub.currency.clone())
         }
@@ -336,11 +381,24 @@ fn analytics_json(parsed: &ParsedArgs) -> i32 {
         "  \"monthlyByTag\": {{\n{}\n  }},\n",
         tag_json.join(",\n")
     ));
-    if let Some(me) = most_expensive {
-        out.push_str(&format!(
-            "  \"mostExpensive\": {},\n",
-            sub_json(me).replacen("  {", "{", 1)
-        ));
+    match most_expensive.as_slice() {
+        [] => {}
+        [(_, me)] => {
+            out.push_str(&format!(
+                "  \"mostExpensive\": {},\n",
+                sub_json(me).replacen("  {", "{", 1)
+            ));
+        }
+        most => {
+            let entries: Vec<String> = most
+                .iter()
+                .map(|(currency, me)| nested_sub_entry(currency, me))
+                .collect();
+            out.push_str(&format!(
+                "  \"mostExpensiveByCurrency\": {{\n{}\n  }},\n",
+                entries.join(",\n")
+            ));
+        }
     }
     out.push_str(&format!(
         "  \"period\": {}\n",
@@ -349,6 +407,21 @@ fn analytics_json(parsed: &ParsedArgs) -> i32 {
     out.push_str("}\n");
     out_str(&out);
     0
+}
+
+/// Render `"CCY": { ... }` for `mostExpensiveByCurrency`, adding two spaces
+/// to `sub_json`'s body so the nested object stays readable.
+fn nested_sub_entry(currency: &str, sub: &Subscription) -> String {
+    let rendered = sub_json(sub).replacen("  {", "{", 1);
+    let mut lines = rendered.lines();
+    let first = lines.next().unwrap_or("{").trim_start();
+    let rest: Vec<String> = lines.map(|line| format!("  {line}")).collect();
+    format!(
+        "    {}: {}\n{}",
+        quote_string(currency),
+        first,
+        rest.join("\n")
+    )
 }
 
 pub fn run_analytics(parsed: &ParsedArgs) -> i32 {

@@ -50,7 +50,7 @@ pub fn run_profiles(parsed: &ParsedArgs) -> i32 {
         .iter()
         .find(|p| *p == "list" || *p == "show" || *p == "switch")
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_else(|| "list".to_string());
     match action.as_str() {
         "list" => {
             list_profiles();
