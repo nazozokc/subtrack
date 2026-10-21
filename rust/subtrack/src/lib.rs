@@ -56,6 +56,7 @@ mod tags;
 mod templates;
 mod timeline;
 mod trial;
+mod ui;
 mod upcoming;
 mod usage;
 mod validation;
@@ -71,16 +72,32 @@ pub fn set_exit_code(code: i32) {
     EXIT_CODE.store(code, Ordering::SeqCst)
 }
 
-/// Flush the buffered stdout (the whole CLI output is buffered so that
+/// Flush the buffered stdout/stderr (the whole CLI output is buffered so that
 /// ordering — banner before validation errors, etc. — is deterministic).
 pub fn flush() {
     use std::io::Write;
-    let out = logger::OUT.lock().unwrap().clone();
-    logger::OUT.lock().unwrap().clear();
-    let stdout = std::io::stdout();
-    let mut handle = stdout.lock();
-    let _ = handle.write_all(out.as_bytes());
-    let _ = handle.flush();
+
+    let out = {
+        let mut buffer = logger::OUT.lock().unwrap();
+        std::mem::take(&mut *buffer)
+    };
+    if !out.is_empty() {
+        let stdout = std::io::stdout();
+        let mut handle = stdout.lock();
+        let _ = handle.write_all(out.as_bytes());
+        let _ = handle.flush();
+    }
+
+    let err = {
+        let mut buffer = logger::ERR.lock().unwrap();
+        std::mem::take(&mut *buffer)
+    };
+    if !err.is_empty() {
+        let stderr = std::io::stderr();
+        let mut handle = stderr.lock();
+        let _ = handle.write_all(err.as_bytes());
+        let _ = handle.flush();
+    }
 }
 
 pub fn run(args: Vec<std::ffi::OsString>) -> i32 {

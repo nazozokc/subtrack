@@ -18,7 +18,9 @@ pub struct Summary {
     /// (currency, total) in first-appearance order.
     pub monthly_by_currency: Vec<(String, f64)>,
     monthly_by_tag: Vec<(String, TagInfo)>,
-    most_expensive: Option<usize>,
+    /// (currency, index) sorted by currency. Comparing raw prices across
+    /// currencies is meaningless, so the headline is per-currency.
+    most_expensive_by_currency: Vec<(String, usize)>,
 }
 
 pub fn calc_summary_internal(subs: &[Subscription]) -> Summary {
@@ -63,23 +65,27 @@ fn calc_summary(subs: &[Subscription]) -> Summary {
         }
     }
 
-    let most_expensive = if subs.is_empty() {
-        None
-    } else {
-        let mut idx = 0usize;
-        for (i, sub) in subs.iter().enumerate() {
-            if sub.price > subs[idx].price {
-                idx = i;
+    let mut most_expensive_by_currency: Vec<(String, usize)> = Vec::new();
+    for (i, sub) in subs.iter().enumerate() {
+        match most_expensive_by_currency
+            .iter_mut()
+            .find(|(currency, _)| *currency == sub.currency)
+        {
+            Some((_, idx)) => {
+                if sub.price > subs[*idx].price {
+                    *idx = i;
+                }
             }
+            None => most_expensive_by_currency.push((sub.currency.clone(), i)),
         }
-        Some(idx)
-    };
+    }
+    most_expensive_by_currency.sort_by(|a, b| a.0.cmp(&b.0));
 
     Summary {
         total_count: subs.len(),
         monthly_by_currency,
         monthly_by_tag,
-        most_expensive,
+        most_expensive_by_currency,
     }
 }
 
@@ -117,14 +123,30 @@ fn show_summary(subs: &[Subscription]) {
         crate::ansi::bold(&data.total_count.to_string())
     ));
 
-    if let Some(idx) = data.most_expensive {
-        let me = &subs[idx];
-        log(&format!(
-            "Most expensive:       {} ({}/{})",
-            crate::ansi::bold(&me.name),
-            format_price(me.price, &me.currency),
-            crate::date::format_cycle(&me.cycle)
-        ));
+    match data.most_expensive_by_currency.as_slice() {
+        [] => {}
+        [(_, idx)] => {
+            let me = &subs[*idx];
+            log(&format!(
+                "Most expensive:       {} ({}/{})",
+                crate::ansi::bold(&me.name),
+                format_price(me.price, &me.currency),
+                crate::date::format_cycle(&me.cycle)
+            ));
+        }
+        most => {
+            log(&crate::ansi::bold("Most expensive by currency:"));
+            for (currency, idx) in most {
+                let me = &subs[*idx];
+                log(&format!(
+                    "  {}  {} ({}/{})",
+                    currency,
+                    crate::ansi::bold(&me.name),
+                    format_price(me.price, &me.currency),
+                    crate::date::format_cycle(&me.cycle)
+                ));
+            }
+        }
     }
 
     log("");
@@ -219,14 +241,42 @@ fn summary_json(subs: &[Subscription], data: &Summary) -> String {
         format!("{{\n{}\n  }}", tags.join(",\n")),
     ));
 
-    if let Some(idx) = data.most_expensive {
-        // `sub_json` already uses the 2-space object body indentation this
-        // nesting level needs; only drop its leading first-line indent.
-        f.push(kv(
-            "mostExpensive",
-            sub_json(&subs[idx]).trim_start().to_string(),
-        ));
+    match data.most_expensive_by_currency.as_slice() {
+        [] => {}
+        [(_, idx)] => {
+            // `sub_json` already uses the 2-space object body indentation this
+            // nesting level needs; only drop its leading first-line indent.
+            f.push(kv(
+                "mostExpensive",
+                sub_json(&subs[*idx]).trim_start().to_string(),
+            ));
+        }
+        most => {
+            let entries: Vec<String> = most
+                .iter()
+                .map(|(currency, idx)| nested_sub_entry(currency, &subs[*idx]))
+                .collect();
+            f.push(kv(
+                "mostExpensiveByCurrency",
+                format!("{{\n{}\n  }}", entries.join(",\n")),
+            ));
+        }
     }
 
     format!("{{\n  {}\n}}", f.join(",\n  "))
+}
+
+/// Render `"CCY": { ... }` at the nesting level used by
+/// `mostExpensiveByCurrency`, adding two spaces to `sub_json`'s body.
+fn nested_sub_entry(currency: &str, sub: &Subscription) -> String {
+    let rendered = sub_json(sub);
+    let mut lines = rendered.lines();
+    let first = lines.next().unwrap_or("  {").trim_start();
+    let rest: Vec<String> = lines.map(|line| format!("  {line}")).collect();
+    format!(
+        "    {}: {}\n{}",
+        quote_string(currency),
+        first,
+        rest.join("\n")
+    )
 }

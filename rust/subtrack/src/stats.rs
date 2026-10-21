@@ -1,8 +1,9 @@
 //! `stats` command — port of `stats.ts` + `db/stats.ts` (collectStats).
 
-use crate::json::{number, quote_string};
+use crate::json::quote_string;
 use crate::logger::{self, log};
 use crate::parser::ParsedArgs;
+use crate::price::format_price;
 
 /// Mirrors `formatBytes` in `@subtrack/lib/format`.
 fn format_bytes(bytes: u64) -> String {
@@ -30,9 +31,13 @@ struct Stats {
     total_trials: i64,
     total_usage: i64,
     db_size_bytes: u64,
-    price_min: f64,
-    price_max: f64,
-    currencies: Vec<String>,
+    price_ranges: Vec<PriceRange>,
+}
+
+struct PriceRange {
+    currency: String,
+    min: f64,
+    max: f64,
 }
 
 fn collect_stats() -> std::io::Result<Stats> {
@@ -71,12 +76,21 @@ fn collect_stats() -> std::io::Result<Stats> {
         }
     }
 
-    let mut currencies: Vec<String> = Vec::new();
-    for (_, c) in &price_rows {
-        if !currencies.contains(c) {
-            currencies.push(c.clone());
+    let mut price_ranges: Vec<PriceRange> = Vec::new();
+    for (price, currency) in &price_rows {
+        match price_ranges.iter_mut().find(|r| &r.currency == currency) {
+            Some(range) => {
+                range.min = range.min.min(*price);
+                range.max = range.max.max(*price);
+            }
+            None => price_ranges.push(PriceRange {
+                currency: currency.clone(),
+                min: *price,
+                max: *price,
+            }),
         }
     }
+    price_ranges.sort_by(|a, b| a.currency.cmp(&b.currency));
 
     let count_of = |sql: &str| -> i64 { conn.query_row(sql, [], |r| r.get(0)).unwrap_or(0) };
 
@@ -93,23 +107,7 @@ fn collect_stats() -> std::io::Result<Stats> {
         total_trials: count_of("SELECT COUNT(*) AS count FROM trials"),
         total_usage: count_of("SELECT COUNT(*) AS count FROM llm_usage"),
         db_size_bytes,
-        price_min: if price_rows.is_empty() {
-            0.0
-        } else {
-            price_rows
-                .iter()
-                .map(|(p, _)| *p)
-                .fold(f64::INFINITY, f64::min)
-        },
-        price_max: if price_rows.is_empty() {
-            0.0
-        } else {
-            price_rows
-                .iter()
-                .map(|(p, _)| *p)
-                .fold(f64::NEG_INFINITY, f64::max)
-        },
-        currencies,
+        price_ranges,
     })
 }
 
@@ -139,18 +137,24 @@ pub fn run_stats(parsed: &ParsedArgs) -> i32 {
     log(&format!("  Tags:           {}", stats.total_tags));
     log(&format!("  Trials:         {}", stats.total_trials));
     log(&format!("  LLM Usage entries: {}", stats.total_usage));
-    if !stats.currencies.is_empty() {
+    if !stats.price_ranges.is_empty() {
         log("  Active price range:");
-        log(&format!(
-            "    Min:  {} ({})",
-            number(stats.price_min),
-            stats.currencies.join(", ")
-        ));
-        log(&format!(
-            "    Max:  {} ({})",
-            number(stats.price_max),
-            stats.currencies.join(", ")
-        ));
+        for range in &stats.price_ranges {
+            if range.min == range.max {
+                log(&format!(
+                    "    {}: {}",
+                    range.currency,
+                    format_price(range.min, &range.currency)
+                ));
+            } else {
+                log(&format!(
+                    "    {}: {} – {}",
+                    range.currency,
+                    format_price(range.min, &range.currency),
+                    format_price(range.max, &range.currency)
+                ));
+            }
+        }
     }
     log(&format!(
         "  Database size:   {}",
@@ -161,14 +165,7 @@ pub fn run_stats(parsed: &ParsedArgs) -> i32 {
 
 /// Mirror of `sectionTitle`: bold + accent FG around `── text ──`, else plain.
 fn section_title(theme: &crate::table::Theme, text: &str) -> String {
-    match theme.accent {
-        Some(accent) => format!(
-            "\x1b[1m{}── {} ──\x1b[0m",
-            crate::ansi::fg_code(accent),
-            text
-        ),
-        None => format!("── {} ──", text),
-    }
+    crate::table::section_title(text, theme)
 }
 
 fn stats_json(s: &Stats) -> String {
@@ -183,16 +180,19 @@ fn stats_json(s: &Stats) -> String {
     f.push(kv("totalTrials", s.total_trials.to_string()));
     f.push(kv("totalUsage", s.total_usage.to_string()));
     f.push(kv("dbSizeBytes", s.db_size_bytes.to_string()));
-    let price_range = format!(
-        "{{\n    \"min\": {},\n    \"max\": {},\n    \"currencies\": [\n{}\n    ]\n  }}",
-        number(s.price_min),
-        number(s.price_max),
-        s.currencies
-            .iter()
-            .map(|c| format!("      {}", quote_string(c)))
-            .collect::<Vec<_>>()
-            .join(",\n")
-    );
-    f.push(kv("priceRange", price_range));
+    let mut ranges = serde_json::Map::new();
+    for range in &s.price_ranges {
+        ranges.insert(
+            range.currency.clone(),
+            serde_json::json!({
+                "min": crate::json::num_value(range.min),
+                "max": crate::json::num_value(range.max),
+            }),
+        );
+    }
+    f.push(kv(
+        "priceRanges",
+        serde_json::to_string(&ranges).unwrap_or_else(|_| "{}".to_string()),
+    ));
     format!("{{\n  {}\n}}", f.join(",\n  "))
 }

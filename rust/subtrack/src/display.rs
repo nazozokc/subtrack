@@ -8,9 +8,10 @@ use crate::db::Subscription;
 use crate::logger;
 use crate::price::{format_price, format_usd_cost, round_currency};
 use crate::table::{
-    ColumnConfig, TableBuilder, calc_column_widths, section_title, status_color, table_style,
-    zebra_row,
+    ColumnConfig, TableBuilder, calc_column_widths, section_title, status_color, strlen,
+    table_style, zebra_row,
 };
+use crate::ui;
 
 fn next_billing_cell(sub: &Subscription) -> String {
     if sub.status == "cancelled" || sub.status == "archived" {
@@ -139,7 +140,7 @@ fn pick_config(
                 "name", "status", "cycle", "next", "tags", "method", "contract", "renewal",
                 "vendor", "plan", "notes", "price",
             ]),
-            vec![8, 8, 6, 8, 8, 10, 18, 6, 10, 8, 15, 8],
+            vec![8, 8, 9, 8, 8, 10, 18, 6, 10, 8, 15, 8],
             vec![30, 12, 20, 10, 50, 30, 30, 10, 30, 20, 50, 20],
         )
     } else if show_contract && show_vendor {
@@ -148,7 +149,7 @@ fn pick_config(
                 "name", "status", "cycle", "next", "tags", "contract", "renewal", "vendor", "plan",
                 "price",
             ]),
-            vec![10, 8, 6, 8, 8, 18, 6, 10, 8, 8],
+            vec![10, 8, 9, 8, 8, 18, 6, 10, 8, 8],
             vec![40, 12, 20, 10, 60, 30, 10, 30, 20, 20],
         )
     } else if show_contract {
@@ -156,7 +157,7 @@ fn pick_config(
             config_headers(&[
                 "name", "status", "cycle", "next", "tags", "contract", "renewal", "price",
             ]),
-            vec![10, 8, 6, 8, 8, 18, 6, 8],
+            vec![10, 8, 9, 8, 8, 18, 6, 8],
             vec![40, 12, 20, 10, 60, 30, 10, 20],
         )
     } else if show_vendor {
@@ -164,7 +165,7 @@ fn pick_config(
             config_headers(&[
                 "name", "status", "cycle", "next", "tags", "vendor", "plan", "price",
             ]),
-            vec![10, 8, 6, 8, 8, 10, 8, 8],
+            vec![10, 8, 9, 8, 8, 10, 8, 8],
             vec![40, 12, 20, 10, 60, 30, 20, 20],
         )
     } else if show_notes && show_method {
@@ -172,25 +173,25 @@ fn pick_config(
             config_headers(&[
                 "name", "status", "cycle", "next", "tags", "method", "notes", "price",
             ]),
-            vec![10, 8, 6, 8, 8, 10, 15, 8],
+            vec![10, 8, 9, 8, 8, 10, 15, 8],
             vec![40, 12, 20, 10, 60, 30, 50, 20],
         )
     } else if show_notes {
         (
             config_headers(&["name", "status", "cycle", "next", "tags", "notes", "price"]),
-            vec![10, 8, 6, 8, 8, 15, 8],
+            vec![10, 8, 9, 8, 8, 15, 8],
             vec![40, 12, 20, 10, 60, 50, 20],
         )
     } else if show_method {
         (
             config_headers(&["name", "status", "cycle", "next", "tags", "method", "price"]),
-            vec![10, 8, 6, 8, 8, 10, 8],
+            vec![10, 8, 9, 8, 8, 10, 8],
             vec![40, 12, 20, 10, 60, 30, 20],
         )
     } else {
         (
             config_headers(&["name", "status", "cycle", "next", "tags", "price"]),
-            vec![10, 8, 6, 8, 8, 8],
+            vec![10, 8, 9, 8, 10, 8],
             vec![40, 12, 20, 10, 60, 20],
         )
     }
@@ -231,29 +232,8 @@ pub fn render_table(
     table.wrap_on_word_boundary = true;
     table.col_aligns = col_aligns.clone();
 
-    let col_count = headers.len();
-    let price_col = col_count - 1;
-    let label_col = price_col - 1;
-
     for (i, row) in rows.iter().enumerate() {
-        // Total rows are marked by three leading empty cells.
-        let is_total = row.first().map(|c| c.is_empty()).unwrap_or(false)
-            && row.get(1).map(|c| c.is_empty()).unwrap_or(false)
-            && row.get(2).map(|c| c.is_empty()).unwrap_or(false);
-        if is_total {
-            let mapped: Vec<String> = row
-                .iter()
-                .enumerate()
-                .map(|(j, cell)| {
-                    if j == label_col || j == price_col {
-                        ansi::bold(&ansi::yellow(cell))
-                    } else {
-                        cell.clone()
-                    }
-                })
-                .collect();
-            table.push(mapped)
-        } else if i % 2 == 0 {
+        if i % 2 == 0 {
             table.push(zebra_row(row, theme.zebra))
         } else {
             table.push(row.clone())
@@ -261,6 +241,19 @@ pub fn render_table(
     }
 
     table.to_string()
+}
+
+/// Print a right-aligned total line directly below a rendered table.
+fn log_table_total(table: &str, label: &str, value: &str) {
+    let table_width = table.lines().next().map(strlen).unwrap_or(0);
+    let plain = format!("{}  {}", label, value);
+    let pad = (table_width - strlen(&plain)).max(0) as usize;
+    logger::log(&format!(
+        "{}{}  {}",
+        " ".repeat(pad),
+        ansi::bold(&ansi::yellow(label)),
+        ansi::bold(&ansi::yellow(value))
+    ));
 }
 
 /// Port of spreadSubscription — renders per-currency tables.
@@ -306,18 +299,20 @@ pub fn spread_subscription(
                 ))
             }
         }
-        let mut total_row = vec![String::new(); headers.len()];
-        total_row[headers.len() - 2] = format!("{} TOTAL", cu);
-        total_row[headers.len() - 1] = format_price(round_currency(total), cu);
-        rows.push(total_row);
-        logger::log(&render_table(
+        let table = render_table(
             &rows,
             &headers,
             &min_widths,
             &max_widths,
-            80,
+            ui::term_width(),
             table_min_width,
-        ));
+        );
+        logger::log(&table);
+        log_table_total(
+            &table,
+            &format!("{} TOTAL", cu),
+            &format_price(round_currency(total), cu),
+        );
         return;
     }
 
@@ -345,19 +340,20 @@ pub fn spread_subscription(
             ));
             total += sub.price
         }
-        let mut total_row = vec![String::new(); headers.len()];
-        total_row[headers.len() - 2] = format!("{} TOTAL", currency_code);
-        total_row[headers.len() - 1] = format_price(total, currency_code);
-        group_rows.push(total_row);
-
-        logger::log(&render_table(
+        let table = render_table(
             &group_rows,
             &headers,
             &min_widths,
             &max_widths,
-            80,
+            ui::term_width(),
             table_min_width,
-        ));
+        );
+        logger::log(&table);
+        log_table_total(
+            &table,
+            &format!("{} TOTAL", currency_code),
+            &format_price(total, currency_code),
+        );
         if gi < groups.len() - 1 {
             logger::log("")
         }

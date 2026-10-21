@@ -43,10 +43,22 @@ impl Env {
     }
 
     /// Run the CLI with the per-test env (never mutating global state).
-    fn run_with_stdin(&self, args: &[&str], input: &str) -> Output {
+    fn run_custom(
+        &self,
+        args: &[&str],
+        input: &str,
+        extra: &[(&str, &str)],
+        remove: &[&str],
+    ) -> Output {
         let mut cmd = Command::new(BIN);
         cmd.args(args);
         for (k, v) in self.envs() {
+            cmd.env(k, v);
+        }
+        for key in remove {
+            cmd.env_remove(key);
+        }
+        for (k, v) in extra {
             cmd.env(k, v);
         }
         cmd.stdin(std::process::Stdio::piped());
@@ -60,6 +72,10 @@ impl Env {
             .write_all(input.as_bytes())
             .ok();
         child.wait_with_output().expect("collect subtrack output")
+    }
+
+    fn run_with_stdin(&self, args: &[&str], input: &str) -> Output {
+        self.run_custom(args, input, &[], &[])
     }
 
     fn run(&self, args: &[&str]) -> Output {
@@ -217,20 +233,89 @@ fn summary_and_payment_report_totals() {
 }
 
 #[test]
+fn payment_uses_natural_period_labels() {
+    let env = Env::new("payment-periods");
+    seed(&env);
+
+    let yearly = env.text(&["payment", "yearly"]);
+    assert!(yearly.contains("¥250/year"), "payment yearly: {yearly}");
+    assert!(yearly.contains("$311.76/year"), "payment yearly: {yearly}");
+    assert!(!yearly.contains("/yearly"), "payment yearly: {yearly}");
+
+    let quarterly = env.text(&["payment", "quarterly"]);
+    assert!(
+        quarterly.contains("/quarter"),
+        "payment quarterly: {quarterly}"
+    );
+    assert!(
+        !quarterly.contains("/quarterly"),
+        "payment quarterly: {quarterly}"
+    );
+}
+
+#[test]
+fn summary_and_analytics_compare_most_expensive_per_currency() {
+    let env = Env::new("most-expensive-currency");
+    seed(&env);
+
+    let summary = env.text(&["summary"]);
+    assert!(
+        summary.contains("Most expensive by currency:"),
+        "summary: {summary}"
+    );
+    assert!(summary.contains("JPY  iCloud"), "summary: {summary}");
+    assert!(summary.contains("USD  Netflix"), "summary: {summary}");
+
+    let json = env.text(&["summary", "--json"]);
+    assert!(
+        json.contains("\"mostExpensiveByCurrency\""),
+        "summary json: {json}"
+    );
+    assert!(!json.contains("\"mostExpensive\":"), "summary json: {json}");
+
+    let analytics = env.text(&["analytics", "--period", "yearly"]);
+    assert!(
+        analytics.contains("Most expensive by currency:"),
+        "analytics: {analytics}"
+    );
+    assert!(
+        analytics.contains("¥250/year (1 sub)"),
+        "analytics: {analytics}"
+    );
+    assert!(
+        !analytics.contains("¥250/yearly (1 sub)"),
+        "analytics: {analytics}"
+    );
+
+    let converted: serde_json::Value = serde_json::from_slice(
+        &env.run(&["analytics", "--currency", "JPY", "--json"])
+            .stdout,
+    )
+    .expect("analytics json");
+    assert_eq!(
+        converted["monthlyByCurrency"]["JPY"].as_f64(),
+        Some(3924.33)
+    );
+    assert!(converted["monthlyByCurrency"].get("USD").is_none());
+    assert_eq!(converted["mostExpensive"]["currency"], "JPY");
+    assert_eq!(
+        converted["monthlyByTag"]["streaming"]["monthly"]["JPY"],
+        2402.5
+    );
+}
+
+#[test]
 fn unknown_flags_exit_1_and_fail_loudly() {
     let env = Env::new("errors");
     let out = env.run(&["list", "--min-pricee", "5"]);
     assert_eq!(out.status.code(), Some(1));
-    // consola-style logger prints diagnostics on stdout, not stderr
-    let stdout = String::from_utf8_lossy(&out.stdout);
+    // Diagnostics belong on stderr so piped data stays clean.
+    let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stdout.contains("Unknown option '--min-pricee'"),
-        "stdout: {stdout}"
+        stderr.contains("Unknown option '--min-pricee'"),
+        "stderr: {stderr}"
     );
-    assert!(
-        stdout.contains("✖"),
-        "stderr-style marker missing: {stdout}"
-    );
+    assert!(stderr.contains("✖"), "error marker missing: {stderr}");
 
     // required positional missing → silent no-op, exit 0
     let out = env.run(&["delete"]);
@@ -345,6 +430,81 @@ fn delete_prompts_for_selection_and_confirmation() {
 }
 
 #[test]
+fn piped_output_has_no_ansi_or_banner() {
+    let env = Env::new("piped-clean");
+    seed(&env);
+
+    // A pipe is not a terminal: do not emit colors even without NO_COLOR.
+    let out = env.run_custom(&["list"], "", &[("TERM", "xterm-256color")], &["NO_COLOR"]);
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains('\u{1b}'),
+        "ANSI leaked into a pipe: {stdout:?}"
+    );
+    assert!(
+        !stdout.starts_with("subtrack v"),
+        "banner leaked into a pipe: {stdout}"
+    );
+    assert!(stdout.contains("Netflix"), "list content missing: {stdout}");
+}
+
+#[test]
+fn force_color_emits_ansi_but_no_color_wins() {
+    let env = Env::new("color-policy");
+    seed(&env);
+
+    let out = env.run_custom(
+        &["list"],
+        "",
+        &[("FORCE_COLOR", "1"), ("TERM", "xterm-256color")],
+        &["NO_COLOR"],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains('\u{1b}'), "FORCE_COLOR did not colorize");
+
+    let out = env.run_custom(
+        &["list", "--no-color"],
+        "",
+        &[("FORCE_COLOR", "1"), ("TERM", "xterm-256color")],
+        &["NO_COLOR"],
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains('\u{1b}'),
+        "--no-color should override FORCE_COLOR"
+    );
+}
+
+#[test]
+fn list_respects_columns_width() {
+    let env = Env::new("columns");
+    seed(&env);
+
+    let out = env.run_custom(&["list"], "", &[("COLUMNS", "60")], &[]);
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let widest = stdout
+        .lines()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0);
+    assert!(widest <= 60, "table is {widest} columns wide:\n{stdout}");
+    // The cycle column must stay wide enough for the common "monthly" value.
+    assert!(stdout.contains("monthly"), "cycle truncated:\n{stdout}");
+    assert!(!stdout.contains("month…"), "cycle truncated:\n{stdout}");
+}
+
+#[test]
+fn bare_non_tty_invocation_explains_next_step() {
+    let env = Env::new("bare-hint");
+    let out = env.run(&[]);
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("subtrack --help"), "output: {stdout}");
+}
+
+#[test]
 fn bare_invocation_shows_menu() {
     let env = Env::new("menu");
     seed(&env);
@@ -357,4 +517,103 @@ fn bare_invocation_shows_menu() {
         "output: {text}"
     );
     assert!(text.contains("Netflix"), "output: {text}");
+}
+
+#[test]
+fn timeline_keeps_currencies_separate() {
+    let env = Env::new("timeline-currencies");
+    seed(&env);
+
+    let out = env.run(&["timeline", "--months", "1", "--json"]);
+    assert_eq!(out.status.code(), Some(0));
+    let value: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("timeline json parses");
+    assert!(value["currency"].is_null(), "mixed currency: {value}");
+    let entries = value["currencies"].as_array().expect("currencies array");
+    assert_eq!(entries.len(), 2, "expected USD and JPY: {value}");
+    assert_eq!(entries[0]["currency"], "USD");
+    assert_eq!(entries[0]["total"], 25.98);
+    assert_eq!(entries[1]["currency"], "JPY");
+    assert_eq!(entries[1]["total"], 20.83);
+}
+
+#[test]
+fn stats_reports_price_ranges_per_currency() {
+    let env = Env::new("stats-ranges");
+    seed(&env);
+
+    let text = env.text(&["stats"]);
+    assert!(text.contains("USD: $9.99 – $15.99"), "stats: {text}");
+    assert!(text.contains("JPY: ¥250"), "stats: {text}");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&env.run(&["stats", "--json"]).stdout).expect("stats json");
+    assert_eq!(json["priceRanges"]["USD"]["min"], 9.99);
+    assert_eq!(json["priceRanges"]["USD"]["max"], 15.99);
+    assert_eq!(json["priceRanges"]["JPY"]["min"], 250);
+}
+
+#[test]
+fn optimize_reports_savings_per_currency() {
+    let env = Env::new("optimize-currencies");
+    seed(&env);
+    let out = env.run(&[
+        "add",
+        "--name",
+        "Hulu",
+        "--price",
+        "1200",
+        "--currency",
+        "JPY",
+        "--cycle",
+        "monthly",
+        "--billingDay",
+        "12",
+        "--status",
+        "active",
+    ]);
+    assert_eq!(out.status.code(), Some(0));
+
+    let text = env.text(&["optimize"]);
+    assert!(text.contains("¥2,160/yr + $46.76/yr"), "optimize: {text}");
+
+    // A currency-specific threshold cannot be compared across currencies.
+    let out = env.run(&["optimize", "--min-savings", "10"]);
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("--currency"), "stderr: {stderr}");
+}
+
+#[test]
+fn report_json_total_is_null_for_mixed_currencies() {
+    let env = Env::new("report-currencies");
+    seed(&env);
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&env.run(&["report", "--json"]).stdout).expect("report json");
+    assert!(json["total"].is_null(), "mixed total: {json}");
+    assert!(json["byCurrency"]["USD"].as_f64().unwrap() > 0.0);
+    assert!(json["byCurrency"]["JPY"].as_f64().unwrap() > 0.0);
+}
+
+#[test]
+fn bare_parent_commands_default_to_list_and_forecast_runs() {
+    let env = Env::new("bare-defaults");
+    seed(&env);
+
+    let config = env.text(&["config"]);
+    assert!(config.contains("defaultCurrency: USD"), "config: {config}");
+
+    let forecast = env.text(&["forecast"]);
+    assert!(forecast.contains("Subscription"), "forecast: {forecast}");
+    assert!(forecast.contains("Year"), "forecast: {forecast}");
+
+    let search = env.text(&["search"]);
+    assert!(
+        search.contains("Provide a search query"),
+        "search: {search}"
+    );
+
+    let profile = env.text(&["profile"]);
+    assert!(profile.contains("No saved profiles"), "profile: {profile}");
 }

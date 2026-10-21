@@ -910,14 +910,34 @@ fn mcp_summary_json(subs: &[Subscription]) -> String {
         .collect();
     f.push(format!("\"monthlyByTag\":{{{}}}", tt.join(",")));
 
-    if !subs.is_empty() {
-        let mut idx = 0usize;
-        for (i, sub) in subs.iter().enumerate() {
-            if sub.price > subs[idx].price {
-                idx = i;
+    let mut most_expensive: Vec<(String, &Subscription)> = Vec::new();
+    for sub in subs {
+        match most_expensive
+            .iter_mut()
+            .find(|(currency, _)| *currency == sub.currency)
+        {
+            Some((_, current)) => {
+                if sub.price > current.price {
+                    *current = sub;
+                }
             }
+            None => most_expensive.push((sub.currency.clone(), sub)),
         }
-        f.push(format!("\"mostExpensive\":{}", sub_compact(&subs[idx])));
+    }
+    most_expensive.sort_by(|a, b| a.0.cmp(&b.0));
+    match most_expensive.as_slice() {
+        [] => {}
+        [(_, me)] => f.push(format!("\"mostExpensive\":{}", sub_compact(me))),
+        most => {
+            let entries: Vec<String> = most
+                .iter()
+                .map(|(currency, me)| format!("{}:{}", js_str(currency), sub_compact(me)))
+                .collect();
+            f.push(format!(
+                "\"mostExpensiveByCurrency\":{{{}}}",
+                entries.join(",")
+            ));
+        }
     }
     format!("{{{}}}", f.join(","))
 }
