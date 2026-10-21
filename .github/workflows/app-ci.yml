@@ -68,7 +68,7 @@ jobs:
 
       - name: Spell check
         if: runner.os == 'Linux' && matrix.node-version == 22
-        uses: crate-ci/typos@512fc24f32f44ab01972217aaaf3dc86ec234d53 # v1.50.2
+        uses: crate-ci/typos@7f9d0819ca1c008ade73f4b41fa9d258d48f605b # v1.51.1
         with:
           files: packages/subtrack/ rust/ docs/
           config: typos.toml
