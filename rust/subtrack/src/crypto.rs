@@ -8,7 +8,7 @@ use aes_gcm::aead::consts::U16;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::aes::Aes256;
 use aes_gcm::{AesGcm, Key, Nonce};
-use getrandom::getrandom as getrandom_fill;
+use getrandom::fill as getrandom_fill;
 use sha2::{Digest, Sha256};
 
 type Aes256Gcm = AesGcm<Aes256, U16>;
@@ -85,7 +85,7 @@ pub fn get_or_create_key() -> std::io::Result<Vec<u8>> {
 /// Cryptographically secure random key (32 bytes).
 fn generate_key() -> Vec<u8> {
     let mut key = vec![0u8; KEY_LENGTH];
-    // `getrandom::getrandom` delegates to the OS CSPRNG on every supported platform.
+    // `getrandom::fill` delegates to the OS CSPRNG on every supported platform.
     getrandom_fill(&mut key).expect("OS CSPRNG is unavailable");
     key
 }
