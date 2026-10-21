@@ -6,15 +6,16 @@ use crate::date::{period_factor, today};
 use crate::db::{
     PriceChange, QueryOptions, Subscription, get_all_price_changes, get_subscriptions,
 };
-use crate::fx::{fetch_rates, try_convert};
+use crate::fx::{fetch_rates, try_convert_subs};
 use crate::json::{number, quote_string};
-use crate::logger::{self, info, log, out_str};
+use crate::logger::{self, info, log, out_str, warn};
 use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
 
 #[derive(Clone)]
 struct CycleSuggestion {
     name: String,
+    currency: String,
     current_monthly: f64,
     suggested_monthly: f64,
     yearly_savings: f64,
@@ -23,7 +24,7 @@ struct CycleSuggestion {
 struct DuplicateSuggestion {
     names: Vec<String>,
     category: String,
-    total_monthly: f64,
+    by_currency: Vec<(String, f64)>,
 }
 
 struct InactiveSuggestion {
@@ -103,6 +104,7 @@ fn analyze_cycle_optimization(subs: &[Subscription], discount_rate: f64) -> Vec<
         if savings > 0.0 {
             results.push(CycleSuggestion {
                 name: sub.name.clone(),
+                currency: sub.currency.clone(),
                 current_monthly: monthly_cost,
                 suggested_monthly: round_currency(estimated / 12.0),
                 yearly_savings: round_currency(savings),
@@ -138,10 +140,15 @@ fn analyze_duplicates(subs: &[Subscription]) -> Vec<DuplicateSuggestion> {
             for s in &all_similar {
                 checked.push(s.id);
             }
-            let total: f64 = all_similar
-                .iter()
-                .map(|s| s.price * period_factor(&s.cycle, "monthly"))
-                .sum();
+            let mut by_currency: Vec<(String, f64)> = Vec::new();
+            for s in &all_similar {
+                add_amount(
+                    &mut by_currency,
+                    &s.currency,
+                    s.price * period_factor(&s.cycle, "monthly"),
+                );
+            }
+            by_currency.sort_by(|a, b| a.0.cmp(&b.0));
             let mut first_tags: Vec<String> = all_similar
                 .iter()
                 .filter_map(|s| s.tags.first().cloned())
@@ -160,7 +167,10 @@ fn analyze_duplicates(subs: &[Subscription]) -> Vec<DuplicateSuggestion> {
             results.push(DuplicateSuggestion {
                 names: all_similar.iter().map(|s| s.name.clone()).collect(),
                 category,
-                total_monthly: round_currency(total),
+                by_currency: by_currency
+                    .into_iter()
+                    .map(|(c, amount)| (c, round_currency(amount)))
+                    .collect(),
             });
         }
     }
@@ -263,17 +273,26 @@ pub fn run_optimize(parsed: &ParsedArgs) -> i32 {
         subs.retain(|s| !exclude.contains(&s.name));
     }
 
-    let mut display_currency = "USD".to_string();
-    let currency = parsed.str("currency");
-    if let Some(cu) = &currency {
-        display_currency = cu.clone();
+    let mut display_currency: Option<String> = None;
+    if let Some(target) = parsed
+        .str("currency")
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+    {
         let rates = fetch_rates();
-        for s in &mut subs {
-            if let Some(v) = try_convert(s.price, &s.currency, cu, &rates.rates) {
-                s.price = round_currency(v);
-                s.currency = cu.clone();
-            }
+        let converted = try_convert_subs(&subs, &target, &rates);
+        if converted.has_missing {
+            warn(&format!(
+                "Some prices could not be converted to {}; they are excluded from the report",
+                target
+            ));
         }
+        subs = converted
+            .list
+            .into_iter()
+            .filter(|s| s.currency == target)
+            .collect();
+        display_currency = Some(target);
     }
 
     let all_changes = match get_all_price_changes() {
@@ -288,24 +307,50 @@ pub fn run_optimize(parsed: &ParsedArgs) -> i32 {
     let inactive_suggestions = analyze_inactive(&subs, &all_changes);
     let cancelled_suggestions = analyze_cancelled(&subs);
 
-    let total_yearly_savings =
-        round_currency(cycle_suggestions.iter().map(|c| c.yearly_savings).sum());
+    let mut total_yearly_savings: Vec<(String, f64)> = Vec::new();
+    for s in &cycle_suggestions {
+        add_amount(&mut total_yearly_savings, &s.currency, s.yearly_savings);
+    }
+    total_yearly_savings.sort_by(|a, b| a.0.cmp(&b.0));
+    for (_, total) in &mut total_yearly_savings {
+        *total = round_currency(*total);
+    }
 
-    if min_savings > 0.0 && total_yearly_savings < min_savings {
-        info(&format!(
-            "Potential savings ({}/yr) below minimum threshold ({}/yr)",
-            format_price(total_yearly_savings, &display_currency),
-            format_price(min_savings, &display_currency)
-        ));
-        return 0;
+    if min_savings > 0.0 {
+        let (currency, total) = match (&display_currency, total_yearly_savings.as_slice()) {
+            (Some(c), _) => (
+                c.clone(),
+                total_yearly_savings
+                    .iter()
+                    .find(|(ccy, _)| ccy == c)
+                    .map(|(_, total)| *total)
+                    .unwrap_or(0.0),
+            ),
+            (None, [(ccy, total)]) => (ccy.clone(), *total),
+            (None, _) => {
+                logger::fail(
+                    "min-savings requires --currency when subscriptions use multiple currencies",
+                );
+                return 1;
+            }
+        };
+        if total < min_savings {
+            info(&format!(
+                "Potential savings ({}/yr) below minimum threshold ({}/yr)",
+                format_price(total, &currency),
+                format_price(min_savings, &currency)
+            ));
+            return 0;
+        }
     }
 
     if parsed.bool("json") == Some(true) {
         let mut items: Vec<String> = Vec::new();
         for s in &cycle_suggestions {
             items.push(format!(
-                "    {{\n      \"type\": \"cycle\",\n      \"name\": {},\n      \"currentCycle\": \"monthly\",\n      \"suggestedCycle\": \"yearly\",\n      \"currentMonthly\": {},\n      \"suggestedMonthly\": {},\n      \"yearlySavings\": {}\n    }}",
+                "    {{\n      \"type\": \"cycle\",\n      \"name\": {},\n      \"currency\": {},\n      \"currentCycle\": \"monthly\",\n      \"suggestedCycle\": \"yearly\",\n      \"currentMonthly\": {},\n      \"suggestedMonthly\": {},\n      \"yearlySavings\": {}\n    }}",
                 quote_string(&s.name),
+                quote_string(&s.currency),
                 number(s.current_monthly),
                 number(s.suggested_monthly),
                 number(s.yearly_savings)
@@ -313,11 +358,22 @@ pub fn run_optimize(parsed: &ParsedArgs) -> i32 {
         }
         for d in &duplicate_suggestions {
             let names: Vec<String> = d.names.iter().map(|n| quote_string(n)).collect();
+            let total_monthly = if d.by_currency.len() == 1 {
+                number(d.by_currency[0].1)
+            } else {
+                "null".to_string()
+            };
+            let by_currency: Vec<String> = d
+                .by_currency
+                .iter()
+                .map(|(ccy, amount)| format!("        {}: {}", quote_string(ccy), number(*amount)))
+                .collect();
             items.push(format!(
-                "    {{\n      \"type\": \"duplicate\",\n      \"names\": [\n        {}\n      ],\n      \"category\": {},\n      \"totalMonthly\": {}\n    }}",
+                "    {{\n      \"type\": \"duplicate\",\n      \"names\": [\n        {}\n      ],\n      \"category\": {},\n      \"totalMonthly\": {},\n      \"byCurrency\": {{\n{}\n      }}\n    }}",
                 names.join(",\n        "),
                 quote_string(&d.category),
-                number(d.total_monthly)
+                total_monthly,
+                by_currency.join(",\n")
             ));
         }
         for s in &inactive_suggestions {
@@ -342,10 +398,20 @@ pub fn run_optimize(parsed: &ParsedArgs) -> i32 {
                 number(c.monthly)
             ));
         }
+        let total_json = if total_yearly_savings.len() == 1 {
+            number(total_yearly_savings[0].1)
+        } else {
+            "null".to_string()
+        };
+        let total_by_currency: Vec<String> = total_yearly_savings
+            .iter()
+            .map(|(ccy, total)| format!("    {}: {}", quote_string(ccy), number(*total)))
+            .collect();
         out_str(&format!(
-            "{{\n  \"suggestions\": [\n{}\n  ],\n  \"totalYearlySavings\": {}\n}}\n",
+            "{{\n  \"suggestions\": [\n{}\n  ],\n  \"totalYearlySavings\": {},\n  \"totalYearlySavingsByCurrency\": {{\n{}\n  }}\n}}\n",
             items.join(",\n"),
-            number(total_yearly_savings)
+            total_json,
+            total_by_currency.join(",\n")
         ));
         return 0;
     }
@@ -355,10 +421,33 @@ pub fn run_optimize(parsed: &ParsedArgs) -> i32 {
         &duplicate_suggestions,
         &inactive_suggestions,
         &cancelled_suggestions,
-        total_yearly_savings,
-        &display_currency,
+        &total_yearly_savings,
+        display_currency.as_deref(),
     );
     0
+}
+
+fn add_amount(totals: &mut Vec<(String, f64)>, currency: &str, amount: f64) {
+    match totals.iter_mut().find(|(c, _)| c == currency) {
+        Some((_, total)) => *total += amount,
+        None => totals.push((currency.to_string(), amount)),
+    }
+}
+
+fn format_totals(totals: &[(String, f64)], suffix: &str) -> String {
+    let mut totals = totals.to_vec();
+    totals.sort_by(|a, b| a.0.cmp(&b.0));
+    totals
+        .iter()
+        .map(|(currency, amount)| {
+            format!(
+                "{}{}",
+                format_price(round_currency(*amount), currency),
+                suffix
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
 }
 
 fn render_report(
@@ -366,8 +455,8 @@ fn render_report(
     duplicates: &[DuplicateSuggestion],
     inactive: &[InactiveSuggestion],
     cancelled: &[CancelledSuggestion],
-    total_yearly_savings: f64,
-    display_currency: &str,
+    total_yearly_savings: &[(String, f64)],
+    display_currency: Option<&str>,
 ) {
     let mut sections: Vec<String> = vec![ansi::bold("Cost Optimization Report")];
 
@@ -378,33 +467,33 @@ fn render_report(
             ansi::bold("  Cycle Optimization"),
             String::new(),
         ];
-        let mut total_savings = 0.0_f64;
+        let mut total_savings: Vec<(String, f64)> = Vec::new();
         for s in cycle {
             lines.push(format!(
                 "    {}  {}{}  {}",
                 s.name,
                 ansi::dim(&format!(
                     "{}/mo → ",
-                    format_price(s.current_monthly, display_currency)
+                    format_price(s.current_monthly, &s.currency)
                 )),
                 ansi::green(&format!(
                     "{}/mo",
-                    format_price(s.suggested_monthly, display_currency)
+                    format_price(s.suggested_monthly, &s.currency)
                 )),
                 ansi::green(&format!(
                     "(save {}/yr)",
-                    format_price(s.yearly_savings, display_currency)
+                    format_price(s.yearly_savings, &s.currency)
                 ))
             ));
-            total_savings += s.yearly_savings;
+            add_amount(&mut total_savings, &s.currency, s.yearly_savings);
         }
-        if total_savings > 0.0 {
+        if !total_savings.is_empty() {
             lines.push(format!("    {}", ansi::dim(&"─".repeat(40))));
             lines.push(format!(
                 "    {}",
                 ansi::green(&ansi::bold(&format!(
-                    "Total savings: {}/yr",
-                    format_price(total_savings, display_currency)
+                    "Total savings: {}",
+                    format_totals(&total_savings, "/yr")
                 )))
             ));
         }
@@ -426,8 +515,8 @@ fn render_report(
             lines.push(format!(
                 "      {}",
                 ansi::dim(&format!(
-                    "Combined: {}/mo",
-                    format_price(d.total_monthly, display_currency)
+                    "Combined: {}",
+                    format_totals(&d.by_currency, "/mo")
                 ))
             ));
             lines.push(String::new());
@@ -453,7 +542,10 @@ fn render_report(
 
     // Cancelled / Paused
     if !cancelled.is_empty() {
-        let total_monthly: f64 = cancelled.iter().map(|c| c.monthly).sum();
+        let mut total_monthly: Vec<(String, f64)> = Vec::new();
+        for c in cancelled {
+            add_amount(&mut total_monthly, &c.currency, c.monthly);
+        }
         let mut lines: Vec<String> = vec![
             String::new(),
             ansi::bold("  Cancelled / Paused (previously paid)"),
@@ -470,21 +562,50 @@ fn render_report(
         lines.push(format!(
             "    {}",
             ansi::dim(&format!(
-                "Previously: {}/mo",
-                format_price(total_monthly, display_currency)
+                "Previously: {}",
+                format_totals(&total_monthly, "/mo")
             ))
         ));
         sections.push(lines.join("\n"));
     }
 
-    if total_yearly_savings > 0.0 {
-        sections.push(format!(
-            "\n{}",
-            ansi::bold(&format!(
-                "  Total potential savings: {}/yr",
-                ansi::green(&format_price(total_yearly_savings, display_currency))
-            ))
-        ));
+    if !total_yearly_savings.is_empty() {
+        if let Some(currency) = display_currency {
+            let total = total_yearly_savings
+                .iter()
+                .find(|(c, _)| c == currency)
+                .map(|(_, total)| *total)
+                .unwrap_or(0.0);
+            sections.push(format!(
+                "\n{}",
+                ansi::bold(&format!(
+                    "  Total potential savings: {}/yr",
+                    ansi::green(&format_price(total, currency))
+                ))
+            ));
+        } else if total_yearly_savings.len() == 1 {
+            let (currency, total) = &total_yearly_savings[0];
+            sections.push(format!(
+                "\n{}",
+                ansi::bold(&format!(
+                    "  Total potential savings: {}/yr",
+                    ansi::green(&format_price(*total, currency))
+                ))
+            ));
+        } else {
+            let rendered = total_yearly_savings
+                .iter()
+                .map(|(currency, total)| format_price(*total, currency))
+                .collect::<Vec<_>>()
+                .join(" + ");
+            sections.push(format!(
+                "\n{}",
+                ansi::bold(&format!(
+                    "  Total potential savings: {}/yr",
+                    ansi::green(&rendered)
+                ))
+            ));
+        }
     }
 
     log(&sections.join("\n"));

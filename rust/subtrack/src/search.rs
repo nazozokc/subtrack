@@ -22,6 +22,8 @@ pub fn run_search(parsed: &ParsedArgs) -> i32 {
         None => {
             if json {
                 out_str("[]\n");
+            } else {
+                logger::info("Provide a search query: subtrack search <query>");
             }
             return 0;
         }

@@ -323,7 +323,7 @@ pub fn render_trial_table(trials: &[Trial]) {
         max_widths: vec![10, 40, 14, 10, 20, 40],
         min_avail: Some(50),
     };
-    let widths = calc_column_widths(&rows, &config, 80, 40);
+    let widths = calc_column_widths(&rows, &config, crate::ui::term_width(), 40);
 
     let theme = display_theme();
     let col_aligns: Vec<String> = ["right", "left", "left", "left", "right", "left"]
