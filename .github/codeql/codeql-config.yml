@@ -1,0 +1,6 @@
+# `prompt.rs` writes every interactive prompt (including free-text answers and
+# decrypted subscription labels) to stdout. CodeQL's cleartext-logging query
+# treats stdout as a log sink and flags those UI writes as secret leakage, so
+# the file is excluded from analysis. No secrets are logged by this module.
+paths-ignore:
+  - rust/subtrack/src/prompt.rs

@@ -38,9 +38,41 @@ pub fn run_template_list(parsed: &ParsedArgs) -> i32 {
     0
 }
 
+fn template_names() -> Vec<String> {
+    load_config()
+        .raw
+        .get("templates")
+        .and_then(|v| v.as_object())
+        .map(|t| t.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
+fn pick_template(message: &str) -> Option<String> {
+    let names = template_names();
+    if names.is_empty() {
+        logger::info("No templates found");
+        return None;
+    }
+    let choices: Vec<crate::prompt::Choice> = names
+        .iter()
+        .map(|n| crate::prompt::Choice::plain(n))
+        .collect();
+    crate::prompt::select(message, &choices, None)
+}
+
 /// Port of `handleTemplate("delete")`.
 pub fn run_template_delete(parsed: &ParsedArgs) -> i32 {
-    let name = parsed.str("name").unwrap_or_default();
+    let name = match parsed.str("name") {
+        Some(n) if !n.trim().is_empty() => n,
+        _ if crate::prompt::interactive() => match pick_template("select template to delete") {
+            Some(n) => n,
+            None => return 0,
+        },
+        _ => {
+            logger::fail("Template name required");
+            return 1;
+        }
+    };
     let config = load_config();
     let exists = config
         .raw
@@ -51,6 +83,10 @@ pub fn run_template_delete(parsed: &ParsedArgs) -> i32 {
     if !exists {
         logger::fail(&format!("Template not found: {}", name));
         return 1;
+    }
+    if crate::prompt::confirm(&format!("Delete template \"{}\"?", name), false) != Some(true) {
+        logger::info("Cancelled");
+        return 0;
     }
     let _ = crate::config::save_config_mut(|raw| {
         if let Some(serde_json::Value::Object(map)) = raw.get_mut("templates") {
@@ -63,7 +99,17 @@ pub fn run_template_delete(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `handleTemplate("use")`.
 pub fn run_template_use(parsed: &ParsedArgs) -> i32 {
-    let name = parsed.str("name").unwrap_or_default();
+    let name = match parsed.str("name") {
+        Some(n) if !n.trim().is_empty() => n,
+        _ if crate::prompt::interactive() => match pick_template("select template to use") {
+            Some(n) => n,
+            None => return 0,
+        },
+        _ => {
+            logger::fail("Template name required");
+            return 1;
+        }
+    };
     let config = load_config();
     let templates = config
         .raw
@@ -173,7 +219,17 @@ pub fn run_template_use(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `handleTemplate("edit")`.
 pub fn run_template_edit(parsed: &ParsedArgs) -> i32 {
-    let name = parsed.str("name").unwrap_or_default();
+    let name = match parsed.str("name") {
+        Some(n) if !n.trim().is_empty() => n,
+        _ if crate::prompt::interactive() => match pick_template("select template to edit") {
+            Some(n) => n,
+            None => return 0,
+        },
+        _ => {
+            logger::fail("Template name required");
+            return 1;
+        }
+    };
     let config = load_config();
     let templates = config
         .raw
@@ -240,7 +296,23 @@ pub fn run_template_edit(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `handleTemplate("add")`.
 pub fn run_template_add(parsed: &ParsedArgs) -> i32 {
-    let name = parsed.str("name").unwrap_or_default();
+    let name = match parsed.str("name") {
+        Some(n) if !n.trim().is_empty() => n,
+        _ if crate::prompt::interactive() => {
+            match crate::prompt::input(
+                "Template name",
+                Some(""),
+                Some(crate::validation::validate_name),
+            ) {
+                Some(n) if !n.trim().is_empty() => n,
+                _ => return 0,
+            }
+        }
+        _ => {
+            logger::fail("Template name required");
+            return 1;
+        }
+    };
     let config = load_config();
     let templates = config
         .raw
@@ -253,12 +325,25 @@ pub fn run_template_add(parsed: &ParsedArgs) -> i32 {
         return 1;
     }
 
-    let price = parsed
-        .str("price")
-        .and_then(|v| v.trim().parse::<f64>().ok())
-        .unwrap_or(0.0);
-    let currency = parsed.str("currency").unwrap_or_else(|| "USD".to_string());
-    let cycle = parsed.str("cycle").unwrap_or_else(|| "monthly".to_string());
+    let price = match parsed.str("price") {
+        Some(v) => v.trim().parse::<f64>().ok().unwrap_or(0.0),
+        None if crate::prompt::interactive() => {
+            match crate::prompt::input("Price", Some(""), Some(crate::validation::validate_price)) {
+                Some(v) => v.trim().parse::<f64>().ok().unwrap_or(0.0),
+                None => return 0,
+            }
+        }
+        None => 0.0,
+    };
+    let Some(currency) =
+        crate::prompts::prompt_currency(parsed.str("currency").as_deref(), "Currency")
+    else {
+        return 0;
+    };
+    let Some(cycle) = crate::prompts::prompt_cycle(parsed.str("cycle").as_deref(), "Billing cycle")
+    else {
+        return 0;
+    };
 
     if !price.is_finite() || price <= 0.0 {
         logger::fail("Template price must be a positive number");

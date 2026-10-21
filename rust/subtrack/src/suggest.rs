@@ -180,10 +180,16 @@ pub fn run_suggest_list(parsed: &ParsedArgs) -> i32 {
 }
 
 pub fn run_suggest_view(parsed: &ParsedArgs) -> i32 {
-    let id = parsed
-        .str("id")
-        .and_then(|i| i.parse::<i64>().ok())
-        .unwrap_or(-1);
+    let id = match parsed.str("id").and_then(|i| i.parse::<i64>().ok()) {
+        Some(id) => id,
+        None if crate::prompt::interactive() => {
+            match pick_pending("select suggestion to view", false) {
+                Some(v) => v.parse::<i64>().unwrap_or(-1),
+                None => return 0,
+            }
+        }
+        None => -1,
+    };
     let suggestion = match get_suggestion(id) {
         Ok(s) => s,
         Err(e) => {
@@ -259,15 +265,61 @@ pub fn run_suggest_view(parsed: &ParsedArgs) -> i32 {
     0
 }
 
+/// Prompt for a pending suggestion id.
+fn pick_pending(message: &str, include_all: bool) -> Option<String> {
+    let list = match crate::db::get_suggestions(Some("pending")) {
+        Ok(v) => v,
+        Err(e) => {
+            logger::fail(&format!("Failed to read suggestions: {}", e));
+            return None;
+        }
+    };
+    if list.is_empty() {
+        crate::logger::info("No pending suggestions.");
+        return None;
+    }
+    let mut choices: Vec<crate::prompt::Choice> = Vec::new();
+    if include_all {
+        choices.push(crate::prompt::Choice::new("Dismiss all pending", "all"));
+    }
+    for s in &list {
+        let price = s
+            .price
+            .map(|p| crate::price::format_price(p, s.currency.as_deref().unwrap_or("USD")))
+            .unwrap_or_else(|| "—".to_string());
+        choices.push(crate::prompt::Choice::new(
+            &format!(
+                "#{} {} — {}/{}",
+                s.id,
+                s.name,
+                price,
+                s.cycle.as_deref().unwrap_or("monthly")
+            ),
+            &s.id.to_string(),
+        ));
+    }
+    crate::prompt::select(message, &choices, None)
+}
+
 /// Port of `handleSuggestAdd` (non-interactive).
 pub fn run_suggest_add(parsed: &ParsedArgs) -> i32 {
     let id = match parsed.str("id").and_then(|s| s.trim().parse::<i64>().ok()) {
         Some(id) => id,
         None => {
-            logger::fail("Invalid suggestion ID");
-            return 1;
+            if !crate::prompt::interactive() {
+                logger::fail("Invalid suggestion ID");
+                return 1;
+            }
+            match pick_pending("select suggestion to add", false) {
+                Some(v) => v.parse::<i64>().unwrap_or(0),
+                None => return 0,
+            }
         }
     };
+    if id < 1 {
+        logger::fail("Invalid suggestion ID");
+        return 1;
+    }
     match crate::db::get_suggestion(id) {
         Ok(Some(s)) => {
             if s.status != "pending" {
@@ -359,9 +411,41 @@ pub fn run_suggest_dismiss(parsed: &ParsedArgs) -> i32 {
         ));
         return 0;
     }
-    let Some(id) = parsed.str("id").and_then(|s| s.trim().parse::<i64>().ok()) else {
-        logger::fail("Specify a suggestion ID or use --all");
-        return 1;
+    let id = match parsed.str("id").and_then(|s| s.trim().parse::<i64>().ok()) {
+        Some(id) => id,
+        None => {
+            if !crate::prompt::interactive() {
+                logger::fail("Specify a suggestion ID or use --all");
+                return 1;
+            }
+            let Some(selected) = pick_pending("select suggestion to dismiss", true) else {
+                return 0;
+            };
+            if selected == "all" {
+                if crate::prompt::confirm("Dismiss all pending suggestions?", false) != Some(true) {
+                    crate::logger::info("Cancelled");
+                    return 0;
+                }
+                let count = crate::db::get_suggestions(Some("pending"))
+                    .map(|v| v.len())
+                    .unwrap_or(0);
+                return match crate::db::dismiss_all_suggestions() {
+                    Ok(_) => {
+                        logger::success(&format!(
+                            "{} suggestion{} dismissed.",
+                            count,
+                            if count > 1 { "s" } else { "" }
+                        ));
+                        0
+                    }
+                    Err(e) => {
+                        logger::fail(&format!("Failed to dismiss suggestions: {}", e));
+                        1
+                    }
+                };
+            }
+            selected.parse::<i64>().unwrap_or(0)
+        }
     };
     match crate::db::dismiss_suggestion(id) {
         Ok(true) => {

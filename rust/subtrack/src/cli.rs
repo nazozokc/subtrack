@@ -257,7 +257,11 @@ pub fn run(args: &[String]) -> i32 {
                 // Print menu header (port of showMenuHeader)
                 print_root_header();
             }
-            0
+            if crate::prompt::interactive() {
+                crate::menu::run_menu()
+            } else {
+                0
+            }
         }
     };
     if code != 0 {

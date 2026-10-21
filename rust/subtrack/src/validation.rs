@@ -75,6 +75,21 @@ pub fn validate_price(v: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Port of `validateCycleDays` (custom `Nd` cycles).
+pub fn validate_cycle_days(v: &str) -> Result<(), String> {
+    if v.trim().is_empty() {
+        return Err("Days per cycle cannot be empty".to_string());
+    }
+    let n: f64 = v
+        .trim()
+        .parse()
+        .map_err(|_| "Enter a number between 1 and 365".to_string())?;
+    if n.fract() != 0.0 || !(1.0..=365.0).contains(&n) {
+        return Err("Enter a number between 1 and 365".to_string());
+    }
+    Ok(())
+}
+
 pub fn validate_billing_day(v: &str) -> Result<(), String> {
     if v.trim().is_empty() {
         return Ok(());

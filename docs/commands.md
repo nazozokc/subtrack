@@ -3,12 +3,12 @@ title: Commands
 description: Full reference for all subtrack CLI commands.
 ---
 
-subtrack provides the following 50 commands. Every command runs non-interactively from flags and positional arguments — guided prompt flows (the guided checklist, checkbox deletion, the bare `subtrack` menu) are not part of the native binary. See [Scripting notes](#scripting-notes).
+subtrack provides the following 50 commands. Every command can run non-interactively from flags and positional arguments. When invoked without required arguments on a terminal, commands prompt for the missing values; the bare `subtrack` command opens a menu. See [Scripting notes](#scripting-notes).
 
 ## Scripting notes
 
 - **Output is deterministic.** The `subtrack (subtrack vX.Y.Z)` header line is printed to stdout on every run; passing `-j, --json` (or running `subtrack mcp`) suppresses it for machine-readable output. There is no pre-command notification banner.
-- **No interactive mode.** Commands take flags and positionals directly. When required input is missing, the command either exits 0 taking no action (e.g. bare `subtrack add`, `edit`, `delete`, `restore`, `search`) or prints the pending preview and aborts without changes (e.g. `cancel` without `--force`).
+- **Interactive prompts.** Prompt flows run when stdin is a terminal (or `SUBTRACK_ASSUME_TTY=1`). Flags always take precedence, and `--json` never prompts. In a non-TTY session the scriptable behavior is unchanged: missing required input exits 0 without prompting (e.g. bare `subtrack add`, `edit`, `delete`, `restore`, `search`), or the command aborts without changes (e.g. `cancel` without `--force`).
 - **Exit codes for automation.** `budget --check` exits 1 when over budget; `check --strict` exits 1 when data problems are found.
 - **Unknown flags fail loudly.** A misspelled option aborts with an error and exit code 1: `subtrack list --min-pricee 500` → `✖ --min-pricee: Unknown option '--min-pricee'`. Typos are never silently dropped.
 
@@ -151,7 +151,7 @@ When `--api` is used, LLM API usage costs for the current month are fetched from
 
 ## `add`
 
-Adds a new subscription. Requires at least `--name`, `--price`, `--currency`, `--cycle`, and `--status` — if any of these is missing, the command exits 0 without creating anything (no interactive prompts in this release). Providing all flags also skips further prompts in every environment (useful for scripts).
+Adds a new subscription. Requires at least `--name`, `--price`, `--currency`, `--cycle`, and `--status`. On a terminal, any field not supplied as a flag is prompted for — including optional metadata and a final save confirmation. Providing all flags skips every prompt (useful for scripts); in a non-TTY session missing required input exits 0 without creating anything.
 
 | Option | Description |
 |--------|-------------|
@@ -222,11 +222,11 @@ subtrack add \
 
 ## `edit`
 
-Edits an existing subscription. `[id]` selects the target subscription; only the fields passed as flags are changed.
+Edits an existing subscription. `[id]` selects the target subscription. On a terminal, omitting the ID prompts for one and then lets you pick the fields to change from a checkbox list; each selected field gets its own prompt. Flags skip the prompts. In a non-TTY session, omitting the ID exits 0 and does nothing.
 
 | Option | Description |
 |--------|-------------|
-| `[id]` | Subscription ID (required for any changes — without ID the command exits 0 and does nothing) |
+| `[id]` | Subscription ID (prompted on a terminal; without ID in a non-TTY session the command exits 0) |
 | `--name <name>` | New subscription name |
 | `--price <price>` | New payment amount |
 | `--currency <C>` | New currency code |
@@ -269,11 +269,11 @@ subtrack edit 3 --billingDay ""
 subtrack edit 3 --paymentMethod paypal
 ```
 
-Without any field flags, `edit <id>` prints the subscription's current values and exits without changing anything.
+Without any field flags, `edit <id>` opens the field picker on a terminal. In a non-TTY session it prints the subscription's current values and exits without changing anything.
 
 ## `delete [ids...]`
 
-Deletes one or more subscriptions by ID. Deletion is immediate — no confirmation step — and recorded in the audit log. Without IDs, the command exits 0 and does nothing.
+Deletes one or more subscriptions by ID. On a terminal, omitting the IDs opens a checkbox list and asks for confirmation. Explicit IDs delete immediately (no confirmation) and are recorded in the audit log. In a non-TTY session, omitting the IDs exits 0 and does nothing.
 
 ### Examples
 
@@ -790,7 +790,7 @@ Tracks LLM API usage costs. Costs are auto-calculated from model pricing when av
 
 ### `usage add`
 
-Records an LLM API usage entry. Requires `--provider`, `--model`, `--input-tokens`, and `--output-tokens` (+ `--cost` when no pricing can be resolved — see below).
+Records an LLM API usage entry. Flags supply any field; on a terminal, omitted values (provider, model, cost, tokens, date, description) are prompted for. In a non-TTY session `--provider` and `--model` are required, and `--cost` is required when no pricing can be resolved — see below.
 
 | Option | Description |
 |--------|-------------|
@@ -1727,9 +1727,9 @@ Manages subscription suggestions — candidates detected by the scanner (for exa
 | Subcommand | Description |
 |------------|-------------|
 | `list` | List pending suggestions |
-| `view <id>` | Show full details of a suggestion |
-| `add <id>` | Add a suggestion as a subscription (non-interactive) |
-| `dismiss [id]` | Dismiss one suggestion, or all with `--all` |
+| `view [id]` | Show full details of a suggestion (id prompted on a terminal) |
+| `add [id]` | Add a suggestion as a subscription (id prompted on a terminal) |
+| `dismiss [id]` | Dismiss one suggestion (prompted on a terminal), or all with `--all` |
 
 ### `suggest list`
 

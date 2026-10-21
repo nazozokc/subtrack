@@ -10,11 +10,13 @@
 use crate::db::get_subscription_by_id;
 use crate::logger::{self, fail, info};
 use crate::parser::ParsedArgs;
-use crate::prompts::{prompt_cycle, prompt_select, prompt_string};
+use crate::prompts::{
+    prompt_currency, prompt_cycle, prompt_optional, prompt_select, prompt_string,
+};
 use crate::validation::{
-    CURRENCY_VALUES, STATUS_VALUES, is_valid_currency, is_valid_status, validate_billing_day,
-    validate_date_string, validate_discount_type, validate_discount_value, validate_name,
-    validate_notes, validate_payment_method, validate_plan_tier, validate_price,
+    STATUS_VALUES, is_valid_currency, is_valid_status, validate_billing_day, validate_date_string,
+    validate_discount_type, validate_discount_value, validate_name, validate_notes,
+    validate_payment_method, validate_plan_tier, validate_price, validate_tags,
     validate_vendor_name, validate_vendor_url,
 };
 
@@ -22,133 +24,275 @@ fn parse_id(value: Option<String>) -> Option<i64> {
     value.and_then(|v| v.trim().parse::<i64>().ok())
 }
 
-/// Validate an optional free-text flag; empty values are ignored.
-fn opt_text(
+/// Resolve an id from the positional/flag, or prompt for a subscription.
+fn resolve_id(
     parsed: &ParsedArgs,
-    key: &str,
-    validate: fn(&str) -> Result<(), String>,
-) -> Result<(), ()> {
-    if let Some(raw) = parsed.str(key) {
-        let trimmed = raw.trim();
-        if !trimmed.is_empty()
-            && let Err(msg) = validate(trimmed)
-        {
-            fail(&msg);
-            return Err(());
-        }
+    message: &str,
+    filter: fn(&crate::db::Subscription) -> bool,
+) -> Option<i64> {
+    if let Some(id) = parse_id(parsed.str("id")) {
+        return Some(id);
     }
-    Ok(())
+    let all = crate::db::get_subscriptions(&crate::db::QueryOptions {
+        include_archived: true,
+        ..Default::default()
+    })
+    .ok()?;
+    let filtered: Vec<_> = all.into_iter().filter(filter).collect();
+    if filtered.is_empty() {
+        info("No matching subscriptions found");
+        return None;
+    }
+    let choices: Vec<crate::prompt::Choice> = filtered
+        .iter()
+        .map(|s| {
+            crate::prompt::Choice::new(
+                &format!(
+                    "#{} {} — {}/{}{}",
+                    s.id,
+                    s.name,
+                    crate::price::format_price(s.price, &s.currency),
+                    s.cycle,
+                    if s.status == "active" {
+                        String::new()
+                    } else {
+                        format!(" ({})", s.status)
+                    }
+                ),
+                &s.id.to_string(),
+            )
+        })
+        .collect();
+    crate::prompt::select(message, &choices, None)?
+        .parse::<i64>()
+        .ok()
 }
 
-/// `subtrack add` — port of `resolveAddOptions` validation order.
+fn not_cancelled(sub: &crate::db::Subscription) -> bool {
+    sub.status != "cancelled"
+}
+
+fn archived(sub: &crate::db::Subscription) -> bool {
+    sub.status == "archived"
+}
+
+fn not_archived(sub: &crate::db::Subscription) -> bool {
+    sub.status != "archived"
+}
+
+/// `subtrack add` — port of `resolveAddOptions` (flags + interactive fallback).
 pub fn run_add(parsed: &ParsedArgs) -> i32 {
-    let Some(name) = prompt_string(parsed.str("name").as_deref(), validate_name) else {
-        return 0;
-    };
-    let Some(price) = prompt_string(parsed.str("price").as_deref(), validate_price) else {
-        return 0;
-    };
-    let Some(currency) = prompt_select(
-        parsed.str("currency").as_deref(),
-        is_valid_currency,
-        &CURRENCY_VALUES,
+    let prompted = ["name", "price", "currency", "cycle"]
+        .iter()
+        .any(|key| parsed.str(key).is_none());
+
+    let Some(name) = prompt_string(
+        parsed.str("name").as_deref(),
+        "subscription name",
+        validate_name,
     ) else {
         return 0;
     };
-    let Some(cycle) = prompt_cycle(parsed.str("cycle").as_deref()) else {
+    let Some(price) = prompt_string(
+        parsed.str("price").as_deref(),
+        "monthly payment amount",
+        validate_price,
+    ) else {
+        return 0;
+    };
+    let Some(currency) = prompt_currency(parsed.str("currency").as_deref(), "currency") else {
+        return 0;
+    };
+    let Some(cycle) = prompt_cycle(parsed.str("cycle").as_deref(), "cycle") else {
         return 0;
     };
 
-    // tags: hint from existing tags; flag split happens later.
-    let tags_str = parsed.str("tags").unwrap_or_default();
+    // tags: hint from existing tags during the interactive flow.
+    let tags: Vec<String> = match parsed.str("tags") {
+        Some(raw) => raw
+            .split(',')
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .collect(),
+        None if prompted => {
+            let existing: Vec<String> = crate::db::get_tags_with_count()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(name, _)| name)
+                .collect();
+            let message = if existing.is_empty() {
+                "tags (comma-separated, optional)".to_string()
+            } else {
+                format!(
+                    "tags (comma-separated, optional; existing: {})",
+                    existing.join(", ")
+                )
+            };
+            match crate::prompt::input(&message, Some(""), Some(validate_tags)) {
+                Some(raw) => raw
+                    .split(',')
+                    .map(|t| t.trim().to_string())
+                    .filter(|t| !t.is_empty())
+                    .collect(),
+                None => return 0,
+            }
+        }
+        None => Vec::new(),
+    };
 
-    if opt_text(parsed, "notes", validate_notes).is_err() {
-        return 1;
-    }
-    if opt_text(parsed, "paymentMethod", validate_payment_method).is_err() {
-        return 1;
-    }
-    if let Some(raw) = parsed.str("billingDay") {
-        let trimmed = raw.trim();
-        if !trimmed.is_empty()
-            && let Err(e) = validate_billing_day(trimmed)
-        {
-            fail(&e);
-            return 1;
+    let Some(notes) = prompt_optional(
+        parsed.str("notes").as_deref(),
+        "notes (optional, max 500 chars)",
+        validate_notes,
+    ) else {
+        return 0;
+    };
+    let Some(payment_method) = prompt_optional(
+        parsed.str("paymentMethod").as_deref(),
+        "payment method (optional, e.g. credit_card, paypal)",
+        validate_payment_method,
+    ) else {
+        return 0;
+    };
+    let Some(billing_day) = prompt_optional(
+        parsed.str("billingDay").as_deref(),
+        "billing day (1-31, optional)",
+        validate_billing_day,
+    ) else {
+        return 0;
+    };
+    let Some(vendor_name) = prompt_optional(
+        parsed.str("vendorName").as_deref(),
+        "vendor name (optional, max 100 chars)",
+        validate_vendor_name,
+    ) else {
+        return 0;
+    };
+    let Some(vendor_url) = prompt_optional(
+        parsed.str("vendorUrl").as_deref(),
+        "vendor URL (optional)",
+        validate_vendor_url,
+    ) else {
+        return 0;
+    };
+    let Some(plan_tier) = prompt_optional(
+        parsed.str("planTier").as_deref(),
+        "plan tier (optional, max 100 chars)",
+        validate_plan_tier,
+    ) else {
+        return 0;
+    };
+    let Some(contract_start) = prompt_optional(
+        parsed.str("contractStart").as_deref(),
+        "contract start (YYYY-MM-DD, optional)",
+        validate_date_string,
+    ) else {
+        return 0;
+    };
+    let Some(contract_end) = prompt_optional(
+        parsed.str("contractEnd").as_deref(),
+        "contract end (YYYY-MM-DD, optional)",
+        validate_date_string,
+    ) else {
+        return 0;
+    };
+    let Some(discount_amount) = prompt_optional(
+        parsed.str("discountAmount").as_deref(),
+        "discount amount (optional, non-negative integer)",
+        validate_discount_value,
+    ) else {
+        return 0;
+    };
+    let discount_type = if discount_amount.is_some() {
+        match prompt_optional(
+            parsed.str("discountType").as_deref(),
+            "discount type (percentage or fixed, optional)",
+            validate_discount_type,
+        ) {
+            Some(v) => v,
+            None => return 0,
         }
-    }
-    if opt_text(parsed, "vendorName", validate_vendor_name).is_err() {
-        return 1;
-    }
-    if opt_text(parsed, "vendorUrl", validate_vendor_url).is_err() {
-        return 1;
-    }
-    if let Err(()) = opt_text(parsed, "planTier", validate_plan_tier) {
-        return 1;
-    }
-    if opt_text(parsed, "contractStart", validate_date_string).is_err() {
-        return 1;
-    }
-    if opt_text(parsed, "contractEnd", validate_date_string).is_err() {
-        return 1;
-    }
-    if opt_text(parsed, "discountAmount", validate_discount_value).is_err() {
-        return 1;
-    }
-    if let Some(raw) = parsed.str("discountType") {
-        let trimmed = raw.trim();
-        if !trimmed.is_empty()
-            && let Err(e) = validate_discount_type(trimmed)
-        {
-            fail(&e);
-            return 1;
+    } else {
+        match parsed.str("discountType") {
+            Some(raw) => {
+                let trimmed = raw.trim();
+                if !trimmed.is_empty()
+                    && let Err(e) = validate_discount_type(trimmed)
+                {
+                    fail(&e);
+                    return 1;
+                }
+                Some(trimmed.to_string())
+            }
+            None => None,
         }
-    }
-    if let Some(v) = parsed.str("autoRenewal") {
+    };
+
+    let auto_renewal = match parsed.str("autoRenewal") {
         // validateAutoRenewal runs on the raw flag value (no trimming).
-        if let Err(e) = crate::validation::validate_auto_renewal(&v) {
-            fail(&e);
-            return 1;
+        Some(v) => {
+            if let Err(e) = crate::validation::validate_auto_renewal(&v) {
+                fail(&e);
+                return 1;
+            }
+            v == "true"
         }
-    }
+        None if prompted => match crate::prompt::confirm("auto renew?", true) {
+            Some(v) => v,
+            None => return 0,
+        },
+        None => true,
+    };
 
     // status (last)
+    let status_prompted = parsed.str("status").is_none();
     let Some(status) = prompt_select(
         parsed.str("status").as_deref(),
-        is_valid_status,
+        "status",
         &STATUS_VALUES,
+        is_valid_status,
     ) else {
         return 0;
     };
 
-    let text = |key: &str| -> Option<String> {
-        parsed
-            .str(key)
-            .map(|v| v.trim().to_string())
-            .filter(|v| !v.is_empty())
-    };
-    let tags: Vec<String> = tags_str
-        .split(',')
-        .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty())
-        .collect();
+    if (prompted || status_prompted)
+        && crate::prompt::confirm(
+            &format!(
+                "Save \"{}\" ({} {}, {}{})?",
+                name.trim(),
+                price.trim(),
+                currency,
+                cycle,
+                if status != "active" {
+                    format!(", status: {}", status)
+                } else {
+                    String::new()
+                }
+            ),
+            true,
+        ) != Some(true)
+    {
+        info("Cancelled");
+        return 0;
+    }
+
     let new_sub = crate::db::NewSubscription {
         name: name.trim().to_string(),
         price: price.trim().parse::<f64>().unwrap_or(0.0),
         currency,
         cycle,
         status,
-        billing_day: text("billingDay").and_then(|v| v.parse::<i64>().ok()),
-        notes: text("notes"),
-        payment_method: text("paymentMethod"),
-        contract_start: text("contractStart"),
-        contract_end: text("contractEnd"),
-        auto_renewal: parsed.str("autoRenewal").as_deref() != Some("false"),
-        vendor_name: text("vendorName"),
-        vendor_url: text("vendorUrl"),
-        plan_tier: text("planTier"),
-        discount_amount: text("discountAmount").and_then(|v| v.parse::<f64>().ok()),
-        discount_type: text("discountType"),
+        billing_day: billing_day.and_then(|v| v.trim().parse::<i64>().ok()),
+        notes,
+        payment_method,
+        contract_start,
+        contract_end,
+        auto_renewal,
+        vendor_name,
+        vendor_url,
+        plan_tier,
+        discount_amount: discount_amount.and_then(|v| v.trim().parse::<f64>().ok()),
+        discount_type,
         tags,
     };
 
@@ -201,15 +345,17 @@ pub fn run_edit(parsed: &ParsedArgs) -> i32 {
         info("No subscriptions found — try `subtrack add`");
         return 0;
     }
-    let id = parse_id(parsed.str("id"));
-    if id.is_none() {
-        // Interactive selection is not available in this environment.
-        return 0;
-    }
-    let sub = match get_subscription_by_id(id.unwrap()) {
+    let id = match parse_id(parsed.str("id")) {
+        Some(id) => id,
+        None => match crate::prompt::pick_subscription("select subscription to edit", &all, true) {
+            Some(id) => id,
+            None => return 0,
+        },
+    };
+    let sub = match get_subscription_by_id(id) {
         Ok(Some(s)) => s,
         Ok(None) => {
-            fail(&format!("Subscription with id {} not found", id.unwrap()));
+            fail(&format!("Subscription with id {} not found", id));
             return 1;
         }
         Err(e) => {
@@ -238,10 +384,11 @@ pub fn run_edit(parsed: &ParsedArgs) -> i32 {
         "contractEnd",
         "autoRenewal",
     ];
-    let has_flags = flag_keys
-        .iter()
-        .any(|k| parsed.str(k).map(|v| !v.is_empty()).unwrap_or(false));
+    let has_flags = flag_keys.iter().any(|k| parsed.str(k).is_some());
     if !has_flags {
+        if crate::prompt::interactive() {
+            return interactive_edit(id);
+        }
         info(&format!(
             "Editing: {} — {}/{} [{}]",
             sub.name,
@@ -496,6 +643,358 @@ pub fn run_edit(parsed: &ParsedArgs) -> i32 {
     0
 }
 
+/// Guided edit: pick fields, answer one prompt per field, then run the normal
+/// flag-based update path with the collected values.
+fn interactive_edit(id: i64) -> i32 {
+    use crate::parser::ArgValue;
+    use crate::prompt::{self, Choice};
+
+    let sub = match get_subscription_by_id(id) {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            fail(&format!("Subscription with id {} not found", id));
+            return 1;
+        }
+        Err(e) => {
+            logger::fail(&format!("Failed to read subscription: {}", e));
+            return 1;
+        }
+    };
+
+    let choices = vec![
+        Choice::new(&format!("name ({})", sub.name), "name"),
+        Choice::new(
+            &format!(
+                "price ({})",
+                crate::price::format_price(sub.price, &sub.currency)
+            ),
+            "price",
+        ),
+        Choice::new(&format!("currency ({})", sub.currency), "currency"),
+        Choice::new(&format!("cycle ({})", sub.cycle), "cycle"),
+        Choice::new(&format!("status ({})", sub.status), "status"),
+        Choice::new(
+            &format!(
+                "billing day ({})",
+                sub.billing_day
+                    .map(|d| d.to_string())
+                    .unwrap_or_else(|| "not set".to_string())
+            ),
+            "billingDay",
+        ),
+        Choice::new(
+            &format!(
+                "tags ({})",
+                if sub.tags.is_empty() {
+                    "none".to_string()
+                } else {
+                    sub.tags.join(", ")
+                }
+            ),
+            "tags",
+        ),
+        Choice::new(
+            &format!("notes ({})", sub.notes.as_deref().unwrap_or("not set")),
+            "notes",
+        ),
+        Choice::new(
+            &format!(
+                "payment method ({})",
+                sub.payment_method.as_deref().unwrap_or("not set")
+            ),
+            "paymentMethod",
+        ),
+        Choice::new(
+            &format!(
+                "vendor name ({})",
+                sub.vendor_name.as_deref().unwrap_or("not set")
+            ),
+            "vendorName",
+        ),
+        Choice::new(
+            &format!(
+                "vendor URL ({})",
+                sub.vendor_url.as_deref().unwrap_or("not set")
+            ),
+            "vendorUrl",
+        ),
+        Choice::new(
+            &format!(
+                "plan tier ({})",
+                sub.plan_tier.as_deref().unwrap_or("not set")
+            ),
+            "planTier",
+        ),
+        Choice::new(
+            &format!(
+                "contract start ({})",
+                sub.contract_start.as_deref().unwrap_or("not set")
+            ),
+            "contractStart",
+        ),
+        Choice::new(
+            &format!(
+                "contract end ({})",
+                sub.contract_end.as_deref().unwrap_or("not set")
+            ),
+            "contractEnd",
+        ),
+        Choice::new(
+            &format!(
+                "auto renew ({})",
+                if sub.auto_renewal { "yes" } else { "no" }
+            ),
+            "autoRenewal",
+        ),
+        Choice::new(
+            &format!(
+                "discount ({})",
+                match sub.discount_amount {
+                    Some(amount) => format!(
+                        "{}{}",
+                        amount,
+                        if sub.discount_type.as_deref() == Some("percentage") {
+                            "%"
+                        } else {
+                            sub.currency.as_str()
+                        }
+                    ),
+                    None => "none".to_string(),
+                }
+            ),
+            "discount",
+        ),
+    ];
+
+    info(&format!(
+        "Editing: {} — {}/{} [{}]",
+        sub.name,
+        crate::price::format_price(sub.price, &sub.currency),
+        sub.cycle,
+        if sub.tags.is_empty() {
+            "no tags".to_string()
+        } else {
+            sub.tags.join(", ")
+        }
+    ));
+
+    let Some(fields) = prompt::checkbox("Select fields to edit", &choices) else {
+        return 0;
+    };
+    if fields.is_empty() {
+        info("Cancelled");
+        return 0;
+    }
+
+    let mut values: std::collections::HashMap<String, ArgValue> = std::collections::HashMap::new();
+    values.insert("id".to_string(), ArgValue::Str(id.to_string()));
+
+    for field in fields {
+        match field.as_str() {
+            "name" => {
+                let Some(v) =
+                    prompt::input("New name", Some(sub.name.as_str()), Some(validate_name))
+                else {
+                    return 0;
+                };
+                values.insert("name".to_string(), ArgValue::Str(v));
+            }
+            "price" => {
+                let default = format!("{}", sub.price);
+                let Some(v) =
+                    prompt::input("New price", Some(default.as_str()), Some(validate_price))
+                else {
+                    return 0;
+                };
+                values.insert("price".to_string(), ArgValue::Str(v));
+            }
+            "currency" => {
+                let entries: Vec<Choice> = crate::prompts::CURRENCY_CHOICES
+                    .iter()
+                    .map(|(label, value)| Choice::new(label, value))
+                    .collect();
+                let default = entries.iter().position(|c| c.value == sub.currency);
+                let Some(v) = prompt::select("New currency", &entries, default) else {
+                    return 0;
+                };
+                values.insert("currency".to_string(), ArgValue::Str(v));
+            }
+            "cycle" => {
+                let Some(v) = prompt_cycle(None, "New cycle") else {
+                    return 0;
+                };
+                values.insert("cycle".to_string(), ArgValue::Str(v));
+            }
+            "status" => {
+                let entries: Vec<Choice> = STATUS_VALUES.iter().map(|v| Choice::plain(v)).collect();
+                let default = entries.iter().position(|c| c.value == sub.status);
+                let Some(v) = prompt::select("New status", &entries, default) else {
+                    return 0;
+                };
+                values.insert("status".to_string(), ArgValue::Str(v));
+            }
+            "billingDay" => {
+                let default = sub.billing_day.map(|d| d.to_string()).unwrap_or_default();
+                let Some(v) = prompt::input(
+                    "New billing day (1-31, empty to clear)",
+                    Some(default.as_str()),
+                    Some(validate_billing_day),
+                ) else {
+                    return 0;
+                };
+                values.insert("billingDay".to_string(), ArgValue::Str(v));
+            }
+            "tags" => {
+                let default = sub.tags.join(", ");
+                let existing: Vec<String> = crate::db::get_tags_with_count()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(name, _)| name)
+                    .collect();
+                let message = if existing.is_empty() {
+                    "New tags (comma-separated)".to_string()
+                } else {
+                    format!(
+                        "New tags (comma-separated; existing: {})",
+                        existing.join(", ")
+                    )
+                };
+                let Some(v) = prompt::input(
+                    &message,
+                    Some(default.as_str()),
+                    Some(crate::validation::validate_tags),
+                ) else {
+                    return 0;
+                };
+                values.insert("tags".to_string(), ArgValue::Str(v));
+            }
+            "notes" => {
+                let default = sub.notes.clone().unwrap_or_default();
+                let Some(v) = prompt::input(
+                    "New notes (empty to clear)",
+                    Some(default.as_str()),
+                    Some(validate_notes),
+                ) else {
+                    return 0;
+                };
+                values.insert("notes".to_string(), ArgValue::Str(v));
+            }
+            "paymentMethod" => {
+                let default = sub.payment_method.clone().unwrap_or_default();
+                let Some(v) = prompt::input(
+                    "New payment method (empty to clear)",
+                    Some(default.as_str()),
+                    Some(validate_payment_method),
+                ) else {
+                    return 0;
+                };
+                values.insert("paymentMethod".to_string(), ArgValue::Str(v));
+            }
+            "vendorName" => {
+                let default = sub.vendor_name.clone().unwrap_or_default();
+                let Some(v) = prompt::input(
+                    "New vendor name (empty to clear)",
+                    Some(default.as_str()),
+                    Some(validate_vendor_name),
+                ) else {
+                    return 0;
+                };
+                values.insert("vendorName".to_string(), ArgValue::Str(v));
+            }
+            "vendorUrl" => {
+                let default = sub.vendor_url.clone().unwrap_or_default();
+                let Some(v) = prompt::input(
+                    "New vendor URL (empty to clear)",
+                    Some(default.as_str()),
+                    Some(validate_vendor_url),
+                ) else {
+                    return 0;
+                };
+                values.insert("vendorUrl".to_string(), ArgValue::Str(v));
+            }
+            "planTier" => {
+                let default = sub.plan_tier.clone().unwrap_or_default();
+                let Some(v) = prompt::input(
+                    "New plan tier (empty to clear)",
+                    Some(default.as_str()),
+                    Some(validate_plan_tier),
+                ) else {
+                    return 0;
+                };
+                values.insert("planTier".to_string(), ArgValue::Str(v));
+            }
+            "contractStart" => {
+                let default = sub.contract_start.clone().unwrap_or_default();
+                let Some(v) = prompt::input(
+                    "New contract start (YYYY-MM-DD, empty to clear)",
+                    Some(default.as_str()),
+                    Some(validate_date_string),
+                ) else {
+                    return 0;
+                };
+                values.insert("contractStart".to_string(), ArgValue::Str(v));
+            }
+            "contractEnd" => {
+                let default = sub.contract_end.clone().unwrap_or_default();
+                let Some(v) = prompt::input(
+                    "New contract end (YYYY-MM-DD, empty to clear)",
+                    Some(default.as_str()),
+                    Some(validate_date_string),
+                ) else {
+                    return 0;
+                };
+                values.insert("contractEnd".to_string(), ArgValue::Str(v));
+            }
+            "autoRenewal" => {
+                let Some(v) = prompt::confirm("Auto renew?", sub.auto_renewal) else {
+                    return 0;
+                };
+                values.insert(
+                    "autoRenewal".to_string(),
+                    ArgValue::Str(if v { "true" } else { "false" }.to_string()),
+                );
+            }
+            "discount" => {
+                let default = sub
+                    .discount_amount
+                    .map(|d| d.to_string())
+                    .unwrap_or_default();
+                let Some(amount) = prompt::input(
+                    "New discount amount (empty to clear)",
+                    Some(default.as_str()),
+                    Some(validate_discount_value),
+                ) else {
+                    return 0;
+                };
+                values.insert("discountAmount".to_string(), ArgValue::Str(amount.clone()));
+                if !amount.trim().is_empty() {
+                    let type_default = sub
+                        .discount_type
+                        .clone()
+                        .unwrap_or_else(|| "percentage".to_string());
+                    let Some(kind) = prompt::input(
+                        "Discount type (percentage or fixed)",
+                        Some(type_default.as_str()),
+                        Some(validate_discount_type),
+                    ) else {
+                        return 0;
+                    };
+                    values.insert("discountType".to_string(), ArgValue::Str(kind));
+                } else {
+                    values.insert("discountType".to_string(), ArgValue::Str(String::new()));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let synthetic = ParsedArgs {
+        values,
+        ..Default::default()
+    };
+    run_edit(&synthetic)
+}
+
 /// `trimmed || null` — empty string becomes SQL NULL.
 fn opt_text_val(trimmed: &str) -> crate::db::SqlValue {
     if trimmed.is_empty() {
@@ -508,15 +1007,76 @@ fn opt_text_val(trimmed: &str) -> crate::db::SqlValue {
 /// Port of `handleClone` (not-found path).
 /// Port of `handleDelete` — flag/id path (no interactive selection).
 pub fn run_delete(parsed: &ParsedArgs) -> i32 {
-    let ids: Vec<i64> = parsed
+    let mut ids: Vec<i64> = parsed
         .str_array("id")
         .unwrap_or_default()
         .iter()
         .filter_map(|s| s.trim().parse::<i64>().ok())
         .collect();
     if ids.is_empty() {
-        // Interactive selection is not available in this environment.
-        return 0;
+        let all = match crate::db::get_subscriptions(&crate::db::QueryOptions {
+            include_archived: true,
+            ..Default::default()
+        }) {
+            Ok(v) => v,
+            Err(e) => {
+                logger::fail(&format!("Failed to read subscriptions: {}", e));
+                return 1;
+            }
+        };
+        if all.is_empty() {
+            info("No subscriptions found — try `subtrack add`");
+            return 0;
+        }
+        let choices: Vec<crate::prompt::Choice> = all
+            .iter()
+            .map(|s| {
+                crate::prompt::Choice::new(
+                    &format!(
+                        "{} — {}/{}{}",
+                        s.name,
+                        crate::price::format_price(s.price, &s.currency),
+                        s.cycle,
+                        if s.tags.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" [{}]", s.tags.join(", "))
+                        }
+                    ),
+                    &s.id.to_string(),
+                )
+            })
+            .collect();
+        let Some(selected) = crate::prompt::checkbox("select subscriptions to delete", &choices)
+        else {
+            return 0;
+        };
+        if selected.is_empty() {
+            info("Cancelled");
+            return 0;
+        }
+        ids = selected
+            .iter()
+            .filter_map(|v| v.trim().parse::<i64>().ok())
+            .collect();
+        let names: Vec<String> = all
+            .iter()
+            .filter(|s| ids.contains(&s.id))
+            .map(|s| s.name.clone())
+            .collect();
+        if crate::prompt::confirm(
+            &format!(
+                "Delete {} subscription{}? ({})",
+                names.len(),
+                if names.len() > 1 { "s" } else { "" },
+                names.join(", ")
+            ),
+            false,
+        ) != Some(true)
+        {
+            info("Cancelled");
+            return 0;
+        }
     }
     let conn = match crate::db::open_db() {
         Ok(c) => c,
@@ -555,9 +1115,8 @@ pub fn run_delete(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `handleClone`.
 pub fn run_clone(parsed: &ParsedArgs) -> i32 {
-    let id = match parse_id(parsed.str("id")) {
-        Some(id) => id,
-        None => return 0,
+    let Some(id) = resolve_id(parsed, "select subscription to clone", not_archived) else {
+        return 0;
     };
     let sub = match get_subscription_by_id(id) {
         Ok(Some(s)) => s,
@@ -661,9 +1220,8 @@ pub fn run_clone(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `handleUnarchive`.
 pub fn run_unarchive(parsed: &ParsedArgs) -> i32 {
-    let id = match parse_id(parsed.str("id")) {
-        Some(id) => id,
-        None => return 0,
+    let Some(id) = resolve_id(parsed, "select subscription to unarchive", archived) else {
+        return 0;
     };
     let sub = match get_subscription_by_id(id) {
         Ok(Some(s)) => s,
@@ -713,9 +1271,8 @@ pub fn run_unarchive(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `handleArchive` (not-found / already-archived / success).
 pub fn run_archive(parsed: &ParsedArgs) -> i32 {
-    let id = match parse_id(parsed.str("id")) {
-        Some(id) => id,
-        None => return 0,
+    let Some(id) = resolve_id(parsed, "select subscription to archive", not_archived) else {
+        return 0;
     };
     match get_subscription_by_id(id) {
         Ok(Some(sub)) => {
@@ -763,15 +1320,56 @@ pub fn run_archive(parsed: &ParsedArgs) -> i32 {
 
 /// `pause` / `resume` — port of `changeStatus`.
 fn change_status(parsed: &ParsedArgs, target: &str) -> i32 {
-    let ids: Vec<i64> = parsed
+    let mut ids: Vec<i64> = parsed
         .str_array("id")
         .unwrap_or_default()
         .iter()
         .filter_map(|s| s.trim().parse::<i64>().ok())
         .collect();
     if ids.is_empty() {
-        // Interactive selection is not available in this environment.
-        return 0;
+        let all = match crate::db::get_subscriptions(&crate::db::QueryOptions {
+            include_archived: true,
+            ..Default::default()
+        }) {
+            Ok(v) => v,
+            Err(e) => {
+                logger::fail(&format!("Failed to read subscriptions: {}", e));
+                return 1;
+            }
+        };
+        let choices: Vec<crate::prompt::Choice> = all
+            .iter()
+            .filter(|s| s.status != target && s.status != "archived")
+            .map(|s| {
+                crate::prompt::Choice::new(
+                    &format!(
+                        "#{} {} — {}/{}",
+                        s.id,
+                        s.name,
+                        crate::price::format_price(s.price, &s.currency),
+                        s.cycle
+                    ),
+                    &s.id.to_string(),
+                )
+            })
+            .collect();
+        if choices.is_empty() {
+            info("No subscriptions need changing");
+            return 0;
+        }
+        let Some(selected) =
+            crate::prompt::checkbox(&format!("select subscriptions to {}", target), &choices)
+        else {
+            return 0;
+        };
+        if selected.is_empty() {
+            info("Cancelled");
+            return 0;
+        }
+        ids = selected
+            .iter()
+            .filter_map(|v| v.trim().parse::<i64>().ok())
+            .collect();
     }
     let force = parsed.bool("force").unwrap_or(false);
     let mut pending: Vec<i64> = Vec::new();
@@ -787,8 +1385,17 @@ fn change_status(parsed: &ParsedArgs, target: &str) -> i32 {
         info("No subscriptions need changing");
         return 0;
     }
-    if !force {
-        // Confirmation prompt is unavailable; the reference defaults to false.
+    if !force
+        && crate::prompt::confirm(
+            &format!(
+                "Update {} subscription{} to \"{}\"?",
+                pending.len(),
+                if pending.len() > 1 { "s" } else { "" },
+                target
+            ),
+            false,
+        ) != Some(true)
+    {
         info("Cancelled");
         return 0;
     }
@@ -841,9 +1448,8 @@ pub fn run_resume(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `handleRenew`.
 pub fn run_renew(parsed: &ParsedArgs) -> i32 {
-    let id = match parse_id(parsed.str("id")) {
-        Some(id) => id,
-        None => return 0,
+    let Some(id) = resolve_id(parsed, "select subscription to renew", not_cancelled) else {
+        return 0;
     };
     let sub = match get_subscription_by_id(id) {
         Ok(Some(s)) => s,
@@ -962,9 +1568,8 @@ pub fn run_renew(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `handleCancel`.
 pub fn run_cancel(parsed: &ParsedArgs) -> i32 {
-    let id = match parse_id(parsed.str("id")) {
-        Some(id) => id,
-        None => return 0,
+    let Some(id) = resolve_id(parsed, "select subscription to cancel", not_cancelled) else {
+        return 0;
     };
     let sub = match get_subscription_by_id(id) {
         Ok(Some(s)) => s,
@@ -1031,11 +1636,11 @@ pub fn run_cancel(parsed: &ParsedArgs) -> i32 {
     crate::logger::log("");
 
     if !force {
-        // All interactive confirms resolve to their default (false) without a
-        // TTY: no export, no alternatives checked, no note, no final confirm.
         crate::logger::warn("You may want to review alternatives before cancelling");
-        info("Aborted — no changes made");
-        return 0;
+        if crate::prompt::confirm(&format!("Cancel \"{}\"?", sub.name), false) != Some(true) {
+            info("Aborted — no changes made");
+            return 0;
+        }
     }
 
     let conn = match crate::db::open_db() {

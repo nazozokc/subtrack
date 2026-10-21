@@ -257,7 +257,32 @@ pub fn run_restore(parsed: &ParsedArgs) -> i32 {
         return 0;
     }
 
-    // Interactive selection is unavailable on a non-TTY stdin.
+    let choices: Vec<crate::prompt::Choice> = backups
+        .iter()
+        .map(|b| {
+            crate::prompt::Choice::new(
+                &format!("{} ({:.1} KB)", b.name, b.size as f64 / 1024.0),
+                &b.name,
+            )
+        })
+        .collect();
+    let Some(name) = crate::prompt::select("select backup to restore", &choices, Some(0)) else {
+        return 0;
+    };
+    let Some(backup) = backups.iter().find(|b| b.name == name) else {
+        logger::fail(&format!("Backup file not found: {}", name));
+        return 1;
+    };
+    if crate::prompt::confirm(
+        &format!("Restore {}? This replaces the current data.", backup.name),
+        false,
+    ) != Some(true)
+    {
+        logger::info("Cancelled");
+        return 0;
+    }
+    let force = parsed.bool("force") == Some(true);
+    restore_from_file(&backup.path, force);
     0
 }
 

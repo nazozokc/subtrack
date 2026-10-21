@@ -13,6 +13,12 @@ pub fn run_search(parsed: &ParsedArgs) -> i32 {
     // (bare `subtrack search` prints only the banner, matching the golden).
     let query = match parsed.str("query") {
         Some(q) => q,
+        None if !json && crate::prompt::interactive() => {
+            match crate::prompt::input("Search query", None, None) {
+                Some(q) if !q.trim().is_empty() => q,
+                _ => return 0,
+            }
+        }
         None => {
             if json {
                 out_str("[]\n");

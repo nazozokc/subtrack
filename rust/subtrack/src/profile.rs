@@ -158,9 +158,41 @@ fn show_profile(name: &str) {
             .map_or_else(|| ansi::dim("any"), |m| m.to_string())
     ));
 }
+fn profile_names() -> Vec<String> {
+    load_config()
+        .raw
+        .get("profiles")
+        .and_then(|p| p.as_object())
+        .map(|p| p.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
+fn pick_profile(message: &str) -> Option<String> {
+    let names = profile_names();
+    if names.is_empty() {
+        logger::info("No saved profiles");
+        return None;
+    }
+    let choices: Vec<crate::prompt::Choice> = names
+        .iter()
+        .map(|n| crate::prompt::Choice::plain(n))
+        .collect();
+    crate::prompt::select(message, &choices, None)
+}
+
 /// Port of `switchProfile`.
 pub fn run_profile_switch(parsed: &ParsedArgs) -> i32 {
-    let name = parsed.str("name").unwrap_or_default();
+    let name = match parsed.str("name") {
+        Some(n) if !n.trim().is_empty() => n,
+        _ if crate::prompt::interactive() => match pick_profile("select profile to switch to") {
+            Some(n) => n,
+            None => return 0,
+        },
+        _ => {
+            logger::fail("Profile switching requires a valid profile name");
+            return 1;
+        }
+    };
     let config = load_config();
     let exists = config
         .raw
@@ -257,7 +289,17 @@ pub fn run_profile_save(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `deleteProfile` (not-found path).
 pub fn run_profile_delete(parsed: &ParsedArgs) -> i32 {
-    let name = parsed.str("name").unwrap_or_default();
+    let name = match parsed.str("name") {
+        Some(n) if !n.trim().is_empty() => n,
+        _ if crate::prompt::interactive() => match pick_profile("select profile to delete") {
+            Some(n) => n,
+            None => return 0,
+        },
+        _ => {
+            logger::fail("Profile name required");
+            return 1;
+        }
+    };
     let config = load_config();
     let exists = config
         .raw
@@ -268,6 +310,10 @@ pub fn run_profile_delete(parsed: &ParsedArgs) -> i32 {
     if !exists {
         logger::fail(&format!("Profile \"{}\" not found", name));
         return 1;
+    }
+    if crate::prompt::confirm(&format!("Delete profile \"{}\"?", name), false) != Some(true) {
+        logger::info("Cancelled");
+        return 0;
     }
     let _ = crate::config::save_config_mut(|raw| {
         if let Some(serde_json::Value::Object(map)) = raw.get_mut("profiles") {

@@ -71,46 +71,55 @@ pub fn run_trial_usage() -> i32 {
 
 /// Port of `handleTrialAdd` (validation + persistence).
 pub fn run_trial_add(parsed: &ParsedArgs) -> i32 {
-    use crate::prompts::{prompt_cycle, prompt_select, prompt_string};
-    use crate::validation::{
-        CURRENCY_VALUES, is_valid_currency, js_number, validate_expires_at, validate_notes,
-        validate_trial_name,
-    };
+    use crate::prompts::{prompt_currency, prompt_cycle, prompt_optional, prompt_string};
+    use crate::validation::{validate_expires_at, validate_notes, validate_trial_name};
 
-    let Some(name) = prompt_string(parsed.str("name").as_deref(), validate_trial_name) else {
+    let Some(name) = prompt_string(
+        parsed.str("name").as_deref(),
+        "Trial name",
+        validate_trial_name,
+    ) else {
         return 0;
     };
-    let Some(expires_at) = prompt_string(parsed.str("expiresAt").as_deref(), validate_expires_at)
-    else {
+    let Some(expires_at) = prompt_string(
+        parsed.str("expiresAt").as_deref(),
+        "Expires at (YYYY-MM-DD)",
+        validate_expires_at,
+    ) else {
         return 0;
     };
 
     let price = match parsed.str("price") {
-        Some(raw) => {
-            let trimmed = raw.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                match js_number(trimmed) {
-                    Some(n) if n.is_finite() && n >= 0.0 => Some(n),
-                    _ => {
-                        logger::fail("Price must be a non-negative number");
-                        return 1;
-                    }
+        Some(raw) => match parse_trial_price(&raw) {
+            Ok(v) => v,
+            Err(e) => {
+                logger::fail(&e);
+                return 1;
+            }
+        },
+        None if crate::prompt::interactive() => {
+            let Some(raw) = crate::prompt::input(
+                "Price (optional, empty to skip)",
+                Some(""),
+                Some(validate_optional_price),
+            ) else {
+                return 0;
+            };
+            match parse_trial_price(&raw) {
+                Ok(v) => v,
+                Err(e) => {
+                    logger::fail(&e);
+                    return 1;
                 }
             }
         }
         None => None,
     };
 
-    let Some(currency) = prompt_select(
-        parsed.str("currency").as_deref(),
-        is_valid_currency,
-        &CURRENCY_VALUES,
-    ) else {
+    let Some(currency) = prompt_currency(parsed.str("currency").as_deref(), "Currency") else {
         return 0;
     };
-    let Some(cycle) = prompt_cycle(parsed.str("cycle").as_deref()) else {
+    let Some(cycle) = prompt_cycle(parsed.str("cycle").as_deref(), "Billing cycle") else {
         return 0;
     };
 
@@ -125,6 +134,12 @@ pub fn run_trial_add(parsed: &ParsedArgs) -> i32 {
                     return 1;
                 }
                 Some(trimmed.to_string())
+            }
+        }
+        None if crate::prompt::interactive() => {
+            match prompt_optional(None, "Notes (optional)", validate_notes) {
+                Some(v) => v,
+                None => return 0,
             }
         }
         None => None,
@@ -156,16 +171,80 @@ pub fn run_trial_add(parsed: &ParsedArgs) -> i32 {
     0
 }
 
+fn validate_optional_price(value: &str) -> Result<(), String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+    match crate::validation::js_number(trimmed) {
+        Some(n) if n.is_finite() && n >= 0.0 => Ok(()),
+        _ => Err("Price must be a non-negative number".to_string()),
+    }
+}
+
+fn parse_trial_price(raw: &str) -> Result<Option<f64>, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    match crate::validation::js_number(trimmed) {
+        Some(n) if n.is_finite() && n >= 0.0 => Ok(Some(n)),
+        _ => Err("Price must be a non-negative number".to_string()),
+    }
+}
+
 /// Port of `handleTrialDelete`.
 pub fn run_trial_delete(parsed: &ParsedArgs) -> i32 {
-    let ids: Vec<i64> = parsed
+    let mut ids: Vec<i64> = parsed
         .str_array("id")
         .unwrap_or_default()
         .iter()
         .filter_map(|s| s.trim().parse::<i64>().ok())
         .collect();
     if ids.is_empty() {
-        return 0;
+        let trials = match crate::db::get_trials() {
+            Ok(v) => v,
+            Err(e) => {
+                logger::fail(&format!("Failed to read trials: {}", e));
+                return 1;
+            }
+        };
+        if trials.is_empty() {
+            info("No trials found — try `subtrack trial add`");
+            return 0;
+        }
+        let choices: Vec<crate::prompt::Choice> = trials
+            .iter()
+            .map(|t| {
+                crate::prompt::Choice::new(
+                    &format!("#{} {} — expires {}", t.id, t.name, t.expires_at),
+                    &t.id.to_string(),
+                )
+            })
+            .collect();
+        let Some(selected) = crate::prompt::checkbox("select trials to delete", &choices) else {
+            return 0;
+        };
+        if selected.is_empty() {
+            info("Cancelled");
+            return 0;
+        }
+        ids = selected
+            .iter()
+            .filter_map(|v| v.trim().parse::<i64>().ok())
+            .collect();
+        if crate::prompt::confirm(
+            &format!(
+                "Delete {} trial{}?",
+                ids.len(),
+                if ids.len() > 1 { "s" } else { "" }
+            ),
+            false,
+        ) != Some(true)
+        {
+            info("Cancelled");
+            return 0;
+        }
     }
     let mut rc = 0;
     for id in ids {
