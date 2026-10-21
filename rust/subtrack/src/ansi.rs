@@ -1,7 +1,15 @@
 //! ANSI escape helpers mirroring @subtrack/lib/ansi.ts.
 
+/// Whether ANSI output is enabled for this process.
+pub fn enabled() -> bool {
+    crate::ui::color_enabled()
+}
+
 /// Named ANSI colors (foreground). Mirror of lib/src/ansi.ts FG_CODES.
 pub fn fg_code(name: &str) -> &'static str {
+    if !enabled() {
+        return "";
+    }
     match name {
         "black" => "\x1b[30m",
         "red" => "\x1b[31m",
@@ -26,6 +34,9 @@ pub fn fg_code(name: &str) -> &'static str {
 
 /// Background code = foreground code + 10 (mirror of BG_CODES).
 pub fn bg_code(name: &str) -> &'static str {
+    if !enabled() {
+        return "";
+    }
     match name {
         "black" => "\x1b[40m",
         "red" => "\x1b[41m",
@@ -73,16 +84,25 @@ pub fn is_color_name(name: &str) -> bool {
 
 /// bold = `\x1b[1m{s}\x1b[22m` (mirror of lib/src/ansi.ts).
 pub fn bold(s: &str) -> String {
+    if !enabled() {
+        return s.to_string();
+    }
     format!("\x1b[1m{s}\x1b[22m")
 }
 
 /// dim = `\x1b[2m{s}\x1b[22m` (mirror of lib/src/ansi.ts).
 pub fn dim(s: &str) -> String {
+    if !enabled() {
+        return s.to_string();
+    }
     format!("\x1b[2m{s}\x1b[22m")
 }
 
 /// Colored text closes with `\x1b[39m` (mirror of lib/src/ansi.ts).
 pub fn colored(name: &str, s: &str) -> String {
+    if !enabled() {
+        return s.to_string();
+    }
     format!("{}{}\x1b[39m", fg_code(name), s)
 }
 

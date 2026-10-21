@@ -1143,6 +1143,14 @@ pub static COMMANDS: &[CommandDef] = &[
                 required: None,
             },
             ArgSpec {
+                name: "currency",
+                kind: ArgKind::String,
+                short: None,
+                description: "Convert all prices to target currency",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
                 name: "json",
                 kind: ArgKind::Boolean,
                 short: Some('j'),

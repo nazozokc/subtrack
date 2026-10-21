@@ -35,7 +35,10 @@ const NATIVE_PLATFORM_ARCHES = [
  * @type {Readonly<Record<string, string>>}
  */
 const NATIVE_PACKAGES = Object.fromEntries(
-  NATIVE_PLATFORM_ARCHES.map((platformArch) => [platformArch, `${NATIVE_PACKAGE_SCOPE}/subtrack-${platformArch}`]),
+  NATIVE_PLATFORM_ARCHES.map((platformArch) => [
+    platformArch,
+    `${NATIVE_PACKAGE_SCOPE}/subtrack-${platformArch}`,
+  ]),
 );
 
 /**

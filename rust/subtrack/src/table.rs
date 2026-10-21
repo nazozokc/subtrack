@@ -451,6 +451,14 @@ pub struct TableStyle {
 }
 
 pub fn table_style(theme: &Theme) -> TableStyle {
+    if !crate::ansi::enabled() {
+        return TableStyle {
+            border: [String::new(), String::new()],
+            head: [String::new(), String::new()],
+            padding_left: 1,
+            padding_right: 1,
+        };
+    }
     let border = match theme.border {
         Some(c) => [crate::ansi::fg_code(c).to_string(), "\x1b[0m".to_string()],
         None => [String::new(), String::new()],
@@ -472,17 +480,34 @@ pub fn table_style(theme: &Theme) -> TableStyle {
 
 /// Wrap table cells with the zebra background (even-indexed rows).
 pub fn zebra_row(cells: &[String], zebra: Option<&'static str>) -> Vec<String> {
+    if !crate::ansi::enabled() {
+        return cells.to_vec();
+    }
     match zebra {
-        Some(name) => cells
-            .iter()
-            .map(|cell| format!("{}{}\x1b[0m", crate::ansi::bg_code(name), cell))
-            .collect(),
+        Some(name) => {
+            let open = crate::ansi::bg_code(name);
+            if open.is_empty() {
+                return cells.to_vec();
+            }
+            // Re-open the row background after any nested SGR reset (for
+            // example the reset emitted by a colored status cell).
+            cells
+                .iter()
+                .map(|cell| {
+                    let cell = cell.replace("\x1b[0m", &format!("\x1b[0m{open}"));
+                    format!("{open}{cell}\x1b[0m")
+                })
+                .collect()
+        }
         None => cells.to_vec(),
     }
 }
 
 /// Colorize a subscription status consistently across all views.
 pub fn status_color(status: &str, theme: &Theme) -> String {
+    if !crate::ansi::enabled() {
+        return status.to_string();
+    }
     let name = match status {
         "active" => theme.status_active,
         "paused" => theme.status_paused,
@@ -498,6 +523,9 @@ pub fn status_color(status: &str, theme: &Theme) -> String {
 
 /// Section heading: `` `── ${text} ──` `` with accent color.
 pub fn section_title(text: &str, theme: &Theme) -> String {
+    if !crate::ansi::enabled() {
+        return format!("── {} ──", text);
+    }
     match theme.accent {
         Some(c) => format!("\x1b[1m{}── {} ──\x1b[0m", crate::ansi::fg_code(c), text),
         None => format!("── {} ──", text),
@@ -507,10 +535,11 @@ pub fn section_title(text: &str, theme: &Theme) -> String {
 /// Horizontal divider line (mirror of display-constants `divider`): dimmed
 /// unless the resolved theme emits no colors at all.
 pub fn divider(length: usize, theme: &Theme) -> String {
-    let plain = theme.border.is_none()
-        && theme.header.is_none()
-        && theme.zebra.is_none()
-        && theme.accent.is_none();
+    let plain = !crate::ansi::enabled()
+        || (theme.border.is_none()
+            && theme.header.is_none()
+            && theme.zebra.is_none()
+            && theme.accent.is_none());
     if plain {
         return "─".repeat(length);
     }
@@ -822,18 +851,24 @@ pub struct ColumnConfig {
     pub min_avail: Option<i64>,
 }
 
-pub const BORDER_AND_PADDING: i64 = 16;
-
 /// Calculate column widths that fit the terminal width (mirror of
 /// display-constants.ts calcColumnWidths).
+///
+/// The table border consumes one cell per column plus a closing border
+/// (`cols + 1`); the remaining width is distributed across columns.
 pub fn calc_column_widths(
     rows: &[Vec<String>],
     config: &ColumnConfig,
     term_width: i64,
     table_min_width: i64,
 ) -> Vec<i64> {
-    let avail =
-        (config.min_avail.unwrap_or(table_min_width.max(40))).max(term_width - BORDER_AND_PADDING);
+    let cols = config.headers.len() as i64;
+    let target = if term_width > 0 {
+        term_width
+    } else {
+        config.min_avail.unwrap_or(table_min_width.max(40)).max(1)
+    };
+    let avail = (target - cols - 1).max(1);
 
     let weights: Vec<i64> = config
         .headers
@@ -869,17 +904,16 @@ pub fn calc_column_widths(
         })
         .collect();
 
-    // Adjust to exactly fit avail
+    // Adjust to exactly fit avail. When the terminal is too narrow to honor
+    // every minimum, shrink below it instead of overflowing the screen.
     let sum: i64 = widths.iter().sum();
     let mut diff = sum - avail;
     let mut iterations = 0;
 
-    while diff > 0 && iterations < 100 {
+    while diff > 0 && iterations < 1000 {
         let mut idx: Option<usize> = None;
         for i in 0..widths.len() {
-            if widths[i] > config.min_widths[i]
-                && (idx.is_none() || widths[i] > widths[idx.unwrap()])
-            {
+            if widths[i] > 1 && (idx.is_none() || widths[i] > widths[idx.unwrap()]) {
                 idx = Some(i)
             }
         }
@@ -890,7 +924,7 @@ pub fn calc_column_widths(
     }
 
     iterations = 0;
-    while diff < 0 && iterations < 100 {
+    while diff < 0 && iterations < 1000 {
         let mut idx: Option<usize> = None;
         for i in 0..widths.len() {
             if widths[i] < config.max_widths[i]

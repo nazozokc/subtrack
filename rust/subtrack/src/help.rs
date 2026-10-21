@@ -185,19 +185,13 @@ pub fn render_usage(
     if omitted && has_commands {
         messages.push("COMMANDS:".to_string());
         let command_max_length = loaded.iter().map(|(_, n, _)| n.len()).max().unwrap_or(0);
-        let symbol_length = command_max_length + option_symbols.len() + positional_symbols.len();
+        let symbol_length = command_max_length;
         for (entry, cmd_name, desc) in &loaded {
-            let mut command_str = if *entry {
+            let command_str = if *entry {
                 format!("[{}]", cmd_name)
             } else {
                 cmd_name.clone()
             };
-            if !option_symbols.is_empty() {
-                command_str.push_str(&format!(" {}", option_symbols));
-            }
-            if !positional_symbols.is_empty() {
-                command_str.push_str(&format!(" {}", positional_symbols));
-            }
             let row = if desc.is_empty() {
                 command_str
             } else {

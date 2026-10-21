@@ -86,6 +86,21 @@ pub fn try_convert_subs(
     Converted { list, has_missing }
 }
 
+/// Group subscriptions by currency in first-appearance order. Used by
+/// aggregate commands that must never sum different currencies together.
+pub fn group_by_currency(
+    subs: &[crate::db::Subscription],
+) -> Vec<(String, Vec<crate::db::Subscription>)> {
+    let mut groups: Vec<(String, Vec<crate::db::Subscription>)> = Vec::new();
+    for sub in subs {
+        match groups.iter_mut().find(|(c, _)| c == &sub.currency) {
+            Some((_, list)) => list.push(sub.clone()),
+            None => groups.push((sub.currency.clone(), vec![sub.clone()])),
+        }
+    }
+    groups
+}
+
 /// All-or-nothing fetch equivalent: embedded rates never fail.
 pub fn fetch_converted_subs(
     subs: &[crate::db::Subscription],

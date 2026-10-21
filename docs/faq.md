@@ -16,15 +16,15 @@ Without a backup, the data cannot be recovered — the database is stored locall
 
 **Recommendation:** Set up regular automated backups via cron or Task Scheduler. See the [Data & Storage](/data) page for details.
 
-## Why is there a `subtrack (v…)` header line in my piped output?
+## Why do I not see the header when I pipe output?
 
-Every printout starts with a `subtrack (subtrack vX.Y.Z)` header line on stdout. Pass `-j, --json` to get clean, machine-readable output (the `mcp` command is always silent):
+The `subtrack vX.Y.Z` header is only printed when stdout is a terminal. Piped output is intentionally clean: no banner and no ANSI escapes. Use `-j, --json` when you want structured data (the `mcp` command is always silent):
 
 ```bash
 subtrack list --json | jq '.[0].name'
 ```
 
-There is no pre-command notification banner.
+There is no pre-command notification banner. If you want colors in a pipe, pass `--color=always`; use `--color=never` or `NO_COLOR=1` to force plain text in a terminal.
 
 ## A flag I passed had no effect. Why?
 

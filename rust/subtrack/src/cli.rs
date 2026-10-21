@@ -1,11 +1,14 @@
 //! CLI bootstrap — port of `packages/subtrack/src/cli/index.ts` (the `cli()`
 //! function) and the version fast path + lazy banner logic of `src/index.ts`.
 
+use crate::ansi;
 use crate::commands::{COMMANDS, CommandDef, TOP_SUBCOMMANDS};
 use crate::help::{ArgKind, ArgSpec, CallMode, render_usage};
 use crate::logger::{self};
 use crate::parser::{ParsedArgs, Token, resolve_args, tokenize};
 use crate::router::{get_command_positionals, resolve_command};
+use crate::table;
+use crate::ui;
 
 pub const NAME: &str = "subtrack";
 /// Release builds set `SUBTRACK_VERSION` from the git tag so the binary reports
@@ -16,8 +19,8 @@ pub const VERSION: &str = match option_env!("SUBTRACK_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
-/// Global help/version options merged into every command's args.
-pub const COMMON_ARGS: [ArgSpec<'static>; 2] = [
+/// Global options merged into every command's args.
+pub const COMMON_ARGS: [ArgSpec<'static>; 5] = [
     ArgSpec {
         name: "help",
         kind: ArgKind::Boolean,
@@ -31,6 +34,30 @@ pub const COMMON_ARGS: [ArgSpec<'static>; 2] = [
         kind: ArgKind::Boolean,
         short: Some('v'),
         description: "Display this version",
+        array: false,
+        required: None,
+    },
+    ArgSpec {
+        name: "no-color",
+        kind: ArgKind::Boolean,
+        short: None,
+        description: "Disable ANSI colors",
+        array: false,
+        required: None,
+    },
+    ArgSpec {
+        name: "color",
+        kind: ArgKind::String,
+        short: None,
+        description: "Color mode: auto, always, never",
+        array: false,
+        required: None,
+    },
+    ArgSpec {
+        name: "wide",
+        kind: ArgKind::Boolean,
+        short: None,
+        description: "Use the wide layout (no narrow-terminal wrapping)",
         array: false,
         required: None,
     },
@@ -59,6 +86,8 @@ fn entry_desc() -> &'static str {
 
 /// Port of cli(): resolve, banner, help, validation errors, command run.
 pub fn run(args: &[String]) -> i32 {
+    ui::init(args);
+
     if is_standalone_version(args) {
         logger::outln(VERSION);
         return 0;
@@ -71,11 +100,7 @@ pub fn run(args: &[String]) -> i32 {
 
     // ── 4. priority errors (CommandNotFoundError) — no banner, no resolveArgs
     if let Some(unknown) = &resolved.unknown_name {
-        let message = format!("Command not found: {}", unknown);
-        if !silent {
-            logger::log(&message);
-        }
-        logger::error(&format!("CommandNotFoundError: {}", message));
+        logger::error(&format!("Command not found: {}", unknown));
         return 1;
     }
 
@@ -104,13 +129,17 @@ pub fn run(args: &[String]) -> i32 {
     }
 
     // ── 6. header ──
-    if !silent {
-        logger::log(&format!("{} ({} v{})", NAME, NAME, VERSION));
+    // Help and the entry menu provide their own heading. Piped output stays
+    // clean so `subtrack list | jq` and friends never see a banner.
+    let is_entry = resolved.command.is_none();
+    let wants_help = parsed.bool("help") == Some(true);
+    if !silent && !is_entry && !wants_help && ui::is_stdout_tty() {
+        logger::log(&format!("{} v{}", NAME, VERSION));
         logger::log("");
     }
 
     // ── 7. help ──
-    if parsed.bool("help") == Some(true) {
+    if wants_help {
         // subcommands for the resolved level: its own, or the CLI's for the entry
         let children: Vec<&'static CommandDef> = match resolved.command {
             Some(c) if !c.subcommands.is_empty() => c
@@ -148,12 +177,9 @@ pub fn run(args: &[String]) -> i32 {
 
     // ── 8. validation errors ──
     if !parsed.errors.is_empty() {
-        let lines: Vec<String> = parsed.errors.iter().map(|e| e.message.clone()).collect();
-        if !silent {
-            logger::log(&lines.join("\n"));
+        for error in &parsed.errors {
+            logger::error(&format!("{}: {}", error.name, error.message));
         }
-        let first = &parsed.errors[0];
-        logger::error(&format!("{}: {}", first.name, first.message));
         return 1;
     }
 
@@ -209,11 +235,11 @@ pub fn run(args: &[String]) -> i32 {
             "export" => crate::export::run_export(&parsed, resolved.depth),
             "upcoming" => crate::upcoming::run_upcoming(&parsed),
             "payment" => crate::payment::run_payment(&parsed),
-            "config list" => crate::config::handle_config_list(),
+            "config" | "config list" => crate::config::handle_config_list(),
             "config get" => {
                 crate::config::handle_config_get(&parsed.str("key").unwrap_or_default())
             }
-            "usage list" => crate::usage::run_usage_list(&parsed),
+            "usage" | "usage list" => crate::usage::run_usage_list(&parsed),
             "usage total" => crate::usage::run_usage_total(&parsed),
             "usage refresh" => crate::usage::run_usage_refresh(),
             "search" => crate::search::run_search(&parsed),
@@ -221,7 +247,7 @@ pub fn run(args: &[String]) -> i32 {
             "trial expiring" => crate::trial::run_trial_expiring(&parsed),
             "trial" => crate::trial::run_trial_usage(),
             p if p == "tags" || p.starts_with("tags ") => crate::tags::run_tags(&parsed),
-            "tag list" => crate::tags::run_tag_list(&parsed),
+            "tag" | "tag list" => crate::tags::run_tag_list(&parsed),
             "analytics" => crate::analytics::run_analytics(&parsed),
             "forecast" => crate::forecast::run_forecast(&parsed),
             "optimize" => crate::optimize::run_optimize(&parsed),
@@ -233,7 +259,7 @@ pub fn run(args: &[String]) -> i32 {
             "review" => crate::review::run_review(&parsed),
             "budget" => crate::budget::run_budget(&parsed),
             "currency" => crate::currency::run_currency(&parsed),
-            "profile list" => crate::profile::run_profiles(&parsed),
+            "profile" | "profile list" => crate::profile::run_profiles(&parsed),
             "profile show" => crate::profile::run_profiles(&parsed),
             "compare" => crate::compare::run_compare(&parsed),
             "calendar" => crate::calendar::run_calendar(&parsed),
@@ -244,8 +270,8 @@ pub fn run(args: &[String]) -> i32 {
             "history" => crate::history::run_history(&parsed),
             "changes" => crate::changes::run_changes(&parsed),
             "dedupe" => crate::dedupe::run_dedupe(&parsed),
-            "template list" => crate::templates::run_template_list(&parsed),
-            "suggest list" => crate::suggest::run_suggest_list(&parsed),
+            "template" | "template list" => crate::templates::run_template_list(&parsed),
+            "suggest" | "suggest list" => crate::suggest::run_suggest_list(&parsed),
             "suggest view" => crate::suggest::run_suggest_view(&parsed),
             "receipt" => crate::receipt::run_receipt(&parsed),
             "mcp" => crate::mcp::run_mcp(&parsed),
@@ -253,13 +279,18 @@ pub fn run(args: &[String]) -> i32 {
             _ => 0,
         },
         None => {
-            if !silent {
-                // Print menu header (port of showMenuHeader)
-                print_root_header();
-            }
             if crate::prompt::interactive() {
+                if !silent {
+                    print_root_header();
+                }
                 crate::menu::run_menu()
             } else {
+                if !silent {
+                    logger::log("No command given.");
+                    logger::log(
+                        "Run `subtrack --help` to list commands, or `subtrack add` to create a subscription.",
+                    );
+                }
                 0
             }
         }
@@ -282,15 +313,17 @@ fn print_root_header() {
         .filter(|s| s.status != "cancelled")
         .cloned()
         .collect();
-    logger::log(&format!(
-        "\x1b[1m\x1b[36msubtrack v{}\x1b[39m\x1b[22m",
-        VERSION
-    ));
-    logger::log(&format!(
-        "\x1b[2m  {} subscriptions · {}\x1b[22m",
+    logger::log(&ansi::bold(&ansi::cyan(&format!("subtrack v{}", VERSION))));
+    logger::log(&ansi::dim(&format!(
+        "  {} {} · {}",
         total_all,
+        if total_all == 1 {
+            "subscription"
+        } else {
+            "subscriptions"
+        },
         crate::db::db_path().display()
-    ));
+    )));
     if !active.is_empty() {
         let data = crate::summary::calc_summary_internal(&active);
         let mut parts: Vec<String> = Vec::new();
@@ -324,8 +357,14 @@ fn print_root_header() {
             ));
         }
     } else {
-        logger::log("\x1b[2m  No subscriptions yet — choose Add to create one\x1b[22m");
+        logger::log(&ansi::dim(
+            "  No subscriptions yet — choose Add to create one",
+        ));
     }
-    logger::log("\x1b[2m────────────────────────────────────────────────────\x1b[0m");
+    let divider_width = ui::term_width().clamp(20, 60) as usize;
+    logger::log(&table::divider(
+        divider_width,
+        &crate::config::display_theme(),
+    ));
     logger::log("");
 }
