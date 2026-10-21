@@ -41,7 +41,7 @@ This provides `node`, `pnpm`, `typescript`, `typos`, `rustc`, `cargo`, `rustfmt`
 | Category | Choice |
 |----------|--------|
 | Language | Rust 2024 edition, workspace pinned to 1.98.0 (`rust-toolchain.toml`) |
-| CLI framework | Self-contained (`src/cli.rs`, `src/parser.rs`, `src/router.rs`, `src/help.rs`) |
+| CLI framework | Self-contained (`src/cli.rs`, `src/parser/`, `src/router.rs`, `src/help.rs`) |
 | Database | SQLite via `rusqlite` (bundled, no system libsqlite) |
 | Dates | `chrono` |
 | Encryption | AES-256-GCM (`aes-gcm`) + `scrypt` key derivation |
@@ -55,7 +55,7 @@ This provides `node`, `pnpm`, `typescript`, `typos`, `rustc`, `cargo`, `rustfmt`
 
 The Rust crate carries two layers of tests, plus format/lint gates — all wired into CI (`check.yml` runs `cargo fmt --check`, `cargo clippy -D warnings`, and `cargo test`):
 
-- **Unit tests** live inline as `#[cfg(test)] mod tests` inside each source module. Pure logic — date/billing math, price formatting, validators, argument parsing, table layout, safe path resolution, crypto round-trips, FX conversion, and the suggest email parser — is covered directly against the implementation.
+- **Unit tests** live next to their implementation in each module's `tests.rs` (declared with `#[cfg(test)] mod tests;`). Pure logic — date/billing math, price formatting, validators, argument parsing, table layout, safe path resolution, crypto round-trips, FX conversion, and the suggest email parser — is covered directly against the implementation.
 - **CLI smoke suite** (`rust/subtrack/tests/cli_smoke.rs`) runs the compiled binary end-to-end in a temporary database directory with `SUBTRACK_TODAY` pinned (a Rust-only environment variable that fixes the "today" used by date logic), asserting exit codes and key output fragments for the main command flows.
 - **Formatter/lint gates.** `cargo fmt --check` and `cargo clippy --all-targets -D warnings` keep the code base format- and lint-clean; both come from the pinned `rust-toolchain.toml`.
 
@@ -94,12 +94,12 @@ subtrack/
 │   │   ├── src/
 │   │   │   ├── main.rs            # Entry point
 │   │   │   ├── cli.rs             # Self-contained CLI framework (define(), routing, header)
-│   │   │   ├── parser.rs          # Tokenizer + argument resolution (strict: unknown flags error)
+│   │   │   ├── parser/            # Tokenizer + argument resolution (tokenize.rs, resolve.rs, tests.rs)
 │   │   │   ├── router.rs          # Command/subcommand resolution
 │   │   │   ├── help.rs            # Usage/help rendering
-│   │   │   ├── commands.rs        # Command registry (50 commands)
-│   │   │   ├── mcp.rs             # MCP server (20 tools)
-│   │   │   ├── subs.rs            # add/edit/delete/cancel/pause/resume/renew/backup/restore…
+│   │   │   ├── commands.rs        # Command registry (50 commands, pure data)
+│   │   │   ├── mcp/               # MCP server (20 tools; server.rs, tools.rs, schema.rs, handlers/)
+│   │   │   ├── subs/              # add/edit/delete/clone/status/cancel handlers
 │   │   │   ├── list.rs            # list (filters, sorting)
 │   │   │   ├── search.rs          # search
 │   │   │   ├── tags.rs            # tags & tag subcommands
@@ -107,16 +107,20 @@ subtrack/
 │   │   │   ├── io.rs, export.rs, receipt.rs      # export / import / receipts
 │   │   │   ├── payment.rs, analytics.rs, summary.rs, forecast.rs, compare.rs
 │   │   │   ├── budget.rs, optimize.rs, timeline.rs, calendar.rs, upcoming.rs,
-│   │   │   ├── review.rs, report.rs, history.rs, changes.rs, notify.rs
+│   │   │   ├── review.rs, history.rs, changes.rs, notify.rs
+│   │   │   ├── report/            # Yearly report + monthly totals (calc.rs, render.rs)
 │   │   │   ├── profile.rs         # Filter profiles
-│   │   │   ├── usage.rs           # LLM usage tracking (add/list/import/refresh/total)
-│   │   │   ├── audit.rs, maintenance.rs, cleanup.rs, stats.rs, check.rs, config.rs
-│   │   │   ├── db.rs              # SQLite CRUD, schema, migrations
+│   │   │   ├── usage/             # LLM usage tracking (add/list/import/refresh/total)
+│   │   │   ├── audit.rs, maintenance.rs, cleanup.rs, stats.rs, check.rs
+│   │   │   ├── config/            # Config keys/values and display themes (keys.rs, theme.rs)
+│   │   │   ├── db/                # SQLite CRUD, schema, migrations (migrations.rs, subscriptions.rs, …)
 │   │   │   ├── currency.rs, fx.rs # Currency list & exchange rates
 │   │   │   ├── backup.rs, crypto.rs # Backup & AES-256-GCM encryption
-│   │   │   ├── display.rs, table.rs, price.rs, xlsx.rs, json.rs
+│   │   │   ├── display.rs, price.rs, xlsx.rs, json.rs
+│   │   │   ├── table/             # Table renderer (ansi.rs, text.rs, theme.rs, builder.rs)
 │   │   │   ├── validation.rs, safe_path.rs
-│   │   │   ├── date.rs            # Date helpers (SUBTRACK_TODAY override)
+│   │   │   ├── date/              # Date helpers (period.rs, billing.rs, SUBTRACK_TODAY override)
+│   │   │   ├── suggest_parser/    # Suggest email parsers (bank, card, receipt, wallet, generic)
 │   │   │   ├── ansi.rs, logger.rs # ANSI helpers & consola-compatible logger
 │   │   │   └── …
 │   │   ├── tests/cli_smoke.rs     # End-to-end CLI smoke tests
