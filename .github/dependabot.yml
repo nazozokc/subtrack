@@ -62,3 +62,10 @@ updates:
       - "github-actions"
     commit-message:
       prefix: "chore"
+    groups:
+      # All github/codeql-action steps must use the same version or the
+      # analyze job fails with a config/version mismatch. Group them so
+      # Dependabot never splits init/analyze/upload-sarif into separate PRs.
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
