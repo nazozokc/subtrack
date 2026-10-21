@@ -7,7 +7,7 @@
 use aes_gcm::aead::consts::U16;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::aes::Aes256;
-use aes_gcm::{AesGcm, Key, Nonce};
+use aes_gcm::{AesGcm, Nonce};
 use getrandom::getrandom as getrandom_fill;
 use sha2::{Digest, Sha256};
 
@@ -123,7 +123,7 @@ pub fn derive_key_from_passphrase(passphrase: &str) -> Vec<u8> {
 }
 
 fn aesgcm(key: &[u8]) -> Aes256Gcm {
-    Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key))
+    Aes256Gcm::new_from_slice(key).expect("invalid key length")
 }
 
 /// `iv(16) + tag(16) + ct` — port of encryptBuffer.
@@ -132,9 +132,8 @@ pub fn encrypt_buffer(key: &[u8], plaintext: &[u8]) -> Vec<u8> {
     getrandom_fill(&mut iv).expect("OS CSPRNG is unavailable");
     let cipher = aesgcm(key);
     // `Aead::encrypt` returns `ciphertext || tag`.
-    let sealed = cipher
-        .encrypt(Nonce::from_slice(&iv), plaintext)
-        .expect("encryption failed");
+    let nonce = Nonce::<U16>::try_from(iv.as_slice()).expect("invalid nonce length");
+    let sealed = cipher.encrypt(&nonce, plaintext).expect("encryption failed");
     let split = sealed.len() - TAG_LENGTH;
     let mut out = Vec::with_capacity(IV_LENGTH + TAG_LENGTH + split);
     out.extend_from_slice(&iv);
@@ -155,9 +154,8 @@ pub fn decrypt_buffer(key: &[u8], ciphertext: &[u8]) -> Option<Vec<u8>> {
     let mut ct = Vec::with_capacity(data.len() + TAG_LENGTH);
     ct.extend_from_slice(data);
     ct.extend_from_slice(tag);
-    aesgcm(key)
-        .decrypt(Nonce::from_slice(iv), ct.as_slice())
-        .ok()
+    let nonce = Nonce::<U16>::try_from(iv).expect("invalid nonce length");
+    aesgcm(key).decrypt(&nonce, ct.as_slice()).ok()
 }
 
 /// True when the buffer does NOT start with the SQLite magic header.
