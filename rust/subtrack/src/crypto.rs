@@ -133,7 +133,9 @@ pub fn encrypt_buffer(key: &[u8], plaintext: &[u8]) -> Vec<u8> {
     let cipher = aesgcm(key);
     // `Aead::encrypt` returns `ciphertext || tag`.
     let nonce = Nonce::<U16>::try_from(iv.as_slice()).expect("invalid nonce length");
-    let sealed = cipher.encrypt(&nonce, plaintext).expect("encryption failed");
+    let sealed = cipher
+        .encrypt(&nonce, plaintext)
+        .expect("encryption failed");
     let split = sealed.len() - TAG_LENGTH;
     let mut out = Vec::with_capacity(IV_LENGTH + TAG_LENGTH + split);
     out.extend_from_slice(&iv);
