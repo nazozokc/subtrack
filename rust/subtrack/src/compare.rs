@@ -127,7 +127,7 @@ fn render_compare_table(rows: &[CompareRow], current_label: &str, previous_label
             ]
         })
         .collect();
-    let col_widths = calc_column_widths(&data, &cfg, 80, 40);
+    let col_widths = calc_column_widths(&data, &cfg, crate::ui::term_width(), 40);
 
     let mut table = TableBuilder::new(crate::table::table_style(&crate::table::default_theme()));
     table.col_widths = col_widths;

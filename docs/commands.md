@@ -7,9 +7,13 @@ subtrack provides the following 50 commands. Every command can run non-interacti
 
 ## Scripting notes
 
-- **Output is deterministic.** The `subtrack (subtrack vX.Y.Z)` header line is printed to stdout on every run; passing `-j, --json` (or running `subtrack mcp`) suppresses it for machine-readable output. There is no pre-command notification banner.
+- **TTY-aware output.** The `subtrack vX.Y.Z` header line is printed only when stdout is a terminal. Piped output is plain data with no banner or ANSI escapes, so `subtrack list | jq` works without extra flags. `-j, --json` and `subtrack mcp` always suppress the header.
+- **Color control.** Colors follow `NO_COLOR`, `FORCE_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, and `TERM=dumb`. Override per run with `--no-color` or `--color=auto|always|never`. `--no-color` wins if both are present.
+- **Width.** Tables use the terminal width (or `COLUMNS` when set). `--wide` forces the wide layout, which is useful for long names and notes.
 - **Interactive prompts.** Prompt flows run when stdin is a terminal (or `SUBTRACK_ASSUME_TTY=1`). Flags always take precedence, and `--json` never prompts. In a non-TTY session the scriptable behavior is unchanged: missing required input exits 0 without prompting (e.g. bare `subtrack add`, `edit`, `delete`, `restore`, `search`), or the command aborts without changes (e.g. `cancel` without `--force`).
 - **Exit codes for automation.** `budget --check` exits 1 when over budget; `check --strict` exits 1 when data problems are found.
+- **Diagnostics use stderr.** Errors and warnings are written to stderr; data and success messages go to stdout.
+- **Parent commands have useful defaults.** `subtrack config`, `suggest`, `tag`, `template`, `profile`, and `usage` run their `list` subcommand. Bare `subtrack forecast` runs a 12-month forecast, and bare `subtrack search` prints a query hint in non-TTY sessions.
 - **Unknown flags fail loudly.** A misspelled option aborts with an error and exit code 1: `subtrack list --min-pricee 500` → `✖ --min-pricee: Unknown option '--min-pricee'`. Typos are never silently dropped.
 
 <details>
@@ -380,14 +384,14 @@ Calculates and displays how much you pay over a given billing period. All subscr
 
 The `period` argument defaults to `monthly`. Valid values:
 
-| Period | Alias |
-|--------|-------|
-| `weekly` | per week |
-| `bi-weekly` | per two weeks |
-| `monthly` | per month (default) |
-| `quarterly` | per 3 months |
-| `semi-annual` | per 6 months |
-| `yearly` | per year |
+| Period | Alias | Suffix |
+|--------|-------|--------|
+| `weekly` | per week | `/week` |
+| `bi-weekly` | per two weeks | `/2 weeks` |
+| `monthly` | per month (default) | `/month` |
+| `quarterly` | per 3 months | `/quarter` |
+| `semi-annual` | per 6 months | `/6 months` |
+| `yearly` | per year | `/year` |
 
 | Option | Description |
 |--------|-------------|
@@ -432,9 +436,11 @@ If exchange rates cannot be fetched (e.g. offline), the command falls back to pe
 Shows a summary of all subscriptions including:
 
 - Total number of subscriptions
-- Most expensive subscription
+- Most expensive subscription per currency (raw prices are never compared across currencies)
 - Monthly spending by currency
 - Monthly spending by tag (sorted by cost)
+
+When every subscription uses the same currency, the headline is `Most expensive:`. With mixed currencies it becomes `Most expensive by currency:` so a ¥250 yearly plan is never ranked against a $15.99 monthly plan. In JSON, the single-currency form uses `mostExpensive`; the mixed form uses `mostExpensiveByCurrency`.
 
 | Option | Description |
 |--------|-------------|
@@ -453,7 +459,9 @@ Output:
 
 ```
 Total subscriptions:  5
-Most expensive:       AWS ($50.00/month)
+Most expensive by currency:
+  JPY  AWS (¥4,940/month)
+  USD  Adobe ($50.00/month)
 
 Monthly by currency:
   JPY    ¥4,940
@@ -490,13 +498,16 @@ subtrack analytics --json
 Output:
 
 ```
-📊 Subscription Analytics
+Subscription Analytics
 
 Overview:
   Total subscriptions:  5
   Status breakdown:
     active: 4
     paused: 1
+  Most expensive by currency:
+    JPY  AWS (¥4,940/month)
+    USD  Adobe ($50.00/month)
 
 Monthly spending:
   JPY    ¥4,940
@@ -511,7 +522,7 @@ Monthly by tag:
   ...
 ```
 
-The budget display requires a monthly budget set via `subtrack config set monthlyBudget <amount>`.
+With `--period yearly`, the same tag lines use `/year`. As with `summary`, mixed currencies are never ranked against each other: the overview lists one most-expensive subscription per currency. The budget display requires a monthly budget set via `subtrack config set monthlyBudget <amount>`.
 
 ## `tags <taglist...>`
 
@@ -1159,7 +1170,10 @@ Shows a monthly spending timeline with an ASCII bar chart. Useful for visualizin
 |--------|-------------|
 | `--months <n>` | Number of months to display (default: 12) |
 | `-c, --categories` | Show breakdown by category (first tag) |
+| `--currency <C>` | Convert all prices to target currency |
 | `-j, --json` | Output as JSON |
+
+Without `--currency`, each currency gets its own chart and is never summed with another currency. With `--currency`, rows that cannot be converted are excluded and a warning is printed.
 
 ```bash
 # 12-month spending timeline
@@ -1167,6 +1181,9 @@ subtrack timeline
 
 # 6-month timeline with category breakdown
 subtrack timeline --months 6 --categories
+
+# Convert everything to USD
+subtrack timeline --currency USD
 
 # JSON output
 subtrack timeline --json
@@ -1183,6 +1200,8 @@ Analyzes your subscriptions for cost optimization opportunities. Detects potenti
 | `-c, --currency <C>` | Convert all prices to target currency |
 | `--discount-rate <percent>` | Assumed yearly discount rate for annual plans (default: 15) |
 | `--exclude <names>` | Comma-separated subscription names to exclude from analysis |
+
+Without `--currency`, savings are reported per currency and never summed across currencies. `--min-savings` requires `--currency` when subscriptions use more than one currency.
 
 ```bash
 # Show all optimization suggestions
@@ -1415,11 +1434,13 @@ subtrack cleanup --json
 
 ## `stats`
 
-Shows database statistics: subscription counts by status, tag count, trial count, usage entry count, database file size, and price range information.
+Shows database statistics: subscription counts by status, tag count, trial count, usage entry count, database file size, and per-currency price ranges.
 
 | Option | Description |
 |--------|-------------|
 | `-j, --json` | Output as JSON |
+
+Price ranges are reported separately for each currency; `--json` exposes them as `priceRanges`.
 
 ```bash
 subtrack stats
@@ -1545,7 +1566,7 @@ subtrack report --currency USD
 subtrack report --json
 ```
 
-The monthly chart requires a single currency — use `--currency` to convert. Cancelled subscriptions are counted only until their contract end date. The report compares yearly spending against `yearlyBudget` when configured.
+The monthly chart requires a single currency — use `--currency` to convert. Without conversion, totals are reported per currency in `byCurrency` and the top-level JSON `total` is `null` rather than a meaningless cross-currency sum. Cancelled subscriptions are counted only until their contract end date. The report compares yearly spending against `yearlyBudget` when configured.
 
 ## `pause [ids...]`
 

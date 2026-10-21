@@ -159,7 +159,7 @@ fn render_usage_table(entries: &[crate::db::LlmUsage]) {
         max_widths,
         min_avail: Some(50),
     };
-    let widths = calc_column_widths(&all_rows, &config, 80, 40);
+    let widths = calc_column_widths(&all_rows, &config, crate::ui::term_width(), 40);
 
     let theme = crate::config::display_theme();
     let col_aligns: Vec<String> = ["left", "left", "right", "right", "right", "left", "left"]

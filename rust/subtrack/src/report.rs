@@ -188,19 +188,21 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
     let totals = calc_yearly_totals(&display_subs, year);
     let total: f64 = totals.iter().map(|t| t.total).sum();
 
-    // Per-currency yearly totals (only when no conversion).
+    // Per-currency totals for the selected year (only when no conversion).
+    // Use the same month-by-month calculation as `total` so the breakdown and
+    // the headline can never disagree.
     let mut by_currency: Vec<(String, f64)> = Vec::new();
     if display_currency.is_none() {
-        for sub in &subs {
-            if sub.status == "archived" {
-                continue;
-            }
-            if let Some(slot) = by_currency.iter_mut().find(|(c, _)| c == &sub.currency) {
-                slot.1 += yearly_cost(sub);
-            } else {
-                by_currency.push((sub.currency.clone(), yearly_cost(sub)));
+        for (currency, group) in crate::fx::group_by_currency(&subs) {
+            let amount: f64 = calc_yearly_totals(&group, year)
+                .iter()
+                .map(|t| t.total)
+                .sum();
+            if amount > 0.0 {
+                by_currency.push((currency, round_currency(amount)));
             }
         }
+        by_currency.sort_by(|a, b| a.0.cmp(&b.0));
     }
 
     let top = calc_top(&display_subs, 5);
@@ -267,7 +269,7 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
     if json {
         let out = report_json(
             year,
-            total,
+            (display_currency.is_some() || by_currency.len() <= 1).then_some(total),
             &display_currency,
             &by_currency,
             &totals,
@@ -446,7 +448,7 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
 #[allow(clippy::too_many_arguments)]
 fn report_json(
     year: i64,
-    total: f64,
+    total: Option<f64>,
     display_currency: &Option<String>,
     by_currency: &[(String, f64)],
     totals: &[MonthTotal],
@@ -461,7 +463,10 @@ fn report_json(
     out.push_str(&format!("  \"year\": {},\n", year));
     out.push_str(&format!(
         "  \"total\": {},\n",
-        crate::json::number(round_currency(total))
+        match total {
+            Some(total) => crate::json::number(round_currency(total)),
+            None => "null".to_string(),
+        }
     ));
     out.push_str(&format!(
         "  \"currency\": {},\n",

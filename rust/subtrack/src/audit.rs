@@ -193,7 +193,7 @@ fn list(
             max_widths,
             min_avail: None,
         },
-        80,
+        crate::ui::term_width(),
         40,
     );
 
