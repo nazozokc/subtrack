@@ -70,7 +70,7 @@ pub fn run_dedupe(parsed: &ParsedArgs) -> i32 {
         fail("threshold must be between 0 and 1");
         return 1;
     }
-    let json = parsed.bool("json") == Some(true);
+    let json = parsed.flag("json");
 
     let subs = match get_subscriptions(&QueryOptions::default()) {
         Ok(s) => s,
@@ -81,7 +81,7 @@ pub fn run_dedupe(parsed: &ParsedArgs) -> i32 {
     };
     let subs: Vec<Subscription> = subs
         .into_iter()
-        .filter(|s| s.status != "cancelled")
+        .filter(|s| crate::domain::not_cancelled(&s.status))
         .collect();
 
     // Find pairs i < j.

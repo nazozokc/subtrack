@@ -21,9 +21,9 @@ fn format_bytes(bytes: i64) -> String {
 }
 
 pub fn run_maintenance(parsed: &ParsedArgs) -> i32 {
-    let json = parsed.bool("json") == Some(true);
+    let json = parsed.flag("json");
     let do_check = parsed.bool("check").unwrap_or(true);
-    let do_vacuum = parsed.bool("vacuum") == Some(true);
+    let do_vacuum = parsed.flag("vacuum");
 
     let conn = match db::open_db() {
         Ok(c) => c,

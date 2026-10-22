@@ -110,7 +110,7 @@ pub(crate) struct CalendarEntry {
 pub(crate) fn calc_calendar_entries(month: u32, year: i32) -> Vec<CalendarEntry> {
     let subs = get_subscriptions(&QueryOptions::default())
         .map(|mut v| {
-            v.retain(|s| s.status != "cancelled");
+            v.retain(|s| crate::domain::not_cancelled(&s.status));
             v
         })
         .unwrap_or_default();
@@ -172,7 +172,7 @@ pub fn run_calendar(parsed: &ParsedArgs) -> i32 {
         }
     }
 
-    if parsed.bool("json") == Some(true) {
+    if parsed.flag("json") {
         let mut out = String::new();
         if entries.is_empty() {
             out.push_str("[]\n");

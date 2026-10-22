@@ -8,24 +8,7 @@ pub fn round_currency(v: f64) -> f64 {
 /// Currency symbol for en-US Intl.NumberFormat "symbol" display.
 /// Ambiguous/unknown currencies fall back to `None` → "{CODE} {amount}".
 fn symbol_for(currency: &str) -> Option<&'static str> {
-    match currency {
-        "USD" => Some("$"),
-        "JPY" => Some("¥"),
-        "EUR" => Some("€"),
-        "GBP" => Some("£"),
-        "KRW" => Some("₩"),
-        "INR" => Some("₹"),
-        "BRL" => Some("R$"),
-        "CNY" => Some("CN¥"),
-        "AUD" => Some("A$"),
-        "CAD" => Some("CA$"),
-        "HKD" => Some("HK$"),
-        "SGD" => Some("S$"),
-        "TWD" => Some("NT$"),
-        "MXN" => Some("MX$"),
-        "TRY" => Some("₺"),
-        _ => None,
-    }
+    crate::domain::Currency::parse(currency).ok()?.symbol()
 }
 
 /// Group integer part with "," thousands separators.

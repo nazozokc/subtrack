@@ -89,35 +89,31 @@ fn jaccard_similarity(a: &[String], b: &[String]) -> f64 {
 }
 
 fn analyze_cycle_optimization(subs: &[Subscription], discount_rate: f64) -> Vec<CycleSuggestion> {
-    let mut results = Vec::new();
-    for sub in subs {
-        if sub.status == "cancelled" || sub.status == "paused" {
-            continue;
-        }
-        if sub.cycle != "monthly" {
-            continue;
-        }
-        let monthly_cost = sub.price;
-        let yearly_cost = monthly_cost * 12.0;
-        let estimated = yearly_cost * (1.0 - discount_rate / 100.0);
-        let savings = yearly_cost - estimated;
-        if savings > 0.0 {
-            results.push(CycleSuggestion {
-                name: sub.name.clone(),
-                currency: sub.currency.clone(),
+    subs.iter()
+        .filter(|s| crate::domain::not_cancelled_or_paused(&s.status) && s.cycle == "monthly")
+        .filter_map(|s| {
+            let monthly_cost = s.price;
+            let yearly_cost = monthly_cost * 12.0;
+            let estimated = yearly_cost * (1.0 - discount_rate / 100.0);
+            let savings = yearly_cost - estimated;
+            (savings > 0.0).then(|| CycleSuggestion {
+                name: s.name.clone(),
+                currency: s.currency.clone(),
                 current_monthly: monthly_cost,
                 suggested_monthly: round_currency(estimated / 12.0),
                 yearly_savings: round_currency(savings),
-            });
-        }
-    }
-    results
+            })
+        })
+        .collect()
 }
 
 fn analyze_duplicates(subs: &[Subscription]) -> Vec<DuplicateSuggestion> {
-    let active: Vec<&Subscription> = subs.iter().filter(|s| s.status == "active").collect();
+    let active: Vec<&Subscription> = subs
+        .iter()
+        .filter(|s| crate::domain::is_active(&s.status))
+        .collect();
     let mut results = Vec::new();
-    let mut checked: Vec<i64> = Vec::new();
+    let mut checked: std::collections::HashSet<i64> = std::collections::HashSet::new();
 
     for (i, a) in active.iter().enumerate() {
         if checked.contains(&a.id) {
@@ -138,7 +134,7 @@ fn analyze_duplicates(subs: &[Subscription]) -> Vec<DuplicateSuggestion> {
             let mut all_similar = vec![*a];
             all_similar.extend(similar);
             for s in &all_similar {
-                checked.push(s.id);
+                checked.insert(s.id);
             }
             let mut by_currency: Vec<(String, f64)> = Vec::new();
             for s in &all_similar {
@@ -179,7 +175,10 @@ fn analyze_duplicates(subs: &[Subscription]) -> Vec<DuplicateSuggestion> {
 
 /// Port of `analyzeInactive`: active subs with no price change for >= 18 months.
 fn analyze_inactive(subs: &[Subscription], all_changes: &[PriceChange]) -> Vec<InactiveSuggestion> {
-    let active: Vec<&Subscription> = subs.iter().filter(|s| s.status == "active").collect();
+    let active: Vec<&Subscription> = subs
+        .iter()
+        .filter(|s| crate::domain::is_active(&s.status))
+        .collect();
     let mut last_by_sub: std::collections::HashMap<i64, String> = std::collections::HashMap::new();
     for ch in all_changes {
         let newer = match last_by_sub.get(&ch.subscription_id) {
@@ -216,7 +215,12 @@ fn analyze_inactive(subs: &[Subscription], all_changes: &[PriceChange]) -> Vec<I
 
 fn analyze_cancelled(subs: &[Subscription]) -> Vec<CancelledSuggestion> {
     subs.iter()
-        .filter(|s| s.status == "cancelled" || s.status == "paused")
+        .filter(|s| {
+            matches!(
+                crate::domain::Status::parse(&s.status),
+                Ok(crate::domain::Status::Cancelled) | Ok(crate::domain::Status::Paused)
+            )
+        })
         .map(|s| CancelledSuggestion {
             name: s.name.clone(),
             price: s.price,
@@ -344,7 +348,7 @@ pub fn run_optimize(parsed: &ParsedArgs) -> i32 {
         }
     }
 
-    if parsed.bool("json") == Some(true) {
+    if parsed.flag("json") {
         let mut items: Vec<String> = Vec::new();
         for s in &cycle_suggestions {
             items.push(format!(

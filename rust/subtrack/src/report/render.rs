@@ -144,7 +144,7 @@ pub fn run_report(parsed: &ParsedArgs) -> i32 {
         }
     }
 
-    let json = parsed.bool("json") == Some(true);
+    let json = parsed.flag("json");
 
     if json {
         let out = report_json(

@@ -25,7 +25,7 @@ fn parse_days(parsed: &ParsedArgs, flag: &str) -> Result<Option<i64>, ()> {
 }
 
 pub fn run_review(parsed: &ParsedArgs) -> i32 {
-    let json_out = parsed.bool("json") == Some(true);
+    let json_out = parsed.flag("json");
 
     let bill_days = match parse_days(parsed, "billDays") {
         Ok(v) => v.unwrap_or(7),

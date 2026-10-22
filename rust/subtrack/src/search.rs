@@ -7,7 +7,7 @@ use crate::logger::{self, info, out_str};
 use crate::parser::ParsedArgs;
 
 pub fn run_search(parsed: &ParsedArgs) -> i32 {
-    let json = parsed.bool("json") == Some(true);
+    let json = parsed.flag("json");
 
     // Interactive prompt if no query provided; non-TTY sessions skip it
     // (bare `subtrack search` prints only the banner, matching the golden).
@@ -29,9 +29,9 @@ pub fn run_search(parsed: &ParsedArgs) -> i32 {
         }
     };
 
-    let names = parsed.bool("names") == Some(true);
-    let notes = parsed.bool("notes") == Some(true);
-    let tags = parsed.bool("tags") == Some(true);
+    let names = parsed.flag("names");
+    let notes = parsed.flag("notes");
+    let tags = parsed.flag("tags");
 
     let results = match search_subscriptions(&query, names, notes, tags) {
         Ok(v) => v,

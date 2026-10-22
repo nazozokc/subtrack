@@ -16,8 +16,8 @@ struct Finding {
 /// Port of handleCheck. Returns 1 only for a read failure; `--strict` sets the
 /// process exit code via `set_exit_code` (mirrors `process.exitCode = 1`).
 pub fn run_check(parsed: &ParsedArgs) -> i32 {
-    let json = parsed.bool("json") == Some(true);
-    let strict = parsed.bool("strict") == Some(true);
+    let json = parsed.flag("json");
+    let strict = parsed.flag("strict");
 
     let subs = match get_subscriptions(&QueryOptions {
         include_archived: true,

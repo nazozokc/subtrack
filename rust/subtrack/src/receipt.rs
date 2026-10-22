@@ -109,8 +109,8 @@ pub fn run_receipt(parsed: &ParsedArgs) -> i32 {
             return 1;
         }
     };
-    let json = parsed.bool("json") == Some(true);
-    let dry_run = parsed.bool("dryRun") == Some(true);
+    let json = parsed.flag("json");
+    let dry_run = parsed.flag("dryRun");
 
     let candidates = match read_receipts(&file) {
         Ok(rows) => parse_email_candidates(rows),

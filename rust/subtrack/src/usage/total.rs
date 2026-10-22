@@ -8,22 +8,13 @@ use crate::logger::{self, info, log};
 use crate::parser::ParsedArgs;
 use crate::price::{format_usd_cost, group_whole};
 
-const VALID_PERIODS: [&str; 6] = [
-    "weekly",
-    "bi-weekly",
-    "monthly",
-    "quarterly",
-    "semi-annual",
-    "yearly",
-];
-
 // ── total ────────────────────────────────────────────────
 
 pub fn run_usage_total(parsed: &ParsedArgs) -> i32 {
     let period = parsed
         .str("period")
         .unwrap_or_else(|| "monthly".to_string());
-    if !VALID_PERIODS.contains(&period.as_str()) {
+    if crate::domain::Cycle::parse_named(&period).is_none() {
         logger::fail(
             "period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly",
         );
@@ -43,7 +34,7 @@ pub fn run_usage_total(parsed: &ParsedArgs) -> i32 {
     let by_model = get_llm_usage_total_by_model(&from, &to).unwrap_or_default();
     let (input_tokens, output_tokens) = get_llm_usage_token_total(&from, &to).unwrap_or((0, 0));
 
-    if parsed.bool("json") == Some(true) {
+    if parsed.flag("json") {
         let providers: Vec<String> = by_provider
             .iter()
             .map(|(p, t)| {

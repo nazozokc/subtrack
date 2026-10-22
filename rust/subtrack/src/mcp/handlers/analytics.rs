@@ -43,7 +43,7 @@ pub(super) fn handle_get_analytics(
     };
     let active: Vec<Subscription> = all
         .iter()
-        .filter(|s| s.status != "cancelled" && s.status != "archived")
+        .filter(|s| crate::domain::listed(&s.status))
         .cloned()
         .collect();
     let count = |st: &str| all.iter().filter(|s| s.status == st).count();
@@ -87,7 +87,7 @@ pub(super) fn handle_get_forecast(
     };
     let active: Vec<&Subscription> = subs
         .iter()
-        .filter(|s| s.status != "cancelled" && !cancel_names.contains(&s.name))
+        .filter(|s| crate::domain::not_cancelled(&s.status) && !cancel_names.contains(&s.name))
         .collect();
 
     let mut entries: Vec<String> = Vec::new();
@@ -168,10 +168,10 @@ fn compare_totals(
         None => totals.push((ccy, amount)),
     };
 
-    for sub in subs {
-        if sub.status == "cancelled" {
-            continue;
-        }
+    for sub in subs
+        .iter()
+        .filter(|s| crate::domain::not_cancelled(&s.status))
+    {
         let (price, currency) = if use_previous {
             match price_before.get(&sub.id) {
                 Some((p, c)) => (*p, c.clone()),

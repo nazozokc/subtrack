@@ -123,7 +123,7 @@ pub fn run(args: &[String]) -> i32 {
     );
 
     // ── 5. version ──
-    if parsed.bool("version") == Some(true) {
+    if parsed.flag("version") {
         logger::outln(VERSION);
         return 0;
     }
@@ -132,7 +132,7 @@ pub fn run(args: &[String]) -> i32 {
     // Help and the entry menu provide their own heading. Piped output stays
     // clean so `subtrack list | jq` and friends never see a banner.
     let is_entry = resolved.command.is_none();
-    let wants_help = parsed.bool("help") == Some(true);
+    let wants_help = parsed.flag("help");
     if !silent && !is_entry && !wants_help && ui::is_stdout_tty() {
         logger::log(&format!("{} v{}", NAME, VERSION));
         logger::log("");
@@ -310,7 +310,7 @@ fn print_root_header() {
     let total_all = subs.len();
     let active: Vec<_> = subs
         .iter()
-        .filter(|s| s.status != "cancelled")
+        .filter(|s| crate::domain::not_cancelled(&s.status))
         .cloned()
         .collect();
     logger::log(&ansi::bold(&ansi::cyan(&format!("subtrack v{}", VERSION))));

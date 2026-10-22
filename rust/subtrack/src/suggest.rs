@@ -9,8 +9,8 @@ use crate::parser::ParsedArgs;
 use crate::price::format_price;
 
 pub fn run_suggest_list(parsed: &ParsedArgs) -> i32 {
-    let all = parsed.bool("all") == Some(true);
-    let json = parsed.bool("json") == Some(true);
+    let all = parsed.flag("all");
+    let json = parsed.flag("json");
     let status = if all { None } else { Some("pending") };
     let suggestions = match get_suggestions(status) {
         Ok(s) => s,
@@ -388,7 +388,7 @@ pub fn run_suggest_add(parsed: &ParsedArgs) -> i32 {
 
 /// Port of `handleSuggestDismiss`.
 pub fn run_suggest_dismiss(parsed: &ParsedArgs) -> i32 {
-    if parsed.bool("all") == Some(true) {
+    if parsed.flag("all") {
         let count = match crate::db::get_suggestions(Some("pending")) {
             Ok(v) => v.len(),
             Err(e) => {

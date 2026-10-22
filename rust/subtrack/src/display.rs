@@ -14,7 +14,7 @@ use crate::table::{
 use crate::ui;
 
 fn next_billing_cell(sub: &Subscription) -> String {
-    if sub.status == "cancelled" || sub.status == "archived" {
+    if !crate::domain::listed(&sub.status) {
         return "-".to_string();
     }
     let now = today();

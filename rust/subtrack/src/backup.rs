@@ -171,7 +171,7 @@ pub fn run_backup(parsed: &ParsedArgs) -> i32 {
         let _ = crate::db::save_db(&conn);
     }
 
-    let encrypt = parsed.bool("encrypt") == Some(true);
+    let encrypt = parsed.flag("encrypt");
 
     let dest: PathBuf = match parsed.str("destination") {
         Some(d) => match safe_output_path(&d) {
@@ -232,7 +232,7 @@ pub fn run_restore(parsed: &ParsedArgs) -> i32 {
             logger::fail(&msg);
             return 1;
         };
-        let force = parsed.bool("force") == Some(true);
+        let force = parsed.flag("force");
         restore_from_file(&safe_file, force);
         return 0;
     }
@@ -281,7 +281,7 @@ pub fn run_restore(parsed: &ParsedArgs) -> i32 {
         logger::info("Cancelled");
         return 0;
     }
-    let force = parsed.bool("force") == Some(true);
+    let force = parsed.flag("force");
     restore_from_file(&backup.path, force);
     0
 }

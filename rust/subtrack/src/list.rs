@@ -7,6 +7,7 @@ use crate::db::{
     QueryOptions, get_llm_usage_total, get_llm_usage_total_by_provider, get_subscriptions,
 };
 use crate::display::{show_api_usage, spread_subscription};
+use crate::domain::{Status, f64_arg, int_arg};
 use crate::fx::{Converted, fetch_converted_subs};
 use crate::json::list_json;
 use crate::logger::{fail, info, out_str, success, warn};
@@ -28,49 +29,55 @@ const LONG_MONTHS: [&str; 12] = [
     "December",
 ];
 
-fn parse_num(s: &str) -> f64 {
-    s.parse::<f64>().unwrap_or(f64::NAN)
-}
-
 /// Port of listCommand.run — validation + dispatch. Returns 1 on failure.
 pub fn run_list(parsed: &ParsedArgs) -> i32 {
     // limit/offset must be integers
-    let limit = parsed.str("limit").map(|s| parse_num(&s));
-    if let Some(v) = limit
-        && (v.is_nan() || v < 1.0 || v.fract() != 0.0)
-    {
-        fail("limit must be a positive integer");
-        return 1;
-    }
-    let offset = parsed.str("offset").map(|s| parse_num(&s));
-    if let Some(v) = offset
-        && (v.is_nan() || v < 0.0 || v.fract() != 0.0)
-    {
-        fail("offset must be a non-negative integer");
-        return 1;
-    }
-    // status must be one of the known values
-    if let Some(s) = parsed.str("status")
-        && !["active", "paused", "cancelled", "archived"].contains(&s.as_str())
-    {
-        fail("status must be one of: active, paused, cancelled, archived");
-        return 1;
-    }
-    // price bounds
-    let min_price = parsed.str("min-price").map(|s| parse_num(&s));
-    if let Some(v) = min_price
-        && (v.is_nan() || v < 0.0)
-    {
-        fail("min-price must be a non-negative number");
-        return 1;
-    }
-    let max_price = parsed.str("max-price").map(|s| parse_num(&s));
-    if let Some(v) = max_price
-        && (v.is_nan() || v < 0.0)
-    {
-        fail("max-price must be a non-negative number");
-        return 1;
-    }
+    let limit = match int_arg(
+        parsed,
+        "limit",
+        |v| v >= 1.0,
+        "limit must be a positive integer",
+    ) {
+        Err(()) => return 1,
+        Ok(limit) => limit,
+    };
+    let offset = match int_arg(
+        parsed,
+        "offset",
+        |v| v >= 0.0,
+        "offset must be a non-negative integer",
+    ) {
+        Err(()) => return 1,
+        Ok(offset) => offset,
+    };
+    let status = match parsed.str("status") {
+        Some(raw) => match Status::parse(&raw) {
+            Ok(status) => Some(status),
+            Err(_) => {
+                fail("status must be one of: active, paused, cancelled, archived");
+                return 1;
+            }
+        },
+        None => None,
+    };
+    let min_price = match f64_arg(
+        parsed,
+        "min-price",
+        |v| v >= 0.0,
+        "min-price must be a non-negative number",
+    ) {
+        Err(()) => return 1,
+        Ok(v) => v,
+    };
+    let max_price = match f64_arg(
+        parsed,
+        "max-price",
+        |v| v >= 0.0,
+        "max-price must be a non-negative number",
+    ) {
+        Err(()) => return 1,
+        Ok(v) => v,
+    };
     if let (Some(min), Some(max)) = (min_price, max_price)
         && min > max
     {
@@ -78,7 +85,6 @@ pub fn run_list(parsed: &ParsedArgs) -> i32 {
         return 1;
     }
 
-    let json = parsed.bool("json") == Some(true);
     let tags: Vec<String> = parsed
         .str("tags")
         .map(|t| {
@@ -91,26 +97,25 @@ pub fn run_list(parsed: &ParsedArgs) -> i32 {
 
     let options = QueryOptions {
         sort: parsed.str("sort"),
-        desc: parsed.bool("desc") == Some(true),
-        limit: limit.filter(|v| !v.is_nan()).map(|v| v as i64),
-        offset: offset.filter(|v| !v.is_nan()).map(|v| v as i64),
-        include_archived: parsed.bool("include-archived") == Some(true),
-        status: parsed.str("status"),
+        desc: parsed.flag("desc"),
+        limit,
+        offset,
+        include_archived: parsed.flag("include-archived"),
+        status: status.map(|s| s.to_string()),
         min_price,
         max_price,
-        tags: tags.clone(),
+        tags,
     };
 
-    let list_result = get_subscriptions(&options);
-    let list = match list_result {
+    let list = match get_subscriptions(&options) {
         Ok(l) => l,
         Err(e) => {
-            fail(&format!("Failed to read subscriptions: {}", e));
+            fail(&format!("Failed to read subscriptions: {e}"));
             return 1;
         }
     };
 
-    if json {
+    if parsed.flag("json") {
         out_str(&list_json(&list));
         out_str("\n");
         return 0;
@@ -130,7 +135,7 @@ pub fn run_list(parsed: &ParsedArgs) -> i32 {
             show_method,
             show_contract,
             show_vendor,
-            api: parsed.bool("api") == Some(true),
+            api: parsed.flag("api"),
         },
     );
     0
@@ -147,29 +152,37 @@ pub struct HandleOptions {
 
 /// Port of handleList + showApiUsage dispatch (`subscription/core.ts`).
 pub fn handle_list(list: Vec<crate::db::Subscription>, options: HandleOptions) {
+    let HandleOptions {
+        currency,
+        show_notes,
+        show_method,
+        show_contract,
+        show_vendor,
+        api,
+    } = options;
     let mut display_list = list;
-    let mut display_currency = options.currency.clone();
+    let mut display_currency = currency;
 
     // Currency conversion: when a target currency is requested but some
     // subscriptions are in other currencies, fetch rates and convert.
-    if let Some(cu) = options.currency.as_deref() {
-        let any_other = display_list.iter().any(|s| s.currency != cu);
-        if any_other {
-            info("Fetching the latest exchange rates...");
-            match fetch_converted_subs(&display_list, cu) {
-                Some(Converted { list, has_missing }) => {
-                    success("Exchange rates updated");
-                    display_list = list;
-                    if has_missing {
-                        warn(
-                            "Some prices could not be converted (missing rate). They are shown in original currency.",
-                        );
-                    }
+    if let Some(cu) = display_currency
+        .as_deref()
+        .filter(|cu| display_list.iter().any(|s| s.currency != *cu))
+    {
+        info("Fetching the latest exchange rates...");
+        match fetch_converted_subs(&display_list, cu) {
+            Some(Converted { list, has_missing }) => {
+                success("Exchange rates updated");
+                display_list = list;
+                if has_missing {
+                    warn(
+                        "Some prices could not be converted (missing rate). They are shown in original currency.",
+                    );
                 }
-                None => {
-                    warn("Failed to fetch exchange rates; showing in original currencies");
-                    display_currency = None;
-                }
+            }
+            None => {
+                warn("Failed to fetch exchange rates; showing in original currencies");
+                display_currency = None;
             }
         }
     }
@@ -177,18 +190,17 @@ pub fn handle_list(list: Vec<crate::db::Subscription>, options: HandleOptions) {
     spread_subscription(
         &display_list,
         display_currency.as_deref(),
-        options.show_notes,
-        options.show_method,
-        options.show_contract,
-        options.show_vendor,
+        show_notes,
+        show_method,
+        show_contract,
+        show_vendor,
     );
 
-    if options.api {
+    if api {
         let now = today();
-        let month = now.month();
-        let from = format!("{}-{:02}-01", now.year(), month);
+        let from = format!("{}-{:02}-01", now.year(), now.month());
         let to = today_string();
-        let period_label = format!("{} {}", LONG_MONTHS[(month - 1) as usize], now.year());
+        let period_label = format!("{} {}", LONG_MONTHS[now.month() as usize - 1], now.year());
         let total = get_llm_usage_total(&from, &to).unwrap_or(0);
         let by_provider = get_llm_usage_total_by_provider(&from, &to).unwrap_or_default();
         show_api_usage(total, &by_provider, &period_label)

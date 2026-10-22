@@ -139,6 +139,12 @@ impl ParsedArgs {
         }
     }
 
+    /// Boolean flag as a plain `bool` (`--x` / `--x=...`). Equivalent to
+    /// `bool(key) == Some(true)` without the ceremony.
+    pub fn flag(&self, key: &str) -> bool {
+        matches!(self.values.get(key), Some(ArgValue::Bool(true)))
+    }
+
     pub fn str(&self, key: &str) -> Option<String> {
         match self.values.get(key) {
             Some(ArgValue::Str(s)) => Some(s.clone()),

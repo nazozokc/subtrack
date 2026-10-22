@@ -90,10 +90,13 @@ fn calc_summary(subs: &[Subscription]) -> Summary {
 }
 
 pub fn run_summary(parsed: &ParsedArgs) -> i32 {
-    let json = parsed.bool("json") == Some(true);
+    let json = parsed.flag("json");
 
     let subs: Vec<Subscription> = match get_subscriptions(&QueryOptions::default()) {
-        Ok(s) => s.into_iter().filter(|s| s.status != "cancelled").collect(),
+        Ok(s) => s
+            .into_iter()
+            .filter(|s| crate::domain::not_cancelled(&s.status))
+            .collect(),
         Err(e) => {
             crate::logger::fail(&format!("Failed to read subscriptions: {}", e));
             return 1;

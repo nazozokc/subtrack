@@ -369,10 +369,10 @@ fn export_ics(subs: &[Subscription]) -> String {
     let now = today();
     let mut body =
         String::from("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//subtrack//subtrack//EN\r\n");
-    for sub in subs {
-        if sub.status == "cancelled" {
-            continue;
-        }
+    for sub in subs
+        .iter()
+        .filter(|s| crate::domain::not_cancelled(&s.status))
+    {
         let start =
             calculate_next_billing_inclusive(sub.billing_day, &sub.created_at, &sub.cycle, now);
         let start_str = start.format("%Y%m%d").to_string();

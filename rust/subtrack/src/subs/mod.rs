@@ -73,15 +73,15 @@ pub(super) fn resolve_id(
 }
 
 pub(super) fn not_cancelled(sub: &crate::db::Subscription) -> bool {
-    sub.status != "cancelled"
+    crate::domain::not_cancelled(&sub.status)
 }
 
 pub(super) fn archived(sub: &crate::db::Subscription) -> bool {
-    sub.status == "archived"
+    crate::domain::is_archived(&sub.status)
 }
 
 pub(super) fn not_archived(sub: &crate::db::Subscription) -> bool {
-    sub.status != "archived"
+    !archived(sub)
 }
 
 /// Validate an optional notes/discount flag value (used by add side effects).

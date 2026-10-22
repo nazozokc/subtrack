@@ -57,7 +57,7 @@ pub fn run_usage_list(parsed: &ParsedArgs) -> i32 {
         }
     };
 
-    if parsed.bool("json") == Some(true) {
+    if parsed.flag("json") {
         let items: Vec<String> = entries
             .iter()
             .map(|e| {

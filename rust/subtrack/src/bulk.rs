@@ -133,7 +133,7 @@ pub fn run_bulk_status(parsed: &ParsedArgs) -> i32 {
     if !should_proceed(
         &format!("Change status to \"{}\"", target),
         list.len(),
-        parsed.bool("force") == Some(true),
+        parsed.flag("force"),
     ) {
         return 0;
     }
@@ -198,7 +198,7 @@ pub fn run_bulk_delete(parsed: &ParsedArgs) -> i32 {
         }
     };
 
-    if !should_proceed("Delete", list.len(), parsed.bool("force") == Some(true)) {
+    if !should_proceed("Delete", list.len(), parsed.flag("force")) {
         return 0;
     }
 
@@ -278,7 +278,7 @@ pub fn run_bulk_tag_add(parsed: &ParsedArgs) -> i32 {
     if !should_proceed(
         &format!("Add tag \"{}\" to", tag_name),
         list.len(),
-        parsed.bool("force") == Some(true),
+        parsed.flag("force"),
     ) {
         return 0;
     }
@@ -368,7 +368,7 @@ pub fn run_bulk_tag_remove(parsed: &ParsedArgs) -> i32 {
     if !should_proceed(
         &format!("Remove tag \"{}\" from", tag_name),
         list.len(),
-        parsed.bool("force") == Some(true),
+        parsed.flag("force"),
     ) {
         return 0;
     }

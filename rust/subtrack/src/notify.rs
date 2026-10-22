@@ -13,7 +13,7 @@ use chrono::NaiveDate;
 fn calc_upcoming(days: i64) -> Vec<(Subscription, NaiveDate)> {
     let subs: Vec<Subscription> = get_subscriptions(&QueryOptions::default())
         .map(|mut v| {
-            v.retain(|s| s.status != "cancelled");
+            v.retain(|s| crate::domain::not_cancelled(&s.status));
             v
         })
         .unwrap_or_default();
@@ -56,7 +56,7 @@ pub fn run_notify(parsed: &ParsedArgs) -> i32 {
 
     let entries = calc_upcoming(days);
 
-    if parsed.bool("json") == Some(true) {
+    if parsed.flag("json") {
         let mut out = String::from("{\n  \"days\": ");
         out.push_str(&crate::json::number(days as f64));
         out.push_str(&format!(
@@ -101,7 +101,7 @@ pub fn run_notify(parsed: &ParsedArgs) -> i32 {
     }
 
     if entries.is_empty() {
-        if parsed.bool("dry-run") != Some(true) {
+        if !parsed.flag("dry-run") {
             return 0; // no notification needed
         }
         logger::info(&format!(
@@ -111,7 +111,7 @@ pub fn run_notify(parsed: &ParsedArgs) -> i32 {
         return 0;
     }
 
-    if parsed.bool("dry-run") == Some(true) {
+    if parsed.flag("dry-run") {
         logger::info(&format!("Upcoming bills (next {}):", days_label(days)));
         let iso = config.date_format != "short";
         for (sub, next) in &entries {

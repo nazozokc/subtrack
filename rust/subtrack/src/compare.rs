@@ -15,15 +15,6 @@ use crate::price::{format_price, round_currency};
 use crate::table::{ColumnConfig, TableBuilder, calc_column_widths};
 use crate::{ansi, json};
 
-const VALID_PERIODS: [&str; 6] = [
-    "weekly",
-    "bi-weekly",
-    "monthly",
-    "quarterly",
-    "semi-annual",
-    "yearly",
-];
-
 fn period_label(period: &str) -> &'static str {
     match period {
         "monthly" => "month",
@@ -103,7 +94,7 @@ struct CompareRow {
     is_grand_total: bool,
 }
 
-fn render_compare_table(rows: &[CompareRow], current_label: &str, previous_label: &str) {
+fn render_compare_table(rows: Vec<CompareRow>, current_label: &str, previous_label: &str) {
     let headers: Vec<String> = vec![
         "".into(),
         current_label.into(),
@@ -160,15 +151,10 @@ fn render_compare_table(rows: &[CompareRow], current_label: &str, previous_label
                 ansi::bold(&row.label),
                 ansi::bold(&row.current),
                 ansi::bold(&row.previous),
-                row.change.clone(),
+                row.change,
             ]);
         } else {
-            table.push(vec![
-                row.label.clone(),
-                row.current.clone(),
-                row.previous.clone(),
-                row.change.clone(),
-            ]);
+            table.push(vec![row.label, row.current, row.previous, row.change]);
         }
     }
 
@@ -179,22 +165,22 @@ pub fn run_compare(parsed: &ParsedArgs) -> i32 {
     let period = parsed
         .str("period")
         .unwrap_or_else(|| "monthly".to_string());
-    if !VALID_PERIODS.contains(&period.as_str()) {
+    if crate::domain::Cycle::parse_named(&period).is_none() {
         logger::fail(
             "period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly",
         );
         return 1;
     }
 
-    let json_out = parsed.bool("json") == Some(true);
+    let json_out = parsed.flag("json");
     let target_currency = parsed.str("currency");
-    let api = parsed.bool("api") == Some(true);
+    let api = parsed.flag("api");
 
     let subs = get_subscriptions(&QueryOptions {
         ..Default::default()
     })
     .map(|mut v| {
-        v.retain(|s| s.status != "cancelled");
+        v.retain(|s| crate::domain::not_cancelled(&s.status));
         v
     })
     .unwrap_or_default();
@@ -296,9 +282,9 @@ pub fn run_compare(parsed: &ParsedArgs) -> i32 {
     let mut grand_current = 0.0;
     let mut grand_previous = 0.0;
 
-    for ccy in currencies.clone() {
-        let cur = round_currency(current_totals.get(ccy).copied().unwrap_or(0.0));
-        let prev = round_currency(previous_totals.get(ccy).copied().unwrap_or(0.0));
+    for ccy in &currencies {
+        let cur = round_currency(current_totals.get(*ccy).copied().unwrap_or(0.0));
+        let prev = round_currency(previous_totals.get(*ccy).copied().unwrap_or(0.0));
         grand_current += cur;
         grand_previous += prev;
         rows.push(CompareRow {
@@ -394,7 +380,7 @@ pub fn run_compare(parsed: &ParsedArgs) -> i32 {
         });
     }
 
-    render_compare_table(&rows, &current_label, &previous_label);
+    render_compare_table(rows, &current_label, &previous_label);
     logger::log("");
     0
 }
@@ -406,33 +392,12 @@ fn calc_sub_total(
     rates: &Option<crate::fx::FxRates>,
     target_currency: Option<&str>,
 ) -> std::collections::BTreeMap<String, f64> {
-    let mut totals: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
-    for sub in subs {
-        if sub.status == "cancelled" {
-            continue;
-        }
-        let normalized = sub.price * period_factor(&sub.cycle, "monthly");
-        match target_currency {
-            Some(tc) => {
-                if let Some(r) = rates {
-                    match try_convert(normalized, &sub.currency, tc, &r.rates) {
-                        Some(converted) => {
-                            *totals.entry(tc.to_string()).or_insert(0.0) += converted;
-                        }
-                        None => {
-                            *totals.entry(sub.currency.clone()).or_insert(0.0) += normalized;
-                        }
-                    }
-                } else {
-                    *totals.entry(sub.currency.clone()).or_insert(0.0) += normalized;
-                }
-            }
-            None => {
-                *totals.entry(sub.currency.clone()).or_insert(0.0) += normalized;
-            }
-        }
-    }
-    totals
+    let entries: Vec<(f64, String, String)> = subs
+        .iter()
+        .filter(|s| crate::domain::not_cancelled(&s.status))
+        .map(|s| (s.price, s.currency.clone(), s.cycle.clone()))
+        .collect();
+    calc_totals_from(&entries, rates, target_currency)
 }
 
 /// Same math over pre-resolved (price, currency, cycle) entries.
@@ -444,25 +409,14 @@ fn calc_totals_from(
     let mut totals: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
     for (price, currency, cycle) in entries {
         let monthly = price * period_factor(cycle, "monthly");
-        match target_currency {
-            Some(tc) => {
-                if let Some(r) = rates {
-                    match try_convert(monthly, currency, tc, &r.rates) {
-                        Some(converted) => {
-                            *totals.entry(tc.to_string()).or_insert(0.0) += converted;
-                        }
-                        None => {
-                            *totals.entry(currency.clone()).or_insert(0.0) += monthly;
-                        }
-                    }
-                } else {
-                    *totals.entry(currency.clone()).or_insert(0.0) += monthly;
-                }
-            }
-            None => {
-                *totals.entry(currency.clone()).or_insert(0.0) += monthly;
-            }
-        }
+        // Converted amounts land in the target bucket; unconvertible ones
+        // stay in their source currency.
+        let (bucket, amount) = match (target_currency, rates) {
+            (Some(tc), Some(r)) => try_convert(monthly, currency, tc, &r.rates)
+                .map_or((currency.as_str(), monthly), |converted| (tc, converted)),
+            _ => (currency.as_str(), monthly),
+        };
+        *totals.entry(bucket.to_owned()).or_insert(0.0) += amount;
     }
     totals
 }

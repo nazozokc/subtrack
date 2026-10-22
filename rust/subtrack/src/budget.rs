@@ -105,27 +105,42 @@ fn calc_sub_total(
     target_currency: Option<&str>,
     period: &str,
 ) -> std::collections::BTreeMap<String, f64> {
-    let mut totals: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
-    for sub in subs {
-        if sub.status == "cancelled" {
-            continue;
-        }
-        let normalized = sub.price * period_factor(&sub.cycle, period);
-        match (target_currency, rates) {
-            (Some(tc), Some(r)) => match try_convert(normalized, &sub.currency, tc, &r.rates) {
-                Some(converted) => {
-                    *totals.entry(tc.to_string()).or_insert(0.0) += converted;
-                }
-                None => {
-                    *totals.entry(sub.currency.clone()).or_insert(0.0) += normalized;
-                }
-            },
-            _ => {
-                *totals.entry(sub.currency.clone()).or_insert(0.0) += normalized;
-            }
-        }
-    }
-    totals
+    subs.iter()
+        .filter(|sub| crate::domain::not_cancelled(&sub.status))
+        .fold(std::collections::BTreeMap::new(), |mut totals, sub| {
+            let normalized = sub.price * period_factor(&sub.cycle, period);
+            let (bucket, amount) = match (target_currency, rates) {
+                (Some(tc), Some(r)) => try_convert(normalized, &sub.currency, tc, &r.rates)
+                    .map_or((sub.currency.as_str(), normalized), |converted| {
+                        (tc, converted)
+                    }),
+                _ => (sub.currency.as_str(), normalized),
+            };
+            *totals.entry(bucket.to_owned()).or_insert(0.0) += amount;
+            totals
+        })
+}
+
+/// Width of the budget meter in cells.
+const METER_CELLS: usize = 20;
+
+/// One-line `[████░░░] 41%` fill meter for the text output.
+///
+/// The bar saturates at 100% while the percentage keeps rising, so going
+/// over budget still reads clearly. Colors follow the states: green below
+/// three quarters, yellow below full, red at full or over.
+fn budget_meter(spending: f64, budget: f64) -> String {
+    let ratio = (spending / budget).max(0.0);
+    let filled = (ratio.min(1.0) * METER_CELLS as f64).round() as usize;
+    let bar = format!("{}{}", "█".repeat(filled), "░".repeat(METER_CELLS - filled));
+    let colored = if ratio < 0.75 {
+        ansi::green(&bar)
+    } else if ratio < 1.0 {
+        ansi::yellow(&bar)
+    } else {
+        ansi::red(&bar)
+    };
+    format!("[{}] {}%", colored, (ratio * 100.0).round() as i64)
 }
 
 pub fn run_budget(parsed: &ParsedArgs) -> i32 {
@@ -137,8 +152,8 @@ pub fn run_budget(parsed: &ParsedArgs) -> i32 {
     } else {
         "monthly"
     };
-    let check = parsed.bool("check") == Some(true);
-    let json = parsed.bool("json") == Some(true);
+    let check = parsed.flag("check");
+    let json = parsed.flag("json");
     let name = parsed.str("name").filter(|n| !n.is_empty());
     let currency = parsed.str("currency").filter(|c| !c.is_empty());
 
@@ -297,6 +312,10 @@ pub fn run_budget(parsed: &ParsedArgs) -> i32 {
         budget_line.push_str(&format!(" ({})", budget.currency));
     }
     log(&budget_line);
+    // Visual fill meter — cosmetic only; the JSON path keeps raw numbers.
+    if budget_display > 0.0 {
+        log(&budget_meter(spending, budget_display));
+    }
     if over {
         log(&format!(
             "Over budget: {}",
@@ -321,4 +340,34 @@ pub fn run_budget(parsed: &ParsedArgs) -> i32 {
         return 1;
     }
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_meter() {
+        let m = budget_meter(0.0, 40.0);
+        assert!(m.contains("░".repeat(METER_CELLS).as_str()), "meter: {m}");
+        assert!(m.contains("0%"), "meter: {m}");
+    }
+
+    #[test]
+    fn quarter_meter_fills_five_cells() {
+        let m = budget_meter(10.0, 40.0);
+        // 25% → 5 fill cells
+        assert!(m.contains("█".repeat(5).as_str()), "meter: {m}");
+        assert!(m.contains("░".repeat(15).as_str()), "meter: {m}");
+        assert!(m.contains("25%"), "meter: {m}");
+    }
+
+    #[test]
+    fn over_budget_saturates_and_reports_higher_percent() {
+        let m = budget_meter(125.0, 100.0);
+        assert!(m.contains("█".repeat(METER_CELLS).as_str()), "meter: {m}");
+        assert!(m.contains("125%"), "meter: {m}");
+        // no empty cells
+        assert!(!m.contains('░'), "meter: {m}");
+    }
 }

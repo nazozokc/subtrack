@@ -300,14 +300,14 @@ pub fn pick_subscription(
 ) -> Option<i64> {
     let choices: Vec<Choice> = subs
         .iter()
-        .filter(|s| include_archived || s.status != "archived")
+        .filter(|s| include_archived || !crate::domain::is_archived(&s.status))
         .map(|s| {
             let tags = if s.tags.is_empty() {
                 String::new()
             } else {
                 format!(" [{}]", s.tags.join(", "))
             };
-            let status = if s.status == "active" {
+            let status = if crate::domain::is_active(&s.status) {
                 String::new()
             } else {
                 format!(" ({})", s.status)
