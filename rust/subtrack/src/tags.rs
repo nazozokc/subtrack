@@ -106,7 +106,10 @@ pub fn run_tag_delete(parsed: &ParsedArgs) -> i32 {
                 Some(&format!("\"{}\"", name)),
                 true,
             );
-            logger::success(&format!("Deleted tag: \"{}\"", name));
+            logger::success(&format!(
+                "Deleted tag: \"{}\"",
+                crate::validation::sanitize_text(&name)
+            ));
             0
         }
         Ok(false) => {
@@ -131,7 +134,6 @@ pub fn run_tag_merge(parsed: &ParsedArgs) -> i32 {
     match crate::db::rename_tag(&source, &target) {
         Ok(true) => {
             if let Ok(conn) = crate::db::open_db() {
-                let _ = crate::db::save_db(&conn);
                 let _ = crate::db::add_audit_log(
                     &conn,
                     "tag.merge",
@@ -141,7 +143,11 @@ pub fn run_tag_merge(parsed: &ParsedArgs) -> i32 {
                     true,
                 );
             }
-            logger::success(&format!("Merged tag: \"{}\" → \"{}\"", source, target));
+            logger::success(&format!(
+                "Merged tag: \"{}\" → \"{}\"",
+                crate::validation::sanitize_text(&source),
+                crate::validation::sanitize_text(&target)
+            ));
             0
         }
         Ok(false) => {
@@ -200,7 +206,11 @@ pub fn run_tag_rename(parsed: &ParsedArgs) -> i32 {
     }
     match crate::db::rename_tag(&old_name, &new_name) {
         Ok(true) => {
-            crate::logger::success(&format!("Renamed tag: \"{}\" → \"{}\"", old_name, new_name));
+            crate::logger::success(&format!(
+                "Renamed tag: \"{}\" → \"{}\"",
+                crate::validation::sanitize_text(&old_name),
+                crate::validation::sanitize_text(&new_name)
+            ));
             0
         }
         Ok(false) => {

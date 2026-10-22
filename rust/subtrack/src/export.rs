@@ -7,9 +7,18 @@ use crate::json::{list_json, number};
 use crate::logger::{self, log, success};
 use crate::parser::ParsedArgs;
 use crate::price::format_price;
-use std::fs;
 
 const SUPPORTED: [&str; 5] = ["csv", "json", "md", "excel", "ics"];
+
+fn safe_output_path_or_fail(outpath: &str) -> Option<std::path::PathBuf> {
+    match crate::safe_path::safe_output_path(outpath) {
+        Some(path) => Some(path),
+        None => {
+            logger::fail("Invalid output path — must be within home or temp directory");
+            None
+        }
+    }
+}
 
 pub fn run_export(parsed: &ParsedArgs, depth: usize) -> i32 {
     let format = parsed
@@ -64,9 +73,10 @@ pub fn run_export(parsed: &ParsedArgs, depth: usize) -> i32 {
         "excel" => {
             let buf = export_excel(&list);
             if let Some(outpath) = parsed.str("output").or_else(|| parsed.str("o")) {
-                let cwd = std::env::current_dir().unwrap_or_default();
-                let path = cwd.join(outpath);
-                if let Err(e) = std::fs::write(&path, &buf) {
+                let Some(path) = safe_output_path_or_fail(&outpath) else {
+                    return 1;
+                };
+                if let Err(e) = crate::crypto::write_secret_file(&path, &buf) {
                     logger::fail(&format!("Failed to write file: {}", e));
                     return 1;
                 }
@@ -89,9 +99,10 @@ pub fn run_export(parsed: &ParsedArgs, depth: usize) -> i32 {
 
     // `consola.log(content)` — content already ends in "\n" for json.
     if let Some(outpath) = parsed.str("output").or_else(|| parsed.str("o")) {
-        let cwd = std::env::current_dir().unwrap_or_default();
-        let path = cwd.join(outpath);
-        if let Err(e) = fs::write(&path, content.as_bytes()) {
+        let Some(path) = safe_output_path_or_fail(&outpath) else {
+            return 1;
+        };
+        if let Err(e) = crate::crypto::write_secret_file(&path, content.as_bytes()) {
             logger::fail(&format!("Failed to write file: {}", e));
             return 1;
         }

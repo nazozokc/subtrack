@@ -11,7 +11,10 @@ pub fn get_tags_with_count() -> std::io::Result<Vec<(String, i64)>> {
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let rows = stmt
         .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            Ok((
+                crate::validation::sanitize_text(&row.get::<_, String>(0)?),
+                row.get::<_, i64>(1)?,
+            ))
         })
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut out = Vec::new();
@@ -23,6 +26,11 @@ pub fn get_tags_with_count() -> std::io::Result<Vec<(String, i64)>> {
 
 /// A price-history row joined with its subscription name.
 pub fn rename_tag(old_name: &str, new_name: &str) -> std::io::Result<bool> {
+    let old_name = crate::validation::sanitize_text(old_name);
+    let new_name = crate::validation::sanitize_text(new_name);
+    if new_name.trim().is_empty() {
+        return Err(std::io::Error::other("Tag name cannot be empty"));
+    }
     if old_name == new_name {
         return Ok(true);
     }
@@ -30,7 +38,7 @@ pub fn rename_tag(old_name: &str, new_name: &str) -> std::io::Result<bool> {
     let old_id: Option<i64> = conn
         .query_row(
             "SELECT id FROM tags WHERE name = ?",
-            params![old_name],
+            params![&old_name],
             |r| r.get(0),
         )
         .ok();
@@ -40,7 +48,7 @@ pub fn rename_tag(old_name: &str, new_name: &str) -> std::io::Result<bool> {
     let existing: Option<i64> = conn
         .query_row(
             "SELECT id FROM tags WHERE name = ?",
-            params![new_name],
+            params![&new_name],
             |r| r.get(0),
         )
         .ok();
@@ -60,7 +68,7 @@ pub fn rename_tag(old_name: &str, new_name: &str) -> std::io::Result<bool> {
         } else {
             conn.execute(
                 "UPDATE tags SET name = ? WHERE id = ?",
-                params![new_name, old_id],
+                params![&new_name, old_id],
             )?;
         }
         Ok(())
@@ -69,6 +77,7 @@ pub fn rename_tag(old_name: &str, new_name: &str) -> std::io::Result<bool> {
         Ok(()) => {
             conn.execute_batch("COMMIT")
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
+            save_db(&conn)?;
             Ok(true)
         }
         Err(e) => {

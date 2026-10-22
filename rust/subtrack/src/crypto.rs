@@ -20,6 +20,11 @@ pub const SALT_LENGTH: usize = 32;
 pub const SQLITE_MAGIC: &[u8] = b"SQLite format 3\0";
 pub const CONFIG_MAGIC: &[u8] = b"SUBCCFG\0\0\0\0\0\0\0\0";
 
+const MAX_CONFIG_DIR_LEN: usize = 4096;
+/// Mirrors `validateDbDir` in the TS implementation: never treat a system
+/// directory as the database directory.
+const FORBIDDEN_CONFIG_DIRS: [&str; 5] = ["/etc", "/dev", "/proc", "/sys", "/tmp"];
+
 /// DB/config directory: SUBSC_CLI_DB_DIR override, else ~/.config/subtrack.
 pub fn config_dir() -> std::path::PathBuf {
     if let Ok(dir) = std::env::var("SUBSC_CLI_DB_DIR") {
@@ -31,23 +36,117 @@ pub fn config_dir() -> std::path::PathBuf {
         .join("subtrack")
 }
 
+/// `config_dir()` after rejecting empty/relative/oversized paths and system
+/// directories (root, /etc, /dev, /proc, /sys, /tmp). Port of `validateDbDir`.
+pub fn config_dir_checked() -> std::io::Result<std::path::PathBuf> {
+    let dir = config_dir();
+    validate_config_dir(&dir)?;
+    Ok(dir)
+}
+
+fn validate_config_dir(dir: &std::path::Path) -> std::io::Result<()> {
+    let raw = dir.as_os_str().to_string_lossy();
+    if raw.is_empty() || !dir.is_absolute() {
+        return Err(std::io::Error::other(
+            "Invalid database directory: path must be absolute",
+        ));
+    }
+    if raw.len() > MAX_CONFIG_DIR_LEN {
+        return Err(std::io::Error::other(
+            "Invalid database directory: path is too long",
+        ));
+    }
+    // Resolve symlinks when the directory already exists, otherwise normalize
+    // lexically so `..` components cannot disguise a forbidden target.
+    let absolute = std::path::absolute(dir)?;
+    let resolved = std::fs::canonicalize(&absolute).unwrap_or(absolute);
+    if resolved.parent().is_none()
+        || FORBIDDEN_CONFIG_DIRS
+            .iter()
+            .any(|forbidden| resolved == std::path::Path::new(forbidden))
+    {
+        return Err(std::io::Error::other(format!(
+            "Invalid database directory: refusing to use \"{}\"",
+            resolved.display()
+        )));
+    }
+    Ok(())
+}
+
+/// Create the database directory with owner-only permissions (0o700).
+/// Existing directories created by older versions are tightened as well.
+pub fn ensure_private_dir(dir: &std::path::Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true).mode(0o700);
+        builder.create(dir)?;
+        let mode = std::fs::metadata(dir)?.permissions().mode() & 0o777;
+        if mode != 0o700 {
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::create_dir_all(dir)?;
+    }
+    Ok(())
+}
+
 /// $HOME (scanner paths are resolved relative to it).
 pub fn home_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
 }
 
+/// Passphrase from the environment. An empty value counts as unset, matching
+/// the reference implementation's `if (passphrase)` check.
+fn passphrase_env() -> Option<String> {
+    std::env::var("SUBSC_CLI_DB_PASSPHRASE")
+        .ok()
+        .filter(|p| !p.is_empty())
+}
+
 /// True when an encryption key is available (passphrase or `.key` file).
 pub fn has_encryption_key() -> bool {
-    std::env::var("SUBSC_CLI_DB_PASSPHRASE").is_ok() || config_dir().join(".key").exists()
+    passphrase_env().is_some() || config_dir().join(".key").exists()
 }
 
 /// Raw encryption key: from the passphrase via scrypt, else from `.key`.
 pub fn get_or_create_key() -> std::io::Result<Vec<u8>> {
-    if let Ok(passphrase) = std::env::var("SUBSC_CLI_DB_PASSPHRASE") {
-        return Ok(derive_key_from_passphrase(&passphrase));
+    let dir = config_dir_checked()?;
+    get_or_create_key_in(&dir)
+}
+
+/// Key for reading existing ciphertext. Unlike `get_or_create_key`, this never
+/// generates a replacement key: writing one would silently rotate the key and
+/// make the existing database unrecoverable.
+pub fn decryption_key() -> std::io::Result<Vec<u8>> {
+    let dir = config_dir_checked()?;
+    decryption_key_in(&dir)
+}
+
+fn decryption_key_in(dir: &std::path::Path) -> std::io::Result<Vec<u8>> {
+    let has_key = passphrase_env().is_some() || dir.join(".key").exists();
+    if !has_key {
+        return Err(std::io::Error::other(
+            "Encrypted data found but no encryption key is available. \
+             Restore the .key file or set SUBSC_CLI_DB_PASSPHRASE.",
+        ));
     }
-    let key_path = config_dir().join(".key");
-    match std::fs::read(&key_path) {
+    get_or_create_key_in(dir)
+}
+
+fn get_or_create_key_in(dir: &std::path::Path) -> std::io::Result<Vec<u8>> {
+    if let Some(passphrase) = passphrase_env() {
+        return derive_key_from_passphrase_in(dir, &passphrase);
+    }
+    load_or_create_key_file(dir)
+}
+
+fn load_or_create_key_file(dir: &std::path::Path) -> std::io::Result<Vec<u8>> {
+    let key_path = dir.join(".key");
+    match read_secret_file(&key_path) {
         Ok(key_content) => {
             if key_content.len() != KEY_LENGTH {
                 return Err(std::io::Error::other(format!(
@@ -57,19 +156,19 @@ pub fn get_or_create_key() -> std::io::Result<Vec<u8>> {
                     KEY_LENGTH
                 )));
             }
+            verify_key_integrity(dir, &key_content)?;
             Ok(key_content)
         }
-        Err(_) => {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             // Key missing — generate, persist, and warn (port of getOrCreateKey).
-            let dir = config_dir();
-            std::fs::create_dir_all(&dir)?;
+            ensure_private_dir(dir)?;
             let key = generate_key();
             write_secret_file(&key_path, &key)?;
             let integrity_path = dir.join(".key.sha256");
-            let _ = write_secret_file(
+            write_secret_file(
                 &integrity_path,
                 format!("{}\n", sha256_hex(&key)).as_bytes(),
-            );
+            )?;
             crate::logger::warn(&format!(
                 "Encryption key created at: {}\n  \
                  !! BACKUP THIS KEY! If lost, your encrypted database cannot be recovered.\n  \
@@ -79,7 +178,107 @@ pub fn get_or_create_key() -> std::io::Result<Vec<u8>> {
             ));
             Ok(key)
         }
+        // A symlink, directory, or otherwise unreadable key must never be
+        // silently replaced: that would make the existing database unreadable.
+        Err(e) => Err(e),
     }
+}
+
+/// Read a secret file, rejecting symlinks/non-regular files and tightening
+/// world/group-readable permissions to 0o600 (port of
+/// `verifySecureFilePermission`).
+fn read_secret_file(path: &std::path::Path) -> std::io::Result<Vec<u8>> {
+    let meta = std::fs::symlink_metadata(path)?;
+    if meta.file_type().is_symlink() {
+        return Err(std::io::Error::other(format!(
+            "\"{}\" is a symbolic link — refusing to read it.",
+            path.display()
+        )));
+    }
+    if !meta.is_file() {
+        return Err(std::io::Error::other(format!(
+            "\"{}\" is not a regular file — refusing to read it.",
+            path.display()
+        )));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = meta.permissions().mode() & 0o777;
+        if mode & 0o077 != 0 {
+            crate::logger::warn(&format!(
+                "\"{}\" has insecure permissions ({:o}); tightening to 600.",
+                path.display(),
+                mode
+            ));
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+        }
+    }
+    std::fs::read(path)
+}
+
+/// Verify `.key.sha256`, creating the sidecar when it does not exist yet.
+/// A mismatch fails closed (tampered or corrupted key).
+fn verify_key_integrity(dir: &std::path::Path, key: &[u8]) -> std::io::Result<()> {
+    let path = dir.join(".key.sha256");
+    let actual = sha256_hex(key);
+    match std::fs::read_to_string(&path) {
+        Ok(expected) => {
+            if expected.trim() != actual {
+                return Err(std::io::Error::other(
+                    "Encryption key integrity check failed: .key does not match .key.sha256. \
+                     Restore the original key or its backup before continuing.",
+                ));
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            write_secret_file(&path, format!("{}\n", actual).as_bytes())?;
+        }
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+/// Hex-encoded random bytes, used for collision-resistant temp file names.
+pub fn random_hex(bytes: usize) -> String {
+    let mut buf = vec![0u8; bytes];
+    getrandom_fill(&mut buf).expect("OS CSPRNG is unavailable");
+    hex::encode(buf)
+}
+
+/// Plaintext temp files created by this process, removed on exit.
+static TEMP_FILES: std::sync::Mutex<Vec<std::path::PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Remember a temp file so it is removed even on an error path or panic.
+pub fn track_temp_file(path: &std::path::Path) {
+    if let Ok(mut files) = TEMP_FILES.lock() {
+        files.push(path.to_path_buf());
+    }
+}
+
+/// Remove every tracked temp file (best effort).
+pub fn cleanup_temp_files() {
+    let files = {
+        let mut files = TEMP_FILES.lock().unwrap();
+        std::mem::take(&mut *files)
+    };
+    for path in files {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// Tighten an existing file to owner-only permissions.
+pub fn restrict_file_permissions(path: &std::path::Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+    Ok(())
 }
 
 /// Cryptographically secure random key (32 bytes).
@@ -90,19 +289,25 @@ fn generate_key() -> Vec<u8> {
     key
 }
 
-/// Write a file with owner-only (0o600) permissions.
+/// Write a file with owner-only (0o600) permissions. Existing files are
+/// tightened too, not just newly created ones.
 pub fn write_secret_file(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     #[cfg(unix)]
     {
-        use std::os::unix::fs::OpenOptionsExt;
-        let mut f = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(path)?;
-        f.write_all(data)
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create(true).truncate(true).mode(0o600);
+        // Never follow a symlink at the final component: an attacker-controlled
+        // link in a shared temp directory must not redirect a write elsewhere.
+        #[cfg(target_os = "linux")]
+        opts.custom_flags(0o400000); // O_NOFOLLOW
+        #[cfg(target_os = "macos")]
+        opts.custom_flags(0x0100); // O_NOFOLLOW
+        let mut f = opts.open(path)?;
+        f.write_all(data)?;
+        f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+        Ok(())
     }
     #[cfg(not(unix))]
     {
@@ -112,14 +317,88 @@ pub fn write_secret_file(path: &std::path::Path, data: &[u8]) -> std::io::Result
 }
 
 /// scrypt(passphrase, salt, 32, N=2^17, r=8, p=1).
-pub fn derive_key_from_passphrase(passphrase: &str) -> Vec<u8> {
+///
+/// A random salt is generated for new installations. Databases created by
+/// earlier Rust releases always used an all-zero salt and never wrote
+/// `.key.salt`; those keep working by falling back to the legacy salt.
+fn derive_key_from_passphrase_in(
+    dir: &std::path::Path,
+    passphrase: &str,
+) -> std::io::Result<Vec<u8>> {
+    let salt = salt_for_dir(dir)?;
+    derive_key_with_salt(passphrase, &salt)
+}
+
+fn derive_key_with_salt(passphrase: &str, salt: &[u8]) -> std::io::Result<Vec<u8>> {
     use scrypt::{Params, scrypt as scrypt_kdf};
-    let salt_path = config_dir().join(".key.salt");
-    let salt = std::fs::read(&salt_path).unwrap_or_else(|_| vec![0u8; SALT_LENGTH]);
     let params = Params::new(17, 8, 1).unwrap();
     let mut key = [0u8; KEY_LENGTH];
-    scrypt_kdf(passphrase.as_bytes(), &salt, &params, &mut key).expect("scrypt failed");
-    key.to_vec()
+    scrypt_kdf(passphrase.as_bytes(), salt, &params, &mut key)
+        .map_err(|e| std::io::Error::other(format!("scrypt failed: {e}")))?;
+    Ok(key.to_vec())
+}
+
+/// Key from before `.key.salt` existed (all-zero salt). Used only to read
+/// backups created by older releases, never to encrypt new data.
+pub fn legacy_passphrase_key() -> std::io::Result<Option<Vec<u8>>> {
+    match passphrase_env() {
+        Some(passphrase) => derive_key_with_salt(&passphrase, &[0u8; SALT_LENGTH]).map(Some),
+        None => Ok(None),
+    }
+}
+
+/// Decrypt with the active key, then fall back to the legacy zero-salt key.
+/// Only restore uses this; the live database and config never accept the
+/// weaker legacy derivation.
+pub fn decrypt_with_fallback(data: &[u8]) -> std::io::Result<Option<Vec<u8>>> {
+    let key = decryption_key()?;
+    if let Some(plain) = decrypt_buffer(&key, data) {
+        return Ok(Some(plain));
+    }
+    if let Ok(Some(legacy)) = legacy_passphrase_key()
+        && let Some(plain) = decrypt_buffer(&legacy, data)
+    {
+        return Ok(Some(plain));
+    }
+    Ok(None)
+}
+
+fn salt_for_dir(dir: &std::path::Path) -> std::io::Result<Vec<u8>> {
+    let salt_path = dir.join(".key.salt");
+    match read_secret_file(&salt_path) {
+        Ok(salt) => {
+            if salt.len() != SALT_LENGTH {
+                return Err(std::io::Error::other(format!(
+                    "Encryption salt has unexpected size ({} bytes, expected {}). \
+                     The salt file may be corrupted.",
+                    salt.len(),
+                    SALT_LENGTH
+                )));
+            }
+            Ok(salt)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            if dir.join("subtrack.db").exists() {
+                // Legacy Rust releases derived keys with a zero salt and did
+                // not persist one. Keep that behavior so existing databases
+                // remain decryptable.
+                return Ok(vec![0u8; SALT_LENGTH]);
+            }
+            ensure_private_dir(dir)?;
+            let mut salt = vec![0u8; SALT_LENGTH];
+            getrandom_fill(&mut salt)
+                .map_err(|e| std::io::Error::other(format!("OS CSPRNG is unavailable: {e}")))?;
+            write_secret_file(&salt_path, &salt)?;
+            crate::logger::warn(&format!(
+                "Encryption salt created at: {}\n  \
+                 Back up .key.salt together with .key — without it, passphrase-encrypted \
+                 data cannot be recovered on another machine.",
+                salt_path.display()
+            ));
+            Ok(salt)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 fn aesgcm(key: &[u8]) -> Aes256Gcm {
@@ -181,13 +460,13 @@ pub fn decrypt_file_if_needed(path: &std::path::Path) -> std::io::Result<Vec<u8>
         return Ok(raw);
     }
     if raw[..15].eq(CONFIG_MAGIC) {
-        let key = get_or_create_key()?;
+        let key = decryption_key()?;
         return decrypt_buffer(&key, &raw[15..])
             .ok_or_else(|| std::io::Error::other("config decryption failed"));
     }
     if is_encrypted(&raw) && raw.len() > 32 {
         // DB file (no magic header) — decrypt when it is not plaintext SQLite.
-        let key = get_or_create_key()?;
+        let key = decryption_key()?;
         return decrypt_buffer(&key, &raw)
             .ok_or_else(|| std::io::Error::other("database decryption failed"));
     }
@@ -248,19 +527,79 @@ mod tests {
         );
     }
 
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "subtrack-crypto-{}-{}-{}",
+            name,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[test]
-    fn derive_key_from_passphrase_is_deterministic() {
-        let a = derive_key_from_passphrase("hello world");
-        let b = derive_key_from_passphrase("hello world");
+    fn decryption_key_never_creates_a_replacement_key() {
+        let dir = scratch("no-key");
+        let err = decryption_key_in(&dir).unwrap_err();
+        assert!(err.to_string().contains("no encryption key"));
+        assert!(!dir.join(".key").exists());
+        assert!(!dir.join(".key.sha256").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn derive_key_from_passphrase_is_deterministic_and_salted() {
+        let dir = scratch("salt");
+        let a = derive_key_from_passphrase_in(&dir, "hello world").unwrap();
+        let b = derive_key_from_passphrase_in(&dir, "hello world").unwrap();
         assert_eq!(a.len(), KEY_LENGTH);
         assert_eq!(a, b);
         // never derive the null key
         assert_ne!(a, vec![0u8; KEY_LENGTH]);
+        // a random 32-byte salt is persisted for new installations
+        let salt = std::fs::read(dir.join(".key.salt")).unwrap();
+        assert_eq!(salt.len(), SALT_LENGTH);
+        assert_ne!(salt, vec![0u8; SALT_LENGTH]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn passphrase_keeps_legacy_zero_salt_for_existing_database() {
+        use scrypt::{Params, scrypt as scrypt_kdf};
+        let dir = scratch("legacy-salt");
+        std::fs::write(dir.join("subtrack.db"), b"existing").unwrap();
+
+        let key = derive_key_from_passphrase_in(&dir, "hello world").unwrap();
+        assert!(!dir.join(".key.salt").exists());
+
+        let params = Params::new(17, 8, 1).unwrap();
+        let mut expected = [0u8; KEY_LENGTH];
+        scrypt_kdf(b"hello world", &[0u8; SALT_LENGTH], &params, &mut expected).unwrap();
+        assert_eq!(key, expected.to_vec());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[cfg(unix)]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn write_secret_file_refuses_symlinks() {
+        let dir = scratch("symlink-write");
+        let target = dir.join("target");
+        std::fs::write(&target, b"keep").unwrap();
+        let link = dir.join("link");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        assert!(write_secret_file(&link, b"overwrite").is_err());
+        assert_eq!(std::fs::read(&target).unwrap(), b"keep");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn write_secret_file_sets_owner_only_permissions() {
+        use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!(
             "subtrack-key-{}-{:?}",
             std::process::id(),
@@ -272,9 +611,42 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(".key");
         write_secret_file(&path, b"k").unwrap();
-        use std::os::unix::fs::PermissionsExt;
         let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
+
+        // an existing, loosely-permissioned file is tightened on rewrite
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        write_secret_file(&path, b"k2").unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tampered_key_sidecar_fails_closed() {
+        let dir = scratch("key-integrity");
+        let key = load_or_create_key_file(&dir).unwrap();
+        assert!(dir.join(".key.sha256").exists());
+        assert_eq!(load_or_create_key_file(&dir).unwrap(), key);
+
+        std::fs::write(dir.join(".key.sha256"), "deadbeef\n").unwrap();
+        let err = load_or_create_key_file(&dir).unwrap_err();
+        assert!(err.to_string().contains("integrity"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn key_symlink_is_refused_instead_of_overwritten() {
+        use std::os::unix::fs::symlink;
+        let dir = scratch("key-symlink");
+        let target = dir.join("target");
+        std::fs::write(&target, vec![7u8; KEY_LENGTH]).unwrap();
+        symlink(&target, dir.join(".key")).unwrap();
+
+        let err = load_or_create_key_file(&dir).unwrap_err();
+        assert!(err.to_string().contains("symbolic link"), "{err}");
+        assert_eq!(std::fs::read(&target).unwrap(), vec![7u8; KEY_LENGTH]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

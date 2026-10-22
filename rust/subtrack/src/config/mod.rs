@@ -402,8 +402,8 @@ pub fn save_config_mut(
 }
 
 fn save_config_raw(raw: &serde_json::Map<String, serde_json::Value>) -> std::io::Result<()> {
-    let dir = crate::crypto::config_dir();
-    std::fs::create_dir_all(&dir)?;
+    let dir = crate::crypto::config_dir_checked()?;
+    crate::crypto::ensure_private_dir(&dir)?;
     let json = format!(
         "{}\n",
         serde_json::to_string_pretty(&serde_json::Value::Object(raw.clone()))
@@ -416,7 +416,7 @@ fn save_config_raw(raw: &serde_json::Map<String, serde_json::Value>) -> std::io:
     let key = crate::crypto::get_or_create_key()?;
     let mut bytes = crate::crypto::CONFIG_MAGIC.to_vec();
     bytes.extend(crate::crypto::encrypt_buffer(&key, json.as_bytes()));
-    std::fs::write(crate::crypto::config_dir().join("config.json"), bytes)
+    crate::crypto::write_secret_file(&dir.join("config.json"), &bytes)
 }
 
 /// Port of `handleConfigReset`.

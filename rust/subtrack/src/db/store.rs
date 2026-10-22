@@ -29,24 +29,59 @@ pub fn vacuum_db(conn: &Connection) -> std::io::Result<()> {
 /// Serialize the open connection to `subtrack.db`, encrypting it.
 /// Port of `saveDb()`: `VACUUM INTO` a temp file, then encrypt + replace.
 pub fn save_db(conn: &Connection) -> std::io::Result<()> {
-    let dir = crate::crypto::config_dir();
-    std::fs::create_dir_all(&dir)?;
-    let tmp = dir.join(".subtrack.save.db");
-    let _ = std::fs::remove_file(&tmp);
+    let dir = crate::crypto::config_dir_checked()?;
+    crate::crypto::ensure_private_dir(&dir)?;
+    // A random name prevents clobbering another process or following a
+    // pre-created symlink, and the 0700 directory hides the plaintext dump.
+    let tmp = dir.join(format!(
+        ".subtrack.save.{}.db",
+        crate::crypto::random_hex(8)
+    ));
+    crate::crypto::track_temp_file(&tmp);
     let quoted = tmp.to_string_lossy().replace('\'', "''");
     conn.execute_batch(&format!("VACUUM INTO '{}'", quoted))
         .map_err(|e| std::io::Error::other(e.to_string()))?;
+    crate::crypto::restrict_file_permissions(&tmp)?;
     let data = std::fs::read(&tmp)?;
     let _ = std::fs::remove_file(&tmp);
 
     let key = crate::crypto::get_or_create_key()?;
     let encrypted = crate::crypto::encrypt_buffer(&key, &data);
+    write_db_atomic(&dir, &encrypted)
+}
+
+/// Write the encrypted database and its hash sidecar, then atomically rename
+/// both into place. Prevents a crash mid-write from truncating the live DB.
+pub(crate) fn write_db_atomic(dir: &std::path::Path, encrypted: &[u8]) -> std::io::Result<()> {
+    let token = crate::crypto::random_hex(8);
+    let db_tmp = dir.join(format!(".subtrack.db.{token}.tmp"));
+    let hash_tmp = dir.join(format!(".subtrack.db.{token}.sha256.tmp"));
     let db_path = dir.join("subtrack.db");
-    crate::crypto::write_secret_file(&db_path, &encrypted)?;
-    let sidecar = dir.join("subtrack.db.sha256");
-    crate::crypto::write_secret_file(
-        &sidecar,
-        format!("{}\n", crate::crypto::sha256_hex(&encrypted)).as_bytes(),
-    )?;
+    let hash_path = dir.join("subtrack.db.sha256");
+    crate::crypto::track_temp_file(&db_tmp);
+    crate::crypto::track_temp_file(&hash_tmp);
+
+    if let Err(e) = crate::crypto::write_secret_file(&db_tmp, encrypted) {
+        let _ = std::fs::remove_file(&db_tmp);
+        return Err(e);
+    }
+    let hash = format!("{}\n", crate::crypto::sha256_hex(encrypted));
+    if let Err(e) = crate::crypto::write_secret_file(&hash_tmp, hash.as_bytes()) {
+        let _ = std::fs::remove_file(&db_tmp);
+        let _ = std::fs::remove_file(&hash_tmp);
+        return Err(e);
+    }
+    if let Err(e) = std::fs::rename(&db_tmp, &db_path) {
+        let _ = std::fs::remove_file(&db_tmp);
+        let _ = std::fs::remove_file(&hash_tmp);
+        return Err(e);
+    }
+    if let Err(e) = std::fs::rename(&hash_tmp, &hash_path) {
+        // The database is safely in place; drop the stale sidecar so the next
+        // open regenerates a matching hash instead of warning.
+        let _ = std::fs::remove_file(&hash_path);
+        let _ = std::fs::remove_file(&hash_tmp);
+        return Err(e);
+    }
     Ok(())
 }

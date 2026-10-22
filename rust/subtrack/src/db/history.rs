@@ -14,6 +14,25 @@ pub struct PriceChange {
     pub name: String,
 }
 
+fn price_change_from_row(row: &rusqlite::Row) -> rusqlite::Result<PriceChange> {
+    use crate::validation::sanitize_text;
+    let mut change = PriceChange {
+        id: row.get(0)?,
+        subscription_id: row.get(1)?,
+        old_price: row.get(2)?,
+        new_price: row.get(3)?,
+        old_currency: row.get(4)?,
+        new_currency: row.get(5)?,
+        changed_at: row.get(6)?,
+        name: row.get(7)?,
+    };
+    change.old_currency = change.old_currency.map(|v| sanitize_text(&v));
+    change.new_currency = change.new_currency.map(|v| sanitize_text(&v));
+    change.changed_at = sanitize_text(&change.changed_at);
+    change.name = sanitize_text(&change.name);
+    Ok(change)
+}
+
 /// All price-history changes, newest first (port of `getAllPriceChanges`).
 pub fn get_all_price_changes() -> std::io::Result<Vec<PriceChange>> {
     let conn = open_db()?;
@@ -25,18 +44,7 @@ pub fn get_all_price_changes() -> std::io::Result<Vec<PriceChange>> {
         .prepare(sql)
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let rows = stmt
-        .query_map([], |row| {
-            Ok(PriceChange {
-                id: row.get(0)?,
-                subscription_id: row.get(1)?,
-                old_price: row.get(2)?,
-                new_price: row.get(3)?,
-                old_currency: row.get(4)?,
-                new_currency: row.get(5)?,
-                changed_at: row.get(6)?,
-                name: row.get(7)?,
-            })
-        })
+        .query_map([], price_change_from_row)
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut out = Vec::new();
     for r in rows {
@@ -58,18 +66,7 @@ pub fn get_price_history(subscription_id: i64) -> std::io::Result<Vec<PriceChang
         )
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let rows = stmt
-        .query_map(params![subscription_id], |row| {
-            Ok(PriceChange {
-                id: row.get(0)?,
-                subscription_id: row.get(1)?,
-                old_price: row.get(2)?,
-                new_price: row.get(3)?,
-                old_currency: row.get(4)?,
-                new_currency: row.get(5)?,
-                changed_at: row.get(6)?,
-                name: row.get(7)?,
-            })
-        })
+        .query_map(params![subscription_id], price_change_from_row)
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut out = Vec::new();
     for r in rows {
@@ -92,18 +89,7 @@ pub fn get_price_changes_recent(days: i64) -> std::io::Result<Vec<PriceChange>> 
         )
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let rows = stmt
-        .query_map(params![cutoff], |row| {
-            Ok(PriceChange {
-                id: row.get(0)?,
-                subscription_id: row.get(1)?,
-                old_price: row.get(2)?,
-                new_price: row.get(3)?,
-                old_currency: row.get(4)?,
-                new_currency: row.get(5)?,
-                changed_at: row.get(6)?,
-                name: row.get(7)?,
-            })
-        })
+        .query_map(params![cutoff], price_change_from_row)
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut out = Vec::new();
     for r in rows {

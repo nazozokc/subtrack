@@ -85,7 +85,7 @@ pub struct QueryOptions {
 /// Mirrors `getDb()` in `db/connection.ts`: the live `Connection` always backs
 /// onto a decrypted temp file (`.subtrack.open.db`); `subtrack.db` holds the
 fn row_to_subscription(row: &rusqlite::Row) -> rusqlite::Result<Subscription> {
-    Ok(Subscription {
+    let mut sub = Subscription {
         id: row.get(0)?,
         name: row.get(1)?,
         price: row.get::<_, f64>(2)?,
@@ -105,7 +105,24 @@ fn row_to_subscription(row: &rusqlite::Row) -> rusqlite::Result<Subscription> {
         discount_amount: row.get::<_, Option<f64>>(16)?,
         discount_type: row.get(17)?,
         tags: Vec::new(),
-    })
+    };
+    // Strip terminal control characters once, at the DB boundary, so every
+    // renderer (list, summary, export, TUI) is protected.
+    use crate::validation::sanitize_text;
+    sub.name = sanitize_text(&sub.name);
+    sub.currency = sanitize_text(&sub.currency);
+    sub.cycle = sanitize_text(&sub.cycle);
+    sub.status = sanitize_text(&sub.status);
+    sub.created_at = sanitize_text(&sub.created_at);
+    sub.notes = sub.notes.map(|v| sanitize_text(&v));
+    sub.payment_method = sub.payment_method.map(|v| sanitize_text(&v));
+    sub.contract_start = sub.contract_start.map(|v| sanitize_text(&v));
+    sub.contract_end = sub.contract_end.map(|v| sanitize_text(&v));
+    sub.vendor_name = sub.vendor_name.map(|v| sanitize_text(&v));
+    sub.vendor_url = sub.vendor_url.map(|v| sanitize_text(&v));
+    sub.plan_tier = sub.plan_tier.map(|v| sanitize_text(&v));
+    sub.discount_type = sub.discount_type.map(|v| sanitize_text(&v));
+    Ok(sub)
 }
 
 /// Port of `mapTags` + `getSubscriptions`.
@@ -242,7 +259,10 @@ fn map_tags(conn: &Connection, subs: &mut [Subscription]) -> std::io::Result<()>
     let pairs: Vec<(i64, String)> = rows.filter_map(|r| r.ok()).collect();
     let mut tag_map: std::collections::HashMap<i64, Vec<String>> = std::collections::HashMap::new();
     for (id, name) in pairs {
-        tag_map.entry(id).or_default().push(name)
+        tag_map
+            .entry(id)
+            .or_default()
+            .push(crate::validation::sanitize_text(&name))
     }
     for sub in subs {
         sub.tags = tag_map.get(&sub.id).cloned().unwrap_or_default()
@@ -373,6 +393,24 @@ pub fn write_subscription(
     s: &NewSubscription,
     persist: bool,
 ) -> std::io::Result<i64> {
+    use crate::validation::sanitize_text;
+    let name = sanitize_text(&s.name);
+    let currency = sanitize_text(&s.currency);
+    let cycle = sanitize_text(&s.cycle);
+    let status = sanitize_text(if s.status.is_empty() {
+        "active"
+    } else {
+        &s.status
+    });
+    let notes = s.notes.as_deref().map(sanitize_text);
+    let payment_method = s.payment_method.as_deref().map(sanitize_text);
+    let contract_start = s.contract_start.as_deref().map(sanitize_text);
+    let contract_end = s.contract_end.as_deref().map(sanitize_text);
+    let vendor_name = s.vendor_name.as_deref().map(sanitize_text);
+    let vendor_url = s.vendor_url.as_deref().map(sanitize_text);
+    let plan_tier = s.plan_tier.as_deref().map(sanitize_text);
+    let discount_type = s.discount_type.as_deref().map(sanitize_text);
+
     conn.execute_batch("BEGIN TRANSACTION")
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let result = (|| -> rusqlite::Result<i64> {
@@ -383,37 +421,34 @@ pub fn write_subscription(
                 vendor_name, vendor_url, plan_tier, discount_amount, discount_type
              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             params![
-                s.name,
+                name,
                 s.price,
-                s.currency,
-                s.cycle,
-                if s.status.is_empty() {
-                    "active"
-                } else {
-                    &s.status
-                },
+                currency,
+                cycle,
+                status,
                 s.billing_day,
                 crate::date::today_string(),
-                s.notes,
-                s.payment_method,
-                s.contract_start,
-                s.contract_end,
+                notes,
+                payment_method,
+                contract_start,
+                contract_end,
                 if s.auto_renewal { 1 } else { 0 },
-                s.vendor_name,
-                s.vendor_url,
-                s.plan_tier,
+                vendor_name,
+                vendor_url,
+                plan_tier,
                 s.discount_amount,
-                s.discount_type,
+                discount_type,
             ],
         )?;
         let id: i64 = conn.query_row("SELECT last_insert_rowid()", [], |r| r.get(0))?;
 
-        let mut seen: Vec<&String> = Vec::new();
+        let mut seen: Vec<String> = Vec::new();
         for tag in &s.tags {
-            if seen.contains(&tag) {
+            let tag = sanitize_text(tag);
+            if tag.is_empty() || seen.contains(&tag) {
                 continue;
             }
-            seen.push(tag);
+            seen.push(tag.clone());
             conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", params![tag])?;
             let tag_id: Option<i64> = conn
                 .query_row("SELECT id FROM tags WHERE name = ?", params![tag], |r| {
@@ -469,8 +504,15 @@ pub fn update_subscription(
             .map(|(c, _)| format!("{} = ?", c))
             .collect::<Vec<_>>()
             .join(", ");
-        let mut params_vec: Vec<rusqlite::types::Value> =
-            sets.iter().map(|(_, v)| v.to_sql()).collect();
+        let mut params_vec: Vec<rusqlite::types::Value> = sets
+            .iter()
+            .map(|(_, v)| match v.to_sql() {
+                rusqlite::types::Value::Text(text) => {
+                    rusqlite::types::Value::Text(crate::validation::sanitize_text(&text))
+                }
+                other => other,
+            })
+            .collect();
         params_vec.push(rusqlite::types::Value::Integer(id));
         conn.execute(
             &format!("UPDATE subscriptions SET {} WHERE id = ?", clause),
@@ -497,12 +539,13 @@ pub fn set_subscription_tags(
         params![id],
     )
     .map_err(|e| std::io::Error::other(e.to_string()))?;
-    let mut seen: Vec<&String> = Vec::new();
+    let mut seen: Vec<String> = Vec::new();
     for tag in tags {
-        if seen.contains(&tag) {
+        let tag = crate::validation::sanitize_text(tag);
+        if tag.is_empty() || seen.contains(&tag) {
             continue;
         }
-        seen.push(tag);
+        seen.push(tag.clone());
         conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", params![tag])
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         let tag_id: Option<i64> = conn
@@ -610,12 +653,13 @@ pub fn replace_tags(conn: &Connection, id: i64, tags: &[String]) -> std::io::Res
         params![id],
     )
     .map_err(|e| std::io::Error::other(e.to_string()))?;
-    let mut seen: Vec<&String> = Vec::new();
+    let mut seen: Vec<String> = Vec::new();
     for tag in tags {
-        if seen.contains(&tag) {
+        let tag = crate::validation::sanitize_text(tag);
+        if tag.is_empty() || seen.contains(&tag) {
             continue;
         }
-        seen.push(tag);
+        seen.push(tag.clone());
         conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", params![tag])
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         let tag_id: Option<i64> = conn

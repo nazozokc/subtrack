@@ -26,6 +26,29 @@ pub const CYCLE_VALUES: [&str; 6] = [
     "yearly",
 ];
 
+/// Strip terminal control characters from user-controlled text.
+///
+/// Keeps tab/newline/carriage return, removes ESC and the rest of C0, DEL, C1,
+/// and Unicode bidi overrides/isolates that can spoof rendered output.
+pub fn sanitize_text(value: &str) -> String {
+    value
+        .chars()
+        .filter(|ch| {
+            let u = *ch as u32;
+            !(u <= 0x08
+                || u == 0x0B
+                || u == 0x0C
+                || u == 0x0D
+                || (0x0E..=0x1F).contains(&u)
+                || u == 0x7F
+                || (0x80..=0x9F).contains(&u)
+                || (0x2028..=0x2029).contains(&u)
+                || (0x202A..=0x202E).contains(&u)
+                || (0x2066..=0x2069).contains(&u))
+        })
+        .collect()
+}
+
 /// Port of `isValidCurrency` (uppercase 3-letter code within the choice list).
 pub fn is_valid_currency(v: &str) -> bool {
     v.len() == 3 && v.bytes().all(|b| b.is_ascii_uppercase()) && CURRENCY_VALUES.contains(&v)
@@ -306,6 +329,21 @@ fn is_iso_shape(v: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sanitize_text_strips_terminal_escape_sequences() {
+        // ESC and other C0 controls are removed; tab/newline survive.
+        assert_eq!(
+            sanitize_text("Netflix\x1b[31m\nline\tend\r"),
+            "Netflix[31m\nline\tend"
+        );
+        // DEL, C1, Unicode line breaks, and bidi overrides are removed too.
+        assert_eq!(
+            sanitize_text("a\x7fb\u{0085}c\u{202e}d\u{2066}e\u{2028}f"),
+            "abcdef"
+        );
+        assert_eq!(sanitize_text("plain"), "plain");
+    }
 
     #[test]
     fn whitelists_accept_known_values_only() {
