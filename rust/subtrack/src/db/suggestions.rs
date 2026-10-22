@@ -25,7 +25,8 @@ pub struct Suggestion {
 }
 
 fn suggestion_from_row(row: &rusqlite::Row) -> rusqlite::Result<Suggestion> {
-    Ok(Suggestion {
+    use crate::validation::sanitize_text;
+    let mut s = Suggestion {
         id: row.get(0)?,
         name: row.get(1)?,
         price: row.get(2)?,
@@ -44,7 +45,22 @@ fn suggestion_from_row(row: &rusqlite::Row) -> rusqlite::Result<Suggestion> {
         status: row.get(15)?,
         matched_sub_id: row.get(16)?,
         created_at: row.get(17)?,
-    })
+    };
+    s.name = sanitize_text(&s.name);
+    s.currency = s.currency.map(|v| sanitize_text(&v));
+    s.cycle = s.cycle.map(|v| sanitize_text(&v));
+    s.vendor_name = s.vendor_name.map(|v| sanitize_text(&v));
+    s.vendor_url = s.vendor_url.map(|v| sanitize_text(&v));
+    s.plan_tier = s.plan_tier.map(|v| sanitize_text(&v));
+    s.payment_method = s.payment_method.map(|v| sanitize_text(&v));
+    s.source = sanitize_text(&s.source);
+    s.source_detail = s.source_detail.map(|v| sanitize_text(&v));
+    s.email_subject = s.email_subject.map(|v| sanitize_text(&v));
+    s.email_from = s.email_from.map(|v| sanitize_text(&v));
+    s.email_date = s.email_date.map(|v| sanitize_text(&v));
+    s.status = sanitize_text(&s.status);
+    s.created_at = s.created_at.map(|v| sanitize_text(&v));
+    Ok(s)
 }
 
 const SUGGESTION_SELECT: &str = "SELECT id, name, price, currency, cycle, \

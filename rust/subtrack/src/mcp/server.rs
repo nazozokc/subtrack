@@ -313,8 +313,23 @@ fn parse_content_length(headers: &str) -> Option<usize> {
 
 pub fn run_mcp(_parsed: &ParsedArgs) -> i32 {
     use std::io::Read;
+    // Bound the whole session, not just a single message; otherwise a client
+    // can grow the process without limit before framing even starts.
+    const MAX_STDIN_BYTES: u64 = 64 * 1024 * 1024;
+
     let mut input = Vec::new();
-    let _ = std::io::stdin().read_to_end(&mut input);
+    let read = std::io::stdin()
+        .lock()
+        .take(MAX_STDIN_BYTES + 1)
+        .read_to_end(&mut input);
+    if read.is_err() || input.len() as u64 > MAX_STDIN_BYTES {
+        logger::outln(&send_error(
+            "null",
+            ERR_PARSE,
+            "Request stream too large (max 64 MB)",
+        ));
+        return 1;
+    }
 
     let mut server = Server::new();
     server.consume(&input);

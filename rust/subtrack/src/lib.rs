@@ -100,6 +100,15 @@ pub fn flush() {
     }
 }
 
+/// Remove plaintext backing files left by this run (port of the TS
+/// `process.on("exit")` cleanup). Unlinking an open SQLite file is safe on
+/// Unix; on platforms where it is not, the error is ignored.
+fn cleanup_temp_files() {
+    let dir = crypto::config_dir();
+    let _ = std::fs::remove_file(dir.join(".subtrack.open.db"));
+    crypto::cleanup_temp_files();
+}
+
 pub fn run(args: Vec<std::ffi::OsString>) -> i32 {
     let args: Vec<String> = args
         .into_iter()
@@ -107,6 +116,7 @@ pub fn run(args: Vec<std::ffi::OsString>) -> i32 {
         .collect();
     let code = cli::run(&args);
     let exit = EXIT_CODE.load(Ordering::SeqCst);
+    cleanup_temp_files();
     flush();
     if exit != 0 { exit } else { code }
 }

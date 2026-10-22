@@ -14,6 +14,27 @@ pub struct Trial {
     pub created_at: String,
 }
 
+fn trial_from_row(row: &rusqlite::Row) -> rusqlite::Result<Trial> {
+    use crate::validation::sanitize_text;
+    let mut trial = Trial {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        expires_at: row.get(2)?,
+        price: row.get(3)?,
+        currency: row.get(4)?,
+        cycle: row.get(5)?,
+        notes: row.get(6)?,
+        created_at: row.get(7)?,
+    };
+    trial.name = sanitize_text(&trial.name);
+    trial.expires_at = sanitize_text(&trial.expires_at);
+    trial.currency = trial.currency.map(|v| sanitize_text(&v));
+    trial.cycle = trial.cycle.map(|v| sanitize_text(&v));
+    trial.notes = trial.notes.map(|v| sanitize_text(&v));
+    trial.created_at = sanitize_text(&trial.created_at);
+    Ok(trial)
+}
+
 /// All trials, oldest expiry first (port of `getTrials`).
 pub fn get_trials() -> std::io::Result<Vec<Trial>> {
     let conn = open_db()?;
@@ -24,18 +45,7 @@ pub fn get_trials() -> std::io::Result<Vec<Trial>> {
         )
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let rows = stmt
-        .query_map([], |row| {
-            Ok(Trial {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                expires_at: row.get(2)?,
-                price: row.get(3)?,
-                currency: row.get(4)?,
-                cycle: row.get(5)?,
-                notes: row.get(6)?,
-                created_at: row.get(7)?,
-            })
-        })
+        .query_map([], trial_from_row)
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut out = Vec::new();
     for r in rows {
@@ -58,18 +68,7 @@ pub fn get_trials_expiring_soon(days: i64) -> std::io::Result<Vec<Trial>> {
         )
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let rows = stmt
-        .query_map(params![from, to], |row| {
-            Ok(Trial {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                expires_at: row.get(2)?,
-                price: row.get(3)?,
-                currency: row.get(4)?,
-                cycle: row.get(5)?,
-                notes: row.get(6)?,
-                created_at: row.get(7)?,
-            })
-        })
+        .query_map(params![from, to], trial_from_row)
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut out = Vec::new();
     for r in rows {
@@ -90,18 +89,7 @@ pub fn get_trial(id: i64) -> std::io::Result<Option<Trial>> {
         )
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut rows = stmt
-        .query_map(params![id], |row| {
-            Ok(Trial {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                expires_at: row.get(2)?,
-                price: row.get(3)?,
-                currency: row.get(4)?,
-                cycle: row.get(5)?,
-                notes: row.get(6)?,
-                created_at: row.get(7)?,
-            })
-        })
+        .query_map(params![id], trial_from_row)
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     match rows.next() {
         Some(r) => Ok(Some(r.map_err(|e| std::io::Error::other(e.to_string()))?)),

@@ -107,7 +107,7 @@ fn safe_auto_backup() -> bool {
         let _ = crate::db::save_db(&conn);
     }
     let backup_dir = crate::db::default_backup_dir();
-    if let Err(e) = std::fs::create_dir_all(&backup_dir) {
+    if let Err(e) = crate::crypto::ensure_private_dir(&backup_dir) {
         logger::fail(&format!("Auto-backup failed: {}", e));
         return false;
     }
@@ -185,7 +185,7 @@ pub fn run_backup(parsed: &ParsedArgs) -> i32 {
     };
 
     if !dest.exists() {
-        if let Err(e) = std::fs::create_dir_all(&dest) {
+        if let Err(e) = crate::crypto::ensure_private_dir(&dest) {
             logger::fail(&format!("Backup destination is not accessible: {}", e));
             return 0;
         }

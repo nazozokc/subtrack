@@ -29,7 +29,7 @@ pub fn get_llm_usage_total_by_provider(
     let rows = stmt
         .query_map(params![from, to], |row| {
             Ok((
-                row.get::<_, String>(0)?,
+                crate::validation::sanitize_text(&row.get::<_, String>(0)?),
                 row.get::<_, f64>(1)?.round() as i64,
             ))
         })
@@ -108,7 +108,7 @@ pub fn get_llm_usage(
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let rows = stmt
         .query_map(rusqlite::params_from_iter(params.iter()), |row| {
-            Ok(LlmUsage {
+            let mut usage = LlmUsage {
                 id: row.get(0)?,
                 provider: row.get(1)?,
                 model: row.get(2)?,
@@ -117,7 +117,14 @@ pub fn get_llm_usage(
                 cost: row.get::<_, f64>(5)?,
                 date: row.get(6)?,
                 description: row.get(7)?,
-            })
+            };
+            usage.provider = crate::validation::sanitize_text(&usage.provider);
+            usage.model = crate::validation::sanitize_text(&usage.model);
+            usage.date = crate::validation::sanitize_text(&usage.date);
+            usage.description = usage
+                .description
+                .map(|v| crate::validation::sanitize_text(&v));
+            Ok(usage)
         })
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     let mut out = Vec::new();
@@ -156,8 +163,8 @@ pub fn get_llm_usage_total_by_model(
     let rows = stmt
         .query_map(params![from, to], |row| {
             Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
+                crate::validation::sanitize_text(&row.get::<_, String>(0)?),
+                crate::validation::sanitize_text(&row.get::<_, String>(1)?),
                 row.get::<_, f64>(2)?.round() as i64,
                 row.get::<_, f64>(3)?.round() as i64,
                 row.get::<_, f64>(4)?.round() as i64,

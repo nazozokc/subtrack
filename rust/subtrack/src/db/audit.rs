@@ -78,13 +78,14 @@ pub fn get_audit_logs_filtered(
     bound.push(&limit_box);
     bound.push(&offset_box);
     let rows = match stmt.query_map(bound.as_slice(), |row| {
+        use crate::validation::sanitize_text;
         Ok(AuditEntry {
             id: row.get(0)?,
-            action: row.get(1)?,
-            target_type: row.get(2)?,
+            action: sanitize_text(&row.get::<_, String>(1)?),
+            target_type: row.get::<_, Option<String>>(2)?.map(|v| sanitize_text(&v)),
             target_id: row.get(3)?,
-            details: row.get(4)?,
-            created_at: row.get(5)?,
+            details: row.get::<_, Option<String>>(4)?.map(|v| sanitize_text(&v)),
+            created_at: sanitize_text(&row.get::<_, String>(5)?),
         })
     }) {
         Ok(r) => r,

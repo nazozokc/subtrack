@@ -1,26 +1,32 @@
 use rusqlite::Connection;
 
 pub fn open_db() -> std::io::Result<Connection> {
-    let dir = crate::crypto::config_dir();
+    let dir = crate::crypto::config_dir_checked()?;
+    crate::crypto::ensure_private_dir(&dir)?;
     let db_path = dir.join("subtrack.db");
     let open_path = dir.join(".subtrack.open.db");
 
     if let Ok(raw) = std::fs::read(&db_path) {
+        verify_db_hash(&dir, &raw);
         let plain =
             if raw.len() >= 16 && !raw[..16].eq(crate::crypto::SQLITE_MAGIC) && raw.len() > 32 {
-                let key = crate::crypto::get_or_create_key()?;
+                let key = crate::crypto::decryption_key()?;
                 crate::crypto::decrypt_buffer(&key, &raw)
                     .ok_or_else(|| std::io::Error::other("database decryption failed"))?
             } else {
                 raw
             };
-        std::fs::write(&open_path, &plain)?;
+        // SQLite needs a real file to open; keep the plaintext copy
+        // owner-only for as long as it exists.
+        crate::crypto::write_secret_file(&open_path, &plain)?;
     } else {
-        std::fs::create_dir_all(&dir)?;
         let _ = std::fs::remove_file(&open_path);
     }
 
     let conn = Connection::open(&open_path).map_err(|e| std::io::Error::other(e.to_string()))?;
+    // SQLite creates a fresh file with default permissions; tighten it
+    // whether it came from the encrypted DB or was just created.
+    crate::crypto::restrict_file_permissions(&open_path)?;
     conn.pragma_update(None, "foreign_keys", true)
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     conn.pragma_update(None, "secure_delete", true)
@@ -29,6 +35,35 @@ pub fn open_db() -> std::io::Result<Connection> {
         .map_err(|e| std::io::Error::other(e.to_string()))?;
     run_migrations(&conn).map_err(|e| std::io::Error::other(e.to_string()))?;
     Ok(conn)
+}
+
+/// Compare the saved database against its `.sha256` sidecar. A missing sidecar
+/// is created; a mismatch warns (the encrypted database is still authenticated
+/// by AES-GCM) but never blocks access to the user's data.
+fn verify_db_hash(dir: &std::path::Path, raw: &[u8]) {
+    let actual = crate::crypto::sha256_hex(raw);
+    let path = dir.join("subtrack.db.sha256");
+    match std::fs::read_to_string(&path) {
+        Ok(expected) => {
+            let expected = expected.trim();
+            let valid = expected.len() == 64 && expected.bytes().all(|b| b.is_ascii_hexdigit());
+            if !valid || expected != actual {
+                crate::logger::warn(&format!(
+                    "Database checksum mismatch (expected {}, got {}).\n  \
+                     The database file may be corrupted or tampered with.\n  \
+                     Attempting to load anyway — back up immediately if successful.",
+                    if valid { expected } else { "<invalid>" },
+                    actual
+                ));
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            let _ = crate::crypto::write_secret_file(&path, format!("{}\n", actual).as_bytes());
+        }
+        Err(_) => crate::logger::warn(
+            "Database checksum sidecar is unreadable; continuing without verification.",
+        ),
+    }
 }
 
 /// Port of `runMigrations` + `migrateToV1` (`db/schema.ts`). Idempotent.
