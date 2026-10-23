@@ -143,15 +143,14 @@ pub fn occurrences_per_year(cycle: &str) -> f64 {
     }
 }
 
-/// Days of a day-based cycle ("3d" → 3), or None.
+/// Days of a day-based cycle ("3d" → 3), or None. Delegates to the
+/// [`crate::domain::Cycle`] parser — a single source of truth for the
+/// `Nd` grammar.
 pub fn cycle_days(cycle: &str) -> Option<i64> {
-    if let Some(rest) = cycle.strip_suffix('d')
-        && let Ok(n) = rest.parse::<i64>()
-        && (1..=365).contains(&n)
-    {
-        return Some(n);
+    match crate::domain::Cycle::parse(cycle) {
+        Ok(crate::domain::Cycle::Days(d)) => Some(i64::from(d)),
+        _ => None,
     }
-    None
 }
 
 pub fn is_day_cycle(cycle: &str) -> bool {

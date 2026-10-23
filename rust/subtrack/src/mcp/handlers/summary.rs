@@ -88,7 +88,7 @@ pub(super) fn mcp_summary_json(subs: &[Subscription]) -> String {
 fn non_cancelled() -> std::io::Result<Vec<Subscription>> {
     Ok(db::get_subscriptions(&db::QueryOptions::default())?
         .into_iter()
-        .filter(|s| s.status != "cancelled")
+        .filter(|s| crate::domain::not_cancelled(&s.status))
         .collect())
 }
 

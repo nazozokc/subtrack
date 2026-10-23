@@ -35,7 +35,7 @@ pub fn run_changes(parsed: &ParsedArgs) -> i32 {
         .str("limit")
         .and_then(|l| l.parse::<usize>().ok())
         .unwrap_or(50);
-    let json = parsed.bool("json") == Some(true);
+    let json = parsed.flag("json");
 
     let mut result: Vec<ChangeEntry> = Vec::new();
 

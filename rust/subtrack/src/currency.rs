@@ -47,7 +47,7 @@ pub const CURRENCY_CHOICES: &[(&str, &str)] = &[
 ];
 
 pub fn run_currency(parsed: &ParsedArgs) -> i32 {
-    let json = parsed.bool("json") == Some(true);
+    let json = parsed.flag("json");
 
     if json {
         let mut out = String::from("[\n");

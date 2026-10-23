@@ -81,8 +81,8 @@ fn display_history(entries: &[PriceChange]) {
 
 pub fn run_history(parsed: &ParsedArgs) -> i32 {
     let id = parsed.str("id").and_then(|i| i.parse::<i64>().ok());
-    let json = parsed.bool("json") == Some(true);
-    let all = parsed.bool("all") == Some(true);
+    let json = parsed.flag("json");
+    let all = parsed.flag("all");
     let days = parsed
         .str("days")
         .and_then(|d| d.parse::<i64>().ok())

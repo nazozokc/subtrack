@@ -17,10 +17,10 @@ pub(super) fn calc_yearly_totals(subs: &[Subscription], year: i64) -> Vec<MonthT
         let month_start = format!("{:04}-{:02}-01", year, m + 1);
         let month_end = month_end_string(year, m);
         let mut total = 0.0;
-        for sub in subs {
-            if sub.status == "archived" {
-                continue;
-            }
+        for sub in subs
+            .iter()
+            .filter(|s| !crate::domain::is_archived(&s.status))
+        {
             let created = sub.created_at.as_str();
             if created
                 .as_bytes()
@@ -35,7 +35,7 @@ pub(super) fn calc_yearly_totals(subs: &[Subscription], year: i64) -> Vec<MonthT
             if created > month_end.as_str() {
                 continue;
             }
-            if sub.status == "cancelled" {
+            if !crate::domain::not_cancelled(&sub.status) {
                 let Some(end) = sub.contract_end.as_deref() else {
                     continue;
                 };
@@ -58,7 +58,7 @@ pub(super) fn calc_yearly_totals(subs: &[Subscription], year: i64) -> Vec<MonthT
 pub(super) fn calc_top(subs: &[Subscription], n: usize) -> Vec<Subscription> {
     let mut list: Vec<Subscription> = subs
         .iter()
-        .filter(|s| s.status != "archived")
+        .filter(|s| !crate::domain::is_archived(&s.status))
         .cloned()
         .collect();
     list.sort_by(|a, b| {
@@ -74,7 +74,7 @@ pub(super) fn calc_added(subs: &[Subscription], year: i64) -> Vec<Subscription> 
     let prefix = format!("{}-", year);
     let mut list: Vec<Subscription> = subs
         .iter()
-        .filter(|s| s.created_at.starts_with(&prefix) && s.status != "archived")
+        .filter(|s| s.created_at.starts_with(&prefix) && !crate::domain::is_archived(&s.status))
         .cloned()
         .collect();
     list.sort_by(|a, b| a.created_at.cmp(&b.created_at));
@@ -85,7 +85,7 @@ pub(super) fn calc_cancelled(subs: &[Subscription], year: i64) -> Vec<(String, S
     let prefix = format!("{}-", year);
     let mut results: Vec<(String, String)> = Vec::new();
     for sub in subs {
-        if sub.status == "cancelled"
+        if !crate::domain::not_cancelled(&sub.status)
             && let Some(end) = sub.contract_end.as_deref()
             && end.starts_with(&prefix)
             && !results.iter().any(|(n, _)| n == &sub.name)

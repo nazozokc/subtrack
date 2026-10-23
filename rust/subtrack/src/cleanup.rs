@@ -20,7 +20,7 @@ fn format_bytes(bytes: i64) -> String {
 }
 
 pub fn run_cleanup(parsed: &ParsedArgs) -> i32 {
-    let json = parsed.bool("json") == Some(true);
+    let json = parsed.flag("json");
     let do_vacuum = parsed.bool("vacuum").unwrap_or(true);
     let audit_days = parsed
         .str("audit-days")

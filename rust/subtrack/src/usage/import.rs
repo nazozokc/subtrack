@@ -155,7 +155,7 @@ pub fn run_usage_import(parsed: &ParsedArgs) -> i32 {
     let Some(file) = parsed.str("file") else {
         return 0;
     };
-    let dry_run = parsed.bool("dryRun") == Some(true);
+    let dry_run = parsed.flag("dryRun");
 
     let content = if file == "-" {
         // Read the whole of stdin, capped at 10 MB (port of the stdin branch).

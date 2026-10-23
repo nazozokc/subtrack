@@ -60,10 +60,10 @@ pub fn calc_monthly_totals(subs: &[Subscription], months: i64) -> Vec<MonthTotal
         let label = format!("{}-{:02}", year, month0 + 1);
         let end = month_end(year, month0);
         let mut total = 0.0;
-        for sub in subs {
-            if sub.status == "cancelled" {
-                continue;
-            }
+        for sub in subs
+            .iter()
+            .filter(|s| crate::domain::not_cancelled(&s.status))
+        {
             // Skip if subscription was created after this month.
             if sub.created_at.as_str() > end.as_str() {
                 continue;
@@ -93,10 +93,10 @@ fn calc_monthly_totals_by_category(
     let totals = calc_monthly_totals(subs, months);
 
     let mut cat_set: Vec<String> = Vec::new();
-    for sub in subs {
-        if sub.status == "cancelled" {
-            continue;
-        }
+    for sub in subs
+        .iter()
+        .filter(|s| crate::domain::not_cancelled(&s.status))
+    {
         let cat = sub
             .tags
             .first()
@@ -125,10 +125,10 @@ fn calc_monthly_totals_by_category(
             year -= 1;
         }
         let end = month_end(year, month0);
-        for sub in subs {
-            if sub.status == "cancelled" {
-                continue;
-            }
+        for sub in subs
+            .iter()
+            .filter(|s| crate::domain::not_cancelled(&s.status))
+        {
             if sub.created_at.as_str() > end.as_str() {
                 continue;
             }
@@ -256,7 +256,7 @@ pub fn run_timeline(parsed: &ParsedArgs) -> i32 {
         return 0;
     }
 
-    subs.retain(|s| s.status != "cancelled");
+    subs.retain(|s| crate::domain::not_cancelled(&s.status));
 
     // Never sum different currencies. With `--currency` every row is
     // converted to that target; without it, each currency gets its own chart.
@@ -293,8 +293,8 @@ pub fn run_timeline(parsed: &ParsedArgs) -> i32 {
         return 0;
     }
 
-    let categories = parsed.bool("categories") == Some(true);
-    let json = parsed.bool("json") == Some(true);
+    let categories = parsed.flag("categories");
+    let json = parsed.flag("json");
 
     if json {
         let out = if groups.len() == 1 {

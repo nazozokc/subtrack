@@ -44,7 +44,7 @@ pub(super) fn handle_bulk_operations(
     let affected: Vec<Subscription> = if action == "status" {
         matched
             .into_iter()
-            .filter(|s| s.status != "cancelled")
+            .filter(|s| crate::domain::not_cancelled(&s.status))
             .collect()
     } else {
         matched

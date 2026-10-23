@@ -2,9 +2,9 @@
 //! `packages/subtrack/src/validation.ts`.
 //!
 //! Returns `Result<(), String>` where `Err` carries the exact user-facing
-//! message that the TS validators return as a string.
-
-use crate::date::cycle_days;
+//! message that the TS validators return as a string. Membership-style
+//! validators (`is_valid_*`) delegate to the [`crate::domain`] enums, so
+//! there is a single source of truth for accepted values.
 
 /// Currency choice values (`CURRENCY_CHOICES.map(c => c.value)`).
 pub const CURRENCY_VALUES: [&str; 37] = [
@@ -49,19 +49,20 @@ pub fn sanitize_text(value: &str) -> String {
         .collect()
 }
 
-/// Port of `isValidCurrency` (uppercase 3-letter code within the choice list).
+/// Port of `isValidCurrency` (uppercase 3-letter code within the choice
+/// list — every entry satisfies both, so enum membership is equivalent).
 pub fn is_valid_currency(v: &str) -> bool {
-    v.len() == 3 && v.bytes().all(|b| b.is_ascii_uppercase()) && CURRENCY_VALUES.contains(&v)
+    crate::domain::Currency::parse(v).is_ok()
 }
 
 /// Port of `isValidCycle` (named preset, or an `Nd` day cycle).
 pub fn is_valid_cycle(v: &str) -> bool {
-    CYCLE_VALUES.contains(&v) || cycle_days(v).is_some()
+    crate::domain::Cycle::parse(v).is_ok()
 }
 
 /// Port of `isValidStatus`.
 pub fn is_valid_status(v: &str) -> bool {
-    STATUS_VALUES.contains(&v)
+    crate::domain::Status::parse(v).is_ok()
 }
 
 /// Mirror of the private `isValidIsoDate` helper.

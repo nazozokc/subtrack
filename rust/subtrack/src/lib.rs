@@ -20,6 +20,7 @@ mod date;
 mod db;
 mod dedupe;
 mod display;
+mod domain;
 mod export;
 mod forecast;
 mod fx;

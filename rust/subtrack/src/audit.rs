@@ -76,7 +76,7 @@ pub fn run_audit(parsed: &ParsedArgs, depth: usize, path: &[String]) -> i32 {
     let _ = depth;
     let action = parsed.str("action").filter(|a| !a.is_empty());
     let limit = parsed.str("limit").and_then(|l| l.parse::<i64>().ok());
-    let json = parsed.bool("json") == Some(true);
+    let json = parsed.flag("json");
     let from = parsed.str("from").filter(|a| !a.is_empty());
     let to = parsed.str("to").filter(|a| !a.is_empty());
 
@@ -245,7 +245,7 @@ fn run_audit_prune(parsed: &ParsedArgs) -> i32 {
         .str("days")
         .and_then(|d| d.parse::<i64>().ok())
         .unwrap_or(90);
-    let force = parsed.bool("force") == Some(true);
+    let force = parsed.flag("force");
     let before = (chrono::Utc::now() - chrono::Duration::days(days))
         .format("%Y-%m-%d %H:%M:%S")
         .to_string();

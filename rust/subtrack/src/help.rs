@@ -1,6 +1,10 @@
 //! Usage / help renderer — port of `packages/subtrack/src/cli/help.ts`
 //! (self-contained replacement for gunshi's `@gunshi/plugin-renderer`).
+//!
+//! Color is a TTY-only layer: every piece of plain text is assembled first
+//! and wrapped in ANSI at the final step, so piped output stays byte-stable.
 
+use crate::ansi;
 use crate::commands::CommandDef;
 
 const LEFT_MARGIN: usize = 2;
@@ -45,6 +49,25 @@ fn kebabize(s: &str) -> String {
         }
     }
     out
+}
+
+/// Section labels shown in help output.
+enum Section {
+    Usage,
+    Commands,
+    Arguments,
+    Options,
+}
+
+/// Bold section label (`USAGE:`), colorized only on a TTY.
+fn section_header(section: Section) -> String {
+    let label = match section {
+        Section::Usage => "USAGE:",
+        Section::Commands => "COMMANDS:",
+        Section::Arguments => "ARGUMENTS:",
+        Section::Options => "OPTIONS:",
+    };
+    ansi::bold(label)
 }
 
 /// padEnd(s, n): right-pad to at least n chars with spaces (never truncates).
@@ -160,7 +183,7 @@ pub fn render_usage(
     }
 
     // ── USAGE ──
-    messages.push("USAGE:".to_string());
+    messages.push(section_header(Section::Usage));
     let option_symbols = generate_options_symbols(args);
     let positional_symbols = generate_positional_symbols(args);
     let loaded = load_commands(command_name, command_description, subcommands);
@@ -183,7 +206,7 @@ pub fn render_usage(
 
     // ── COMMANDS + "for more info" hints ──
     if omitted && has_commands {
-        messages.push("COMMANDS:".to_string());
+        messages.push(section_header(Section::Commands));
         let command_max_length = loaded.iter().map(|(_, n, _)| n.len()).max().unwrap_or(0);
         let symbol_length = command_max_length;
         for (entry, cmd_name, desc) in &loaded {
@@ -193,18 +216,20 @@ pub fn render_usage(
                 cmd_name.clone()
             };
             let row = if desc.is_empty() {
-                command_str
+                ansi::bold(&command_str)
             } else {
                 format!(
                     "{}{}",
-                    pad_end(&command_str, symbol_length + MIDDLE_MARGIN),
-                    desc
+                    ansi::bold(&pad_end(&command_str, symbol_length + MIDDLE_MARGIN)),
+                    ansi::dim(desc)
                 )
             };
             messages.push(format!("{}{}", " ".repeat(LEFT_MARGIN), row));
         }
         messages.push(String::new());
-        messages.push("For more info, run any command with the `--help` flag:".to_string());
+        messages.push(ansi::dim(
+            "For more info, run any command with the `--help` flag:",
+        ));
         let base_path = if path.is_empty() {
             name.to_string()
         } else {
@@ -216,14 +241,14 @@ pub fn render_usage(
             } else {
                 format!("{} {} --help", base_path, cmd_name)
             };
-            messages.push(format!("{}{}", " ".repeat(LEFT_MARGIN), hint));
+            messages.push(format!("{}{}", " ".repeat(LEFT_MARGIN), ansi::dim(&hint)));
         }
         messages.push(String::new());
     }
 
     // ── ARGUMENTS ──
     if has_positional_args(args) {
-        messages.push("ARGUMENTS:".to_string());
+        messages.push(section_header(Section::Arguments));
         let positionals: Vec<&ArgSpec> = args
             .iter()
             .filter(|a| a.kind == ArgKind::Positional)
@@ -233,8 +258,8 @@ pub fn render_usage(
             let desc = spec.description;
             let arg = format!(
                 "{} {}",
-                pad_end(spec.name, args_max_length + MIDDLE_MARGIN),
-                desc
+                ansi::colored("cyan", &pad_end(spec.name, args_max_length + MIDDLE_MARGIN)),
+                ansi::dim(desc)
             );
             messages.push(format!("{}{}", " ".repeat(LEFT_MARGIN), arg));
         }
@@ -243,7 +268,7 @@ pub fn render_usage(
 
     // ── OPTIONS ──
     if has_optional_args(args) {
-        messages.push("OPTIONS:".to_string());
+        messages.push(section_header(Section::Options));
         let options: Vec<(String, String)> = args
             .iter()
             .filter(|a| a.kind != ArgKind::Positional)
@@ -272,8 +297,8 @@ pub fn render_usage(
                 .unwrap_or("");
             let option = format!(
                 "{}{}",
-                pad_end(key, options_max_length + MIDDLE_MARGIN),
-                desc
+                ansi::colored("cyan", &pad_end(key, options_max_length + MIDDLE_MARGIN)),
+                ansi::dim(desc)
             );
             messages.push(format!("{}{}", " ".repeat(LEFT_MARGIN), option));
         }

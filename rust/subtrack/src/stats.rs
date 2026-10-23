@@ -112,7 +112,7 @@ fn collect_stats() -> std::io::Result<Stats> {
 }
 
 pub fn run_stats(parsed: &ParsedArgs) -> i32 {
-    let json = parsed.bool("json") == Some(true);
+    let json = parsed.flag("json");
     let stats = match collect_stats() {
         Ok(s) => s,
         Err(e) => {

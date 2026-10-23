@@ -21,7 +21,7 @@ pub struct Entry {
 fn active_subs() -> std::io::Result<Vec<Subscription>> {
     Ok(get_subscriptions(&QueryOptions::default())?
         .into_iter()
-        .filter(|s| s.status != "cancelled")
+        .filter(|s| crate::domain::not_cancelled(&s.status))
         .collect())
 }
 
@@ -97,7 +97,7 @@ pub fn run_upcoming(parsed: &ParsedArgs) -> i32 {
         },
         None => 7,
     };
-    let json = parsed.bool("json") == Some(true);
+    let json = parsed.flag("json");
     let currency = parsed.str("currency");
 
     let subs = match active_subs() {

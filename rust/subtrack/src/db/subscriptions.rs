@@ -1,3 +1,4 @@
+use crate::domain::SortField;
 use rusqlite::{Connection, params};
 
 use super::{open_db, save_db};
@@ -24,27 +25,6 @@ pub struct Subscription {
     pub discount_type: Option<String>,
     pub tags: Vec<String>,
 }
-
-pub const SORT_FIELDS: [&str; 18] = [
-    "id",
-    "name",
-    "price",
-    "currency",
-    "cycle",
-    "status",
-    "billingDay",
-    "createdAt",
-    "paymentMethod",
-    "contractStart",
-    "contractEnd",
-    "autoRenewal",
-    "vendorName",
-    "vendorUrl",
-    "planTier",
-    "discountAmount",
-    "discountType",
-    "tags",
-];
 
 const SUB_COLUMNS: [&str; 18] = [
     "id",
@@ -137,10 +117,13 @@ fn query_subscriptions(
     conn: &Connection,
     options: &QueryOptions,
 ) -> std::io::Result<Vec<Subscription>> {
-    let field = match &options.sort {
-        Some(s) if SORT_FIELDS.contains(&s.as_str()) => s.clone(),
-        _ => "id".to_string(),
-    };
+    // Unknown values fall back to the default sort (same as the TS port);
+    // `SortField::as_str` produces the exact SQL column spelling.
+    let field = options
+        .sort
+        .as_deref()
+        .and_then(|s| SortField::parse(s).ok())
+        .map_or("id", SortField::as_str);
     let order = if options.desc { "DESC" } else { "ASC" };
 
     let mut conditions: Vec<String> = Vec::new();

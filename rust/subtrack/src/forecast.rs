@@ -83,7 +83,7 @@ pub fn run_forecast(parsed: &ParsedArgs) -> i32 {
     };
     let list: Vec<Subscription> = subs
         .into_iter()
-        .filter(|s| s.status != "cancelled")
+        .filter(|s| crate::domain::not_cancelled(&s.status))
         .collect();
 
     let mut entries: Vec<ForecastEntry> = list
@@ -159,7 +159,7 @@ pub fn run_forecast(parsed: &ParsedArgs) -> i32 {
     groups.sort_by(|a, b| a.0.cmp(&b.0));
 
     // JSON
-    if parsed.bool("json") == Some(true) {
+    if parsed.flag("json") {
         let json = forecast_json(months, target_currency.as_deref(), &cancel, &groups);
         out_str(&format!("{}\n", json));
         return 0;

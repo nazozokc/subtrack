@@ -67,11 +67,21 @@ fn show_analytics(parsed: &ParsedArgs) -> i32 {
             return 1;
         }
     };
-    let list: Vec<Subscription> = all
-        .iter()
-        .filter(|s| s.status != "cancelled")
-        .cloned()
-        .collect();
+    // One pass over every row for the status breakdown, before the
+    // cancelled rows are dropped below.
+    let mut active_count = 0usize;
+    let mut paused_count = 0usize;
+    let mut cancelled_count = 0usize;
+    for s in &all {
+        match crate::domain::Status::parse(&s.status) {
+            Ok(crate::domain::Status::Active) => active_count += 1,
+            Ok(crate::domain::Status::Paused) => paused_count += 1,
+            Ok(crate::domain::Status::Cancelled) => cancelled_count += 1,
+            _ => {}
+        }
+    }
+    let mut list = all;
+    list.retain(|s| crate::domain::not_cancelled(&s.status));
     if list.is_empty() {
         logger::info("No active subscriptions found — try `subtrack add` or change status");
         return 0;
@@ -80,8 +90,8 @@ fn show_analytics(parsed: &ParsedArgs) -> i32 {
     let config = load_config();
     let target_currency = parsed.str("currency");
     let rates = target_currency.as_ref().map(|_| crate::fx::fetch_rates());
-    let mut display_list = list.clone();
-    if let Some(target) = target_currency.as_deref() {
+    let total_count = list.len();
+    let display_list: Vec<Subscription> = if let Some(target) = target_currency.as_deref() {
         let rates = rates.as_ref().expect("rates fetched for target currency");
         let converted = try_convert_subs(&list, target, rates);
         if converted.has_missing {
@@ -90,13 +100,14 @@ fn show_analytics(parsed: &ParsedArgs) -> i32 {
                 target
             ));
         }
-        display_list = converted
+        converted
             .list
             .into_iter()
             .filter(|s| s.currency == target)
-            .collect();
-    }
-    let total_count = list.len();
+            .collect()
+    } else {
+        list
+    };
     let (_, _, by_tag, most_expensive) = calc_summary(&display_list);
 
     let is_yearly = parsed.str("period").as_deref() == Some("yearly");
@@ -115,9 +126,6 @@ fn show_analytics(parsed: &ParsedArgs) -> i32 {
         ansi::bold(&total_count.to_string())
     ));
     log("  Status breakdown:");
-    let active_count = list.iter().filter(|s| s.status == "active").count();
-    let paused_count = list.iter().filter(|s| s.status == "paused").count();
-    let cancelled_count = all.iter().filter(|s| s.status == "cancelled").count();
     log(&format!(
         "    {}",
         ansi::green(&format!("active: {}", active_count))
@@ -306,14 +314,11 @@ fn analytics_json(parsed: &ParsedArgs) -> i32 {
             return 1;
         }
     };
-    let list: Vec<Subscription> = subs
-        .iter()
-        .filter(|s| s.status != "cancelled")
-        .cloned()
-        .collect();
+    let mut list = subs;
+    list.retain(|s| crate::domain::not_cancelled(&s.status));
+    let total_count = list.len();
     let target_currency = parsed.str("currency");
-    let mut display_list = list.clone();
-    if let Some(target) = target_currency.as_deref() {
+    let display_list: Vec<Subscription> = if let Some(target) = target_currency.as_deref() {
         let rates = crate::fx::fetch_rates();
         let converted = try_convert_subs(&list, target, &rates);
         if converted.has_missing {
@@ -322,13 +327,14 @@ fn analytics_json(parsed: &ParsedArgs) -> i32 {
                 target
             ));
         }
-        display_list = converted
+        converted
             .list
             .into_iter()
             .filter(|s| s.currency == target)
-            .collect();
-    }
-    let total_count = list.len();
+            .collect()
+    } else {
+        list
+    };
     let (_, by_currency, by_tag, most_expensive) = calc_summary(&display_list);
 
     // monthlyByCurrency (insertion order preserved by BTreeMap? — no;
@@ -426,7 +432,7 @@ fn nested_sub_entry(currency: &str, sub: &Subscription) -> String {
 
 pub fn run_analytics(parsed: &ParsedArgs) -> i32 {
     // period validation happens in the command wrapper (parsed errors)
-    if parsed.bool("json") == Some(true) {
+    if parsed.flag("json") {
         analytics_json(parsed)
     } else {
         show_analytics(parsed)

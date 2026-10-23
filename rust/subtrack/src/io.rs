@@ -51,8 +51,8 @@ pub fn run_import(parsed: &ParsedArgs) -> i32 {
         logger::fail("Usage: subtrack import <file> [--dry-run]");
         return 1;
     }
-    let dry_run = parsed.bool("dryRun") == Some(true);
-    let deduplicate = parsed.bool("deduplicate") == Some(true);
+    let dry_run = parsed.flag("dryRun");
+    let deduplicate = parsed.flag("deduplicate");
 
     let Some(safe_file) = safe_path(&file) else {
         logger::fail("File not found or path not allowed — must be within home or temp directory");

@@ -11,15 +11,6 @@ use crate::parser::ParsedArgs;
 use crate::price::{format_price, format_usd_cost, round_currency};
 use std::collections::BTreeMap;
 
-const VALID_PERIODS: [&str; 6] = [
-    "weekly",
-    "bi-weekly",
-    "monthly",
-    "quarterly",
-    "semi-annual",
-    "yearly",
-];
-
 fn fmt_period(period: &str) -> &str {
     match period {
         "weekly" => "week",
@@ -42,7 +33,7 @@ struct Entry {
 fn active_subs() -> std::io::Result<Vec<Subscription>> {
     Ok(get_subscriptions(&QueryOptions::default())?
         .into_iter()
-        .filter(|s| s.status != "cancelled")
+        .filter(|s| crate::domain::not_cancelled(&s.status))
         .collect())
 }
 
@@ -50,13 +41,15 @@ pub fn run_payment(parsed: &ParsedArgs) -> i32 {
     let period = parsed
         .str("period")
         .unwrap_or_else(|| "monthly".to_string());
-    if !VALID_PERIODS.contains(&period.as_str()) {
+    if crate::domain::Cycle::parse_named(&period).is_none() {
         logger::fail(
             "period must be one of: weekly, bi-weekly, monthly, quarterly, semi-annual, yearly",
         );
         return 1;
     }
 
+    // A failed read must not fall through to the empty-state or zero-total
+    // rendering: fail() marks exit code 1, then we stop here.
     let subs = match active_subs() {
         Ok(s) => s,
         Err(e) => {
@@ -66,10 +59,10 @@ pub fn run_payment(parsed: &ParsedArgs) -> i32 {
     };
 
     let currency = parsed.str("currency");
-    let api = parsed.bool("api") == Some(true);
-    let method = parsed.bool("method") == Some(true);
+    let api = parsed.flag("api");
+    let method = parsed.flag("method");
 
-    if parsed.bool("json") == Some(true) {
+    if parsed.flag("json") {
         return payment_json(&subs, &period, currency.as_deref(), api, method);
     }
 
@@ -78,15 +71,13 @@ pub fn run_payment(parsed: &ParsedArgs) -> i32 {
 }
 
 fn calculate_totals(subs: &[Subscription], period: &str) -> BTreeMap<String, f64> {
-    let mut totals: BTreeMap<String, f64> = BTreeMap::new();
-    for sub in subs {
-        if sub.status == "cancelled" {
-            continue;
-        }
-        let amount = sub.price * period_factor(&sub.cycle, period);
-        *totals.entry(sub.currency.clone()).or_insert(0.0) += amount;
-    }
-    totals
+    subs.iter()
+        .filter(|sub| crate::domain::not_cancelled(&sub.status))
+        .fold(BTreeMap::new(), |mut totals, sub| {
+            let amount = sub.price * period_factor(&sub.cycle, period);
+            *totals.entry(sub.currency.clone()).or_insert(0.0) += amount;
+            totals
+        })
 }
 
 fn show_payment(
