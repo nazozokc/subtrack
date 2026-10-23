@@ -553,7 +553,7 @@ fn digit_run(bytes: &[u8], from: usize) -> usize {
 
 /// Result of reading a numeric flag value: [`NumArg::Missing`] = flag
 /// absent (OK), [`NumArg::Value`] = parsed (never NaN), [`NumArg::Bad`] =
-/// present but unparseable (caller prints its message).
+/// present but unparsable (caller prints its message).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NumArg {
     Missing,
