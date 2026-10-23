@@ -173,18 +173,23 @@ pub fn run_add(parsed: &ParsedArgs) -> i32 {
         None => true,
     };
 
-    // status (last)
-    let status_prompted = parsed.str("status").is_none();
-    let Some(status) = prompt_select(
-        parsed.str("status").as_deref(),
-        "status",
-        &STATUS_VALUES,
-        is_valid_status,
-    ) else {
+    // status (last). A scriptable non-TTY run applies the "default: active"
+    // advertised in --help instead of aborting quietly on the prompt EOF.
+    let status = if parsed.str("status").is_some() || crate::prompt::interactive() {
+        prompt_select(
+            parsed.str("status").as_deref(),
+            "status",
+            &STATUS_VALUES,
+            is_valid_status,
+        )
+    } else {
+        Some("active".to_string())
+    };
+    let Some(status) = status else {
         return 0;
     };
 
-    if (prompted || status_prompted)
+    if prompted
         && crate::prompt::confirm(
             &format!(
                 "Save \"{}\" ({} {}, {}{})?",

@@ -72,13 +72,41 @@ fn finish(message: &str, value: &str) {
     out(&format!(
         "{} {} {}\n",
         ansi::green("\u{2714}"),
-        message,
+        ansi::dim(message),
         ansi::green(value)
     ));
 }
 
 fn cancel(message: &str) {
     out(&format!("{} {}\n", ansi::red("\u{2716}"), message));
+}
+
+/// Render a numbered choice list.
+///
+/// Numbers are dimmed and right-aligned so they line up on long lists, and
+/// the pre-selected choice carries a `›` pointer — the "(default)" suffix in
+/// the question leaves the default discoverable without scanning list text.
+fn render_choices(choices: &[Choice], highlight: Option<usize>) {
+    let number_width = choices.len().to_string().len();
+    for (index, choice) in choices.iter().enumerate() {
+        let is_pointer = Some(index) == highlight;
+        let gutter = if is_pointer {
+            format!("{} ", ansi::cyan("\u{203a}"))
+        } else {
+            "  ".to_string()
+        };
+        let label = if is_pointer {
+            ansi::bold(&choice.label)
+        } else {
+            choice.label.clone()
+        };
+        let number = format!(
+            "{number:>width$}",
+            width = number_width + 1,
+            number = index + 1
+        );
+        out(&format!("{gutter}{}) {}\n", ansi::dim(&number), label));
+    }
 }
 
 /// Prompt for a line of text.
@@ -139,14 +167,7 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
             .map(|i| choices[i].value.clone());
     }
 
-    for (index, choice) in choices.iter().enumerate() {
-        let marker = if Some(index) == default {
-            " (default)"
-        } else {
-            ""
-        };
-        out(&format!("  {:>2}) {}{}\n", index + 1, choice.label, marker));
-    }
+    render_choices(choices, default);
 
     let hint = match default {
         Some(i) if i < choices.len() => {
@@ -229,15 +250,10 @@ pub fn checkbox(message: &str, choices: &[Choice]) -> Option<Vec<String>> {
         return None;
     }
 
-    for (index, choice) in choices.iter().enumerate() {
-        out(&format!("  {:>2}) {}\n", index + 1, choice.label));
-    }
+    render_choices(choices, None);
 
     loop {
-        let answer = ask(&format!(
-            "{} (numbers separated by commas, or 'all'; empty to cancel)",
-            message
-        ))?;
+        let answer = ask(&format!("{} (numbers, 'all', empty = cancel)", message))?;
         let trimmed = answer.trim();
         if trimmed.is_empty() {
             finish(message, "none");

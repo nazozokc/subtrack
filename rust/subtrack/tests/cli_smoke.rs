@@ -406,6 +406,40 @@ fn mcp_tools_list_probe() {
 }
 
 #[test]
+fn add_without_status_scripts_the_active_default() {
+    // The help advertises "default: active" — a scriptable non-TTY run
+    // without `--status` must save the row instead of exiting silently.
+    let env = Env::new("add-status-default");
+    let out = env.run(&[
+        "add",
+        "--name",
+        "Standalone",
+        "--price",
+        "4.99",
+        "--currency",
+        "USD",
+        "--cycle",
+        "monthly",
+    ]);
+    assert_eq!(out.status.code(), Some(0));
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(text.contains("Added subscription:"), "silent add: {text}");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&env.run(&["list", "-j"]).stdout).expect("list json");
+    assert_eq!(
+        json.as_array().map(|a| a.len()),
+        Some(1),
+        "row was saved: {json}"
+    );
+    assert_eq!(json[0]["status"], "active", "default status: {json}");
+}
+
+#[test]
 fn edit_prompts_for_id_field_and_value() {
     let env = Env::new("edit-prompts");
     seed(&env);

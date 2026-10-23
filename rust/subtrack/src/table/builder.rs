@@ -13,6 +13,11 @@ pub struct TableBuilder {
     pub word_wrap: bool,
     pub wrap_on_word_boundary: bool,
     pub truncate_char: String,
+    /// When false (the default), the border between two consecutive regular
+    /// rows is skipped: the zebra bands carry the row rhythm instead, and the
+    /// table stays half as tall. The header separator, span-row borders, and
+    /// the outer frame are always drawn.
+    pub row_dividers: bool,
     rows: Vec<Vec<String>>,
 }
 
@@ -46,6 +51,7 @@ impl TableBuilder {
             word_wrap: false,
             wrap_on_word_boundary: true,
             truncate_char: "…".to_string(),
+            row_dividers: false,
             rows: Vec::new(),
         }
     }
@@ -60,7 +66,13 @@ impl TableBuilder {
 
     /// Whether `all_rows[y]` (head-relative) is a full-width span row.
     fn is_span_row_at(&self, y: usize, col_count: usize) -> bool {
-        let rows_index = if self.head.is_empty() { y } else { y - 1 };
+        let rows_index = if self.head.is_empty() {
+            y
+        } else if y == 0 {
+            return false; // the header row is never a span row
+        } else {
+            y - 1
+        };
         match self.rows.get(rows_index) {
             Some(r) => is_span_row(r, col_count),
             None => false,
@@ -147,6 +159,14 @@ impl TableBuilder {
 
         let mut out: Vec<String> = Vec::new();
         for (y, height) in heights.iter().enumerate() {
+            let is_top = y == 0;
+            let is_bottom = y + 1 == all_rows.len();
+            let is_header_sep = y == 1 && !self.head.is_empty();
+            let beside_span = self.is_span_row_at(y, col_count)
+                || (y >= 1 && self.is_span_row_at(y - 1, col_count));
+            if !self.row_dividers && !is_top && !is_bottom && !is_header_sep && !beside_span {
+                continue;
+            }
             out.push(self.draw_border(&widths, y, false));
             for line_num in 0..*height {
                 out.push(self.draw_line(&cell_lines, &widths, y, line_num, col_count))
