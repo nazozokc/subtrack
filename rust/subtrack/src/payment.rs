@@ -48,9 +48,15 @@ pub fn run_payment(parsed: &ParsedArgs) -> i32 {
         return 1;
     }
 
-    let subs = active_subs()
-        .map_err(|e| logger::fail(&format!("Failed to read subscriptions: {}", e)))
-        .unwrap_or_else(|()| Vec::new());
+    // A failed read must not fall through to the empty-state or zero-total
+    // rendering: fail() marks exit code 1, then we stop here.
+    let subs = match active_subs() {
+        Ok(s) => s,
+        Err(e) => {
+            logger::fail(&format!("Failed to read subscriptions: {}", e));
+            return 1;
+        }
+    };
 
     let currency = parsed.str("currency");
     let api = parsed.flag("api");
