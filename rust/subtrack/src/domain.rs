@@ -331,8 +331,11 @@ impl FromStr for Currency {
 
 // ── Sort field ──────────────────────────────────────────────────────────────
 
-/// `list --sort` field. `as_str` doubles as the SQL column name, so the
-/// string must match the subscriptions table columns byte for byte.
+/// `list --sort` field. The accepted set mirrors the TS `SORT_FIELDS`
+/// exactly — these happen to be real `subscriptions` columns, so `as_str`
+/// doubles as the `ORDER BY` identifier. Unknown values fall back to `id`
+/// at the query layer (TS behavior; a broadened list would emit a SQLite
+/// `no such column` error).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SortField {
     Id,
@@ -341,42 +344,20 @@ pub enum SortField {
     Currency,
     Cycle,
     Status,
-    BillingDay,
-    CreatedAt,
-    PaymentMethod,
-    ContractStart,
-    ContractEnd,
-    AutoRenewal,
-    VendorName,
-    VendorUrl,
-    PlanTier,
-    DiscountAmount,
-    DiscountType,
-    Tags,
 }
 
 impl SortField {
-    pub const ALL: [SortField; 18] = [
+    pub const ALL: [SortField; 6] = [
         SortField::Id,
         SortField::Name,
         SortField::Price,
         SortField::Currency,
         SortField::Cycle,
         SortField::Status,
-        SortField::BillingDay,
-        SortField::CreatedAt,
-        SortField::PaymentMethod,
-        SortField::ContractStart,
-        SortField::ContractEnd,
-        SortField::AutoRenewal,
-        SortField::VendorName,
-        SortField::VendorUrl,
-        SortField::PlanTier,
-        SortField::DiscountAmount,
-        SortField::DiscountType,
-        SortField::Tags,
     ];
 
+    /// SQL column spelling. Accepted `--sort` values happen to be real
+    /// `subscriptions` columns, so this is also the `ORDER BY` identifier.
     pub fn as_str(self) -> &'static str {
         match self {
             SortField::Id => "id",
@@ -385,18 +366,6 @@ impl SortField {
             SortField::Currency => "currency",
             SortField::Cycle => "cycle",
             SortField::Status => "status",
-            SortField::BillingDay => "billingDay",
-            SortField::CreatedAt => "createdAt",
-            SortField::PaymentMethod => "paymentMethod",
-            SortField::ContractStart => "contractStart",
-            SortField::ContractEnd => "contractEnd",
-            SortField::AutoRenewal => "autoRenewal",
-            SortField::VendorName => "vendorName",
-            SortField::VendorUrl => "vendorUrl",
-            SortField::PlanTier => "planTier",
-            SortField::DiscountAmount => "discountAmount",
-            SortField::DiscountType => "discountType",
-            SortField::Tags => "tags",
         }
     }
 
