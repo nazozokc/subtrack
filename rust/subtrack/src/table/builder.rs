@@ -160,14 +160,20 @@ impl TableBuilder {
         let mut out: Vec<String> = Vec::new();
         for (y, height) in heights.iter().enumerate() {
             let is_top = y == 0;
-            let is_bottom = y + 1 == all_rows.len();
             let is_header_sep = y == 1 && !self.head.is_empty();
             let beside_span = self.is_span_row_at(y, col_count)
                 || (y >= 1 && self.is_span_row_at(y - 1, col_count));
-            if !self.row_dividers && !is_top && !is_bottom && !is_header_sep && !beside_span {
-                continue;
+            // Only the border above a row is optional: skip it at plain
+            // seams (between two consecutive regular rows) in compact mode,
+            // but draw it at every structural one — the top frame, the
+            // header separator, span-row junctions, and when full row
+            // dividers are requested. The bottom frame is drawn after the
+            // loop, so the last row still closes cleanly.
+            if self.row_dividers || is_top || is_header_sep || beside_span {
+                out.push(self.draw_border(&widths, y, false));
             }
-            out.push(self.draw_border(&widths, y, false));
+            // The row's own content lines are always emitted — skipping the
+            // border must never swallow the data beneath it.
             for line_num in 0..*height {
                 out.push(self.draw_line(&cell_lines, &widths, y, line_num, col_count))
             }

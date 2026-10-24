@@ -197,6 +197,10 @@ fn add_then_list_shows_expectations() {
     let table = env.text(&["list"]);
     assert!(table.contains("Netflix"), "table list: {table}");
     assert!(table.contains("$15.99"), "table list: {table}");
+    // Interior rows of a 3-row table must render in compact mode too
+    // (divider-skipping must not swallow data rows).
+    assert!(table.contains("Spotify"), "table list: {table}");
+    assert!(table.contains("iCloud"), "table list: {table}");
 
     // filtered by tag: only Spotify carries "music"
     let out = env.text(&["tags", "music"]);
