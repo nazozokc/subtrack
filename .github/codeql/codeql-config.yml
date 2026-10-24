@@ -3,4 +3,4 @@
 # treats stdout as a log sink and flags those UI writes as secret leakage, so
 # the file is excluded from analysis. No secrets are logged by this module.
 paths-ignore:
-  - rust/subtrack/src/prompt.rs
+  - rust/crates/subtrack/src/prompt.rs

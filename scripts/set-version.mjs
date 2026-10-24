@@ -7,7 +7,7 @@
 // Usage: node scripts/set-version.mjs {version}
 //
 // The Rust binary reports its version via the SUBTRACK_VERSION build-time env
-// var (see rust/subtrack/src/cli.rs), so Cargo.toml does not need to be
+// var (see rust/crates/subtrack/src/cli.rs), so Cargo.toml does not need to be
 // rewritten here. Keep rust/Cargo.toml's workspace version in sync manually as
 // the fallback for local builds.
 import { globSync, readFileSync, writeFileSync } from "node:fs";

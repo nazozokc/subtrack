@@ -56,7 +56,7 @@ This provides `node`, `pnpm`, `typescript`, `typos`, `rustc`, `cargo`, `rustfmt`
 The Rust crate carries two layers of tests, plus format/lint gates — all wired into CI (`check.yml` runs `cargo fmt --check`, `cargo clippy -D warnings`, and `cargo test`):
 
 - **Unit tests** live next to their implementation in each module's `tests.rs` (declared with `#[cfg(test)] mod tests;`). Pure logic — date/billing math, price formatting, validators, argument parsing, table layout, safe path resolution, crypto round-trips, FX conversion, and the suggest email parser — is covered directly against the implementation.
-- **CLI smoke suite** (`rust/subtrack/tests/cli_smoke.rs`) runs the compiled binary end-to-end in a temporary database directory with `SUBTRACK_TODAY` pinned (a Rust-only environment variable that fixes the "today" used by date logic), asserting exit codes and key output fragments for the main command flows.
+- **CLI smoke suite** (`rust/crates/subtrack/tests/cli_smoke.rs`) runs the compiled binary end-to-end in a temporary database directory with `SUBTRACK_TODAY` pinned (a Rust-only environment variable that fixes the "today" used by date logic), asserting exit codes and key output fragments for the main command flows.
 - **Formatter/lint gates.** `cargo fmt --check` and `cargo clippy --all-targets -D warnings` keep the code base format- and lint-clean; both come from the pinned `rust-toolchain.toml`.
 
 Add a unit test next to the function it covers; extend `cli_smoke.rs` when a new user-facing command lands.
@@ -89,8 +89,8 @@ Make sure all checks pass and CI is green.
 ```
 subtrack/
 ├── rust/                          # Rust implementation
-│   ├── Cargo.toml                 # Workspace (crates: ["subtrack"], edition 2024)
-│   ├── subtrack/                  # The CLI crate
+│   ├── Cargo.toml                 # Workspace (crates: ["crates/subtrack"], edition 2024)
+│   ├── crates/subtrack/           # The CLI crate
 │   │   ├── src/
 │   │   │   ├── main.rs            # Entry point
 │   │   │   ├── cli.rs             # Self-contained CLI framework (define(), routing, header)
