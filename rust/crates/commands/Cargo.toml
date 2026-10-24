@@ -1,0 +1,9 @@
+[package]
+name = "subtrack-commands"
+description = "Command resolution layer for subtrack: the command registry, argument routing and usage rendering"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+subtrack-core.workspace = true

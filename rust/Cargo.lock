@@ -626,7 +626,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
 dependencies = [
  "serde_core",
- "serde_derive",
 ]
 
 [[package]]
@@ -707,20 +706,78 @@ dependencies = [
 name = "subtrack"
 version = "12.0.0"
 dependencies = [
+ "chrono",
+ "flate2",
+ "libz-sys",
+ "regex",
+ "regex-lite",
+ "serde_json",
+ "subtrack-commands",
+ "subtrack-config",
+ "subtrack-core",
+ "subtrack-db",
+ "subtrack-mcp",
+ "subtrack-ui",
+]
+
+[[package]]
+name = "subtrack-commands"
+version = "12.0.0"
+dependencies = [
+ "subtrack-core",
+]
+
+[[package]]
+name = "subtrack-config"
+version = "12.0.0"
+dependencies = [
+ "serde_json",
+ "subtrack-core",
+ "subtrack-db",
+ "subtrack-ui",
+]
+
+[[package]]
+name = "subtrack-core"
+version = "12.0.0"
+dependencies = [
  "aes-gcm",
  "chrono",
  "flate2",
  "getrandom",
  "hex",
  "libz-sys",
- "regex",
- "regex-lite",
- "rusqlite",
  "scrypt",
- "serde",
  "serde_json",
  "sha2",
  "terminal_size",
+]
+
+[[package]]
+name = "subtrack-db"
+version = "12.0.0"
+dependencies = [
+ "chrono",
+ "flate2",
+ "rusqlite",
+ "subtrack-core",
+]
+
+[[package]]
+name = "subtrack-mcp"
+version = "12.0.0"
+dependencies = [
+ "chrono",
+ "serde_json",
+ "subtrack-core",
+ "subtrack-db",
+]
+
+[[package]]
+name = "subtrack-ui"
+version = "12.0.0"
+dependencies = [
+ "subtrack-core",
 ]
 
 [[package]]
