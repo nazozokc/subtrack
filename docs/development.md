@@ -88,43 +88,52 @@ Make sure all checks pass and CI is green.
 
 ```
 subtrack/
-├── rust/                          # Rust implementation
-│   ├── Cargo.toml                 # Workspace (crates: ["crates/subtrack"], edition 2024)
-│   ├── crates/subtrack/           # The CLI crate
+├── rust/                          # Rust implementation (multi-crate workspace)
+│   ├── Cargo.toml                 # Workspace (crates: ["crates/*"], edition 2024)
+│   ├── rust-toolchain.toml        # Pinned toolchain inherited by all crates
+│   ├── crates/core/               # subtrack-core — infrastructure & domain layer
 │   │   ├── src/
-│   │   │   ├── main.rs            # Entry point
-│   │   │   ├── cli.rs             # Self-contained CLI framework (define(), routing, header)
+│   │   │   ├── ansi.rs, logger.rs # ANSI helpers & consola-compatible logger (buffer, flush, exit code)
+│   │   │   ├── ui.rs, prompt.rs   # Terminal width, interactive prompt core
 │   │   │   ├── parser/            # Tokenizer + argument resolution (tokenize.rs, resolve.rs, tests.rs)
-│   │   │   ├── router.rs          # Command/subcommand resolution
-│   │   │   ├── help.rs            # Usage/help rendering
-│   │   │   ├── commands.rs        # Command registry (50 commands, pure data)
-│   │   │   ├── mcp/               # MCP server (20 tools; server.rs, tools.rs, schema.rs, handlers/)
-│   │   │   ├── subs/              # add/edit/delete/clone/status/cancel handlers
-│   │   │   ├── list.rs            # list (filters, sorting)
-│   │   │   ├── search.rs          # search
-│   │   │   ├── tags.rs            # tags & tag subcommands
-│   │   │   ├── trial.rs, bulk.rs, dedupe.rs, templates.rs, suggest.rs
-│   │   │   ├── io.rs, export.rs, receipt.rs      # export / import / receipts
-│   │   │   ├── payment.rs, analytics.rs, summary.rs, forecast.rs, compare.rs
-│   │   │   ├── budget.rs, optimize.rs, timeline.rs, calendar.rs, upcoming.rs,
-│   │   │   ├── review.rs, history.rs, changes.rs, notify.rs
-│   │   │   ├── report/            # Yearly report + monthly totals (calc.rs, render.rs)
-│   │   │   ├── profile.rs         # Filter profiles
-│   │   │   ├── usage/             # LLM usage tracking (add/list/import/refresh/total)
-│   │   │   ├── audit.rs, maintenance.rs, cleanup.rs, stats.rs, check.rs
-│   │   │   ├── config/            # Config keys/values and display themes (keys.rs, theme.rs)
-│   │   │   ├── db/                # SQLite CRUD, schema, migrations (migrations.rs, subscriptions.rs, …)
-│   │   │   ├── currency.rs, fx.rs # Currency list & exchange rates
-│   │   │   ├── backup.rs, crypto.rs # Backup & AES-256-GCM encryption
-│   │   │   ├── display.rs, price.rs, xlsx.rs, json.rs
-│   │   │   ├── table/             # Table renderer (ansi.rs, text.rs, theme.rs, builder.rs)
+│   │   │   ├── domain.rs, models.rs # Status/Cycle/FilterDomain + row types shared by all layers
 │   │   │   ├── validation.rs, safe_path.rs
 │   │   │   ├── date/              # Date helpers (period.rs, billing.rs, SUBTRACK_TODAY override)
-│   │   │   ├── suggest_parser/    # Suggest email parsers (bank, card, receipt, wallet, generic)
-│   │   │   ├── ansi.rs, logger.rs # ANSI helpers & consola-compatible logger
-│   │   │   └── …
-│   │   ├── tests/cli_smoke.rs     # End-to-end CLI smoke tests
+│   │   │   ├── price.rs, fx.rs    # Price formatting & embedded-rate FX (data/fx-rates.json)
+│   │   │   ├── json.rs, xlsx.rs   # JS-compatible JSON emitter & XLSX writer
+│   │   │   ├── formats.rs         # Document builders (csv / md / ics / xlsx / json export)
+│   │   │   ├── calendar.rs, upcoming.rs # Pure billing-day & upcoming math
+│   │   │   └── crypto.rs          # AES-256-GCM storage, key dirs, temp files
 │   │   └── data/fx-rates.json     # Embedded FX rates (include_str! in fx.rs)
+│   ├── crates/ui/                 # subtrack-ui — table rendering engine
+│   │   └── src/table/             # (ansi.rs, text.rs, theme.rs, builder.rs, tests.rs)
+│   ├── crates/db/                 # subtrack-db — SQLite persistence layer
+│   │   └── src/db/                # CRUD, migrations, encrypted save/backup, history
+│   ├── crates/config/             # subtrack-config — settings & display themes
+│   ├── crates/commands/           # subtrack-commands — command registry, router, help
+│   ├── crates/mcp/                # subtrack-mcp — MCP server (20 tools; handlers/)
+│   └── crates/subtrack/           # The `subtrack` CLI binary + command handlers
+│       ├── src/
+│       │   ├── main.rs            # Entry point
+│       │   ├── cli.rs             # CLI bootstrap & dispatch (creates Command objects)
+│       │   ├── subs/              # add/edit/delete/clone/status/cancel handlers
+│       │   ├── list.rs            # list (filters, sorting)
+│       │   ├── search.rs          # search
+│       │   ├── tags.rs            # tags & tag subcommands
+│       │   ├── trial.rs, bulk.rs, dedupe.rs, templates.rs, suggest.rs
+│       │   ├── io.rs, export.rs, receipt.rs      # import / export / receipts commands
+│       │   ├── payment.rs, analytics.rs, summary.rs, forecast.rs, compare.rs
+│       │   ├── budget.rs, optimize.rs, timeline.rs, calendar.rs, upcoming.rs,
+│       │   ├── review.rs, history.rs, changes.rs, notify.rs
+│       │   ├── report/            # Yearly report + monthly totals (calc.rs, render.rs)
+│       │   ├── profile.rs         # Filter profiles
+│       │   ├── usage/             # LLM usage tracking (add/list/import/refresh/total)
+│       │   ├── prompts.rs         # Prompt helpers composing the two layers
+│       │   ├── suggest_parser/    # Suggest email parsers (bank, card, receipt, wallet, generic)
+│       │   ├── currency.rs        # Currency list command
+│       │   ├── display.rs, backup.rs # Display CLI recipes & backup command
+│       │   └── …
+│       └── tests/cli_smoke.rs     # End-to-end CLI smoke tests
 ├── packages/
 │   ├── subtrack/                  # npm package: launcher + metadata
 │   │   ├── src/launcher.mjs       # Spawns the platform binary (SUBTRACK_BINARY override)

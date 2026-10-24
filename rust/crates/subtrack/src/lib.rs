@@ -1,7 +1,19 @@
-//! CLI entry — port of `src/index.ts` main + cli bootstrap.
+//! CLI entry — glue between the workspace crates. Command modules live in
+//! this crate (entry → commands → handlers → DB layering); infrastructure
+//! (core, table engine, DB, config, command registry, MCP) is re-exported
+//! below so the pre-split `crate::<module>` paths keep resolving.
+
+pub use subtrack_commands::{commands, help, router};
+pub use subtrack_config::config;
+pub use subtrack_core::{
+    ansi, crypto, date, domain, flush, formats, fx, json, logger, parser, price, prompt, safe_path,
+    set_exit_code, ui, validation, xlsx,
+};
+pub use subtrack_db::db;
+pub use subtrack_mcp::mcp;
+pub use subtrack_ui::table;
 
 mod analytics;
-mod ansi;
 mod audit;
 mod backup;
 mod budget;
@@ -11,95 +23,37 @@ mod changes;
 mod check;
 mod cleanup;
 mod cli;
-mod commands;
 mod compare;
-mod config;
-mod crypto;
 mod currency;
-mod date;
-mod db;
 mod dedupe;
 mod display;
-mod domain;
 mod export;
 mod forecast;
-mod fx;
-mod help;
 mod history;
 mod io;
-mod json;
 mod list;
-mod logger;
 mod maintenance;
-mod mcp;
 mod menu;
 mod notify;
 mod optimize;
-mod parser;
 mod payment;
-mod price;
 mod profile;
-mod prompt;
 mod prompts;
 mod receipt;
 mod report;
 mod review;
-mod router;
-mod safe_path;
 mod search;
 mod stats;
 mod subs;
 mod suggest;
 mod suggest_parser;
 mod summary;
-mod table;
 mod tags;
 mod templates;
 mod timeline;
 mod trial;
-mod ui;
 mod upcoming;
 mod usage;
-mod validation;
-mod xlsx;
-
-use std::sync::atomic::{AtomicI32, Ordering};
-
-static EXIT_CODE: AtomicI32 = AtomicI32::new(0);
-
-/// Recorded by logger::fail() — the process exit code when the last
-/// operation failed.
-pub fn set_exit_code(code: i32) {
-    EXIT_CODE.store(code, Ordering::SeqCst)
-}
-
-/// Flush the buffered stdout/stderr (the whole CLI output is buffered so that
-/// ordering — banner before validation errors, etc. — is deterministic).
-pub fn flush() {
-    use std::io::Write;
-
-    let out = {
-        let mut buffer = logger::OUT.lock().unwrap();
-        std::mem::take(&mut *buffer)
-    };
-    if !out.is_empty() {
-        let stdout = std::io::stdout();
-        let mut handle = stdout.lock();
-        let _ = handle.write_all(out.as_bytes());
-        let _ = handle.flush();
-    }
-
-    let err = {
-        let mut buffer = logger::ERR.lock().unwrap();
-        std::mem::take(&mut *buffer)
-    };
-    if !err.is_empty() {
-        let stderr = std::io::stderr();
-        let mut handle = stderr.lock();
-        let _ = handle.write_all(err.as_bytes());
-        let _ = handle.flush();
-    }
-}
 
 /// Remove plaintext backing files left by this run (port of the TS
 /// `process.on("exit")` cleanup). Unlinking an open SQLite file is safe on
@@ -116,7 +70,7 @@ pub fn run(args: Vec<std::ffi::OsString>) -> i32 {
         .filter_map(|a| a.into_string().ok())
         .collect();
     let code = cli::run(&args);
-    let exit = EXIT_CODE.load(Ordering::SeqCst);
+    let exit = logger::exit_code();
     cleanup_temp_files();
     flush();
     if exit != 0 { exit } else { code }

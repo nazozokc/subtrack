@@ -1,0 +1,12 @@
+[package]
+name = "subtrack-mcp"
+description = "MCP (Model Context Protocol) stdio server for subtrack with read-only and write tools over the local database"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+serde_json.workspace = true
+subtrack-core.workspace = true
+subtrack-db.workspace = true

@@ -1,0 +1,9 @@
+[package]
+name = "subtrack-ui"
+description = "Table rendering engine for subtrack themed CLI tables"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+subtrack-core.workspace = true
