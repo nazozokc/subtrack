@@ -1,89 +1,19 @@
-//! `upcoming` command — port of `upcoming.ts` + `domain/billing.ts`
-//! (upcomingWithinDays).
+//! `upcoming` command — port of `upcoming.ts`. The date math and the
+//! currency conversion live in `subtrack_core::upcoming`.
 
-use crate::date::{
-    calculate_next_billing_inclusive, days_until, format_date, format_short_date, today,
-};
+use crate::date::{days_until, format_date, format_short_date};
 use crate::db::{QueryOptions, Subscription, get_subscriptions};
 use crate::json::{number, quote_string};
 use crate::logger::{self, log, out_str};
 use crate::parser::ParsedArgs;
 use crate::price::{format_price, round_currency};
-use chrono::NaiveDate;
-
-#[derive(Clone)]
-pub struct Entry {
-    pub idx: usize,
-    pub next_date: NaiveDate,
-    pub amount: f64,
-}
+use subtrack_core::upcoming::{Entry, upcoming_with_currency, upcoming_within_days};
 
 fn active_subs() -> std::io::Result<Vec<Subscription>> {
     Ok(get_subscriptions(&QueryOptions::default())?
         .into_iter()
         .filter(|s| crate::domain::not_cancelled(&s.status))
         .collect())
-}
-
-/// Port of `upcomingWithinDays(listActive(), days)`.
-pub(crate) fn upcoming_within_days(subs: &[Subscription], days: i64) -> Vec<Entry> {
-    if subs.is_empty() {
-        return Vec::new();
-    }
-    let now = today();
-    let end = now + chrono::Duration::days(days);
-    let mut entries: Vec<Entry> = Vec::new();
-    for (idx, sub) in subs.iter().enumerate() {
-        let next =
-            calculate_next_billing_inclusive(sub.billing_day, &sub.created_at, &sub.cycle, now);
-        if next >= now && next <= end {
-            entries.push(Entry {
-                idx,
-                next_date: next,
-                amount: sub.price,
-            });
-        }
-    }
-    entries.sort_by_key(|e| e.next_date);
-    entries
-}
-
-/// Port of `calcUpcomingWithCurrency` (embedded rates never fail).
-pub fn upcoming_with_currency_internal(
-    subs: &[Subscription],
-    days: i64,
-    target: Option<&str>,
-) -> (Vec<Entry>, Vec<Subscription>) {
-    upcoming_with_currency(subs, days, target)
-}
-
-fn upcoming_with_currency(
-    subs: &[Subscription],
-    days: i64,
-    target: Option<&str>,
-) -> (Vec<Entry>, Vec<Subscription>) {
-    let mut entries = upcoming_within_days(subs, days);
-    let mut display: Vec<Subscription> = subs.to_vec();
-    let Some(target) = target else {
-        return (entries, display);
-    };
-    if entries.is_empty() {
-        return (entries, display);
-    }
-    let rates = crate::fx::fetch_rates();
-    for entry in entries.iter_mut() {
-        let sub = &subs[entry.idx];
-        if let Some(converted) =
-            crate::fx::try_convert(entry.amount, &sub.currency, target, &rates.rates)
-        {
-            entry.amount = round_currency(converted);
-            let mut s = sub.clone();
-            s.price = round_currency(converted);
-            s.currency = target.to_string();
-            display[entry.idx] = s;
-        }
-    }
-    (entries, display)
 }
 
 pub fn run_upcoming(parsed: &ParsedArgs) -> i32 {

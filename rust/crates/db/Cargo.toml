@@ -1,0 +1,12 @@
+[package]
+name = "subtrack-db"
+description = "SQLite persistence layer for subtrack: subscription CRUD, migrations, encrypted on-disk storage, backup and usage history"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rusqlite.workspace = true
+chrono.workspace = true
+flate2.workspace = true
+subtrack-core.workspace = true

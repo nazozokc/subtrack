@@ -334,7 +334,8 @@ fn print_root_header() {
         }
         logger::log(&format!("  Monthly: {}", parts.join(" + ")));
         let days = 7i64;
-        let (entries, _) = crate::upcoming::upcoming_with_currency_internal(&active, days, None);
+        let (entries, _) =
+            subtrack_core::upcoming::upcoming_with_currency_internal(&active, days, None);
         if !entries.is_empty() {
             let mut totals: std::collections::HashMap<String, f64> =
                 std::collections::HashMap::new();

@@ -1,0 +1,18 @@
+[package]
+name = "subtrack-core"
+description = "Common infrastructure and domain layer for subtrack: terminal IO, arg parser, domain models, dates, prices, FX conversion, storage crypto and document builders"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+serde_json.workspace = true
+aes-gcm.workspace = true
+scrypt.workspace = true
+sha2.workspace = true
+hex.workspace = true
+getrandom.workspace = true
+flate2.workspace = true
+libz-sys.workspace = true
+terminal_size.workspace = true

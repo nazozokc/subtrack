@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/subtrack"]
+members = ["crates/*"]
 
 [profile.release]
 lto = "fat"
@@ -16,7 +16,6 @@ version = "12.0.0"
 [workspace.dependencies]
 rusqlite = { version = "0.40", features = ["bundled"] }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
-serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 aes-gcm = "0.11"
 scrypt = "0.12"
@@ -25,3 +24,27 @@ hex = "0.4"
 # OS CSPRNG for key/nonce generation (replaces direct /dev/urandom reads,
 # which do not exist on Windows).
 getrandom = "0.4"
+# Keep C zlib (byte-identical deflate output to the TypeScript reference) and
+# link it statically so the Linux musl artifact is self-contained. flate2 has no
+# feature for this; enabling libz-sys's `static` feature is the standard way to
+# bundle zlib instead of depending on a dynamic libz.
+flate2 = { version = "1.1.10", default-features = false, features = ["zlib"] }
+libz-sys = { version = "1.1", features = ["static"] }
+# regex-lite covers every pattern used by `suggest_parser` (see doc comment
+# there) at a fraction of the code size of the `regex` crate. The full `regex`
+# engine's extra features (Unicode tables, NFA optimization) are dead weight in
+# a CLI binary for these simple patterns.
+regex-lite = "0.1"
+# Terminal width detection (COLUMNS is still preferred when set).
+terminal_size = "0.4"
+# The golden harness normalizes captured output with a few regexes; only tests
+# need the full engine, so `regex` stays out of the runtime dependency graph.
+regex = "1"
+
+# Workspace-internal crates (path dependencies, shared across all members).
+subtrack-core = { path = "crates/core" }
+subtrack-ui = { path = "crates/ui" }
+subtrack-db = { path = "crates/db" }
+subtrack-config = { path = "crates/config" }
+subtrack-commands = { path = "crates/commands" }
+subtrack-mcp = { path = "crates/mcp" }
