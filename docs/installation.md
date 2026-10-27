@@ -3,6 +3,8 @@ title: Installation
 description: Install subtrack via npm, pnpm, or build the Rust binary from source.
 ---
 
+# Installation
+
 ## Requirements
 
 **subtrack** is a native Rust binary distributed through npm. The npm package (`@subtrack-org/subtrack`) contains a small Node.js launcher that runs the platform binary, so Node.js **22.5+** is required to launch it. The binary itself is self-contained — Linux builds are statically linked (musl) and work on any glibc or musl distribution, including Alpine.
@@ -62,9 +64,9 @@ export SUBTRACK_BINARY=$PWD/rust/target/release/subtrack
 SUBTRACK_BINARY=$PWD/rust/target/release/subtrack subtrack list
 ```
 
-<div class="callout info">
-  <strong>💡 Tip:</strong> Run <code>subtrack --help</code> after installation to verify everything works.
-</div>
+::: tip
+Run `subtrack --help` after installation to verify everything works.
+:::
 
 ## Verify installation
 

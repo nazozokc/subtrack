@@ -1,11 +1,28 @@
 ---
 title: Usage Guides
 description: Practical usage examples and workflows for subtrack.
+outline: [2, 2]
 ---
 
-Practical workflows for managing your subscriptions with subtrack.
+# Usage Guides
 
-## First-time setup & adding subscriptions
+Practical workflows for managing your subscriptions with subtrack. The guide is grouped by task — start with the category that matches what you want to do, or search for a command name.
+
+<div class="doc-map">
+  <a class="doc-map-item" href="#managing-subscriptions"><span class="doc-map-title">Managing subscriptions</span><span class="doc-map-desc">Add, edit, pause, cancel, clone, and clean up subscriptions.</span><span class="doc-map-names"><code>First-time setup & adding subscriptions</code> · <code>Editing subscriptions</code> · <code>Pausing, resuming, and renewing</code> · <code>Cancelling with the guided checklist</code> · <code>Cloning subscriptions</code> · <code>Archiving and unarchiving</code> · <code>Bulk operations</code> · <code>Finding duplicates</code> · <code>Reusable templates</code> · <code>Subscription suggestions</code> · <code>Tracking free trials</code></span></a>
+  <a class="doc-map-item" href="#spending-budgets"><span class="doc-map-title">Spending & budgets</span><span class="doc-map-desc">Understand totals, plan budgets, and forecast future costs.</span><span class="doc-map-names"><code>Tracking upcoming bills</code> · <code>Analytics and budget tracking</code> · <code>Budgets and yearly reports</code> · <code>Understanding your spending</code> · <code>Managing multi-currency subscriptions</code> · <code>Spending forecast</code> · <code>Cost optimization</code> · <code>Comparing spending over time</code> · <code>Monthly spending timeline</code> · <code>Price change history</code> · <code>Reviewing what's coming up</code></span></a>
+  <a class="doc-map-item" href="#organizing-searching"><span class="doc-map-title">Organizing & searching</span><span class="doc-map-desc">Tags, search, imports, and saved filter profiles.</span><span class="doc-map-names"><code>Importing from CSV</code> · <code>Tag-based organization</code> · <code>Searching subscriptions</code> · <code>Filter profiles</code></span></a>
+  <a class="doc-map-item" href="#data-maintenance"><span class="doc-map-title">Data & maintenance</span><span class="doc-map-desc">Exports, backups, audits, and integrity checks.</span><span class="doc-map-names"><code>Exporting data</code> · <code>Regular backups</code> · <code>Audit trail</code> · <code>Database maintenance</code> · <code>Database statistics</code> · <code>Data integrity and change history</code></span></a>
+  <a class="doc-map-item" href="#llm-api-usage"><span class="doc-map-title">LLM API usage</span><span class="doc-map-desc">Track, import, and refresh API costs.</span><span class="doc-map-names"><code>Tracking LLM API costs</code></span></a>
+  <a class="doc-map-item" href="#display-alerts"><span class="doc-map-title">Display & alerts</span><span class="doc-map-desc">Themes, columns, and desktop notifications.</span><span class="doc-map-names"><code>Calendar view</code> · <code>Desktop notifications</code> · <code>Customizing the display</code></span></a>
+  <a class="doc-map-item" href="#integrations"><span class="doc-map-title">Integrations</span><span class="doc-map-desc">Connect subtrack to AI assistants.</span><span class="doc-map-names"><code>MCP integration</code></span></a>
+</div>
+
+## Managing subscriptions
+
+Add, edit, pause, cancel, clone, and clean up subscriptions.
+
+### First-time setup & adding subscriptions
 
 After installation, start by adding your subscriptions. Each subscription needs a name, price, currency, billing cycle, and status:
 
@@ -24,7 +41,7 @@ Once added, verify with:
 subtrack list
 ```
 
-### Example: Adding a Netflix subscription
+#### Example: Adding a Netflix subscription
 
 ```bash
 subtrack add \
@@ -36,7 +53,7 @@ subtrack add \
   --tags "video,entertainment"
 ```
 
-## Editing subscriptions
+### Editing subscriptions
 
 Update existing subscriptions with `subtrack edit`. Specify the subscription ID and the fields to update — only the passed fields change:
 
@@ -46,7 +63,7 @@ subtrack edit 3 --price 2500 --tags "video,entertainment,4k"
 
 To see subscription IDs, run `subtrack list`. Editing without an ID — or without any field flag — takes no action.
 
-### Managing status and billing day
+#### Managing status and billing day
 
 Each subscription has a **status** (`active`, `paused`, `cancelled`, `archived`) and an optional **billing day** (day of month).
 
@@ -63,7 +80,7 @@ subtrack edit 3 --status active
 
 Paused subscriptions are preserved in the database but excluded from payment calculations. Cancelled subscriptions are kept for record-keeping but excluded from all totals.
 
-## Pausing, resuming, and renewing
+### Pausing, resuming, and renewing
 
 `subtrack edit --status` works, but the dedicated commands are faster for multiple IDs:
 
@@ -81,7 +98,7 @@ subtrack renew 3 --price 1980 --contractEnd 2027-08-31
 
 `--force` skips the confirmation prompt, which makes these safe to script.
 
-## Cancelling with the guided checklist
+### Cancelling with the guided checklist
 
 `subtrack cancel` reviews the cancellation steps (optional data export, alternative-service checks, a cancellation-date note, and a final confirmation) and aborts without changes until you pass `--force`. With `--force`, the subscription is marked `cancelled` (not deleted) and written to the audit log.
 
@@ -98,7 +115,119 @@ subtrack cancel 3 --json
 
 To remove a cancelled subscription permanently, use `subtrack delete <id>`.
 
-## Tracking upcoming bills
+### Cloning subscriptions
+
+Clone an existing subscription to quickly create a similar one:
+
+```bash
+# Clone subscription 3 with auto-generated name
+subtrack clone 3
+
+# Clone with custom name and price override
+subtrack clone 3 --name "Netflix (Travel)" --price 1500
+```
+
+All fields from the source subscription are copied. Use optional flags to override specific fields.
+
+### Archiving and unarchiving
+
+Archive subscriptions you no longer actively use but want to keep for reference:
+
+```bash
+# Archive a subscription
+subtrack archive 5
+
+# Restore it when needed
+subtrack unarchive 5
+```
+
+Archived subscriptions are excluded from all payment calculations and reports, unlike cancelled subscriptions which are kept for record-keeping without a path back to active.
+
+### Bulk operations
+
+Manage multiple subscriptions at once with filters:
+
+```bash
+# Pause all unused subscriptions
+subtrack bulk status --set paused --tag unused
+
+# Delete cancelled subscriptions
+subtrack bulk delete --status cancelled
+
+# Tag all active music subscriptions
+subtrack bulk tag add --add music --status active
+```
+
+### Finding duplicates
+
+`subtrack dedupe` compares normalized subscription names for near-matches (Levenshtein distance, default threshold 0.8; pairs sharing a vendor URL are boosted):
+
+```bash
+subtrack dedupe
+subtrack dedupe --threshold 0.7
+subtrack dedupe --json
+
+# Merge the duplicate (price history and tags move to the kept entry)
+subtrack dedupe merge 4 5
+```
+
+### Reusable templates
+
+Save a frequently used subscription shape once, then create instances from it:
+
+```bash
+subtrack template add spotify --price 980 --currency JPY --cycle monthly --tags music
+subtrack template list
+
+# Create a subscription from the template
+subtrack template use spotify
+
+# Override fields at creation time
+subtrack template use spotify --price 1080
+
+subtrack template edit spotify --price 1080
+subtrack template delete spotify
+```
+
+### Subscription suggestions
+
+Suggestions are candidate subscriptions detected by the scanner (for example AI tool usage that looks like a paid plan) or imported from a receipt file:
+
+```bash
+# List pending candidates
+subtrack suggest list
+subtrack suggest view 3
+
+# Accept a candidate
+subtrack suggest add 3
+
+# Dismiss one, or all
+subtrack suggest dismiss 3
+subtrack suggest dismiss --all
+```
+
+`subtrack receipt <file>` parses a receipt and creates candidates; use `--dryRun` to inspect without writing.
+
+### Tracking free trials
+
+Add trial periods to get reminders before they expire:
+
+```bash
+# Add a trial
+subtrack trial add --name "Spotify Premium" --expires-at 2026-08-01 --price 980 --currency JPY --cycle monthly
+
+# List all trials
+subtrack trial list
+
+# See what's expiring soon
+subtrack trial expiring 7
+```
+
+## Spending & budgets
+
+Understand totals, plan budgets, and forecast future costs.
+
+### Tracking upcoming bills
 
 See which subscriptions are due for payment soon:
 
@@ -115,7 +244,7 @@ subtrack upcoming 0
 
 The `upcoming` command uses each subscription's `billingDay` (or creation date) to calculate the next billing date. Only active and paused subscriptions are included.
 
-## Analytics and budget tracking
+### Analytics and budget tracking
 
 Get detailed analytics including status breakdown and budget tracking:
 
@@ -132,7 +261,7 @@ subtrack analytics
 
 The analytics command shows whether you're within budget or over.
 
-## Budgets and yearly reports
+### Budgets and yearly reports
 
 Set a budget and check it against actual spending:
 
@@ -163,76 +292,7 @@ subtrack report --year 2025 --json
 
 The report shows total spending, a monthly bar chart, top subscriptions, what was added or cancelled during the year, price changes, and a comparison against `yearlyBudget`.
 
-## Importing from CSV
-
-Bulk-import subscriptions from a CSV file:
-
-```bash
-subtrack import subscriptions.csv
-```
-
-The CSV must have the header `name,cycle,tags,price,currency` (an optional `notes` column is also accepted; CSVs produced by `subtrack export csv` work as-is). Tags are separated by semicolons:
-
-```csv
-name,cycle,tags,price,currency
-Netflix,monthly,video;entertainment,1980,JPY
-GitHub Copilot,monthly,development,10,USD
-```
-
-Use `--dry-run` to validate without importing:
-
-```bash
-subtrack import subscriptions.csv --dry-run
-```
-
-## Tag-based organization
-
-Tags are a powerful way to categorize subscriptions. Examples:
-
-- **By category:** `music`, `video`, `cloud`, `productivity`
-- **By priority:** `essential`, `nice-to-have`
-- **By payment method:** `credit-card`, `paypal`
-- **By usage:** `personal`, `work`, `family`
-
-Filter by tags:
-
-```bash
-# Find all music-related subscriptions
-subtrack tags music
-
-# Find subscriptions used for both work and personal
-subtrack tags work personal
-```
-
-Tags use AND logic — only subscriptions matching **all** specified tags are shown.
-
-### Managing tags
-
-View all tags and their usage count:
-
-```bash
-subtrack tag list
-```
-
-Rename a tag (merges if the new name already exists):
-
-```bash
-subtrack tag rename entertainment fun
-```
-
-Delete a tag and its associations:
-
-```bash
-subtrack tag delete fun
-```
-
-Clean up orphaned tags (tags no longer attached to any subscription):
-
-```bash
-subtrack tag prune
-```
-
-## Understanding your spending
+### Understanding your spending
 
 Use `subtrack payment` to see your total spending across different periods:
 
@@ -259,7 +319,7 @@ subtrack payment monthly --api
 subtrack payment monthly --api --currency JPY
 ```
 
-### Summary statistics
+#### Summary statistics
 
 Get a quick overview of all your subscriptions:
 
@@ -269,7 +329,7 @@ subtrack summary
 
 This shows total count, the most expensive subscription, monthly spending broken down by currency, and monthly spending broken down by tag.
 
-## Managing multi-currency subscriptions
+### Managing multi-currency subscriptions
 
 If you have subscriptions in different currencies (e.g., JPY for local services and USD for international ones), subtrack handles this natively:
 
@@ -283,152 +343,7 @@ subtrack list
 
 Without `--currency`, subscriptions are grouped by their original currency with per-group subtotals.
 
-## Exporting data
-
-Export subscriptions for use in spreadsheets or other tools:
-
-```bash
-# CSV (for Excel / Google Sheets)
-subtrack export csv
-
-# JSON (for programmatic use)
-subtrack export json
-
-# Markdown (for documentation)
-subtrack export md
-
-# Filter by tags and convert currency
-subtrack export csv --tags video --currency JPY
-```
-
-## Regular backups
-
-Set up a cron job (or Task Scheduler on Windows) for automatic backups:
-
-```bash
-# Example cron: daily backup at 3 AM
-0 3 * * * subtrack backup ~/subtrack-backups
-```
-
-Backups are timestamped and will never overwrite previous files. See [Data & Storage](/data) for restore instructions.
-
-## Tracking LLM API costs
-
-subtrack can track LLM API usage costs alongside subscription costs. This is useful if you use paid LLM APIs (OpenAI, Anthropic, etc.) and want to see total AI spending.
-
-### Adding usage entries
-
-```bash
-subtrack usage add \
-  --provider openai \
-  --model gpt-4o \
-  --input-tokens 5000 \
-  --output-tokens 1500 \
-  --date 2026-06-19 \
-  --description "Code review"
-```
-
-Cost is automatically calculated using LiteLLM pricing data. If the model has no known pricing (or you are offline), pass `--cost` explicitly — for example `--cost 0.50` for 50 USD cents.
-
-### Listing and filtering
-
-```bash
-# All entries
-subtrack usage list
-
-# Filter by provider and date range
-subtrack usage list --provider anthropic --from 2026-06-01
-```
-
-### Including API costs in payment totals
-
-```bash
-# See subscription + API costs together
-subtrack payment monthly --api
-```
-
-API costs for the current period are fetched and added to the subscription totals. They are stored in USD cents and automatically converted if you use `--currency`.
-
-### Auto-scanning from AI tools
-
-subtrack can automatically discover and import LLM usage data from various AI coding tools:
-
-```bash
-# Auto-scan known sources for the current month
-subtrack usage refresh
-
-# Scan a specific date range
-subtrack usage refresh --from 2026-01-01 --to 2026-06-30
-
-# Scan all available historical data
-subtrack usage refresh --all
-```
-
-Supported sources: OpenCode DB, Claude Code, Codex CLI, Cursor, GitHub Copilot, and Windsurf.
-
-### Importing from log files
-
-Import usage data from provider response logs:
-
-```bash
-# Import from a JSONL file
-subtrack usage import ./openai-responses.jsonl
-
-# Pipe from stdin
-cat responses.jsonl | subtrack usage import -
-```
-
-### Refreshing pricing data
-
-The LiteLLM pricing cache is automatically refreshed every 24 hours. To force a refresh:
-
-```bash
-subtrack usage refresh
-```
-
-## Searching subscriptions
-
-Quickly find subscriptions by name, notes, or tags:
-
-```bash
-# Search by keyword
-subtrack search netflix
-
-# Search in notes only
-subtrack search "family plan" --notes
-```
-
-## Tracking free trials
-
-Add trial periods to get reminders before they expire:
-
-```bash
-# Add a trial
-subtrack trial add --name "Spotify Premium" --expires-at 2026-08-01 --price 980 --currency JPY --cycle monthly
-
-# List all trials
-subtrack trial list
-
-# See what's expiring soon
-subtrack trial expiring 7
-```
-
-## Bulk operations
-
-Manage multiple subscriptions at once with filters:
-
-```bash
-# Pause all unused subscriptions
-subtrack bulk status --set paused --tag unused
-
-# Delete cancelled subscriptions
-subtrack bulk delete --status cancelled
-
-# Tag all active music subscriptions
-subtrack bulk tag add --add music --status active
-```
-
-## Spending forecast
+### Spending forecast
 
 Project your subscription costs into the future:
 
@@ -443,7 +358,7 @@ subtrack forecast --cancel Netflix
 subtrack forecast --addName "New Service" --addPrice 1500 --addCurrency JPY --addCycle monthly
 ```
 
-## Cost optimization
+### Cost optimization
 
 Let subtrack analyze your subscriptions for savings:
 
@@ -461,7 +376,7 @@ The optimizer flags:
 - **Inactive subscriptions** — paused or long-unused subscriptions
 - **Cancelled waste** — subscriptions that were cancelled but had recent payments
 
-## Comparing spending over time
+### Comparing spending over time
 
 See how your costs have changed between periods:
 
@@ -475,7 +390,7 @@ subtrack compare quarterly
 
 The `compare` command accounts for price changes recorded in your subscription history.
 
-## Monthly spending timeline
+### Monthly spending timeline
 
 Visualize spending trends:
 
@@ -487,7 +402,7 @@ subtrack timeline
 subtrack timeline --months 6 --categories
 ```
 
-## Price change history
+### Price change history
 
 Track when subscription prices changed:
 
@@ -499,34 +414,102 @@ subtrack history 3
 subtrack history --all --days 30
 ```
 
-## Calendar view
+### Reviewing what's coming up
 
-See which days of the month have bills due:
-
-```bash
-# Current month
-subtrack calendar
-
-# Specific month
-subtrack calendar --month 12 --year 2026
-```
-
-## Desktop notifications
-
-Get OS-level reminders for upcoming bills:
+`subtrack review` combines upcoming bills, contract expirations, and expiring trials into one screen:
 
 ```bash
-# Preview upcoming bills
-subtrack notify --dry-run
-
-# Send notification
-subtrack notify
-
-# Custom look-ahead period
-subtrack notify --days 3
+subtrack review
+subtrack review --billDays 30 --contractDays 60 --trialDays 14
+subtrack review --json
 ```
 
-## Filter profiles
+## Organizing & searching
+
+Tags, search, imports, and saved filter profiles.
+
+### Importing from CSV
+
+Bulk-import subscriptions from a CSV file:
+
+```bash
+subtrack import subscriptions.csv
+```
+
+The CSV must have the header `name,cycle,tags,price,currency` (an optional `notes` column is also accepted; CSVs produced by `subtrack export csv` work as-is). Tags are separated by semicolons:
+
+```csv
+name,cycle,tags,price,currency
+Netflix,monthly,video;entertainment,1980,JPY
+GitHub Copilot,monthly,development,10,USD
+```
+
+Use `--dry-run` to validate without importing:
+
+```bash
+subtrack import subscriptions.csv --dry-run
+```
+
+### Tag-based organization
+
+Tags are a powerful way to categorize subscriptions. Examples:
+
+- **By category:** `music`, `video`, `cloud`, `productivity`
+- **By priority:** `essential`, `nice-to-have`
+- **By payment method:** `credit-card`, `paypal`
+- **By usage:** `personal`, `work`, `family`
+
+Filter by tags:
+
+```bash
+# Find all music-related subscriptions
+subtrack tags music
+
+# Find subscriptions used for both work and personal
+subtrack tags work personal
+```
+
+Tags use AND logic — only subscriptions matching **all** specified tags are shown.
+
+#### Managing tags
+
+View all tags and their usage count:
+
+```bash
+subtrack tag list
+```
+
+Rename a tag (merges if the new name already exists):
+
+```bash
+subtrack tag rename entertainment fun
+```
+
+Delete a tag and its associations:
+
+```bash
+subtrack tag delete fun
+```
+
+Clean up orphaned tags (tags no longer attached to any subscription):
+
+```bash
+subtrack tag prune
+```
+
+### Searching subscriptions
+
+Quickly find subscriptions by name, notes, or tags:
+
+```bash
+# Search by keyword
+subtrack search netflix
+
+# Search in notes only
+subtrack search "family plan" --notes
+```
+
+### Filter profiles
 
 Save and switch between filter profiles to focus on specific subscription groups:
 
@@ -544,35 +527,40 @@ subtrack profile delete work
 subtrack profile list
 ```
 
-## Cloning subscriptions
+## Data & maintenance
 
-Clone an existing subscription to quickly create a similar one:
+Exports, backups, audits, and integrity checks.
 
-```bash
-# Clone subscription 3 with auto-generated name
-subtrack clone 3
+### Exporting data
 
-# Clone with custom name and price override
-subtrack clone 3 --name "Netflix (Travel)" --price 1500
-```
-
-All fields from the source subscription are copied. Use optional flags to override specific fields.
-
-## Archiving and unarchiving
-
-Archive subscriptions you no longer actively use but want to keep for reference:
+Export subscriptions for use in spreadsheets or other tools:
 
 ```bash
-# Archive a subscription
-subtrack archive 5
+# CSV (for Excel / Google Sheets)
+subtrack export csv
 
-# Restore it when needed
-subtrack unarchive 5
+# JSON (for programmatic use)
+subtrack export json
+
+# Markdown (for documentation)
+subtrack export md
+
+# Filter by tags and convert currency
+subtrack export csv --tags video --currency JPY
 ```
 
-Archived subscriptions are excluded from all payment calculations and reports, unlike cancelled subscriptions which are kept for record-keeping without a path back to active.
+### Regular backups
 
-## Audit trail
+Set up a cron job (or Task Scheduler on Windows) for automatic backups:
+
+```bash
+# Example cron: daily backup at 3 AM
+0 3 * * * subtrack backup ~/subtrack-backups
+```
+
+Backups are timestamped and will never overwrite previous files. See [Data & Storage](/data) for restore instructions.
+
+### Audit trail
 
 Track all changes made to your subscription data:
 
@@ -587,7 +575,7 @@ subtrack audit list --action subscription.edit
 subtrack audit prune --days 90
 ```
 
-## Database maintenance
+### Database maintenance
 
 Keep your database healthy with regular maintenance:
 
@@ -602,7 +590,7 @@ subtrack maintenance --vacuum
 subtrack cleanup
 ```
 
-## Database statistics
+### Database statistics
 
 Get a quick overview of your database's health and contents:
 
@@ -612,11 +600,132 @@ subtrack stats
 
 Shows subscription counts by status, tag count, trial count, usage entry count, database file size, and price range information.
 
-## Customizing the display
+### Data integrity and change history
+
+```bash
+# Check for data problems (exits 1 with --strict)
+subtrack check
+subtrack check --strict
+
+# Review what changed and when
+subtrack changes --from 2026-01-01 --to 2026-12-31
+subtrack changes --id 3
+```
+
+## LLM API usage
+
+Track, import, and refresh API costs.
+
+### Tracking LLM API costs
+
+subtrack can track LLM API usage costs alongside subscription costs. This is useful if you use paid LLM APIs (OpenAI, Anthropic, etc.) and want to see total AI spending.
+
+#### Adding usage entries
+
+```bash
+subtrack usage add \
+  --provider openai \
+  --model gpt-4o \
+  --input-tokens 5000 \
+  --output-tokens 1500 \
+  --date 2026-06-19 \
+  --description "Code review"
+```
+
+Cost is automatically calculated using LiteLLM pricing data. If the model has no known pricing (or you are offline), pass `--cost` explicitly — for example `--cost 0.50` for 50 USD cents.
+
+#### Listing and filtering
+
+```bash
+# All entries
+subtrack usage list
+
+# Filter by provider and date range
+subtrack usage list --provider anthropic --from 2026-06-01
+```
+
+#### Including API costs in payment totals
+
+```bash
+# See subscription + API costs together
+subtrack payment monthly --api
+```
+
+API costs for the current period are fetched and added to the subscription totals. They are stored in USD cents and automatically converted if you use `--currency`.
+
+#### Auto-scanning from AI tools
+
+subtrack can automatically discover and import LLM usage data from various AI coding tools:
+
+```bash
+# Auto-scan known sources for the current month
+subtrack usage refresh
+
+# Scan a specific date range
+subtrack usage refresh --from 2026-01-01 --to 2026-06-30
+
+# Scan all available historical data
+subtrack usage refresh --all
+```
+
+Supported sources: OpenCode DB, Claude Code, Codex CLI, Cursor, GitHub Copilot, and Windsurf.
+
+#### Importing from log files
+
+Import usage data from provider response logs:
+
+```bash
+# Import from a JSONL file
+subtrack usage import ./openai-responses.jsonl
+
+# Pipe from stdin
+cat responses.jsonl | subtrack usage import -
+```
+
+#### Refreshing pricing data
+
+The LiteLLM pricing cache is automatically refreshed every 24 hours. To force a refresh:
+
+```bash
+subtrack usage refresh
+```
+
+## Display & alerts
+
+Themes, columns, and desktop notifications.
+
+### Calendar view
+
+See which days of the month have bills due:
+
+```bash
+# Current month
+subtrack calendar
+
+# Specific month
+subtrack calendar --month 12 --year 2026
+```
+
+### Desktop notifications
+
+Get OS-level reminders for upcoming bills:
+
+```bash
+# Preview upcoming bills
+subtrack notify --dry-run
+
+# Send notification
+subtrack notify
+
+# Custom look-ahead period
+subtrack notify --days 3
+```
+
+### Customizing the display
 
 subtrack's tables and headings are themeable via `subtrack config set`. Everything is stored in `config.json` and validated on write, so an invalid value never breaks your terminal.
 
-### Choosing a theme preset
+#### Choosing a theme preset
 
 The `theme` key picks a preset tuned for your terminal:
 
@@ -634,7 +743,7 @@ subtrack config set theme high-contrast
 subtrack config set theme none
 ```
 
-### Overriding individual colors
+#### Overriding individual colors
 
 Any color key overrides the active preset. Valid color names are `black`, `red`,
 `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `gray`, plus the `bright*`
@@ -650,7 +759,7 @@ subtrack config set tableHeaderColor brightBlue
 subtrack config set tableZebraColor gray
 ```
 
-### Table sizing and zebra stripes
+#### Table sizing and zebra stripes
 
 ```bash
 # Turn zebra striping off (or back on)
@@ -661,7 +770,7 @@ subtrack config set tableZebra off
 subtrack config set tableMinWidth 60
 ```
 
-### Dates and list columns
+#### Dates and list columns
 
 ```bash
 # Compact MM/DD dates in cancel/notify messages
@@ -675,85 +784,17 @@ subtrack config set listShowMethod on
 
 CLI flags (`subtrack list --notes --method`) always take precedence over these defaults.
 
-### Seeing the current configuration
+#### Seeing the current configuration
 
 ```bash
 subtrack config list
 ```
 
-## Finding duplicates
+## Integrations
 
-`subtrack dedupe` compares normalized subscription names for near-matches (Levenshtein distance, default threshold 0.8; pairs sharing a vendor URL are boosted):
+Connect subtrack to AI assistants.
 
-```bash
-subtrack dedupe
-subtrack dedupe --threshold 0.7
-subtrack dedupe --json
-
-# Merge the duplicate (price history and tags move to the kept entry)
-subtrack dedupe merge 4 5
-```
-
-## Reusable templates
-
-Save a frequently used subscription shape once, then create instances from it:
-
-```bash
-subtrack template add spotify --price 980 --currency JPY --cycle monthly --tags music
-subtrack template list
-
-# Create a subscription from the template
-subtrack template use spotify
-
-# Override fields at creation time
-subtrack template use spotify --price 1080
-
-subtrack template edit spotify --price 1080
-subtrack template delete spotify
-```
-
-## Reviewing what's coming up
-
-`subtrack review` combines upcoming bills, contract expirations, and expiring trials into one screen:
-
-```bash
-subtrack review
-subtrack review --billDays 30 --contractDays 60 --trialDays 14
-subtrack review --json
-```
-
-## Subscription suggestions
-
-Suggestions are candidate subscriptions detected by the scanner (for example AI tool usage that looks like a paid plan) or imported from a receipt file:
-
-```bash
-# List pending candidates
-subtrack suggest list
-subtrack suggest view 3
-
-# Accept a candidate
-subtrack suggest add 3
-
-# Dismiss one, or all
-subtrack suggest dismiss 3
-subtrack suggest dismiss --all
-```
-
-`subtrack receipt <file>` parses a receipt and creates candidates; use `--dryRun` to inspect without writing.
-
-## Data integrity and change history
-
-```bash
-# Check for data problems (exits 1 with --strict)
-subtrack check
-subtrack check --strict
-
-# Review what changed and when
-subtrack changes --from 2026-01-01 --to 2026-12-31
-subtrack changes --id 3
-```
-
-## MCP integration
+### MCP integration
 
 subtrack runs an MCP (Model Context Protocol) server, allowing AI assistants to manage your subscriptions:
 
@@ -762,3 +803,4 @@ subtrack mcp
 ```
 
 This enables AI tools like Claude Desktop, Cursor, and Windsurf to read and modify your subscription data. See the [MCP page](/mcp) for setup instructions and tool reference.
+
