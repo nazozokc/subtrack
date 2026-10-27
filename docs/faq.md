@@ -1,9 +1,24 @@
 ---
 title: FAQ
 description: Frequently asked questions and troubleshooting for subtrack.
+outline: [2, 2]
 ---
 
-## I lost my database. Can I recover it?
+# FAQ
+
+<div class="doc-map">
+  <a class="doc-map-item" href="#data-backups-privacy"><span class="doc-map-title">Data, backups & privacy</span><span class="doc-map-desc">Where data lives, how it is protected, and how to recover it.</span></a>
+  <a class="doc-map-item" href="#cli-behavior"><span class="doc-map-title">CLI behavior</span><span class="doc-map-desc">Output, flags, offline use, containers, and updates.</span></a>
+  <a class="doc-map-item" href="#subscriptions-organization"><span class="doc-map-title">Subscriptions & organization</span><span class="doc-map-desc">Status, billing days, search, trials, and bulk actions.</span></a>
+  <a class="doc-map-item" href="#spending-reports"><span class="doc-map-title">Spending & reports</span><span class="doc-map-desc">Currencies, analytics, budgets, forecasts, and notifications.</span></a>
+  <a class="doc-map-item" href="#automation-integrations"><span class="doc-map-title">Automation & integrations</span><span class="doc-map-desc">Usage scanning, MCP, profiles, audit logs, and maintenance.</span></a>
+</div>
+
+## Data, backups & privacy
+
+Where data lives, how it is protected, and how to recover it.
+
+### I lost my database. Can I recover it?
 
 Use `subtrack restore` to restore from a backup. If you have a backup file, you can also restore it manually:
 
@@ -16,39 +31,7 @@ Without a backup, the data cannot be recovered — the database is stored locall
 
 **Recommendation:** Set up regular automated backups via cron or Task Scheduler. See the [Data & Storage](/data) page for details.
 
-## Why do I not see the header when I pipe output?
-
-The `subtrack vX.Y.Z` header is only printed when stdout is a terminal. Piped output is intentionally clean: no banner and no ANSI escapes. Use `-j, --json` when you want structured data (the `mcp` command is always silent):
-
-```bash
-subtrack list --json | jq '.[0].name'
-```
-
-There is no pre-command notification banner. If you want colors in a pipe, pass `--color=always`; use `--color=never` or `NO_COLOR=1` to force plain text in a terminal.
-
-## A flag I passed had no effect. Why?
-
-subtrack rejects unknown flags with an error and exit code 1 — e.g. `✖ --min-pricee: Unknown option '--min-pricee'` — so typos fail loudly rather than being dropped. If a flag *exists* but had no effect, the two naming styles are likely at play, and they are not interchangeable:
-
-| Command group | Style | Example |
-|---------------|-------|---------|
-| `usage add` / `usage edit` | kebab-case | `subtrack usage add --input-tokens 500` |
-| `add`, `edit`, `forecast`, `renew`, `template` | camelCase | `subtrack forecast --addName "New Service"` |
-| `list`, `import`, `receipt` | kebab-case | `subtrack list --min-price 500` |
-
-Check `subtrack <command> --help` for the authoritative list.
-
-## Can I add support for more currencies?
-
-The `Currency` type now accepts any ISO 4217 3-letter code, so all currencies supported by [open.er-api.com](https://open.er-api.com) work out of the box. Run `subtrack currency` for the curated list of 37 commonly used currencies. If you need a currency not in the list, use the `--currency` flag directly with any valid code.
-
-## Does subtrack work offline?
-
-Yes. Listing, adding, editing, deleting, importing, exporting, and filtering all work fully offline. The only feature that requires internet is `--currency` conversion, which fetches live exchange rates from [open.er-api.com](https://open.er-api.com).
-
-When offline, `--currency` falls back to per-currency display without conversion.
-
-## How do I restore from a backup?
+### How do I restore from a backup?
 
 Restore from a specific backup file — pass `--force` to proceed (without it the command takes no action):
 
@@ -67,21 +50,53 @@ gunzip -k ~/.config/subtrack/subtrack.db.gz
 
 Ensure no subtrack processes are running during the restore — the database is flushed to disk after each command.
 
-## Is my data sent anywhere?
+### Is my data sent anywhere?
 
 **No.** All data is stored locally in a SQLite file on your machine. There are no accounts, no telemetry, and no cloud sync. The only external request subtrack makes is to [open.er-api.com](https://open.er-api.com) for currency exchange rates — and only when you use the `--currency` flag.
 
-## Is the database encrypted?
+### Is the database encrypted?
 
 Yes. subtrack automatically encrypts the SQLite database file on disk using **AES-256-GCM**. On first run, a random 256-bit key is generated and stored at `~/.config/subtrack/.key`. Alternatively, you can set `SUBSC_CLI_DB_PASSPHRASE` to derive the key from a passphrase.
 
 > ⚠️ **If you lose the key file or forget the passphrase, the database cannot be recovered.** Always back up the `.key` file or keep your passphrase in a secure location (e.g. password manager).
 
-## Can I encrypt backups?
+### Can I encrypt backups?
 
 Yes. Use `subtrack backup --encrypt` to create an encrypted backup. Encrypted backups use the `.db.enc` extension and can only be restored on a machine with the same encryption key or passphrase.
 
-## Can I use subtrack in Docker or CI?
+## CLI behavior
+
+Output, flags, offline use, containers, and updates.
+
+### Why do I not see the header when I pipe output?
+
+The `subtrack vX.Y.Z` header is only printed when stdout is a terminal. Piped output is intentionally clean: no banner and no ANSI escapes. Use `-j, --json` when you want structured data (the `mcp` command is always silent):
+
+```bash
+subtrack list --json | jq '.[0].name'
+```
+
+There is no pre-command notification banner. If you want colors in a pipe, pass `--color=always`; use `--color=never` or `NO_COLOR=1` to force plain text in a terminal.
+
+### A flag I passed had no effect. Why?
+
+subtrack rejects unknown flags with an error and exit code 1 — e.g. `✖ --min-pricee: Unknown option '--min-pricee'` — so typos fail loudly rather than being dropped. If a flag *exists* but had no effect, the two naming styles are likely at play, and they are not interchangeable:
+
+| Command group | Style | Example |
+|---------------|-------|---------|
+| `usage add` / `usage edit` | kebab-case | `subtrack usage add --input-tokens 500` |
+| `add`, `edit`, `forecast`, `renew`, `template` | camelCase | `subtrack forecast --addName "New Service"` |
+| `list`, `import`, `receipt` | kebab-case | `subtrack list --min-price 500` |
+
+Check `subtrack <command> --help` for the authoritative list.
+
+### Does subtrack work offline?
+
+Yes. Listing, adding, editing, deleting, importing, exporting, and filtering all work fully offline. The only feature that requires internet is `--currency` conversion, which fetches live exchange rates from [open.er-api.com](https://open.er-api.com).
+
+When offline, `--currency` falls back to per-currency display without conversion.
+
+### Can I use subtrack in Docker or CI?
 
 Yes. subtrack is installed like any Node.js package (the npm launcher runs a native Rust binary; the Linux binaries are statically linked, so they work on any glibc or musl distribution). For Docker:
 
@@ -93,55 +108,7 @@ CMD ["subtrack", "list"]
 
 Use `SUBSC_CLI_DB_DIR` to control where the database is stored in containerized environments.
 
-## How does LLM API cost tracking work?
-
-The `subtrack usage` command uses [LiteLLM](https://github.com/BerriAI/litellm) pricing data to automatically calculate costs based on model name and token counts. Pricing is cached locally for 24 hours and can be refreshed with `subtrack usage refresh`. If a model is not found in the cache (and the LiteLLM Model Catalog API), the command exits with an error instructing you to pass `--cost` for a manual price.
-
-API costs are stored in USD cents (as a real number, allowing fractional cents for precise billing) and can be included in payment totals with `subtrack payment --api`.
-
-## Where does the pricing data come from?
-
-Model pricing is fetched from the [LiteLLM GitHub repository](https://github.com/BerriAI/litellm) (`model_prices_and_context_window.json`). The data is cached locally for 24 hours to avoid excessive network requests. You can force a refresh with `subtrack usage refresh`.
-
-## Can I pause a subscription instead of deleting it?
-
-Yes! Each subscription has a `status` field: `active`, `paused`, `cancelled`, or `archived`. Paused subscriptions are preserved in the database but excluded from payment totals, analytics, and upcoming bills. This is useful for subscriptions you want to keep for reference but aren't currently paying for.
-
-Use `subtrack edit <id> --status paused` (or `subtrack pause <id>`).
-
-## What is the billing day for?
-
-The billing day (1–31) controls the day of month when a subscription is considered due. This is used by the `subtrack upcoming` command to predict when your next bill is coming. If not set, the subscription's creation date is used as the billing anchor.
-
-Set it with: `subtrack edit <id> --billingDay 15`
-
-## What is the analytics command?
-
-`subtrack analytics` provides a detailed overview of your subscriptions including:
-- Status breakdown (active vs paused vs cancelled)
-- Monthly spending by currency
-- Monthly spending by tag
-- Budget tracking (if configured)
-
-Set a budget with `subtrack config set monthlyBudget <amount>` and the analytics command will show whether you're within budget.
-
-## How does the config command work?
-
-The `subtrack config` command manages runtime settings stored in `~/.config/subtrack/config.json`:
-
-- `defaultCurrency` — default currency for display (default: `USD`)
-- `monthlyBudget` — monthly spending budget in USD (0 = disabled)
-- `theme` — display theme (default: `default`)
-
-Set values with `subtrack config set <key> <value>` and list them with `subtrack config list`.
-
-## How does usage auto-scan work?
-
-The `subtrack usage refresh` command automatically scans known AI coding tools for LLM API usage data, including OpenCode DB, Claude Code, Codex CLI, Cursor, GitHub Copilot, and Windsurf. It parses local logs and databases to find usage entries and imports them without manual data entry.
-
-By default, it scans the current month. Use `--all` to scan all historical data.
-
-## How do I update subtrack?
+### How do I update subtrack?
 
 ```bash
 npm update -g subtrack
@@ -155,66 +122,131 @@ pnpm update -g subtrack
 
 Your database will be preserved — updates only affect the CLI code, not your data.
 
-## What is MCP and how do I use it?
+## Subscriptions & organization
 
-MCP (Model Context Protocol) is a standard that allows AI assistants to interact with tools. subtrack implements an MCP server that exposes 20 tools for subscription management. Start it with `subtrack mcp` and configure it in Claude Desktop, Cursor, Windsurf, or any MCP-compatible host. See the [MCP page](/mcp) for full details.
+Status, billing days, search, trials, and bulk actions.
 
-## How do I search for subscriptions?
+### Can I pause a subscription instead of deleting it?
+
+Yes! Each subscription has a `status` field: `active`, `paused`, `cancelled`, or `archived`. Paused subscriptions are preserved in the database but excluded from payment totals, analytics, and upcoming bills. This is useful for subscriptions you want to keep for reference but aren't currently paying for.
+
+Use `subtrack edit <id> --status paused` (or `subtrack pause <id>`).
+
+### What is the billing day for?
+
+The billing day (1–31) controls the day of month when a subscription is considered due. This is used by the `subtrack upcoming` command to predict when your next bill is coming. If not set, the subscription's creation date is used as the billing anchor.
+
+Set it with: `subtrack edit <id> --billingDay 15`
+
+### How do I search for subscriptions?
 
 Use `subtrack search <query>` to search by name, notes, or tags. You can restrict search scope with `--names`, `--notes`, or `--tags`.
 
-## What are trial periods?
+### What are trial periods?
 
 The `subtrack trial` command lets you track free trial periods. Add trials with an expiration date, and use `subtrack trial expiring` to see which trials are about to end. This helps you avoid unexpected charges when trials convert to paid subscriptions.
 
-## Can I manage multiple subscriptions at once?
+### Can I manage multiple subscriptions at once?
 
 Yes. The `subtrack bulk` command lets you change status, delete, or modify tags on multiple subscriptions at once. You can filter by tag, current status, or name pattern before applying the action.
 
-## What does the forecast command do?
-
-`subtrack forecast` projects your subscription spending over a given number of months (default: 12). It supports what-if scenarios — you can simulate cancelling subscriptions (`--cancel`) or adding hypothetical ones (`--addName`, `--addPrice`) to see how your costs would change.
-
-## What is the timeline command?
-
-`subtrack timeline` shows a monthly spending bar chart over time. Use `--categories` to break down spending by the first tag of each subscription. Useful for spotting spending trends.
-
-## How do I optimize my subscriptions?
-
-`subtrack optimize` analyzes your subscriptions for cost savings. It flags cycle changes (monthly → yearly savings), duplicate services, inactive subscriptions, and waste from cancelled subscriptions. Use `--min-savings` to filter suggestions by minimum yearly savings.
-
-## Can I compare my spending month-over-month?
-
-Yes. `subtrack compare` compares spending between the current period and the previous period. It accounts for price changes recorded in your subscription history. Use it with or without currency conversion and API cost inclusion.
-
-## How do I see a monthly calendar of my bills?
-
-`subtrack calendar` displays a monthly calendar with billing days marked, showing which subscriptions bill on which day. Specify `--month` and `--year` for a specific month, or omit for the current month.
-
-## Can I get desktop notifications for upcoming bills?
-
-Yes. `subtrack notify` sends an OS desktop notification for bills due within a configurable number of days. Use `--dry-run` to preview without sending a notification. The default look-ahead period is configured via `subtrack config set notifyDays <n>`.
-
-## What are filter profiles?
-
-Filter profiles let you save a set of filters (tags, status, payment method) and switch between them. When a profile is active, all list, payment, and summary commands show only matching subscriptions. Useful for separating work/personal subscriptions or focusing on specific categories.
-
-## What is the archive command for?
+### What is the archive command for?
 
 `subtrack archive <id>` sets a subscription's status to `archived`. Archived subscriptions are preserved in the database but excluded from all payment calculations and reports. This is different from `cancelled` — archiving is intended for long-term record-keeping (e.g., services you no longer use but want to keep a reference to). Use `subtrack unarchive <id>` to restore it back to active.
 
-## What is the clone command?
+### What is the clone command?
 
 `subtrack clone <id>` creates a new subscription pre-filled with all fields from the existing one. This is useful for creating similar subscriptions (e.g., multiple cloud service accounts) without re-entering all the data. Optionally override fields like `--name`, `--price`, or `--tags`.
 
-## What is the audit log?
+## Spending & reports
+
+Currencies, analytics, budgets, forecasts, and notifications.
+
+### Can I add support for more currencies?
+
+The `Currency` type now accepts any ISO 4217 3-letter code, so all currencies supported by [open.er-api.com](https://open.er-api.com) work out of the box. Run `subtrack currency` for the curated list of 37 commonly used currencies. If you need a currency not in the list, use the `--currency` flag directly with any valid code.
+
+### How many currencies does subtrack support?
+
+subtrack supports 37 built-in currencies (view with `subtrack currency`), and any ISO 4217 3-letter code via the `--currency` flag.
+
+### What is the analytics command?
+
+`subtrack analytics` provides a detailed overview of your subscriptions including:
+- Status breakdown (active vs paused vs cancelled)
+- Monthly spending by currency
+- Monthly spending by tag
+- Budget tracking (if configured)
+
+Set a budget with `subtrack config set monthlyBudget <amount>` and the analytics command will show whether you're within budget.
+
+### How does the config command work?
+
+The `subtrack config` command manages runtime settings stored in `~/.config/subtrack/config.json`:
+
+- `defaultCurrency` — default currency for display (default: `USD`)
+- `monthlyBudget` — monthly spending budget in USD (0 = disabled)
+- `theme` — display theme (default: `default`)
+
+Set values with `subtrack config set <key> <value>` and list them with `subtrack config list`.
+
+### How does LLM API cost tracking work?
+
+The `subtrack usage` command uses [LiteLLM](https://github.com/BerriAI/litellm) pricing data to automatically calculate costs based on model name and token counts. Pricing is cached locally for 24 hours and can be refreshed with `subtrack usage refresh`. If a model is not found in the cache (and the LiteLLM Model Catalog API), the command exits with an error instructing you to pass `--cost` for a manual price.
+
+API costs are stored in USD cents (as a real number, allowing fractional cents for precise billing) and can be included in payment totals with `subtrack payment --api`.
+
+### Where does the pricing data come from?
+
+Model pricing is fetched from the [LiteLLM GitHub repository](https://github.com/BerriAI/litellm) (`model_prices_and_context_window.json`). The data is cached locally for 24 hours to avoid excessive network requests. You can force a refresh with `subtrack usage refresh`.
+
+### What does the forecast command do?
+
+`subtrack forecast` projects your subscription spending over a given number of months (default: 12). It supports what-if scenarios — you can simulate cancelling subscriptions (`--cancel`) or adding hypothetical ones (`--addName`, `--addPrice`) to see how your costs would change.
+
+### What is the timeline command?
+
+`subtrack timeline` shows a monthly spending bar chart over time. Use `--categories` to break down spending by the first tag of each subscription. Useful for spotting spending trends.
+
+### How do I optimize my subscriptions?
+
+`subtrack optimize` analyzes your subscriptions for cost savings. It flags cycle changes (monthly → yearly savings), duplicate services, inactive subscriptions, and waste from cancelled subscriptions. Use `--min-savings` to filter suggestions by minimum yearly savings.
+
+### Can I compare my spending month-over-month?
+
+Yes. `subtrack compare` compares spending between the current period and the previous period. It accounts for price changes recorded in your subscription history. Use it with or without currency conversion and API cost inclusion.
+
+### How do I see a monthly calendar of my bills?
+
+`subtrack calendar` displays a monthly calendar with billing days marked, showing which subscriptions bill on which day. Specify `--month` and `--year` for a specific month, or omit for the current month.
+
+### Can I get desktop notifications for upcoming bills?
+
+Yes. `subtrack notify` sends an OS desktop notification for bills due within a configurable number of days. Use `--dry-run` to preview without sending a notification. The default look-ahead period is configured via `subtrack config set notifyDays <n>`.
+
+## Automation & integrations
+
+Usage scanning, MCP, profiles, audit logs, and maintenance.
+
+### How does usage auto-scan work?
+
+The `subtrack usage refresh` command automatically scans known AI coding tools for LLM API usage data, including OpenCode DB, Claude Code, Codex CLI, Cursor, GitHub Copilot, and Windsurf. It parses local logs and databases to find usage entries and imports them without manual data entry.
+
+By default, it scans the current month. Use `--all` to scan all historical data.
+
+### What is MCP and how do I use it?
+
+MCP (Model Context Protocol) is a standard that allows AI assistants to interact with tools. subtrack implements an MCP server that exposes 20 tools for subscription management. Start it with `subtrack mcp` and configure it in Claude Desktop, Cursor, Windsurf, or any MCP-compatible host. See the [MCP page](/mcp) for full details.
+
+### What are filter profiles?
+
+Filter profiles let you save a set of filters (tags, status, payment method) and switch between them. When a profile is active, all list, payment, and summary commands show only matching subscriptions. Useful for separating work/personal subscriptions or focusing on specific categories.
+
+### What is the audit log?
 
 Every mutating operation (add, edit, delete, clone, archive, import, etc.) is recorded in an audit log. View it with `subtrack audit list` and prune old entries with `subtrack audit prune --days 90`. The audit log helps track changes over time and diagnose issues.
 
-## How do I run database maintenance?
+### How do I run database maintenance?
 
 Use `subtrack maintenance` to run an integrity check (default) and optionally VACUUM to reclaim disk space. For a one-command cleanup that also prunes audit logs and orphaned tags, use `subtrack cleanup`. These commands help keep your database healthy and compact.
 
-## How many currencies does subtrack support?
-
-subtrack supports 37 built-in currencies (view with `subtrack currency`), and any ISO 4217 3-letter code via the `--currency` flag.

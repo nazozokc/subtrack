@@ -3,6 +3,8 @@ title: MCP
 description: Integrate subtrack with AI assistants via the Model Context Protocol.
 ---
 
+# MCP
+
 subtrack implements an MCP (Model Context Protocol) server that allows AI assistants — such as Claude Desktop, Cursor, and Windsurf — to read and manage your subscriptions directly.
 
 ## Starting the server

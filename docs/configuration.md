@@ -3,6 +3,8 @@ title: Configuration
 description: Environment variables and configuration options for subtrack.
 ---
 
+# Configuration
+
 subtrack follows a **zero-configuration** philosophy. It works out of the box with sensible defaults.
 
 ## Environment variables
@@ -31,13 +33,13 @@ export SUBSC_CLI_DB_PASSPHRASE="my-secure-passphrase"
 subtrack list
 ```
 
-<div class="callout info">
-  <strong>💡 Tip:</strong> Changing <code>SUBSC_CLI_DB_DIR</code> lets you maintain separate databases — useful for testing or multi-profile setups.
-</div>
+::: tip Separate profiles
+Changing `SUBSC_CLI_DB_DIR` lets you maintain separate databases — useful for testing or multi-profile setups.
+:::
 
-<div class="callout warning">
-  <strong>⚠️ Important:</strong> If you use <code>SUBSC_CLI_DB_PASSPHRASE</code> or the auto-generated encryption key, <strong>back up the key file</strong> (<code>~/.config/subtrack/.key</code>) or remember your passphrase. Without it, encrypted backups and the database itself cannot be recovered.
-</div>
+::: warning Back up your key
+If you use `SUBSC_CLI_DB_PASSPHRASE` or the auto-generated encryption key, **back up the key file** (`~/.config/subtrack/.key`) or remember your passphrase. Without it, encrypted backups and the database itself cannot be recovered.
+:::
 
 ## Database encryption
 

@@ -3,6 +3,8 @@ title: Data & Storage
 description: How subtrack stores data, database location, backup and restore.
 ---
 
+# Data & Storage
+
 ## Database location
 
 All subscription data is stored in a single SQLite database file at:

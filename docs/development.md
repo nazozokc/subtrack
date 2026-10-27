@@ -3,6 +3,8 @@ title: Development
 description: How to set up, build, test, and contribute to subtrack.
 ---
 
+# Development
+
 ## Repository setup
 
 ```bash
