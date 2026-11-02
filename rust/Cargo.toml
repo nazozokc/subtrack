@@ -14,7 +14,7 @@ license = "MIT"
 version = "12.0.0"
 
 [workspace.dependencies]
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 serde_json = "1"
 aes-gcm = "0.11"
