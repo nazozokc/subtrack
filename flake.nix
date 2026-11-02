@@ -27,7 +27,7 @@
             default = pkgs.mkShell {
               name = "subtrack-dev";
               packages = with pkgs; [
-                nodejs
+                nodejs_latest
                 pnpm
                 typos
                 typescript
