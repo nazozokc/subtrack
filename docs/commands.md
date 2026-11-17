@@ -1194,7 +1194,7 @@ If no destination is specified, backups are saved to `~/.config/subtrack/backups
 |--------|-------------|
 | `-e, --encrypt` | Encrypt the backup using AES-256-GCM with your database encryption key |
 
-Encrypted backups use the `.db.enc` extension and require the same derived key material to restore (either the same `.key` file, or the same passphrase **and** persisted salt).
+Encrypted backups use the `.db.enc` extension and require the same derived key material to restore (either the same `.key` file, or the same passphrase **and** the persisted `.key.salt` / `.key.kdf` files). Backups made with an older work factor are still restorable.
 
 #### Examples
 

@@ -10,6 +10,9 @@ use aes_gcm::aes::Aes256;
 use aes_gcm::{AesGcm, Nonce};
 use getrandom::fill as getrandom_fill;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 
 type Aes256Gcm = AesGcm<Aes256, U16>;
 
@@ -24,6 +27,78 @@ const MAX_CONFIG_DIR_LEN: usize = 4096;
 /// Mirrors `validateDbDir` in the TS implementation: never treat a system
 /// directory as the database directory.
 const FORBIDDEN_CONFIG_DIRS: [&str; 5] = ["/etc", "/dev", "/proc", "/sys", "/tmp"];
+
+// scrypt work factors. `Legacy` is kept verbatim so databases and backups from
+// older releases stay decryptable; `Fast` applies only to new installations.
+const SCRYPT_LOG_N_LEGACY: u8 = 17; // 128 MiB, ~0.5-1 s per derivation here
+const SCRYPT_LOG_N_FAST: u8 = 15; // 32 MiB, ~1/4 the cost
+const SCRYPT_R: u32 = 8;
+const SCRYPT_P: u32 = 1;
+const KDF_MARKER_FILE: &str = ".key.kdf";
+const KDF_MARKER_FAST: &str = "2";
+const KDF_MARKER_LEGACY: &str = "1";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum KdfVersion {
+    Legacy,
+    Fast,
+}
+
+impl KdfVersion {
+    fn log_n(self) -> u8 {
+        match self {
+            Self::Legacy => SCRYPT_LOG_N_LEGACY,
+            Self::Fast => SCRYPT_LOG_N_FAST,
+        }
+    }
+}
+
+/// Cache key includes the passphrase digest so tests (and any future code)
+/// that switch identity mid-process cannot reuse another identity's key.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct DerivedKeyId {
+    dir: std::path::PathBuf,
+    salt: Vec<u8>,
+    version: KdfVersion,
+    passphrase_digest: String,
+}
+
+static DERIVED_KEYS: OnceLock<Mutex<HashMap<DerivedKeyId, Vec<u8>>>> = OnceLock::new();
+
+fn derive_cached(
+    dir: &Path,
+    passphrase: &str,
+    salt: &[u8],
+    version: KdfVersion,
+) -> std::io::Result<Vec<u8>> {
+    let id = DerivedKeyId {
+        dir: dir.to_path_buf(),
+        salt: salt.to_vec(),
+        version,
+        passphrase_digest: sha256_hex(passphrase.as_bytes()),
+    };
+    let cache = DERIVED_KEYS.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(key) = cache.lock().unwrap().get(&id) {
+        return Ok(key.clone());
+    }
+    // Derive outside the lock so a slow KDF does not block unrelated lookups.
+    let key = derive_key_with_params(passphrase, salt, version)?;
+    cache.lock().unwrap().insert(id, key.clone());
+    Ok(key)
+}
+
+#[cfg(test)]
+fn is_key_cached(dir: &Path, passphrase: &str, salt: &[u8], version: KdfVersion) -> bool {
+    let id = DerivedKeyId {
+        dir: dir.to_path_buf(),
+        salt: salt.to_vec(),
+        version,
+        passphrase_digest: sha256_hex(passphrase.as_bytes()),
+    };
+    DERIVED_KEYS
+        .get()
+        .is_some_and(|cache| cache.lock().unwrap().contains_key(&id))
+}
 
 /// DB/config directory: SUBSC_CLI_DB_DIR override, else ~/.config/subtrack.
 pub fn config_dir() -> std::path::PathBuf {
@@ -330,7 +405,8 @@ pub fn write_secret_file(path: &std::path::Path, data: &[u8]) -> std::io::Result
     }
 }
 
-/// scrypt(passphrase, salt, 32, N=2^17, r=8, p=1).
+/// scrypt(passphrase, salt, 32, N, r=8, p=1). `N` depends on the installation's
+/// KDF version: brand-new installs use `Fast`, existing ones keep `Legacy`.
 ///
 /// A random salt is generated for new installations. Databases created by
 /// earlier Rust releases always used an all-zero salt and never wrote
@@ -340,16 +416,39 @@ fn derive_key_from_passphrase_in(
     passphrase: &str,
 ) -> std::io::Result<Vec<u8>> {
     let salt = salt_for_dir(dir)?;
-    derive_key_with_salt(passphrase, &salt)
+    let version = kdf_version_for_dir(dir)?;
+    derive_cached(dir, passphrase, &salt, version)
 }
 
-fn derive_key_with_salt(passphrase: &str, salt: &[u8]) -> std::io::Result<Vec<u8>> {
+fn derive_key_with_params(
+    passphrase: &str,
+    salt: &[u8],
+    version: KdfVersion,
+) -> std::io::Result<Vec<u8>> {
     use scrypt::{Params, scrypt as scrypt_kdf};
-    let params = Params::new(17, 8, 1).unwrap();
+    let params = Params::new(version.log_n(), SCRYPT_R, SCRYPT_P).unwrap();
     let mut key = [0u8; KEY_LENGTH];
     scrypt_kdf(passphrase.as_bytes(), salt, &params, &mut key)
         .map_err(|e| std::io::Error::other(format!("scrypt failed: {e}")))?;
     Ok(key.to_vec())
+}
+
+/// Read the KDF marker. A missing marker means `Legacy`: installations created
+/// before versioning existed must keep deriving the exact same key.
+fn kdf_version_for_dir(dir: &Path) -> std::io::Result<KdfVersion> {
+    let path = dir.join(KDF_MARKER_FILE);
+    match std::fs::read_to_string(&path) {
+        Ok(marker) => match marker.trim() {
+            KDF_MARKER_FAST => Ok(KdfVersion::Fast),
+            KDF_MARKER_LEGACY => Ok(KdfVersion::Legacy),
+            other => Err(std::io::Error::other(format!(
+                "Unrecognized KDF version in {}: {other:?}",
+                path.display()
+            ))),
+        },
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(KdfVersion::Legacy),
+        Err(e) => Err(e),
+    }
 }
 
 /// The all-zero salt used by releases before `.key.salt` existed.
@@ -367,20 +466,43 @@ fn legacy_salt() -> Vec<u8> {
 /// backups created by older releases, never to encrypt new data.
 pub fn legacy_passphrase_key() -> std::io::Result<Option<Vec<u8>>> {
     match passphrase_env() {
-        Some(passphrase) => derive_key_with_salt(&passphrase, &legacy_salt()).map(Some),
+        Some(passphrase) => {
+            let dir = config_dir_checked()?;
+            derive_cached(&dir, &passphrase, &legacy_salt(), KdfVersion::Legacy).map(Some)
+        }
         None => Ok(None),
     }
 }
 
-/// Decrypt with the active key, then fall back to the legacy zero-salt key.
-/// Only restore uses this; the live database and config never accept the
-/// weaker legacy derivation.
+/// Restore fallback: active key, then the previous release's work factor with
+/// the current salt, then the pre-salt zero-salt key.
 pub fn decrypt_with_fallback(data: &[u8]) -> std::io::Result<Option<Vec<u8>>> {
+    let dir = config_dir_checked()?;
     let key = decryption_key()?;
     if let Some(plain) = decrypt_buffer(&key, data) {
         return Ok(Some(plain));
     }
-    if let Ok(Some(legacy)) = legacy_passphrase_key()
+    let Some(passphrase) = passphrase_env() else {
+        return Ok(None);
+    };
+    decrypt_with_fallback_in(&dir, &passphrase, data, &key)
+}
+
+fn decrypt_with_fallback_in(
+    dir: &Path,
+    passphrase: &str,
+    data: &[u8],
+    active_key: &[u8],
+) -> std::io::Result<Option<Vec<u8>>> {
+    if kdf_version_for_dir(dir)? == KdfVersion::Fast {
+        let salt = salt_for_dir(dir)?;
+        let previous = derive_cached(dir, passphrase, &salt, KdfVersion::Legacy)?;
+        if let Some(plain) = decrypt_buffer(&previous, data) {
+            return Ok(Some(plain));
+        }
+    }
+    let legacy = derive_cached(dir, passphrase, &legacy_salt(), KdfVersion::Legacy)?;
+    if legacy != active_key
         && let Some(plain) = decrypt_buffer(&legacy, data)
     {
         return Ok(Some(plain));
@@ -414,10 +536,15 @@ fn salt_for_dir(dir: &std::path::Path) -> std::io::Result<Vec<u8>> {
             getrandom_fill(&mut salt)
                 .map_err(|e| std::io::Error::other(format!("OS CSPRNG is unavailable: {e}")))?;
             write_secret_file(&salt_path, &salt)?;
+            // New installation: record the fast work factor so this key stays
+            // reproducible. Existing directories never reach this branch, so
+            // their legacy work factor is preserved by the missing marker.
+            let marker_path = dir.join(KDF_MARKER_FILE);
+            write_secret_file(&marker_path, format!("{KDF_MARKER_FAST}\n").as_bytes())?;
             crate::logger::warn(&format!(
                 "Encryption salt created at: {}\n  \
-                 Back up .key.salt together with .key — without it, passphrase-encrypted \
-                 data cannot be recovered on another machine.",
+                 Back up .key.salt and .key.kdf together with .key — without them, \
+                 passphrase-encrypted data cannot be recovered on another machine.",
                 salt_path.display()
             ));
             Ok(salt)
@@ -589,6 +716,108 @@ mod tests {
         let salt = std::fs::read(dir.join(".key.salt")).unwrap();
         assert_eq!(salt.len(), SALT_LENGTH);
         assert_ne!(salt, vec![0u8; SALT_LENGTH]);
+        // new installs record the fast work factor
+        let marker = std::fs::read_to_string(dir.join(KDF_MARKER_FILE)).unwrap();
+        assert_eq!(marker.trim(), KDF_MARKER_FAST);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn new_install_uses_the_fast_work_factor() {
+        use scrypt::{Params, scrypt as scrypt_kdf};
+        let dir = scratch("fast-kdf");
+        let key = derive_key_from_passphrase_in(&dir, "hello world").unwrap();
+        let salt = std::fs::read(dir.join(".key.salt")).unwrap();
+
+        let params = Params::new(SCRYPT_LOG_N_FAST, SCRYPT_R, SCRYPT_P).unwrap();
+        let mut expected = [0u8; KEY_LENGTH];
+        scrypt_kdf(b"hello world", &salt, &params, &mut expected).unwrap();
+        assert_eq!(key, expected.to_vec());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn existing_salt_without_marker_keeps_the_legacy_work_factor() {
+        use scrypt::{Params, scrypt as scrypt_kdf};
+        let dir = scratch("legacy-kdf");
+        let salt = vec![9u8; SALT_LENGTH];
+        write_secret_file(&dir.join(".key.salt"), &salt).unwrap();
+
+        let key = derive_key_from_passphrase_in(&dir, "hello world").unwrap();
+        assert!(!dir.join(KDF_MARKER_FILE).exists());
+
+        let params = Params::new(SCRYPT_LOG_N_LEGACY, SCRYPT_R, SCRYPT_P).unwrap();
+        let mut expected = [0u8; KEY_LENGTH];
+        scrypt_kdf(b"hello world", &salt, &params, &mut expected).unwrap();
+        assert_eq!(key, expected.to_vec());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unknown_kdf_marker_fails_closed() {
+        let dir = scratch("bad-kdf");
+        write_secret_file(&dir.join(".key.salt"), &[7u8; SALT_LENGTH]).unwrap();
+        write_secret_file(&dir.join(KDF_MARKER_FILE), b"99\n").unwrap();
+        let err = derive_key_from_passphrase_in(&dir, "hello world").unwrap_err();
+        assert!(
+            err.to_string().contains("Unrecognized KDF version"),
+            "{err}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn derived_keys_are_cached_per_identity() {
+        let dir_a = scratch("cache-a");
+        let dir_b = scratch("cache-b");
+        let salt_a = vec![11u8; SALT_LENGTH];
+        let salt_b = vec![22u8; SALT_LENGTH];
+        assert!(!is_key_cached(&dir_a, "pass", &salt_a, KdfVersion::Legacy));
+
+        let id_a = DerivedKeyId {
+            dir: dir_a.clone(),
+            salt: salt_a.clone(),
+            version: KdfVersion::Legacy,
+            passphrase_digest: sha256_hex(b"pass"),
+        };
+        let key_a = derive_cached(&dir_a, "pass", &salt_a, KdfVersion::Legacy).unwrap();
+        assert!(is_key_cached(&dir_a, "pass", &salt_a, KdfVersion::Legacy));
+        assert_eq!(
+            derive_cached(&dir_a, "pass", &salt_a, KdfVersion::Legacy).unwrap(),
+            key_a
+        );
+        assert_eq!(
+            DERIVED_KEYS.get().unwrap().lock().unwrap().get(&id_a),
+            Some(&key_a)
+        );
+
+        let key_b = derive_cached(&dir_b, "pass", &salt_b, KdfVersion::Legacy).unwrap();
+        assert_ne!(key_a, key_b); // different salt → different key
+        assert!(is_key_cached(&dir_b, "pass", &salt_b, KdfVersion::Legacy));
+        let _ = std::fs::remove_dir_all(&dir_a);
+        let _ = std::fs::remove_dir_all(&dir_b);
+    }
+
+    #[test]
+    fn restore_fallback_accepts_previous_work_factor_with_current_salt() {
+        use scrypt::{Params, scrypt as scrypt_kdf};
+        let dir = scratch("fallback-kdf");
+        // Force the fast (new) marker, but encrypt with the legacy work factor.
+        let salt = vec![3u8; SALT_LENGTH];
+        write_secret_file(&dir.join(".key.salt"), &salt).unwrap();
+        write_secret_file(
+            &dir.join(KDF_MARKER_FILE),
+            format!("{KDF_MARKER_FAST}\n").as_bytes(),
+        )
+        .unwrap();
+        let params = Params::new(SCRYPT_LOG_N_LEGACY, SCRYPT_R, SCRYPT_P).unwrap();
+        let mut legacy_key = [0u8; KEY_LENGTH];
+        scrypt_kdf(b"hello world", &salt, &params, &mut legacy_key).unwrap();
+        let sealed = encrypt_buffer(&legacy_key, b"old backup");
+
+        let active = derive_key_from_passphrase_in(&dir, "hello world").unwrap();
+        let plain = decrypt_with_fallback_in(&dir, "hello world", &sealed, &active).unwrap();
+        assert_eq!(plain.as_deref(), Some(b"old backup".as_slice()));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

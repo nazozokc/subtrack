@@ -37,8 +37,8 @@ subtrack list
 Changing `SUBSC_CLI_DB_DIR` lets you maintain separate databases — useful for testing or multi-profile setups.
 :::
 
-::: warning Back up your key
-If you use `SUBSC_CLI_DB_PASSPHRASE` or the auto-generated encryption key, **back up the key file** (`~/.config/subtrack/.key`) or remember your passphrase. Without it, encrypted backups and the database itself cannot be recovered.
+::: warning Back up your key material
+For the auto-generated key, back up `~/.config/subtrack/.key` (and `.key.sha256`). For `SUBSC_CLI_DB_PASSPHRASE`, also back up `.key.salt` and `.key.kdf` — the passphrase alone cannot reproduce the derived key on another machine.
 :::
 
 ## Database encryption
@@ -49,7 +49,7 @@ subtrack automatically encrypts the SQLite database file on disk using **AES-256
 ~/.config/subtrack/.key
 ```
 
-Alternatively, you can set `SUBSC_CLI_DB_PASSPHRASE` to derive the encryption key from a passphrase (using scrypt key derivation). This is useful for CI environments or when you want to avoid storing a key file.
+Alternatively, you can set `SUBSC_CLI_DB_PASSPHRASE` to derive the encryption key from a passphrase (using scrypt key derivation). This is useful for CI environments or when you want to avoid storing a key file. New installs use the faster `N=2^15` work factor; existing installs keep the legacy `N=2^17` factor so their data stays readable. The derived key is computed once per command.
 
 Backups can also be encrypted with `subtrack backup --encrypt`.
 
