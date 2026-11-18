@@ -157,6 +157,17 @@ subtrack automatically encrypts the database file on disk using **AES-256-GCM**.
 
 This means your subscription data is encrypted at rest. Backups can also be encrypted with `subtrack backup --encrypt`.
 
+### Passphrase key derivation
+
+Passphrase installs store a random salt in `.key.salt` and a work-factor marker in `.key.kdf` next to the database:
+
+- New installations use scrypt `N=2^15, r=8, p=1` (marker `2`).
+- Installations created before the marker existed keep `N=2^17, r=8, p=1` so their existing database and backups remain readable. The derived key is cached in memory for the lifetime of a command, so normal commands perform a single derivation.
+
+Backups created with the older work factor can still be restored: `restore` tries the current key, the previous work factor with the current salt, then the pre-salt key.
+
+> ⚠️ **Back up `.key.salt` and `.key.kdf` together with `.key`.** The passphrase alone is not enough to reproduce the key on another machine.
+
 ### Key integrity verification
 
 subtrack maintains a SHA-256 integrity hash for the encryption key file at `~/.config/subtrack/.key.sha256`. On every startup, the key's SHA-256 hash is compared against the stored hash:
@@ -167,7 +178,7 @@ subtrack maintains a SHA-256 integrity hash for the encryption key file at `~/.c
 
 This detects file corruption and tampering before any encryption/decryption operation. If the integrity check fails, restore the `.key` file from a backup, or delete it to generate a new key (note: this will make encrypted backups unrecoverable).
 
-> ⚠️ **Back up your key file or remember your passphrase.** Without it, the database and encrypted backups cannot be recovered. Consider backing up both `.key` and `.key.sha256` together.
+> ⚠️ **Back up your key material.** For `.key` installs, keep `.key` and `.key.sha256` together. For passphrase installs, also keep `.key.salt` and `.key.kdf` — the passphrase alone cannot reproduce the key.
 
 ## Backup
 
