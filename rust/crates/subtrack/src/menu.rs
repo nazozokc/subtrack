@@ -16,8 +16,14 @@ pub fn run_menu() -> i32 {
             Choice::new("Payment totals", "payment"),
             Choice::new("Budget status", "budget"),
             Choice::new("Yearly report", "report"),
+            Choice::new("Upcoming bills", "upcoming"),
+            Choice::new("Statistics", "stats"),
+            Choice::new("Calendar", "calendar"),
+            Choice::new("Tags", "tags"),
             Choice::new("LLM usage", "usage"),
             Choice::new("Trials", "trial"),
+            Choice::new("Configuration", "config"),
+            Choice::new("Help — all commands", "help"),
             Choice::new("Exit", "exit"),
         ];
         let Some(action) = prompt::select("What would you like to do?", &choices, Some(0)) else {
@@ -32,8 +38,17 @@ pub fn run_menu() -> i32 {
             "payment" => crate::payment::run_payment(&args),
             "budget" => crate::budget::run_budget(&args),
             "report" => crate::report::run_report(&args),
+            "upcoming" => crate::upcoming::run_upcoming(&args),
+            "stats" => crate::stats::run_stats(&args),
+            "calendar" => crate::calendar::run_calendar(&args),
+            "tags" => crate::tags::run_tag_list(&args),
             "usage" => crate::usage::run_usage_list(&args),
             "trial" => crate::trial::run_trial_list(),
+            "config" => crate::config::handle_config_list(),
+            "help" => {
+                crate::cli::print_root_help();
+                0
+            }
             _ => return 0,
         };
         if code != 0 {

@@ -302,6 +302,26 @@ pub fn run(args: &[String]) -> i32 {
     0
 }
 
+/// Root help text, also reachable from the entry menu's "Help" action.
+pub fn print_root_help() {
+    let children: Vec<&'static CommandDef> = TOP_SUBCOMMANDS
+        .iter()
+        .map(|(_, i)| &COMMANDS[*i as usize])
+        .collect();
+    let usage = render_usage(
+        NAME,
+        NAME,
+        entry_desc(),
+        &[],
+        true,
+        CallMode::Entry,
+        &COMMON_ARGS,
+        &children,
+        false,
+    );
+    logger::log(&usage);
+}
+
 fn print_root_header() {
     let subs = match crate::db::get_subscriptions(&crate::db::QueryOptions::default()) {
         Ok(s) => s,

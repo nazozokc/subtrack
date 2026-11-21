@@ -64,8 +64,21 @@ fn ask(message: &str) -> Option<String> {
     }
 }
 
+/// Confirm a field without echoing an empty (optional) value.
 fn finish_only(message: &str) {
     out(&format!("{} {}\n", ansi::green("\u{2714}"), message));
+}
+
+/// Long choice lists are capped: a short list is scannable, a long one is
+/// searched by typing part of a label (see `select`).
+const MAX_VISIBLE_CHOICES: usize = 10;
+
+fn choice_matches(choice: &Choice, needle: &str) -> bool {
+    choice.label.to_lowercase().contains(needle) || choice.value.to_lowercase().contains(needle)
+}
+
+fn choice_equals(choice: &Choice, needle: &str) -> bool {
+    choice.value.to_lowercase() == needle || choice.label.to_lowercase() == needle
 }
 
 fn finish(message: &str, value: &str) {
@@ -86,10 +99,13 @@ fn cancel(message: &str) {
 /// Numbers are dimmed and right-aligned so they line up on long lists, and
 /// the pre-selected choice carries a `›` pointer — the "(default)" suffix in
 /// the question leaves the default discoverable without scanning list text.
-fn render_choices(choices: &[Choice], highlight: Option<usize>) {
-    let number_width = choices.len().to_string().len();
-    for (index, choice) in choices.iter().enumerate() {
-        let is_pointer = Some(index) == highlight;
+/// `visible` holds indices into `choices`; `highlight` is a position in
+/// `visible`, so filtered lists can be renumbered from 1.
+fn render_numbered_choices(choices: &[Choice], visible: &[usize], highlight: Option<usize>) {
+    let number_width = visible.len().to_string().len();
+    for (position, &index) in visible.iter().enumerate() {
+        let choice = &choices[index];
+        let is_pointer = Some(position) == highlight;
         let gutter = if is_pointer {
             format!("{} ", ansi::cyan("\u{203a}"))
         } else {
@@ -102,10 +118,36 @@ fn render_choices(choices: &[Choice], highlight: Option<usize>) {
         };
         let number = format!(
             "{number:>width$}",
-            width = number_width + 1,
-            number = index + 1
+            number = position + 1,
+            width = number_width + 1
         );
         out(&format!("{gutter}{}) {}\n", ansi::dim(&number), label));
+    }
+}
+
+/// Full list used by `checkbox` (short lists: subscriptions, trials, fields).
+fn render_choices(choices: &[Choice], highlight: Option<usize>) {
+    let indices: Vec<usize> = (0..choices.len()).collect();
+    render_numbered_choices(choices, &indices, highlight);
+}
+
+/// Render the (possibly filtered, capped) choices used by `select`.
+fn render_select_choices(
+    choices: &[Choice],
+    visible: &[usize],
+    highlight: Option<usize>,
+    filtered: bool,
+) {
+    let shown = visible.len().min(MAX_VISIBLE_CHOICES);
+    render_numbered_choices(choices, &visible[..shown], highlight);
+    if visible.len() > MAX_VISIBLE_CHOICES {
+        out(&format!(
+            "  … {} more — type to narrow down\n",
+            visible.len() - MAX_VISIBLE_CHOICES
+        ));
+    }
+    if filtered && visible.len() <= MAX_VISIBLE_CHOICES {
+        out(&format!("  ({} matching)\n", visible.len()));
     }
 }
 
@@ -148,15 +190,22 @@ pub fn input(message: &str, default: Option<&str>, validate: Option<Validator>) 
             continue;
         }
 
-        finish_only(message);
+        if value.is_empty() {
+            finish_only(message);
+        } else {
+            finish(message, &value);
+        }
         return Some(value);
     }
 }
 
 /// Pick one entry from a numbered list.
 ///
-/// Empty input selects `default` (when supplied). Both the index and the
-/// label/value text are accepted.
+/// Short lists are shown in full; long ones are capped at
+/// `MAX_VISIBLE_CHOICES` and can be narrowed by typing part of a label. An
+/// exact value/label (or a unique substring match) selects immediately; a
+/// query matching several entries re-renders just those entries, numbered
+/// from 1. Empty input clears the filter, then falls back to `default`.
 pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Option<String> {
     if choices.is_empty() {
         return None;
@@ -167,21 +216,58 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
             .map(|i| choices[i].value.clone());
     }
 
-    render_choices(choices, default);
-
-    let hint = match default {
-        Some(i) if i < choices.len() => {
-            format!("{} [1-{}] (default {})", message, choices.len(), i + 1)
-        }
-        _ => format!("{} [1-{}]", message, choices.len()),
-    };
+    let mut filter: Option<String> = None;
 
     loop {
+        let visible: Vec<usize> = match &filter {
+            Some(needle) => choices
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| choice_matches(c, needle))
+                .map(|(i, _)| i)
+                .collect(),
+            None => (0..choices.len()).collect(),
+        };
+        if visible.is_empty() {
+            filter = None;
+            cancel("No matches — showing all choices");
+            continue;
+        }
+
+        let highlight = if filter.is_none() {
+            default.filter(|i| *i < choices.len())
+        } else {
+            None
+        };
+        render_select_choices(choices, &visible, highlight, filter.is_some());
+
+        let hint = match &filter {
+            Some(needle) => format!(
+                "{} [{} matching \"{}\"] (empty = show all)",
+                message,
+                visible.len(),
+                needle
+            ),
+            None => match highlight {
+                Some(i) => format!(
+                    "{} [1-{}] (default {}, type to filter)",
+                    message,
+                    choices.len(),
+                    i + 1
+                ),
+                None => format!("{} [1-{}] (type to filter)", message, choices.len()),
+            },
+        };
+
         let answer = ask(&hint)?;
         let trimmed = answer.trim();
 
         if trimmed.is_empty() {
-            if let Some(i) = default.filter(|i| *i < choices.len()) {
+            if filter.is_some() {
+                filter = None;
+                continue;
+            }
+            if let Some(i) = highlight {
                 finish(message, &choices[i].label);
                 return Some(choices[i].value.clone());
             }
@@ -189,26 +275,38 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
             continue;
         }
 
-        if let Ok(number) = trimmed.parse::<usize>()
-            && number >= 1
-            && number <= choices.len()
-        {
-            let choice = &choices[number - 1];
-            finish(message, &choice.label);
-            return Some(choice.value.clone());
+        if let Ok(number) = trimmed.parse::<usize>() {
+            if let Some(&index) = visible.get(number.saturating_sub(1)) {
+                let choice = &choices[index];
+                finish(message, &choice.label);
+                return Some(choice.value.clone());
+            }
+            cancel("Invalid choice");
+            continue;
         }
 
         let needle = trimmed.to_lowercase();
-        if let Some(choice) = choices.iter().find(|c| {
-            c.value.to_lowercase() == needle
-                || c.label.to_lowercase() == needle
-                || c.label.to_lowercase().starts_with(&needle)
-        }) {
+        if let Some(index) = choices.iter().position(|c| choice_equals(c, &needle)) {
+            let choice = &choices[index];
             finish(message, &choice.label);
             return Some(choice.value.clone());
         }
 
-        cancel("Invalid choice");
+        let matches: Vec<usize> = choices
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| choice_matches(c, &needle))
+            .map(|(i, _)| i)
+            .collect();
+        match matches.len() {
+            1 => {
+                let choice = &choices[matches[0]];
+                finish(message, &choice.label);
+                return Some(choice.value.clone());
+            }
+            n if n > 1 => filter = Some(needle),
+            _ => cancel("Invalid choice"),
+        }
     }
 }
 
