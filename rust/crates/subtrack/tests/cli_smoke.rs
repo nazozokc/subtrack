@@ -468,6 +468,64 @@ fn delete_prompts_for_selection_and_confirmation() {
 }
 
 #[test]
+fn interactive_input_echoes_the_value_it_saved() {
+    let env = Env::new("input-echo");
+    seed(&env);
+    let out = env.run_interactive(&["edit"], "1\nname\nNetflix Plus\n");
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("✔ New name Netflix Plus"),
+        "entered value was not echoed: {text}"
+    );
+}
+
+#[test]
+fn interactive_select_filters_long_choice_lists() {
+    let env = Env::new("select-filter");
+    seed(&env);
+    // "dollar" matches 7 currencies (incl. TWD); the first shown is AUD.
+    let out = env.run_interactive(&["edit"], "1\ncurrency\ndollar\n1\n");
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("7 matching \"dollar\""),
+        "filter hint missing: {text}"
+    );
+    assert!(
+        text.contains("Australian Dollar"),
+        "filtered list missing: {text}"
+    );
+    assert!(
+        !text.contains("37 matching"),
+        "full list was not narrowed: {text}"
+    );
+
+    let json = env.text(&["list", "--json"]);
+    assert!(json.contains("AUD"), "selection was not saved: {json}");
+}
+
+#[test]
+fn menu_exposes_more_actions_and_root_help() {
+    let env = Env::new("menu-help");
+    let out = env.run_interactive(&[], "16\n");
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("Help — all commands"),
+        "menu item missing: {text}"
+    );
+    assert!(
+        text.contains("USAGE:"),
+        "help action did not render: {text}"
+    );
+    assert!(
+        text.contains("COMMANDS:"),
+        "help action did not render: {text}"
+    );
+}
+
+#[test]
 fn piped_output_has_no_ansi_or_banner() {
     let env = Env::new("piped-clean");
     seed(&env);
