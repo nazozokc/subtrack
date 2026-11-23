@@ -4,6 +4,49 @@
 //! piped `subtrack list` stays parseable even when something goes wrong.
 
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU8, Ordering};
+
+/// Visibility of status messages. Data output (`log`, `outln`) and diagnostics
+/// (`warn`, `error`) are always shown; the level only controls the commentary
+/// around them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Level {
+    /// Results and diagnostics only — no status commentary.
+    Quiet,
+    /// Default: status messages, no progress/debug chatter.
+    Normal,
+    /// Everything, including progress/debug chatter.
+    Verbose,
+}
+
+impl Level {
+    pub fn from_code(code: &str) -> Self {
+        match code {
+            "quiet" => Level::Quiet,
+            "verbose" => Level::Verbose,
+            _ => Level::Normal,
+        }
+    }
+}
+
+static LEVEL: AtomicU8 = AtomicU8::new(1); // Normal
+
+/// Set the process-wide log level (called from config at startup).
+pub fn set_level(level: Level) {
+    LEVEL.store(level as u8, Ordering::Relaxed)
+}
+
+pub fn set_level_code(code: &str) {
+    set_level(Level::from_code(code))
+}
+
+pub fn level() -> Level {
+    match LEVEL.load(Ordering::Relaxed) {
+        0 => Level::Quiet,
+        2 => Level::Verbose,
+        _ => Level::Normal,
+    }
+}
 
 /// Global output buffer; flushed to stdout once at the end of `run`.
 pub static OUT: Mutex<String> = Mutex::new(String::new());
@@ -36,24 +79,35 @@ fn emit(buffer: &Mutex<String>, color: &str, icon: &str, message: &str) {
     buf.push('\n')
 }
 
+/// Progress/chatter — only shown at `verbose`.
+pub fn debug(message: &str) {
+    if level() == Level::Verbose {
+        emit(&OUT, "90", "·", &crate::i18n::tr(message))
+    }
+}
+
 /// consola.info
 pub fn info(message: &str) {
-    emit(&OUT, "36", "ℹ", message)
+    if level() != Level::Quiet {
+        emit(&OUT, "36", "ℹ", &crate::i18n::tr(message))
+    }
 }
 
 /// consola.success
 pub fn success(message: &str) {
-    emit(&OUT, "32", "✔", message)
+    if level() != Level::Quiet {
+        emit(&OUT, "32", "✔", &crate::i18n::tr(message))
+    }
 }
 
 /// consola.warn
 pub fn warn(message: &str) {
-    emit(&ERR, "33", "⚠", message)
+    emit(&ERR, "33", "⚠", &crate::i18n::tr(message))
 }
 
 /// consola.error
 pub fn error(message: &str) {
-    emit(&ERR, "31", "✖", message)
+    emit(&ERR, "31", "✖", &crate::i18n::tr(message))
 }
 
 /// Report a fatal CLI error and mark the process to exit non-zero.

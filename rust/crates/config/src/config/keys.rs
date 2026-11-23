@@ -1,7 +1,9 @@
 use super::Config;
 
 /// Order mirrors `CONFIG_KEYS` in config.ts.
-pub const CONFIG_KEYS: [&str; 17] = [
+pub const CONFIG_KEYS: [&str; 19] = [
+    "language",
+    "logLevel",
     "defaultCurrency",
     "monthlyBudget",
     "yearlyBudget",

@@ -283,7 +283,7 @@ pub fn run_import(parsed: &ParsedArgs) -> i32 {
         }
 
         if dry_run {
-            logger::info(&format!(
+            logger::debug(&format!(
                 "[dry-run] Would import: {} ({} {}, {})",
                 sanitized, price_str, currency, cycle
             ));

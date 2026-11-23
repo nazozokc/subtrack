@@ -12,6 +12,7 @@
 use std::io::{self, BufRead, IsTerminal, Write};
 
 use crate::ansi;
+use crate::i18n::tr;
 
 /// A selectable entry. `value` is what the caller receives; `label` is shown.
 #[derive(Clone, Debug)]
@@ -56,7 +57,7 @@ fn out(text: &str) {
 }
 
 fn ask(message: &str) -> Option<String> {
-    out(&format!("{} {} \u{203a} ", ansi::cyan("?"), message));
+    out(&format!("{} {} \u{203a} ", ansi::cyan("?"), tr(message)));
     let mut line = String::new();
     match io::stdin().lock().read_line(&mut line) {
         Ok(0) | Err(_) => None,
@@ -66,7 +67,7 @@ fn ask(message: &str) -> Option<String> {
 
 /// Confirm a field without echoing an empty (optional) value.
 fn finish_only(message: &str) {
-    out(&format!("{} {}\n", ansi::green("\u{2714}"), message));
+    out(&format!("{} {}\n", ansi::green("\u{2714}"), tr(message)));
 }
 
 /// Long choice lists are capped: a short list is scannable, a long one is
@@ -85,13 +86,13 @@ fn finish(message: &str, value: &str) {
     out(&format!(
         "{} {} {}\n",
         ansi::green("\u{2714}"),
-        ansi::dim(message),
+        ansi::dim(&tr(message)),
         ansi::green(value)
     ));
 }
 
 fn cancel(message: &str) {
-    out(&format!("{} {}\n", ansi::red("\u{2716}"), message));
+    out(&format!("{} {}\n", ansi::red("\u{2716}"), tr(message)));
 }
 
 /// Render a numbered choice list.
@@ -332,7 +333,8 @@ pub fn confirm(message: &str, default: bool) -> Option<bool> {
                 continue;
             }
         };
-        finish(message, if value { "yes" } else { "no" });
+        let answer = if value { tr("yes") } else { tr("no") };
+        finish(message, &answer);
         return Some(value);
     }
 }
@@ -354,12 +356,12 @@ pub fn checkbox(message: &str, choices: &[Choice]) -> Option<Vec<String>> {
         let answer = ask(&format!("{} (numbers, 'all', empty = cancel)", message))?;
         let trimmed = answer.trim();
         if trimmed.is_empty() {
-            finish(message, "none");
+            finish(message, &tr("none"));
             return Some(Vec::new());
         }
         if trimmed.eq_ignore_ascii_case("all") {
             let values = choices.iter().map(|c| c.value.clone()).collect();
-            finish(message, "all");
+            finish(message, &tr("all"));
             return Some(values);
         }
 

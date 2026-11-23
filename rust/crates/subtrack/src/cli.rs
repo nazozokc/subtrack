@@ -87,6 +87,10 @@ fn entry_desc() -> &'static str {
 /// Port of cli(): resolve, banner, help, validation errors, command run.
 pub fn run(args: &[String]) -> i32 {
     ui::init(args);
+    // Display settings come from config.json; apply them before any command
+    // (including the version/help fast paths) emits output.
+    let config = crate::config::load_config();
+    crate::config::apply_runtime(&config);
 
     if is_standalone_version(args) {
         logger::outln(VERSION);
@@ -334,14 +338,15 @@ fn print_root_header() {
         .cloned()
         .collect();
     logger::log(&ansi::bold(&ansi::cyan(&format!("subtrack v{}", VERSION))));
+    let count_label = crate::i18n::tr(if total_all == 1 {
+        "subscription"
+    } else {
+        "subscriptions"
+    });
     logger::log(&ansi::dim(&format!(
         "  {} {} · {}",
         total_all,
-        if total_all == 1 {
-            "subscription"
-        } else {
-            "subscriptions"
-        },
+        count_label,
         crate::db::db_path().display()
     )));
     if !active.is_empty() {
@@ -352,7 +357,11 @@ fn print_root_header() {
         for (ccy, total) in &sorted_currencies {
             parts.push(crate::price::format_price(*total, ccy));
         }
-        logger::log(&format!("  Monthly: {}", parts.join(" + ")));
+        logger::log(&format!(
+            "{} {}",
+            crate::i18n::tr("  Monthly:"),
+            parts.join(" + ")
+        ));
         let days = 7i64;
         let (entries, _) =
             subtrack_core::upcoming::upcoming_with_currency_internal(&active, days, None);
@@ -369,18 +378,19 @@ fn print_root_header() {
             for (ccy, total) in &sorted2 {
                 parts2.push(crate::price::format_price(**total, ccy));
             }
-            let bill_label = if entries.len() == 1 { "bill" } else { "bills" };
+            let bill_label = crate::i18n::tr(if entries.len() == 1 { "bill" } else { "bills" });
             logger::log(&format!(
-                "  Next 7 days: {} {} ({})",
+                "{} {} {} ({})",
+                crate::i18n::tr("  Next 7 days:"),
                 entries.len(),
                 bill_label,
                 parts2.join(" + ")
             ));
         }
     } else {
-        logger::log(&ansi::dim(
+        logger::log(&ansi::dim(&crate::i18n::tr(
             "  No subscriptions yet — choose Add to create one",
-        ));
+        )));
     }
     let divider_width = ui::term_width().clamp(20, 60) as usize;
     logger::log(&table::divider(

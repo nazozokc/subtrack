@@ -6,6 +6,7 @@
 
 use crate::commands::CommandDef;
 use subtrack_core::ansi;
+use subtrack_core::i18n::tr;
 
 const LEFT_MARGIN: usize = 2;
 const MIDDLE_MARGIN: usize = 10;
@@ -52,7 +53,7 @@ fn section_header(section: Section) -> String {
         Section::Arguments => "ARGUMENTS:",
         Section::Options => "OPTIONS:",
     };
-    ansi::bold(label)
+    ansi::bold(&tr(label))
 }
 
 /// padEnd(s, n): right-pad to at least n chars with spaces (never truncates).
@@ -128,12 +129,12 @@ fn load_commands(
     let mut loaded: Vec<(bool, String, String)> = vec![(
         true,
         command_name.to_string(),
-        command_description.to_string(),
+        tr(command_description).into_owned(),
     )];
     loaded.extend(
         subcommands
             .iter()
-            .map(|c| (false, c.name.to_string(), c.description.to_string())),
+            .map(|c| (false, c.name.to_string(), tr(c.description).into_owned())),
     );
     loaded.sort_by(|a, b| {
         // entry first, then by name (localeCompare — names are ASCII)
@@ -163,20 +164,20 @@ pub fn render_usage(
     let mut messages: Vec<String> = Vec::new();
 
     if call_mode == CallMode::SubCommand && !command_description.is_empty() {
-        messages.push(command_description.to_string());
+        messages.push(tr(command_description).into_owned());
         messages.push(String::new());
     }
 
     // ── USAGE ──
     messages.push(section_header(Section::Usage));
-    let option_symbols = generate_options_symbols(args);
+    let option_symbols = tr(generate_options_symbols(args));
     let positional_symbols = generate_positional_symbols(args);
     let loaded = load_commands(command_name, command_description, subcommands);
     let has_commands = loaded.len() > 1;
 
     let mut usage = name.to_string();
     if omitted && has_commands {
-        usage.push_str(" [COMMANDS]");
+        usage.push_str(&format!(" {}", tr("[COMMANDS]")));
     } else if call_mode == CallMode::SubCommand {
         usage.push_str(&format!(" {}", path.join(" ")));
     }
@@ -212,9 +213,9 @@ pub fn render_usage(
             messages.push(format!("{}{}", " ".repeat(LEFT_MARGIN), row));
         }
         messages.push(String::new());
-        messages.push(ansi::dim(
+        messages.push(ansi::dim(&tr(
             "For more info, run any command with the `--help` flag:",
-        ));
+        )));
         let base_path = if path.is_empty() {
             name.to_string()
         } else {
@@ -244,7 +245,7 @@ pub fn render_usage(
             let arg = format!(
                 "{} {}",
                 ansi::colored("cyan", &pad_end(spec.name, args_max_length + MIDDLE_MARGIN)),
-                ansi::dim(desc)
+                ansi::dim(&tr(desc))
             );
             messages.push(format!("{}{}", " ".repeat(LEFT_MARGIN), arg));
         }
@@ -283,7 +284,7 @@ pub fn render_usage(
             let option = format!(
                 "{}{}",
                 ansi::colored("cyan", &pad_end(key, options_max_length + MIDDLE_MARGIN)),
-                ansi::dim(desc)
+                ansi::dim(&tr(desc))
             );
             messages.push(format!("{}{}", " ".repeat(LEFT_MARGIN), option));
         }

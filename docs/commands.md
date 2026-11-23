@@ -1675,6 +1675,8 @@ Manages subtrack configuration. Configuration is stored in `~/.config/subtrack/c
 
 | Key | Description | Default |
 |-----|-------------|---------|
+| `language` | Output language for the common UI (help, menu, prompts, status messages): `en` or `ja` | `en` |
+| `logLevel` | Status-message verbosity: `quiet`, `normal`, `verbose` | `normal` |
 | `defaultCurrency` | Default currency for display and analytics | `USD` |
 | `monthlyBudget` | Monthly spending budget in USD (0 = disabled) | `0` |
 | `yearlyBudget` | Yearly spending budget (used by `budget --period yearly` and `report`) | — |
@@ -1745,6 +1747,10 @@ The `config set` command validates input (e.g., currency codes must be ISO 4217,
 The `theme` key switches between four presets: `default` (dark backgrounds), `light`, `high-contrast`, and `none` (plain monochrome). Individual color keys (`tableBorderColor`, `tableHeaderColor`, `tableZebraColor`, `accentColor`) override the preset. Valid color names: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `gray`, and the `bright*` variants.
 
 `dateFormat` controls human-facing dates in `cancel` and `notify` (`short` uses `MM/DD` style); machine-readable output (JSON) always uses ISO 8601. `listShowNotes` / `listShowMethod` enable the notes and payment method columns in `subtrack list` by default — CLI flags still take precedence.
+
+`language` switches the common UI (help, root menu, prompts and short status messages) between English (`en`) and Japanese (`ja`). Strings outside that surface, including report text and JSON output, keep their original wording. Change it with `subtrack config set language ja`.
+
+`logLevel` controls status commentary, not data: `normal` (default) keeps status messages but hides progress/debug chatter (e.g. exchange-rate fetching), `quiet` hides status and success messages while keeping results plus warnings/errors, and `verbose` shows everything. Tables, JSON and other command output are never suppressed. Change it with `subtrack config set logLevel quiet`.
 
 ## Scripting notes
 

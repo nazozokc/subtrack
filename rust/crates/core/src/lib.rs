@@ -16,6 +16,7 @@ pub mod date;
 pub mod domain;
 pub mod formats;
 pub mod fx;
+pub mod i18n;
 pub mod json;
 pub mod logger;
 pub mod models;
