@@ -118,6 +118,7 @@ Available CLI commands (run `subtrack --help` in the package for the full list):
 | `subtrack backup [destination]` | Backup database |
 | `subtrack restore [file]` | Restore database |
 | `subtrack payment [period]` | Show payment totals |
+| `subtrack expense add\|list\|total\|delete\|item` | Record and analyze daily expenses |
 | `subtrack budget` | Show spending vs budget (overrun detection) |
 | `subtrack report` | Show yearly subscription report |
 | `subtrack usage add\|list\|delete\|refresh` | Track LLM API usage |

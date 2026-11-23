@@ -3032,6 +3032,300 @@ pub static COMMANDS: &[CommandDef] = &[
         ],
         subcommands: &[],
     },
+    CommandDef {
+        name: "expense",
+        description: "Record daily expenses and show spending totals",
+        to_kebab: false,
+        args: &[],
+        subcommands: &[93, 94, 95, 96, 97],
+    },
+    CommandDef {
+        name: "add",
+        description: "Add items to a day's expense summary",
+        to_kebab: false,
+        args: &[
+            ArgSpec {
+                name: "date",
+                kind: ArgKind::String,
+                short: None,
+                description: "Date (YYYY-MM-DD, default: today)",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "amount",
+                kind: ArgKind::String,
+                short: None,
+                description: "Amount in major currency units",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "currency",
+                kind: ArgKind::String,
+                short: None,
+                description: "Currency code (default: defaultCurrency)",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "category",
+                kind: ArgKind::String,
+                short: None,
+                description: "Category (default: other)",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "method",
+                kind: ArgKind::String,
+                short: None,
+                description: "Payment method: cash, card, bank, other",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "note",
+                kind: ArgKind::String,
+                short: None,
+                description: "Optional note",
+                array: false,
+                required: None,
+            },
+        ],
+        subcommands: &[],
+    },
+    CommandDef {
+        name: "list",
+        description: "List daily expense summaries",
+        to_kebab: false,
+        args: &[
+            ArgSpec {
+                name: "date",
+                kind: ArgKind::String,
+                short: None,
+                description: "Show one date (YYYY-MM-DD)",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "from",
+                kind: ArgKind::String,
+                short: None,
+                description: "Start date (YYYY-MM-DD)",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "to",
+                kind: ArgKind::String,
+                short: None,
+                description: "End date (YYYY-MM-DD)",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "all",
+                kind: ArgKind::Boolean,
+                short: None,
+                description: "Show every recorded day",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "json",
+                kind: ArgKind::Boolean,
+                short: Some('j'),
+                description: "Output as JSON",
+                array: false,
+                required: None,
+            },
+        ],
+        subcommands: &[],
+    },
+    CommandDef {
+        name: "total",
+        description: "Show expense totals for a period",
+        to_kebab: false,
+        args: &[
+            ArgSpec {
+                name: "month",
+                kind: ArgKind::String,
+                short: None,
+                description: "Month to summarize (YYYY-MM, default: current month)",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "from",
+                kind: ArgKind::String,
+                short: None,
+                description: "Start date (YYYY-MM-DD)",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "to",
+                kind: ArgKind::String,
+                short: None,
+                description: "End date (YYYY-MM-DD)",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "group",
+                kind: ArgKind::String,
+                short: None,
+                description: "Group by: category, method, day (default: category)",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "currency",
+                kind: ArgKind::String,
+                short: None,
+                description: "Convert all totals to this currency using FX rates",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "json",
+                kind: ArgKind::Boolean,
+                short: Some('j'),
+                description: "Output as JSON",
+                array: false,
+                required: None,
+            },
+        ],
+        subcommands: &[],
+    },
+    CommandDef {
+        name: "delete",
+        description: "Delete one or more day summaries",
+        to_kebab: false,
+        args: &[
+            ArgSpec {
+                name: "target",
+                kind: ArgKind::Positional,
+                short: None,
+                description: "Day ID or date (YYYY-MM-DD)",
+                array: true,
+                required: Some(true),
+            },
+            ArgSpec {
+                name: "force",
+                kind: ArgKind::Boolean,
+                short: Some('f'),
+                description: "Skip confirmation",
+                array: false,
+                required: None,
+            },
+        ],
+        subcommands: &[],
+    },
+    CommandDef {
+        name: "item",
+        description: "Manage individual expense items",
+        to_kebab: false,
+        args: &[],
+        subcommands: &[98, 99],
+    },
+    CommandDef {
+        name: "delete",
+        description: "Delete one item from a day",
+        to_kebab: false,
+        args: &[
+            ArgSpec {
+                name: "day",
+                kind: ArgKind::Positional,
+                short: None,
+                description: "Day ID or date (YYYY-MM-DD)",
+                array: false,
+                required: Some(true),
+            },
+            ArgSpec {
+                name: "item",
+                kind: ArgKind::Positional,
+                short: None,
+                description: "Item ID within the day",
+                array: false,
+                required: Some(true),
+            },
+        ],
+        subcommands: &[],
+    },
+    CommandDef {
+        name: "edit",
+        description: "Edit one item in a day",
+        to_kebab: false,
+        args: &[
+            ArgSpec {
+                name: "day",
+                kind: ArgKind::Positional,
+                short: None,
+                description: "Day ID or date (YYYY-MM-DD)",
+                array: false,
+                required: Some(true),
+            },
+            ArgSpec {
+                name: "item",
+                kind: ArgKind::Positional,
+                short: None,
+                description: "Item ID within the day",
+                array: false,
+                required: Some(true),
+            },
+            ArgSpec {
+                name: "amount",
+                kind: ArgKind::String,
+                short: None,
+                description: "New amount",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "currency",
+                kind: ArgKind::String,
+                short: None,
+                description: "New currency code",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "category",
+                kind: ArgKind::String,
+                short: None,
+                description: "New category",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "method",
+                kind: ArgKind::String,
+                short: None,
+                description: "New payment method",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "note",
+                kind: ArgKind::String,
+                short: None,
+                description: "New note",
+                array: false,
+                required: None,
+            },
+            ArgSpec {
+                name: "clear-note",
+                kind: ArgKind::Boolean,
+                short: None,
+                description: "Remove the existing note",
+                array: false,
+                required: None,
+            },
+        ],
+        subcommands: &[],
+    },
 ];
 
 /// Top-level subCommands map (index.ts order: name → COMMANDS index).
@@ -3086,8 +3380,22 @@ pub static TOP_SUBCOMMANDS: &[(&str, u16)] = &[
     ("changes", 47),
     ("receipt", 48),
     ("template", 49),
+    ("expense", 92),
 ];
 
 /// Total number of command definitions (incl. nested subcommands).
 #[allow(dead_code)]
-pub const COMMAND_COUNT: usize = 92;
+pub const COMMAND_COUNT: usize = 100;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn registry_matches_declared_count() {
+        assert_eq!(COMMANDS.len(), COMMAND_COUNT);
+        let (name, idx) = TOP_SUBCOMMANDS.last().unwrap();
+        assert_eq!(*name, "expense");
+        assert_eq!(COMMANDS[*idx as usize].name, "expense");
+    }
+}

@@ -4,6 +4,7 @@
 
 mod audit;
 mod backup;
+mod expenses;
 mod history;
 mod migrations;
 mod store;
@@ -16,8 +17,8 @@ mod usage;
 // Row types moved to the domain layer (`subtrack-core::models`); re-exported
 // here so every `crate::db::<Type>` path keeps resolving unchanged.
 pub use subtrack_core::models::{
-    AuditEntry, LlmUsage, NewSubscription, NewSuggestion, PriceChange, QueryOptions, SqlValue,
-    Subscription, Suggestion, Trial,
+    AuditEntry, Expense, ExpenseItem, LlmUsage, NewExpenseItem, NewSubscription, NewSuggestion,
+    PriceChange, QueryOptions, SqlValue, Subscription, Suggestion, Trial,
 };
 
 pub use audit::{
@@ -26,6 +27,10 @@ pub use audit::{
 };
 pub use backup::{
     default_backup_dir, export_db_bytes, restore_db, verify_backup_hash, write_backup_hash,
+};
+pub use expenses::{
+    append_expense_items, delete_expense_day, delete_expense_item, get_expense, get_expense_groups,
+    get_expense_item, get_expense_totals, get_expenses, update_expense_item,
 };
 pub use history::{get_all_price_changes, get_price_changes_recent, get_price_history};
 pub use migrations::{open_db, run_migrations};

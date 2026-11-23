@@ -748,6 +748,7 @@ dependencies = [
  "chrono",
  "flate2",
  "rusqlite",
+ "serde_json",
  "subtrack-core",
 ]
 

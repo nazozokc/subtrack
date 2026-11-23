@@ -148,3 +148,32 @@ pub struct NewSuggestion {
     pub source_detail: Option<String>,
     pub confidence: f64,
 }
+
+/// One line item inside a daily expense summary. `id` is unique per day.
+#[derive(Clone, Debug)]
+pub struct ExpenseItem {
+    pub id: i64,
+    pub amount: f64,
+    pub currency: String,
+    pub category: String,
+    pub method: String,
+    pub note: Option<String>,
+}
+
+/// A single day's spending summary (one row, items stored as JSON).
+#[derive(Clone, Debug)]
+pub struct Expense {
+    pub id: i64,
+    pub date: String,
+    pub items: Vec<ExpenseItem>,
+}
+
+/// Item as supplied by a command before the DB assigns its day-local id.
+#[derive(Clone, Debug)]
+pub struct NewExpenseItem {
+    pub amount: f64,
+    pub currency: String,
+    pub category: String,
+    pub method: String,
+    pub note: Option<String>,
+}
