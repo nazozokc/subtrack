@@ -286,6 +286,13 @@ pub fn run(args: &[String]) -> i32 {
             "suggest view" => crate::suggest::run_suggest_view(&parsed),
             "receipt" => crate::receipt::run_receipt(&parsed),
             "mcp" => crate::mcp::run_mcp(&parsed),
+            "expense" | "expense list" => crate::expense::run_expense_list(&parsed),
+            "expense add" => crate::expense::run_expense_add(&parsed),
+            "expense total" => crate::expense::run_expense_total(&parsed),
+            "expense delete" => crate::expense::run_expense_delete(&parsed),
+            "expense item" => crate::expense::run_expense_item(),
+            "expense item delete" => crate::expense::run_expense_item_delete(&parsed),
+            "expense item edit" => crate::expense::run_expense_item_edit(&parsed),
             // entry menu and unported commands — later phases
             _ => 0,
         },

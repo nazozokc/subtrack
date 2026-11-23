@@ -22,6 +22,7 @@ pub fn run_menu() -> i32 {
             Choice::new(&tr("Calendar"), "calendar"),
             Choice::new(&tr("Tags"), "tags"),
             Choice::new(&tr("LLM usage"), "usage"),
+            Choice::new(&tr("Daily expenses"), "expense"),
             Choice::new(&tr("Trials"), "trial"),
             Choice::new(&tr("Configuration"), "config"),
             Choice::new(&tr("Help — all commands"), "help"),
@@ -44,6 +45,7 @@ pub fn run_menu() -> i32 {
             "calendar" => crate::calendar::run_calendar(&args),
             "tags" => crate::tags::run_tag_list(&args),
             "usage" => crate::usage::run_usage_list(&args),
+            "expense" => crate::expense::run_expense_list(&args),
             "trial" => crate::trial::run_trial_list(),
             "config" => crate::config_wizard::run_config_wizard(),
             "help" => {

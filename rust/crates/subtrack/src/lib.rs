@@ -28,6 +28,7 @@ mod config_wizard;
 mod currency;
 mod dedupe;
 mod display;
+mod expense;
 mod export;
 mod forecast;
 mod history;

@@ -6,11 +6,11 @@ outline: [2, 2]
 
 # Commands
 
-subtrack provides 50 commands. Every command can run non-interactively from flags and positional arguments. When invoked without required arguments on a terminal, commands prompt for the missing values; the bare `subtrack` command opens a menu. The list below is grouped by task — use the map to jump to a category, or see [Scripting notes](#scripting-notes) for behavior that applies to every command.
+subtrack provides 51 commands. Every command can run non-interactively from flags and positional arguments. When invoked without required arguments on a terminal, commands prompt for the missing values; the bare `subtrack` command opens a menu. The list below is grouped by task — use the map to jump to a category, or see [Scripting notes](#scripting-notes) for behavior that applies to every command.
 
 <div class="doc-map">
   <a class="doc-map-item" href="#subscription-management"><span class="doc-map-title">Subscription management</span><span class="doc-map-desc">Create, inspect, and maintain the subscriptions you track.</span><span class="doc-map-names"><code>add</code> · <code>list</code> · <code>edit</code> · <code>delete</code> · <code>cancel</code> · <code>pause</code> · <code>resume</code> · <code>renew</code> · <code>clone</code> · <code>archive</code> · <code>unarchive</code> · <code>bulk</code> · <code>review</code> · <code>upcoming</code></span></a>
-  <a class="doc-map-item" href="#spending-insights"><span class="doc-map-title">Spending & insights</span><span class="doc-map-desc">Totals, budgets, forecasts, and reports.</span><span class="doc-map-names"><code>payment</code> · <code>summary</code> · <code>analytics</code> · <code>budget</code> · <code>report</code> · <code>yearly</code> · <code>forecast</code> · <code>timeline</code> · <code>compare</code> · <code>optimize</code> · <code>calendar</code></span></a>
+  <a class="doc-map-item" href="#spending-insights"><span class="doc-map-title">Spending & insights</span><span class="doc-map-desc">Totals, budgets, forecasts, and reports.</span><span class="doc-map-names"><code>payment</code> · <code>expense</code> · <code>summary</code> · <code>analytics</code> · <code>budget</code> · <code>report</code> · <code>yearly</code> · <code>forecast</code> · <code>timeline</code> · <code>compare</code> · <code>optimize</code> · <code>calendar</code></span></a>
   <a class="doc-map-item" href="#organization-discovery"><span class="doc-map-title">Organization & discovery</span><span class="doc-map-desc">Tags, search, profiles, templates, and duplicate handling.</span><span class="doc-map-names"><code>tags</code> · <code>tag</code> · <code>search</code> · <code>trial</code> · <code>profile</code> · <code>dedupe</code> · <code>template</code> · <code>suggest</code></span></a>
   <a class="doc-map-item" href="#data-safety"><span class="doc-map-title">Data & safety</span><span class="doc-map-desc">Import, export, backups, integrity checks, and history.</span><span class="doc-map-names"><code>import</code> · <code>export</code> · <code>backup</code> · <code>restore</code> · <code>history</code> · <code>changes</code> · <code>audit</code> · <code>maintenance</code> · <code>cleanup</code> · <code>check</code> · <code>stats</code> · <code>currency</code></span></a>
   <a class="doc-map-item" href="#automation-integrations"><span class="doc-map-title">Automation & integrations</span><span class="doc-map-desc">LLM usage tracking, notifications, receipts, and MCP.</span><span class="doc-map-names"><code>usage</code> · <code>notify</code> · <code>receipt</code> · <code>mcp</code></span></a>
@@ -514,6 +514,95 @@ When `--currency` is used, the total is displayed as a single amount in the targ
 When `--api` is used, API usage costs for the current period are fetched from the `llm_usage` table and added to the subscription totals. API costs are stored in USD cents and are shown both individually and as part of the grand total.
 
 If exchange rates cannot be fetched (e.g. offline), the command falls back to per-currency display without conversion.
+
+### `expense`
+
+Records everyday spending separately from subscriptions. A day is stored as one summary row with a JSON array of line items; each item has its own amount, currency, category, payment method, and optional note. Multiple items can be added to the same day.
+
+#### `expense add [options]`
+
+Adds one or more items to a day. With no flags on a terminal, it prompts for amount, currency, category, method, and note, then asks whether to add another item. Scripted use requires at least `--amount`.
+
+| Option | Description |
+|--------|-------------|
+| `--date <YYYY-MM-DD>` | Day to update (default: today) |
+| `--amount <number>` | Amount in major currency units, `> 0` and at most `99,999,999` |
+| `--currency <C>` | Three-letter currency code (default: `defaultCurrency` from config) |
+| `--category <name>` | Free-form category, stored lowercase (default: `other`) |
+| `--method <m>` | One of `cash`, `card`, `bank`, `other` (default: `other`) |
+| `--note <text>` | Optional note |
+
+Common category suggestions: `food`, `transport`, `daily`, `shopping`, `entertainment`, `utilities`, `health`, `other`. Categories are not a fixed list.
+
+#### `expense list [options]`
+
+Lists day summaries. Defaults to today; with `--from`/`--to` it lists a closed date range.
+
+| Option | Description |
+|--------|-------------|
+| `--date <YYYY-MM-DD>` | Show one date |
+| `--from <YYYY-MM-DD>` | Inclusive start date |
+| `--to <YYYY-MM-DD>` | Inclusive end date |
+| `--all` | Ignore the date filter and show every recorded day |
+| `-j, --json` | Output as JSON |
+
+#### `expense total [options]`
+
+Aggregates item amounts for a period. Without `--currency`, totals and groups are reported per source currency.
+
+| Option | Description |
+|--------|-------------|
+| `--month <YYYY-MM>` | Month to summarize (default: current month) |
+| `--from <YYYY-MM-DD>` | Inclusive start date (overrides `--month`) |
+| `--to <YYYY-MM-DD>` | Inclusive end date (overrides `--month`) |
+| `--group <category\|method\|day>` | Grouping for the breakdown (default: `category`) |
+| `--currency <C>` | Convert every total to one currency using bundled FX rates |
+| `-j, --json` | Output as JSON |
+
+#### `expense delete <date|id>... [--force]`
+
+Deletes whole day summaries. Accepts a date (`YYYY-MM-DD`) or the numeric day ID shown in `expense list`. Interactive runs prompt for confirmation unless `--force` is given.
+
+#### `expense item delete <date|id> <item-id>`
+
+Deletes one line item. Removing the last item also removes the now-empty day.
+
+#### `expense item edit <date|id> <item-id> [options]`
+
+Edits one line item. Only supplied fields change.
+
+| Option | Description |
+|--------|-------------|
+| `--amount <number>` | New amount |
+| `--currency <C>` | New currency code |
+| `--category <name>` | New category |
+| `--method <m>` | New payment method |
+| `--note <text>` | New note |
+| `--clear-note` | Remove the existing note |
+
+#### Examples
+
+```bash
+# Add a lunch and a train ticket to today
+subtrack expense add --amount 1200 --currency JPY --category food --method cash --note ramen
+subtrack expense add --amount 300 --currency JPY --category transport --method card
+
+# Interactive: add several items to a specific date
+subtrack expense add --date 2026-11-23
+
+# List all days in a range as JSON
+subtrack expense list --from 2026-11-01 --to 2026-11-30 --json
+
+# Monthly totals by payment method, converted to USD
+subtrack expense total --month 2026-11 --group method --currency USD
+
+# Fix an item and delete another
+subtrack expense item edit 2026-11-23 1 --amount 1500 --clear-note
+subtrack expense item delete 2026-11-23 2
+
+# Delete a whole day without confirmation
+subtrack expense delete 2026-11-23 --force
+```
 
 ### `summary`
 

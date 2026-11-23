@@ -508,7 +508,7 @@ fn interactive_select_filters_long_choice_lists() {
 #[test]
 fn menu_exposes_more_actions_and_root_help() {
     let env = Env::new("menu-help");
-    let out = env.run_interactive(&[], "16\n");
+    let out = env.run_interactive(&[], "help\n");
     assert!(out.status.success());
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(
@@ -860,7 +860,7 @@ fn config_wizard_reprompts_on_invalid_value_and_can_cancel() {
 #[test]
 fn config_wizard_is_reachable_from_menu_and_applies_language_immediately() {
     let env = Env::new("config-wizard-menu");
-    let out = env.run_interactive(&[], "15\nlanguage\nja\nDone\nexit\n");
+    let out = env.run_interactive(&[], "Configuration\nlanguage\nja\nDone\nexit\n");
     assert!(out.status.success());
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(
@@ -883,4 +883,120 @@ fn config_wizard_does_not_offer_secret_keys() {
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(!text.contains("slackWebhook"), "secret key listed: {text}");
     assert!(!text.contains("webhookUrl"), "secret key listed: {text}");
+}
+
+fn expense_json(env: &Env, args: &[&str]) -> serde_json::Value {
+    let out = env.run(args);
+    assert!(out.status.success(), "command failed: {args:?}");
+    let body = String::from_utf8_lossy(&out.stdout);
+    serde_json::from_str(&body).unwrap_or_else(|e| panic!("invalid JSON ({e}): {body}"))
+}
+
+#[test]
+fn expense_add_list_total_and_item_edits() {
+    let env = Env::new("expense-crud");
+    let add = |extra: &[&str]| {
+        let mut args = vec![
+            "expense",
+            "add",
+            "--date",
+            TODAY,
+            "--amount",
+            "1200",
+            "--currency",
+            "jpy",
+            "--category",
+            "Food",
+            "--method",
+            "Cash",
+            "--note",
+            "ramen",
+        ];
+        args.extend_from_slice(extra);
+        assert!(env.run(&args).status.success(), "add failed: {args:?}");
+    };
+    add(&[]);
+    add(&[
+        "--amount",
+        "300",
+        "--category",
+        "transport",
+        "--method",
+        "card",
+        "--note",
+        "train",
+    ]);
+
+    let listed = expense_json(&env, &["expense", "list", "--json"]);
+    let days = listed.as_array().unwrap();
+    assert_eq!(days.len(), 1);
+    assert_eq!(days[0]["date"], TODAY);
+    let items = days[0]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["category"], "food");
+    assert_eq!(items[0]["currency"], "JPY");
+    assert_eq!(days[0]["totals"][0]["amount"], 1500.0);
+
+    let total = expense_json(&env, &["expense", "total", "--json", "--month", "2026-10"]);
+    assert_eq!(total["period"]["from"], "2026-10-01");
+    assert_eq!(total["period"]["to"], "2026-10-31");
+    assert_eq!(total["totals"][0]["amount"], 1500.0);
+    assert_eq!(total["groups"][0]["key"], "food");
+
+    assert!(
+        env.run(&[
+            "expense",
+            "item",
+            "edit",
+            TODAY,
+            "1",
+            "--amount",
+            "1500",
+            "--clear-note",
+        ])
+        .status
+        .success()
+    );
+    let edited = expense_json(&env, &["expense", "list", "--json"]);
+    assert_eq!(edited[0]["items"][0]["amount"], 1500.0);
+    assert!(edited[0]["items"][0]["note"].is_null());
+
+    assert!(
+        env.run(&["expense", "item", "delete", TODAY, "2"])
+            .status
+            .success()
+    );
+    assert_eq!(
+        expense_json(&env, &["expense", "list", "--json"])[0]["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    assert!(
+        env.run(&["expense", "delete", TODAY, "--force"])
+            .status
+            .success()
+    );
+    assert_eq!(
+        expense_json(&env, &["expense", "list", "--json"]),
+        serde_json::json!([])
+    );
+}
+
+#[test]
+fn expense_interactive_add_collects_multiple_items() {
+    let env = Env::new("expense-interactive");
+    let out = env.run_interactive(
+        &["expense", "add"],
+        "1200\n\n\n\n\ny\n300\n\ntransport\n1\n\n\n",
+    );
+    assert!(out.status.success());
+    let listed = expense_json(&env, &["expense", "list", "--json"]);
+    let items = listed[0]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["category"], "other");
+    assert_eq!(items[1]["category"], "transport");
+    assert_eq!(items[1]["method"], "cash");
 }

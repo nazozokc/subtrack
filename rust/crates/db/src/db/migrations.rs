@@ -89,8 +89,37 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
             }
         }
     }
+    if version < 2 {
+        conn.execute_batch("BEGIN TRANSACTION")?;
+        let result = (|| -> rusqlite::Result<()> {
+            migrate_to_v2(conn)?;
+            conn.execute_batch("PRAGMA user_version = 2")?;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => conn.execute_batch("COMMIT")?,
+            Err(e) => {
+                let _ = conn.execute_batch("ROLLBACK");
+                return Err(e);
+            }
+        }
+    }
     ensure_usage_generation_index(conn)?;
     Ok(())
+}
+
+/// Daily expense summaries. Never edit v1 in place: existing databases may
+/// already carry that version.
+fn migrate_to_v2(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL UNIQUE,
+            items TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL DEFAULT (date('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );",
+    )
 }
 
 fn table_has_column(conn: &Connection, table: &str, column: &str) -> rusqlite::Result<bool> {

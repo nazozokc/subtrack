@@ -11,10 +11,10 @@ const MAX_DECOMPRESSED_BYTES: u64 = 256 * 1024 * 1024;
 /// Upper bound for the backup file itself; a larger file cannot represent a
 /// database that fits the decompression cap.
 const MAX_BACKUP_FILE_BYTES: u64 = 256 * 1024 * 1024;
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 const LEGACY_TABLES: [&str; 3] = ["subscriptions", "tags", "subscription_tags"];
-const REQUIRED_TABLES: [&str; 8] = [
+const REQUIRED_TABLES: [&str; 9] = [
     "subscriptions",
     "tags",
     "subscription_tags",
@@ -23,8 +23,9 @@ const REQUIRED_TABLES: [&str; 8] = [
     "price_history",
     "audit_log",
     "suggestions",
+    "expenses",
 ];
-const REQUIRED_COLUMNS: [(&str, &[&str]); 8] = [
+const REQUIRED_COLUMNS: [(&str, &[&str]); 9] = [
     (
         "subscriptions",
         &[
@@ -122,6 +123,10 @@ const REQUIRED_COLUMNS: [(&str, &[&str]); 8] = [
             "matched_sub_id",
             "created_at",
         ],
+    ),
+    (
+        "expenses",
+        &["id", "date", "items", "created_at", "updated_at"],
     ),
 ];
 const LEGACY_COLUMNS: [(&str, &[&str]); 3] = [
@@ -429,7 +434,7 @@ mod tests {
     #[test]
     fn rejects_newer_schema_version() {
         let conn = current_db();
-        conn.execute_batch("PRAGMA user_version = 2").unwrap();
+        conn.execute_batch("PRAGMA user_version = 3").unwrap();
         let err = validate_restored_database(&conn).unwrap_err();
         assert!(err.to_string().contains("schema version"), "{err}");
     }
