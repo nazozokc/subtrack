@@ -124,25 +124,50 @@ fn pad_end(s: &str, len: usize) -> String {
 }
 
 /// Serialize JSON without reordering subscriptions, methods, currencies, or providers.
+/// One argument per JSON section, mirroring the report renderer.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn json(
     subs: &[Subscription],
     period: &str,
     currency: Option<&str>,
     api: Option<&ApiUsage>,
     entries: &[Entry],
-    sub_total: f64,
+    sub_total: Option<f64>,
     mut by_method_entries: Vec<(String, MethodTotals)>,
+    by_currency: &[(String, f64)],
 ) -> String {
     let mut out: Vec<String> = Vec::new();
     let kv = |k: &str, v: String| format!("{}: {}", quote_string(k), v);
     out.push(kv("period", quote_string(period)));
-    out.push(kv("total", number(round_currency(sub_total))));
+    let mut mixed_currencies: Option<String> = None;
+    if let Some(sub_total) = sub_total {
+        out.push(kv("total", number(round_currency(sub_total))));
+    } else {
+        out.push(kv("total", "null".to_string()));
+        let currencies: Vec<String> = by_currency
+            .iter()
+            .map(|(currency, amount)| {
+                format!(
+                    "    {{\n      {}\n    }}",
+                    [
+                        kv("currency", quote_string(currency)),
+                        kv("amount", number(round_currency(*amount))),
+                    ]
+                    .join(",\n      ")
+                )
+            })
+            .collect();
+        mixed_currencies = Some(format!("[\n{}\n  ]", currencies.join(",\n")));
+    }
     out.push(kv(
         "currency",
         currency
             .map(quote_string)
             .unwrap_or_else(|| "null".to_string()),
     ));
+    if let Some(currencies) = mixed_currencies {
+        out.push(kv("currencies", currencies));
+    }
     let subs_json: Vec<String> = entries
         .iter()
         .map(|e| {

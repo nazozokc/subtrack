@@ -113,15 +113,13 @@ fn text_sorts_methods_and_currencies_but_json_keeps_encounter_order() {
 }
 
 #[test]
-fn json_total_preserves_currency_grouped_float_summation() {
+fn json_total_refuses_to_mix_currencies() {
     let subs = vec![
-        subscription(1, 1e16, "AAA", None),
-        subscription(2, 1.0, "BBB", None),
-        subscription(3, -1e16, "AAA", None),
+        subscription(1, 100.0, "JPY", None),
+        subscription(2, 2.0, "USD", None),
     ];
     let entries = calculate::entries(&subs, "monthly");
-    assert_eq!(calculate::json_total(&entries), 1.0);
-    assert_eq!(entries.iter().map(|e| e.converted_price).sum::<f64>(), 0.0);
+    assert_eq!(calculate::json_total(&entries), None);
 }
 
 #[test]
@@ -164,8 +162,9 @@ fn json_bytes_keep_original_subscription_units_and_raw_api_cents() {
         Some("JPY"),
         Some(&api),
         &entries,
-        1500.0,
+        Some(1500.0),
         methods,
+        &[],
     );
     assert_eq!(
         output,
@@ -228,6 +227,7 @@ fn json_rounds_after_aggregation_not_before() {
         &entries,
         calculate::json_total(&entries),
         methods,
+        &[],
     );
     let value: serde_json::Value = serde_json::from_str(&output).unwrap();
     assert_eq!(value["total"], 0.01);
@@ -254,8 +254,9 @@ fn json_omits_nonpositive_api_usage_and_fully_unconvertible_methods() {
             Some("USD"),
             Some(&api),
             &entries,
-            0.0,
+            Some(0.0),
             methods,
+            &[],
         );
         let value: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert_eq!(value["total"], 0);
@@ -263,6 +264,38 @@ fn json_omits_nonpositive_api_usage_and_fully_unconvertible_methods() {
         assert!(value.get("apiUsage").is_none());
         assert!(value.get("byMethod").is_none());
     }
+}
+
+#[test]
+fn json_renders_per_currency_totals_instead_of_mixing_currencies() {
+    let subs = vec![
+        subscription(1, 100.0, "JPY", None),
+        subscription(2, 2.0, "USD", None),
+    ];
+    let entries = calculate::entries(&subs, "monthly");
+    let methods = calculate::json_methods(&entries, None, None);
+    let output = render::json(
+        &subs,
+        "monthly",
+        None,
+        None,
+        &entries,
+        calculate::json_total(&entries),
+        methods,
+        &calculate::currency_totals(&subs, "monthly")
+            .into_iter()
+            .collect::<Vec<_>>(),
+    );
+    let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+    assert!(
+        value["total"].is_null(),
+        "total must not mix currencies: {value}"
+    );
+    let currencies = value["currencies"].as_array().expect("per-currency totals");
+    assert_eq!(currencies[0]["currency"], "JPY");
+    assert_eq!(currencies[0]["amount"], 100.0);
+    assert_eq!(currencies[1]["currency"], "USD");
+    assert_eq!(currencies[1]["amount"], 2.0);
 }
 
 #[test]

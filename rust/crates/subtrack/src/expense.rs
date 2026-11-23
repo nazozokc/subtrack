@@ -48,12 +48,10 @@ fn parse_amount(value: &str) -> Result<f64, String> {
 
 fn normalize_currency(value: &str) -> Result<String, String> {
     let code = value.trim().to_uppercase();
-    if code.len() == 3 && code.chars().all(|c| c.is_ascii_uppercase()) {
+    if crate::validation::is_valid_currency(&code) {
         Ok(code)
     } else {
-        Err(format!(
-            "Invalid currency code: {value} (expected 3 letters)"
-        ))
+        Err(format!("Invalid currency code: {value}"))
     }
 }
 

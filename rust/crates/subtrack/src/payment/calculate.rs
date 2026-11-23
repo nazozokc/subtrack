@@ -40,13 +40,18 @@ pub(super) fn converted_total(amounts: &[Option<f64>]) -> f64 {
     amounts.iter().map(|v| v.unwrap_or(0.0)).sum()
 }
 
-/// JSON's unconverted total sums currency groups in key order, not row order.
-pub(super) fn json_total(entries: &[Entry]) -> f64 {
+/// JSON's unconverted total is only meaningful for a single currency.
+/// Mixed currencies have no single numeric total; callers render per-currency
+/// sums instead.
+pub(super) fn json_total(entries: &[Entry]) -> Option<f64> {
     let mut by_currency: BTreeMap<String, f64> = BTreeMap::new();
     for e in entries {
         *by_currency.entry(e.currency.clone()).or_insert(0.0) += e.converted_price;
     }
-    by_currency.values().sum()
+    if by_currency.len() > 1 {
+        return None;
+    }
+    Some(by_currency.values().sum())
 }
 
 pub(super) type TextMethods = Vec<(String, Vec<(String, f64)>)>;
