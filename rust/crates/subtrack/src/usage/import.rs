@@ -1,4 +1,4 @@
-use crate::logger::{self, info};
+use crate::logger::{self, debug, info};
 use crate::parser::ParsedArgs;
 
 // ── import ───────────────────────────────────────────────
@@ -244,7 +244,7 @@ pub fn run_usage_import(parsed: &ParsedArgs) -> i32 {
         return 0;
     }
 
-    info(&format!(
+    debug(&format!(
         "Found {} JSON object{} in file",
         objects.len(),
         if objects.len() != 1 { "s" } else { "" }

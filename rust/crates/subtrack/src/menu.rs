@@ -1,5 +1,6 @@
 //! Interactive entry menu shown when `subtrack` runs with no arguments.
 
+use crate::i18n::tr;
 use crate::logger;
 use crate::parser::ParsedArgs;
 use crate::prompt::{self, Choice};
@@ -8,23 +9,23 @@ pub fn run_menu() -> i32 {
     loop {
         let args = ParsedArgs::default();
         let choices = vec![
-            Choice::new("List subscriptions", "list"),
-            Choice::new("Add subscription", "add"),
-            Choice::new("Edit subscription", "edit"),
-            Choice::new("Delete subscription", "delete"),
-            Choice::new("Summary", "summary"),
-            Choice::new("Payment totals", "payment"),
-            Choice::new("Budget status", "budget"),
-            Choice::new("Yearly report", "report"),
-            Choice::new("Upcoming bills", "upcoming"),
-            Choice::new("Statistics", "stats"),
-            Choice::new("Calendar", "calendar"),
-            Choice::new("Tags", "tags"),
-            Choice::new("LLM usage", "usage"),
-            Choice::new("Trials", "trial"),
-            Choice::new("Configuration", "config"),
-            Choice::new("Help — all commands", "help"),
-            Choice::new("Exit", "exit"),
+            Choice::new(&tr("List subscriptions"), "list"),
+            Choice::new(&tr("Add subscription"), "add"),
+            Choice::new(&tr("Edit subscription"), "edit"),
+            Choice::new(&tr("Delete subscription"), "delete"),
+            Choice::new(&tr("Summary"), "summary"),
+            Choice::new(&tr("Payment totals"), "payment"),
+            Choice::new(&tr("Budget status"), "budget"),
+            Choice::new(&tr("Yearly report"), "report"),
+            Choice::new(&tr("Upcoming bills"), "upcoming"),
+            Choice::new(&tr("Statistics"), "stats"),
+            Choice::new(&tr("Calendar"), "calendar"),
+            Choice::new(&tr("Tags"), "tags"),
+            Choice::new(&tr("LLM usage"), "usage"),
+            Choice::new(&tr("Trials"), "trial"),
+            Choice::new(&tr("Configuration"), "config"),
+            Choice::new(&tr("Help — all commands"), "help"),
+            Choice::new(&tr("Exit"), "exit"),
         ];
         let Some(action) = prompt::select("What would you like to do?", &choices, Some(0)) else {
             return 0;

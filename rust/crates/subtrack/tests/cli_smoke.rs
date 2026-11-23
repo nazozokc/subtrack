@@ -713,3 +713,75 @@ fn bare_parent_commands_default_to_list_and_forecast_runs() {
     let profile = env.text(&["profile"]);
     assert!(profile.contains("No saved profiles"), "profile: {profile}");
 }
+
+#[test]
+fn config_language_switches_common_ui_to_japanese() {
+    let env = Env::new("language-ja");
+    assert!(
+        env.run(&["config", "set", "language", "ja"])
+            .status
+            .success()
+    );
+
+    let help = env.text(&["--help"]);
+    assert!(help.contains("使い方:"), "help: {help}");
+    assert!(help.contains("コマンド:"), "help: {help}");
+    assert!(
+        help.contains("サブスクリプションを追加"),
+        "translated command description missing: {help}"
+    );
+
+    let menu = String::from_utf8_lossy(&env.run_interactive(&[], "1\n").stdout).into_owned();
+    assert!(menu.contains("サブスクリプション一覧"), "menu: {menu}");
+    assert!(
+        menu.contains("「追加」で作成できます"),
+        "menu header: {menu}"
+    );
+
+    let profile = env.text(&["profile"]);
+    assert!(
+        profile.contains("保存済みプロファイルがありません"),
+        "status message: {profile}"
+    );
+
+    // Invalid values are rejected instead of silently changing the UI.
+    let bad = env.run(&["config", "set", "language", "fr"]);
+    assert_eq!(bad.status.code(), Some(1));
+}
+
+#[test]
+fn config_log_level_controls_status_chatter() {
+    let env = Env::new("log-level");
+    let home = env.dir.join("empty-home");
+    std::fs::create_dir_all(&home).unwrap();
+    let extra = [("HOME", home.to_str().unwrap())];
+
+    // Default (normal): status messages stay, progress/debug chatter is hidden.
+    let normal = env.run_custom(&["usage", "refresh"], "", &extra, &[]);
+    let stdout = String::from_utf8_lossy(&normal.stdout);
+    assert!(
+        stdout.contains("No new usage entries found"),
+        "normal: {stdout}"
+    );
+    assert!(!stdout.contains("not found — skip"), "normal: {stdout}");
+
+    assert!(
+        env.run(&["config", "set", "logLevel", "quiet"])
+            .status
+            .success()
+    );
+    let quiet = env.text(&["profile"]);
+    assert!(!quiet.contains("No saved profiles"), "quiet: {quiet}");
+
+    assert!(
+        env.run(&["config", "set", "logLevel", "verbose"])
+            .status
+            .success()
+    );
+    let verbose = env.run_custom(&["usage", "refresh"], "", &extra, &[]);
+    let stdout = String::from_utf8_lossy(&verbose.stdout);
+    assert!(stdout.contains("not found — skip"), "verbose: {stdout}");
+
+    let bad = env.run(&["config", "set", "logLevel", "loud"]);
+    assert_eq!(bad.status.code(), Some(1));
+}

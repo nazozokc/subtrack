@@ -25,6 +25,10 @@ pub struct BudgetEntry {
 
 #[derive(Clone, Debug)]
 pub struct Config {
+    /// Output language for the shared UI (`en` or `ja`).
+    pub language: String,
+    /// Status-message verbosity (`quiet`, `normal` or `verbose`).
+    pub log_level: String,
     pub theme: String,
     pub table_min_width: i64,
     pub list_show_notes: bool,
@@ -51,6 +55,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
+            language: "en".to_string(),
+            log_level: "normal".to_string(),
             theme: "default".to_string(),
             table_min_width: 40,
             list_show_notes: false,
@@ -96,6 +102,12 @@ fn read_config() -> Config {
         "defaultCurrency".into(),
         serde_json::Value::String("USD".into()),
     );
+    cfg.raw
+        .insert("language".into(), serde_json::Value::String("en".into()));
+    cfg.raw.insert(
+        "logLevel".into(),
+        serde_json::Value::String("normal".into()),
+    );
     let path = subtrack_core::crypto::config_dir().join("config.json");
     let Ok(decrypted) = subtrack_core::crypto::decrypt_file_if_needed(&path) else {
         return cfg;
@@ -107,6 +119,16 @@ fn read_config() -> Config {
     let get = |k: &str| -> Option<&serde_json::Value> { obj?.get(k) };
     let get_str =
         |k: &str| -> Option<String> { get(k).and_then(|v| v.as_str()).map(|s| s.to_string()) };
+    if let Some(v) = get_str("language")
+        && (v == "en" || v == "ja")
+    {
+        cfg.language = v;
+    }
+    if let Some(v) = get_str("logLevel")
+        && ["quiet", "normal", "verbose"].contains(&v.as_str())
+    {
+        cfg.log_level = v;
+    }
     cfg.theme = get_str("theme").unwrap_or_else(|| cfg.theme.clone());
     cfg.default_currency = get_str("defaultCurrency").unwrap_or(cfg.default_currency);
     cfg.monthly_budget = get("monthlyBudget").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -173,7 +195,24 @@ fn read_config() -> Config {
             cfg.raw.insert(k.clone(), v.clone());
         }
     }
+    // Keep `config list` in sync with the effective (validated) values.
+    cfg.raw.insert(
+        "language".into(),
+        serde_json::Value::String(cfg.language.clone()),
+    );
+    cfg.raw.insert(
+        "logLevel".into(),
+        serde_json::Value::String(cfg.log_level.clone()),
+    );
     cfg
+}
+
+/// Apply the display-related settings to the process-wide runtime. Called
+/// once at CLI startup so every layer (including DB/MCP warnings and help
+/// rendering) sees the same language and log level.
+pub fn apply_runtime(cfg: &Config) {
+    subtrack_core::i18n::set_language(&cfg.language);
+    subtrack_core::logger::set_level_code(&cfg.log_level);
 }
 
 pub fn handle_config_list() -> i32 {
@@ -276,6 +315,18 @@ pub fn handle_config_set(key: &str, value: &str) -> i32 {
             }
             None => return 1,
         },
+        "language" => {
+            if value != "en" && value != "ja" {
+                bad!("language must be 'en' or 'ja'");
+            }
+            raw.insert(key.into(), value.into());
+        }
+        "logLevel" => {
+            if !["quiet", "normal", "verbose"].contains(&value) {
+                bad!("logLevel must be 'quiet', 'normal' or 'verbose'");
+            }
+            raw.insert(key.into(), value.into());
+        }
         "theme" => {
             const THEMES: [&str; 4] = ["default", "light", "high-contrast", "none"];
             if !THEMES.contains(&value) {

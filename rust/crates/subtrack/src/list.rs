@@ -10,7 +10,7 @@ use crate::display::{show_api_usage, spread_subscription};
 use crate::domain::{Status, f64_arg, int_arg};
 use crate::fx::{Converted, fetch_converted_subs};
 use crate::json::list_json;
-use crate::logger::{fail, info, out_str, success, warn};
+use crate::logger::{debug, fail, out_str, warn};
 use crate::parser::ParsedArgs;
 use chrono::Datelike;
 
@@ -169,10 +169,10 @@ pub fn handle_list(list: Vec<crate::db::Subscription>, options: HandleOptions) {
         .as_deref()
         .filter(|cu| display_list.iter().any(|s| s.currency != *cu))
     {
-        info("Fetching the latest exchange rates...");
+        debug("Fetching the latest exchange rates...");
         match fetch_converted_subs(&display_list, cu) {
             Some(Converted { list, has_missing }) => {
-                success("Exchange rates updated");
+                debug("Exchange rates updated");
                 display_list = list;
                 if has_missing {
                     warn(

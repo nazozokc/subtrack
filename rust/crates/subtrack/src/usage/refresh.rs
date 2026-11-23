@@ -1,4 +1,4 @@
-use crate::logger::info;
+use crate::logger::{debug, info};
 
 // ── refresh ──────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ pub fn run_usage_refresh() -> i32 {
             found_any = true;
             // Scanning is not required by the golden cases (sources absent).
         } else {
-            info(&format!("{} not found — skip", label));
+            debug(&format!("{} not found — skip", label));
         }
     }
     let _ = found_any;
