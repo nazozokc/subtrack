@@ -785,3 +785,102 @@ fn config_log_level_controls_status_chatter() {
     let bad = env.run(&["config", "set", "logLevel", "loud"]);
     assert_eq!(bad.status.code(), Some(1));
 }
+
+#[test]
+fn config_wizard_edits_a_setting_and_persists_it() {
+    let env = Env::new("config-wizard-set");
+    let out = env.run_interactive(&["config"], "language\nja\nDone\n");
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("Set language = ja"),
+        "wizard did not save: {text}"
+    );
+    assert!(
+        text.contains("1 setting(s) updated"),
+        "wizard summary missing: {text}"
+    );
+
+    let value = env.text(&["config", "get", "language"]);
+    assert!(value.contains("language: ja"), "not persisted: {value}");
+
+    // Non-TTY stays scriptable: the bare command still prints the full list.
+    let list = env.text(&["config"]);
+    assert!(list.contains("defaultCurrency: USD"), "config list: {list}");
+}
+
+#[test]
+fn config_wizard_keeps_current_value_on_empty_answer() {
+    let env = Env::new("config-wizard-keep");
+    let out = env.run_interactive(&["config"], "logLevel\n\nDone\n");
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("No settings changed"),
+        "empty answer changed a setting: {text}"
+    );
+    let value = env.text(&["config", "get", "logLevel"]);
+    assert!(value.contains("logLevel: normal"), "value changed: {value}");
+}
+
+#[test]
+fn config_wizard_reprompts_on_invalid_value_and_can_cancel() {
+    let env = Env::new("config-wizard-validate");
+    let out = env.run_interactive(
+        &["config"],
+        "tableMinWidth\n999\nabc\n60\nmonthlyBudget\n-\nmonthlyBudget\n\nDone\n",
+    );
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("tableMinWidth must be an integer between 20 and 200"),
+        "validation error missing: {text}"
+    );
+    assert!(text.contains("- = back"), "cancel hint missing: {text}");
+    assert!(
+        text.contains("1 setting(s) updated"),
+        "cancelled edit was saved: {text}"
+    );
+    let value = env.text(&["config", "get", "tableMinWidth"]);
+    assert!(
+        value.contains("tableMinWidth: 60"),
+        "not persisted: {value}"
+    );
+    assert!(
+        !text.contains("monthlyBudget must be a non-negative number"),
+        "empty answer was validated: {text}"
+    );
+    let budget = env.text(&["config", "get", "monthlyBudget"]);
+    assert!(
+        budget.contains("monthlyBudget: (not set)"),
+        "cancelled edit: {budget}"
+    );
+}
+
+#[test]
+fn config_wizard_is_reachable_from_menu_and_applies_language_immediately() {
+    let env = Env::new("config-wizard-menu");
+    let out = env.run_interactive(&[], "15\nlanguage\nja\nDone\nexit\n");
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("Select a setting to change"),
+        "wizard did not open: {text}"
+    );
+    assert!(
+        text.contains("変更する設定を選択"),
+        "menu did not pick up the new language: {text}"
+    );
+    let value = env.text(&["config", "get", "language"]);
+    assert!(value.contains("language: ja"), "not persisted: {value}");
+}
+
+#[test]
+fn config_wizard_does_not_offer_secret_keys() {
+    let env = Env::new("config-wizard-secrets");
+    let out = env.run_interactive(&["config"], "Done\n");
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(!text.contains("slackWebhook"), "secret key listed: {text}");
+    assert!(!text.contains("webhookUrl"), "secret key listed: {text}");
+}

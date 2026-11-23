@@ -161,17 +161,58 @@ fn render_select_choices(
 pub type Validator = fn(&str) -> Result<(), String>;
 
 pub fn input(message: &str, default: Option<&str>, validate: Option<Validator>) -> Option<String> {
+    input_inner(message, default, validate, None, false)
+}
+
+/// Like [`input`], but a literal `-` returns `None` so the caller can go back
+/// without saving anything. Used by the settings wizard's value prompts.
+pub fn input_cancelable(
+    message: &str,
+    default: Option<&str>,
+    validate: Option<Validator>,
+) -> Option<String> {
+    input_inner(message, default, validate, Some("-"), false)
+}
+
+/// Like [`input_cancelable`], but an empty answer is also a cancellation when
+/// there is no default value to fall back to.
+pub fn input_optional_cancelable(
+    message: &str,
+    default: Option<&str>,
+    validate: Option<Validator>,
+) -> Option<String> {
+    input_inner(message, default, validate, Some("-"), true)
+}
+
+fn input_inner(
+    message: &str,
+    default: Option<&str>,
+    validate: Option<Validator>,
+    cancel_token: Option<&str>,
+    empty_cancels: bool,
+) -> Option<String> {
     if !interactive() {
         return default.map(|d| d.to_string());
     }
 
-    let hint = match default {
+    let mut hint = match default {
         Some(d) if !d.is_empty() => format!("{} [{}]", message, d),
         _ => message.to_string(),
     };
+    if cancel_token.is_some() {
+        hint.push_str(" (- = back)");
+    }
 
     loop {
         let answer = ask(&hint)?;
+        if cancel_token.is_some_and(|token| answer.trim() == token) {
+            cancel("Cancelled");
+            return None;
+        }
+        if answer.is_empty() && empty_cancels && default.is_none() {
+            cancel("Cancelled");
+            return None;
+        }
         let value = if answer.is_empty() {
             match default {
                 Some(d) => d.to_string(),

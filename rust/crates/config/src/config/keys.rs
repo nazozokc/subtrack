@@ -52,7 +52,7 @@ pub(super) fn stringify(v: &serde_json::Value) -> String {
     }
 }
 
-pub(super) fn display_value(key: &str, cfg: &Config) -> String {
+pub fn display_value(key: &str, cfg: &Config) -> String {
     match key {
         "notifyChannels" => cfg
             .raw
@@ -90,67 +90,52 @@ pub(super) fn is_known_key(key: &str) -> bool {
     CONFIG_KEYS.contains(&key) || key == "budgets"
 }
 
-pub(super) fn parse_budgets(value: &str) -> Option<Vec<serde_json::Value>> {
-    let parsed: serde_json::Value = match serde_json::from_str(value) {
-        Ok(v) => v,
-        Err(_) => {
-            subtrack_core::logger::fail("budgets must be a valid JSON array of budget entries");
-            return None;
-        }
-    };
-    let arr = match parsed.as_array() {
-        Some(a) => a.clone(),
-        None => {
-            subtrack_core::logger::fail("budgets must be a valid JSON array of budget entries");
-            return None;
-        }
-    };
+pub(super) fn parse_budgets(value: &str) -> Result<Vec<serde_json::Value>, String> {
+    const BAD_ARRAY: &str = "budgets must be a valid JSON array of budget entries";
+    let parsed: serde_json::Value =
+        serde_json::from_str(value).map_err(|_| BAD_ARRAY.to_string())?;
+    let arr = parsed
+        .as_array()
+        .ok_or_else(|| BAD_ARRAY.to_string())?
+        .clone();
     for item in &arr {
         let Some(obj) = item.as_object() else {
-            subtrack_core::logger::fail(
-                "Each budget entry must be an object with name, amount, currency",
-            );
-            return None;
+            return Err("Each budget entry must be an object with name, amount, currency".into());
         };
         let name = obj.get("name").and_then(|v| v.as_str()).unwrap_or("");
         if name.trim().is_empty() {
-            subtrack_core::logger::fail("Each budget entry needs a non-empty name");
-            return None;
+            return Err("Each budget entry needs a non-empty name".into());
         }
         let amount = obj.get("amount").and_then(|v| v.as_f64());
         match amount {
             Some(a) if a >= 0.0 && a.is_finite() => {}
             _ => {
-                subtrack_core::logger::fail(&format!(
+                return Err(format!(
                     "Budget \"{}\": amount must be a non-negative number",
                     name
                 ));
-                return None;
             }
         }
         let currency = obj.get("currency").and_then(|v| v.as_str()).unwrap_or("");
         if !(currency.len() == 3 && currency.bytes().all(|b| b.is_ascii_uppercase())) {
-            subtrack_core::logger::fail(&format!(
+            return Err(format!(
                 "Budget \"{}\": currency must be a 3-letter code (e.g. JPY)",
                 name
             ));
-            return None;
         }
         if let Some(period) = obj.get("period") {
             if let Some(p) = period.as_str() {
                 if p != "monthly" && p != "yearly" {
-                    subtrack_core::logger::fail(&format!(
+                    return Err(format!(
                         "Budget \"{}\": period must be \"monthly\" or \"yearly\"",
                         name
                     ));
-                    return None;
                 }
             } else {
-                subtrack_core::logger::fail(&format!(
+                return Err(format!(
                     "Budget \"{}\": period must be \"monthly\" or \"yearly\"",
                     name
                 ));
-                return None;
             }
         }
         if let Some(cats) = obj.get("categories") {
@@ -159,13 +144,12 @@ pub(super) fn parse_budgets(value: &str) -> Option<Vec<serde_json::Value>> {
                 .map(|a| a.iter().all(|c| c.is_string()))
                 .unwrap_or(false);
             if !valid {
-                subtrack_core::logger::fail(&format!(
+                return Err(format!(
                     "Budget \"{}\": categories must be an array of tag names",
                     name
                 ));
-                return None;
             }
         }
     }
-    Some(arr)
+    Ok(arr)
 }

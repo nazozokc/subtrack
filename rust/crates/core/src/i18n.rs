@@ -292,6 +292,12 @@ static JA: &[(&str, &str)] = &[
     ("all", "すべて"),
     ("yes", "はい"),
     ("no", "いいえ"),
+    // Settings wizard
+    ("Select a setting to change", "変更する設定を選択"),
+    ("New value for", "新しい値"),
+    ("Done", "完了"),
+    ("(- = back)", "(- = 戻る)"),
+    ("No settings changed", "設定は変更されませんでした"),
     // Common status / empty-state messages
     (
         "No subscriptions found — try `subtrack add`",

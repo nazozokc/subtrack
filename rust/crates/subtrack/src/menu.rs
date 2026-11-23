@@ -45,7 +45,7 @@ pub fn run_menu() -> i32 {
             "tags" => crate::tags::run_tag_list(&args),
             "usage" => crate::usage::run_usage_list(&args),
             "trial" => crate::trial::run_trial_list(),
-            "config" => crate::config::handle_config_list(),
+            "config" => crate::config_wizard::run_config_wizard(),
             "help" => {
                 crate::cli::print_root_help();
                 0
