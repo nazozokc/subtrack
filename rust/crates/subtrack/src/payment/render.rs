@@ -124,6 +124,8 @@ fn pad_end(s: &str, len: usize) -> String {
 }
 
 /// Serialize JSON without reordering subscriptions, methods, currencies, or providers.
+/// One argument per JSON section, mirroring the report renderer.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn json(
     subs: &[Subscription],
     period: &str,
