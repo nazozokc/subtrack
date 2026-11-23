@@ -115,10 +115,15 @@ fn render_payment(
     });
 
     if json {
-        let total = conversion.as_ref().map_or_else(
-            || calculate::json_total(&entries),
-            |converted| converted.total,
-        );
+        let (total, by_currency) = match &conversion {
+            Some(converted) => (Some(converted.total), Vec::new()),
+            None => (
+                calculate::json_total(&entries),
+                calculate::currency_totals(subs, period)
+                    .into_iter()
+                    .collect(),
+            ),
+        };
         let methods = if by_method {
             calculate::json_methods(
                 &entries,
@@ -136,6 +141,7 @@ fn render_payment(
             &entries,
             total,
             methods,
+            &by_currency,
         ));
     } else {
         // With --currency the text branch ignores --method entirely.

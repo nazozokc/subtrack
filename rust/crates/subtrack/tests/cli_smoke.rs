@@ -1000,3 +1000,36 @@ fn expense_interactive_add_collects_multiple_items() {
     assert_eq!(items[1]["category"], "transport");
     assert_eq!(items[1]["method"], "cash");
 }
+
+#[test]
+fn tag_merge_missing_source_is_rejected() {
+    let env = Env::new("tag-merge-missing");
+    let out = env.run(&["tag", "merge", "ghost", "ghost"]);
+    assert_eq!(out.status.code(), Some(1));
+    let message = String::from_utf8_lossy(&out.stderr);
+    assert!(message.contains("not found"), "output: {message}");
+}
+
+#[test]
+fn expense_add_rejects_unknown_currency() {
+    let env = Env::new("expense-currency");
+    let out = env.run(&[
+        "expense",
+        "add",
+        "--date",
+        TODAY,
+        "--amount",
+        "1",
+        "--currency",
+        "XXX",
+        "--category",
+        "food",
+        "--method",
+        "card",
+    ]);
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(
+        expense_json(&env, &["expense", "list", "--json"]),
+        serde_json::json!([])
+    );
+}

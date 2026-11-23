@@ -31,9 +31,6 @@ pub fn rename_tag(old_name: &str, new_name: &str) -> std::io::Result<bool> {
     if new_name.trim().is_empty() {
         return Err(std::io::Error::other("Tag name cannot be empty"));
     }
-    if old_name == new_name {
-        return Ok(true);
-    }
     let conn = open_db()?;
     let old_id: Option<i64> = conn
         .query_row(
@@ -45,6 +42,10 @@ pub fn rename_tag(old_name: &str, new_name: &str) -> std::io::Result<bool> {
     let Some(old_id) = old_id else {
         return Ok(false);
     };
+    // A self-merge is a successful no-op only when the tag actually exists.
+    if old_name == new_name {
+        return Ok(true);
+    }
     let existing: Option<i64> = conn
         .query_row(
             "SELECT id FROM tags WHERE name = ?",
