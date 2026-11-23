@@ -24,6 +24,7 @@ mod check;
 mod cleanup;
 mod cli;
 mod compare;
+mod config_wizard;
 mod currency;
 mod dedupe;
 mod display;

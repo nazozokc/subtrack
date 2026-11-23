@@ -8,10 +8,10 @@ use std::sync::OnceLock;
 mod keys;
 mod theme;
 
-pub use keys::CONFIG_KEYS;
+pub use keys::{CONFIG_KEYS, display_value};
 pub use theme::display_theme;
 
-use keys::{display_value, is_known_key, mask_secret, parse_budgets, stringify};
+use keys::{is_known_key, mask_secret, parse_budgets, stringify};
 
 #[derive(Clone, Debug)]
 /// A named budget entry from `config.budgets` (port of resolveBudget).
@@ -215,6 +215,17 @@ pub fn apply_runtime(cfg: &Config) {
     subtrack_core::logger::set_level_code(&cfg.log_level);
 }
 
+/// Re-read config.json and refresh both the process cache and the runtime
+/// settings derived from it. The entry menu runs several commands in one
+/// process, so a setting changed there must be visible to the next action.
+pub fn reload_config() -> Config {
+    let cfg = read_config();
+    let slot = CONFIG.get_or_init(|| Mutex::new(cfg.clone()));
+    *slot.lock().unwrap() = cfg.clone();
+    apply_runtime(&cfg);
+    cfg
+}
+
 pub fn handle_config_list() -> i32 {
     let cfg = load_config();
     for key in CONFIG_KEYS {
@@ -273,114 +284,101 @@ pub fn handle_config_get(key: &str) -> i32 {
     0
 }
 
-/// Port of `handleConfigSet`. Returns 0 on success (config saved), 1 on the
-/// first validation failure.
-pub fn handle_config_set(key: &str, value: &str) -> i32 {
-    let cfg = load_config();
-    let mut raw = cfg.raw.clone();
+/// Validate `value` for `key` without changing any state.
+///
+/// Both `config set` and the interactive wizard use this, so the two paths
+/// accept exactly the same values and report the same errors.
+pub fn validate_value(key: &str, value: &str) -> Result<(), String> {
+    prepare_value(key, value).map(|_| ())
+}
+
+/// Validate `value` and stage it into `raw`, ready for `save_config_mut`.
+pub fn apply_value(
+    key: &str,
+    value: &str,
+    raw: &mut serde_json::Map<String, serde_json::Value>,
+) -> Result<(), String> {
+    let prepared = prepare_value(key, value)?;
+    raw.insert(key.to_string(), prepared);
+    Ok(())
+}
+
+fn prepare_value(key: &str, value: &str) -> Result<serde_json::Value, String> {
     macro_rules! bad {
         ($msg:expr) => {{
-            subtrack_core::logger::fail($msg);
-            return 1;
+            return Err($msg.to_string());
         }};
     }
     match key {
         "defaultCurrency" => {
             if !(value.len() == 3 && value.bytes().all(|b| b.is_ascii_uppercase())) {
-                bad!(&format!("Invalid currency code: \"{}\"", value));
+                bad!(format!("Invalid currency code: \"{}\"", value));
             }
-            raw.insert(key.into(), value.into());
+            Ok(value.into())
         }
-        "monthlyBudget" => {
-            let n = subtrack_core::validation::js_number(value);
-            match n {
-                Some(n) if n >= 0.0 && n.is_finite() => {
-                    raw.insert(key.into(), subtrack_core::json::num_value(n));
-                }
-                _ => bad!("monthlyBudget must be a non-negative number"),
-            }
-        }
-        "yearlyBudget" => {
-            let n = subtrack_core::validation::js_number(value);
-            match n {
-                Some(n) if n >= 0.0 && n.is_finite() => {
-                    raw.insert(key.into(), subtrack_core::json::num_value(n));
-                }
-                _ => bad!("yearlyBudget must be a non-negative number"),
-            }
-        }
-        "budgets" => match parse_budgets(value) {
-            Some(entries) => {
-                raw.insert(key.into(), serde_json::Value::Array(entries));
-            }
-            None => return 1,
+        "monthlyBudget" | "yearlyBudget" => match subtrack_core::validation::js_number(value) {
+            Some(n) if n >= 0.0 && n.is_finite() => Ok(subtrack_core::json::num_value(n)),
+            _ => bad!(format!("{} must be a non-negative number", key)),
         },
+        "budgets" => parse_budgets(value).map(serde_json::Value::Array),
         "language" => {
             if value != "en" && value != "ja" {
                 bad!("language must be 'en' or 'ja'");
             }
-            raw.insert(key.into(), value.into());
+            Ok(value.into())
         }
         "logLevel" => {
             if !["quiet", "normal", "verbose"].contains(&value) {
                 bad!("logLevel must be 'quiet', 'normal' or 'verbose'");
             }
-            raw.insert(key.into(), value.into());
+            Ok(value.into())
         }
         "theme" => {
             const THEMES: [&str; 4] = ["default", "light", "high-contrast", "none"];
             if !THEMES.contains(&value) {
-                bad!(&format!("theme must be one of: {}", THEMES.join(", ")));
+                bad!(format!("theme must be one of: {}", THEMES.join(", ")));
             }
-            raw.insert(key.into(), value.into());
+            Ok(value.into())
         }
         "tableBorderColor" | "tableHeaderColor" | "tableZebraColor" | "accentColor" => {
             if !subtrack_core::ansi::is_color_name(value) {
-                bad!(&format!(
+                bad!(format!(
                     "\"{}\" must be a color name: black, red, green, yellow, blue, \
-magenta, cyan, white, gray, brightRed, brightGreen, brightYellow, brightBlue, \
-brightMagenta, brightCyan, brightWhite",
+ magenta, cyan, white, gray, brightRed, brightGreen, brightYellow, brightBlue, \
+ brightMagenta, brightCyan, brightWhite",
                     key
                 ));
             }
-            raw.insert(key.into(), value.into());
+            Ok(value.into())
         }
         "tableZebra" => {
             if value != "on" && value != "off" {
                 bad!("tableZebra must be 'on' or 'off'");
             }
-            raw.insert(key.into(), value.into());
+            Ok(value.into())
         }
-        "tableMinWidth" => {
-            let n = subtrack_core::validation::js_number(value);
-            match n {
-                Some(n) if (20.0..=200.0).contains(&n) && n.fract() == 0.0 => {
-                    raw.insert(key.into(), subtrack_core::json::num_value(n));
-                }
-                _ => bad!("tableMinWidth must be an integer between 20 and 200"),
+        "listShowNotes" | "listShowMethod" => {
+            if value != "on" && value != "off" {
+                bad!(format!("\"{}\" must be 'on' or 'off'", key));
             }
+            Ok(value.into())
         }
+        "tableMinWidth" => match subtrack_core::validation::js_number(value) {
+            Some(n) if (20.0..=200.0).contains(&n) && n.fract() == 0.0 => {
+                Ok(subtrack_core::json::num_value(n))
+            }
+            _ => bad!("tableMinWidth must be an integer between 20 and 200"),
+        },
         "dateFormat" => {
             if value != "iso" && value != "short" {
                 bad!("dateFormat must be 'iso' or 'short'");
             }
-            raw.insert(key.into(), value.into());
+            Ok(value.into())
         }
-        "listShowNotes" | "listShowMethod" => {
-            if value != "on" && value != "off" {
-                bad!(&format!("\"{}\" must be 'on' or 'off'", key));
-            }
-            raw.insert(key.into(), value.into());
-        }
-        "notifyDays" => {
-            let n = subtrack_core::validation::js_number(value);
-            match n {
-                Some(n) if n >= 0.0 && n.fract() == 0.0 => {
-                    raw.insert(key.into(), subtrack_core::json::num_value(n));
-                }
-                _ => bad!("notifyDays must be a non-negative integer"),
-            }
-        }
+        "notifyDays" => match subtrack_core::validation::js_number(value) {
+            Some(n) if n >= 0.0 && n.fract() == 0.0 => Ok(subtrack_core::json::num_value(n)),
+            _ => bad!("notifyDays must be a non-negative integer"),
+        },
         "notifyChannels" => {
             let channels: Vec<String> = value
                 .split(',')
@@ -394,35 +392,38 @@ brightMagenta, brightCyan, brightWhite",
             {
                 bad!("notifyChannels must be a comma-separated list of: os, slack, webhook");
             }
-            raw.insert(
-                key.into(),
-                serde_json::Value::Array(channels.into_iter().map(|c| c.into()).collect()),
-            );
+            Ok(serde_json::Value::Array(
+                channels.into_iter().map(|c| c.into()).collect(),
+            ))
         }
-        "slackWebhook" => {
+        "slackWebhook" | "webhookUrl" => {
             if !value.starts_with("https://") {
-                bad!("slackWebhook must be an https:// URL");
+                bad!(format!("{} must be an https:// URL", key));
             }
-            raw.insert(key.into(), value.into());
+            Ok(value.into())
         }
-        "webhookUrl" => {
-            if !value.starts_with("https://") {
-                bad!("webhookUrl must be an https:// URL");
-            }
-            raw.insert(key.into(), value.into());
-        }
-        _ => {
-            bad!(&format!(
-                "Unknown config key: \"{}\". Valid: {}",
-                key,
-                CONFIG_KEYS.join(", ")
-            ));
-        }
+        _ => bad!(format!(
+            "Unknown config key: \"{}\". Valid: {}",
+            key,
+            CONFIG_KEYS.join(", ")
+        )),
+    }
+}
+
+/// Port of `handleConfigSet`. Returns 0 on success (config saved), 1 on the
+/// first validation failure.
+pub fn handle_config_set(key: &str, value: &str) -> i32 {
+    let cfg = load_config();
+    let mut raw = cfg.raw.clone();
+    if let Err(error) = apply_value(key, value, &mut raw) {
+        subtrack_core::logger::fail(&error);
+        return 1;
     }
     if let Err(e) = save_config_raw(&raw) {
         subtrack_core::logger::fail(&format!("Failed to save config: {}", e));
         return 1;
     }
+    reload_config();
     let display = if key == "slackWebhook" || key == "webhookUrl" {
         mask_secret(value)
     } else {
@@ -449,7 +450,9 @@ pub fn save_config_mut(
 ) -> std::io::Result<()> {
     let mut raw = load_config().raw;
     f(&mut raw);
-    save_config_raw(&raw)
+    save_config_raw(&raw)?;
+    reload_config();
+    Ok(())
 }
 
 fn save_config_raw(raw: &serde_json::Map<String, serde_json::Value>) -> std::io::Result<()> {
@@ -475,6 +478,7 @@ pub fn handle_config_reset() -> i32 {
     let dir = subtrack_core::crypto::config_dir();
     let _ = std::fs::remove_file(dir.join("config.json"));
     let _ = std::fs::remove_file(dir.join("config.json.sha256"));
+    reload_config();
     subtrack_core::logger::success("Config reset to defaults");
     0
 }

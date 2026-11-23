@@ -239,7 +239,14 @@ pub fn run(args: &[String]) -> i32 {
             "export" => crate::export::run_export(&parsed, resolved.depth),
             "upcoming" => crate::upcoming::run_upcoming(&parsed),
             "payment" => crate::payment::run_payment(&parsed),
-            "config" | "config list" => crate::config::handle_config_list(),
+            "config" => {
+                if crate::prompt::interactive() {
+                    crate::config_wizard::run_config_wizard()
+                } else {
+                    crate::config::handle_config_list()
+                }
+            }
+            "config list" => crate::config::handle_config_list(),
             "config get" => {
                 crate::config::handle_config_get(&parsed.str("key").unwrap_or_default())
             }

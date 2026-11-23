@@ -1744,6 +1744,8 @@ subtrack config reset
 
 The `config set` command validates input (e.g., currency codes must be ISO 4217, budget must be non-negative, channels must be one of `os`/`slack`/`webhook`).
 
+With a terminal attached, bare `subtrack config` (and the "Configuration" action in the root menu) opens a guided editor: pick a key by name or by typing a filter, then choose or type a value. Empty input keeps the current value, `-` goes back without saving, and `Done` exits. `config list` stays the scriptable listing in every environment. The webhook keys (`slackWebhook`, `webhookUrl`) are deliberately excluded from the editor so secrets are never echoed; set them with `config set`. `budgets` is entered as JSON in the editor.
+
 The `theme` key switches between four presets: `default` (dark backgrounds), `light`, `high-contrast`, and `none` (plain monochrome). Individual color keys (`tableBorderColor`, `tableHeaderColor`, `tableZebraColor`, `accentColor`) override the preset. Valid color names: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `gray`, and the `bright*` variants.
 
 `dateFormat` controls human-facing dates in `cancel` and `notify` (`short` uses `MM/DD` style); machine-readable output (JSON) always uses ISO 8601. `listShowNotes` / `listShowMethod` enable the notes and payment method columns in `subtrack list` by default — CLI flags still take precedence.
