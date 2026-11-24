@@ -29,7 +29,7 @@ fn is_long_option(arg: &str) -> bool {
         return false;
     }
     let s = &arg[2..];
-    !s.is_empty() && !s[1..].contains('=')
+    !s.is_empty() && !s.chars().skip(1).any(|c| c == '=')
 }
 
 fn is_long_option_and_value(arg: &str) -> bool {
@@ -37,7 +37,7 @@ fn is_long_option_and_value(arg: &str) -> bool {
         return false;
     }
     let s = &arg[2..];
-    !s.is_empty() && s[1..].contains('=')
+    !s.is_empty() && s.chars().skip(1).any(|c| c == '=')
 }
 
 /// Split argv into tokens (port of tokenize).
@@ -82,13 +82,22 @@ pub fn tokenize(argv: &[String]) -> Vec<Token> {
             let mut expanded: Vec<String> = Vec::new();
             let mut has_separator = false;
             let mut short_value = String::new();
-            for ch in arg[1..].chars() {
+            let mut chars = arg[1..].chars();
+            while let Some(ch) = chars.next() {
                 if has_separator {
                     short_value.push(ch);
                 } else if ch == '=' {
                     has_separator = true;
-                } else {
+                } else if ch.is_ascii() {
                     expanded.push(format!("-{}", ch));
+                } else {
+                    // Short flags are single ASCII bytes. A multibyte char
+                    // cannot be a flag: treat it (and the rest) as the value of
+                    // the preceding flag, or as a positional when there is none.
+                    // Re-emitting it as `-<char>` would loop forever.
+                    short_value.push(ch);
+                    short_value.extend(chars);
+                    break;
                 }
             }
             if !short_value.is_empty() {

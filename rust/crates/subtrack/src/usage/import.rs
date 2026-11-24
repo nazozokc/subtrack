@@ -289,13 +289,15 @@ pub fn run_usage_import(parsed: &ParsedArgs) -> i32 {
         }
 
         let Some(cost) = cost_cents else {
-            logger::warn(&format!(
+            // Imported logs are untrusted: IDs/provider/model are echoed back to
+            // stderr, so strip terminal control sequences first.
+            logger::warn(&crate::validation::sanitize_text(&format!(
                 "Entry {} ({}): Cannot determine cost for \"{}/{}\", skipping",
                 i + 1,
                 entry.generation_id,
                 entry.provider,
                 entry.model
-            ));
+            )));
             no_cost += 1;
             continue;
         };

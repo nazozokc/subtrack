@@ -67,6 +67,19 @@ fn cleanup_temp_files() {
 }
 
 pub fn run(args: Vec<std::ffi::OsString>) -> i32 {
+    // `panic = "abort"` skips destructors, so the normal cleanup at the end of
+    // this function would leave `.subtrack.open.db` (the full plaintext DB)
+    // behind after any panic. The hook still runs before abort, so remove the
+    // plaintext files there while preserving the default panic message.
+    static PANIC_CLEANUP: std::sync::Once = std::sync::Once::new();
+    PANIC_CLEANUP.call_once(|| {
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            cleanup_temp_files();
+            default_hook(info);
+        }));
+    });
+
     let args: Vec<String> = args
         .into_iter()
         .filter_map(|a| a.into_string().ok())

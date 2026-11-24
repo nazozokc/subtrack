@@ -52,6 +52,19 @@ fn format_action(action: &str) -> String {
         .unwrap_or_else(|| action.to_string())
 }
 
+/// Truncate audit details to the historical 60-byte width without cutting a
+/// UTF-8 character in half. ASCII output is byte-for-byte unchanged.
+fn truncate_details(value: &str) -> String {
+    if value.len() <= 60 {
+        return value.to_string();
+    }
+    let mut end = 57;
+    while !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...", &value[..end])
+}
+
 /// "2026-07-05 12:34:56" → "Jul 05 12:34" (UTC).
 fn format_timestamp(ts: &str) -> String {
     const MONTHS: [&str; 12] = [
@@ -168,13 +181,7 @@ fn list(
                     .unwrap_or_default(),
                 e.details
                     .as_deref()
-                    .map(|d| {
-                        if d.len() > 60 {
-                            format!("{}...", &d[..57])
-                        } else {
-                            d.to_string()
-                        }
-                    })
+                    .map(truncate_details)
                     .unwrap_or_default(),
             ]
         })
@@ -278,4 +285,24 @@ fn run_audit_prune(parsed: &ParsedArgs) -> i32 {
         if deleted != 1 { "ies" } else { "y" }
     ));
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_details_preserves_ascii_output() {
+        let long = "a".repeat(80);
+        assert_eq!(truncate_details(&long), format!("{}...", "a".repeat(57)));
+        assert_eq!(truncate_details("short"), "short");
+    }
+
+    #[test]
+    fn truncate_details_never_splits_utf8() {
+        let value = format!("{} — 9.99 USD/monthly", "あ".repeat(18));
+        let truncated = truncate_details(&value);
+        assert_eq!(truncated, format!("{} ...", "あ".repeat(18)));
+        assert!(std::str::from_utf8(truncated.as_bytes()).is_ok());
+    }
 }

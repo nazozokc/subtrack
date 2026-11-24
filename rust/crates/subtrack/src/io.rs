@@ -14,6 +14,16 @@ use crate::validation::{
 const MAX_CSV_SIZE: u64 = 10 * 1024 * 1024;
 const MAX_CSV_ROWS: usize = 10_000;
 
+/// Row validation errors quote raw CSV fields. Strip terminal control
+/// sequences before writing them to stderr.
+fn warn_row(line_no: usize, message: &str) {
+    logger::warn(&format!(
+        "Line {}: {}",
+        line_no,
+        crate::validation::sanitize_text(message)
+    ));
+}
+
 /// Port of `parseCsvLine`.
 fn parse_csv_line(line: &str) -> Vec<String> {
     let mut fields: Vec<String> = Vec::new();
@@ -188,72 +198,69 @@ pub fn run_import(parsed: &ParsedArgs) -> i32 {
             .collect();
 
         if let Err(e) = validate_name(&sanitized) {
-            logger::warn(&format!("Line {}: {}", line_no, e));
+            warn_row(line_no, &e);
             failed += 1;
             continue;
         }
         if let Err(e) = validate_price(&price_str) {
-            logger::warn(&format!("Line {}: {}", line_no, e));
+            warn_row(line_no, &e);
             failed += 1;
             continue;
         }
         if !is_valid_currency(&currency) {
-            logger::warn(&format!(
-                "Line {}: invalid currency \"{}\"",
-                line_no, currency
-            ));
+            warn_row(line_no, &format!("invalid currency \"{}\"", currency));
             failed += 1;
             continue;
         }
         if !is_valid_cycle(&cycle) {
-            logger::warn(&format!("Line {}: invalid cycle \"{}\"", line_no, cycle));
+            warn_row(line_no, &format!("invalid cycle \"{}\"", cycle));
             failed += 1;
             continue;
         }
         if !is_valid_status(&status) {
-            logger::warn(&format!("Line {}: invalid status \"{}\"", line_no, status));
+            warn_row(line_no, &format!("invalid status \"{}\"", status));
             failed += 1;
             continue;
         }
         if let Some(v) = &discount_amount
             && let Err(e) = validate_discount_value(v)
         {
-            logger::warn(&format!("Line {}: {}", line_no, e));
+            warn_row(line_no, &e);
             failed += 1;
             continue;
         }
         if let Some(v) = &discount_type
             && let Err(e) = validate_discount_type(v)
         {
-            logger::warn(&format!("Line {}: {}", line_no, e));
+            warn_row(line_no, &e);
             failed += 1;
             continue;
         }
         if let Some(v) = &auto_renewal
             && let Err(e) = validate_auto_renewal(v)
         {
-            logger::warn(&format!("Line {}: {}", line_no, e));
+            warn_row(line_no, &e);
             failed += 1;
             continue;
         }
         if let Some(v) = &contract_start
             && let Err(e) = validate_date_string(v)
         {
-            logger::warn(&format!("Line {}: {}", line_no, e));
+            warn_row(line_no, &e);
             failed += 1;
             continue;
         }
         if let Some(v) = &contract_end
             && let Err(e) = validate_date_string(v)
         {
-            logger::warn(&format!("Line {}: {}", line_no, e));
+            warn_row(line_no, &e);
             failed += 1;
             continue;
         }
         if let Some(bd) = &billing_day
             && let Err(e) = validate_billing_day(bd)
         {
-            logger::warn(&format!("Line {}: {}", line_no, e));
+            warn_row(line_no, &e);
             failed += 1;
             continue;
         }
@@ -264,7 +271,7 @@ pub fn run_import(parsed: &ParsedArgs) -> i32 {
             .filter(|t| !t.is_empty())
             .collect();
         if let Err(e) = validate_tags(&tags.join(",")) {
-            logger::warn(&format!("Line {}: {}", line_no, e));
+            warn_row(line_no, &e);
             failed += 1;
             continue;
         }
@@ -272,12 +279,14 @@ pub fn run_import(parsed: &ParsedArgs) -> i32 {
         if deduplicate
             && let Ok(Some(existing)) = crate::db::find_subscription_by_name(sanitized.trim())
         {
-            logger::warn(&format!(
-                "Line {}: \"{}\" already exists (id={}) — skipping",
+            warn_row(
                 line_no,
-                sanitized.trim(),
-                existing
-            ));
+                &format!(
+                    "\"{}\" already exists (id={}) — skipping",
+                    sanitized.trim(),
+                    existing
+                ),
+            );
             skipped += 1;
             continue;
         }
@@ -313,7 +322,7 @@ pub fn run_import(parsed: &ParsedArgs) -> i32 {
         match crate::db::write_subscription(&conn, &new_sub, false) {
             Ok(_) => success += 1,
             Err(e) => {
-                logger::warn(&format!("Line {}: failed to import: {}", line_no, e));
+                warn_row(line_no, &format!("failed to import: {}", e));
                 failed += 1;
             }
         }

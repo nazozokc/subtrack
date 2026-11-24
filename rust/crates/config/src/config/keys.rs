@@ -29,19 +29,21 @@ pub(super) fn mask_secret(value: &str) -> String {
     };
     let scheme = &value[..idx];
     let rest = &value[idx + 3..];
-    let (host, path) = match rest.find('/') {
+    // Query strings and fragments can carry tokens too, and userinfo embeds
+    // credentials in the authority. Redact both, not just the path.
+    let (authority, tail) = match rest.find(['/', '?', '#']) {
         Some(p) => (&rest[..p], &rest[p..]),
         None => (rest, ""),
     };
-    if host.is_empty() {
+    if authority.is_empty() {
         return "(set)".to_string();
     }
-    let masked_path = if path.is_empty() || path == "/" {
-        ""
-    } else {
-        "/***"
+    let host = match authority.rfind('@') {
+        Some(at) => format!("***@{}", &authority[at + 1..]),
+        None => authority.to_string(),
     };
-    format!("{}://{}{}", scheme, host, masked_path)
+    let masked_tail = if tail.is_empty() { "" } else { "/***" };
+    format!("{}://{}{}", scheme, host, masked_tail)
 }
 
 pub(super) fn stringify(v: &serde_json::Value) -> String {
@@ -152,4 +154,30 @@ pub(super) fn parse_budgets(value: &str) -> Result<Vec<serde_json::Value>, Strin
         }
     }
     Ok(arr)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mask_secret_redacts_path_query_and_userinfo() {
+        assert_eq!(
+            mask_secret("https://example.com/hook"),
+            "https://example.com/***"
+        );
+        assert_eq!(
+            mask_secret("https://example.com?token=SUPERSECRET123"),
+            "https://example.com/***"
+        );
+        assert_eq!(
+            mask_secret("https://user:pass@example.com/hook?token=x"),
+            "https://***@example.com/***"
+        );
+        assert_eq!(
+            mask_secret("https://user:pass@example.com"),
+            "https://***@example.com"
+        );
+        assert_eq!(mask_secret("not-a-url"), "(set)");
+    }
 }
