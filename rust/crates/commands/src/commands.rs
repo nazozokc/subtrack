@@ -1198,7 +1198,7 @@ pub static COMMANDS: &[CommandDef] = &[
                 required: None,
             },
         ],
-        subcommands: &[],
+        subcommands: &[100],
     },
     CommandDef {
         name: "cleanup",
@@ -3326,6 +3326,22 @@ pub static COMMANDS: &[CommandDef] = &[
         ],
         subcommands: &[],
     },
+    CommandDef {
+        name: "rekey-kdf",
+        description: "Re-encrypt data with the fast KDF (passphrase only)",
+        to_kebab: false,
+        args: &[
+            ArgSpec {
+                name: "json",
+                kind: ArgKind::Boolean,
+                short: Some('j'),
+                description: "Output as JSON",
+                array: false,
+                required: None,
+            },
+        ],
+        subcommands: &[],
+    },
 ];
 
 /// Top-level subCommands map (index.ts order: name → COMMANDS index).
@@ -3385,7 +3401,7 @@ pub static TOP_SUBCOMMANDS: &[(&str, u16)] = &[
 
 /// Total number of command definitions (incl. nested subcommands).
 #[allow(dead_code)]
-pub const COMMAND_COUNT: usize = 100;
+pub const COMMAND_COUNT: usize = 101;
 
 #[cfg(test)]
 mod tests {

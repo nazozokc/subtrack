@@ -1,7 +1,7 @@
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
 use super::subscriptions::to_sql;
-use super::{LlmUsage, SqlValue, open_db, save_db};
+use super::{open_db, save_db, LlmUsage, SqlValue};
 
 pub fn get_llm_usage_total(from: &str, to: &str) -> std::io::Result<i64> {
     let conn = open_db()?;

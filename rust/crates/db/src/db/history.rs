@@ -1,6 +1,6 @@
 use rusqlite::params;
 
-use super::{PriceChange, open_db};
+use super::{open_db, PriceChange};
 
 fn price_change_from_row(row: &rusqlite::Row) -> rusqlite::Result<PriceChange> {
     use subtrack_core::validation::sanitize_text;

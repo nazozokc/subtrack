@@ -1,6 +1,6 @@
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
-use super::{AuditEntry, open_db, save_db};
+use super::{open_db, save_db, AuditEntry};
 
 /// Query audit log entries with optional filters (port of `getAuditLogs`).
 pub fn get_audit_logs(

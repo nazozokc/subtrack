@@ -109,6 +109,44 @@ impl Env {
         s.push_str(&String::from_utf8_lossy(&out.stderr));
         s
     }
+
+    /// Run with a deterministic passphrase so encryption is exercised in a
+    /// separate child process (no mutable process-global env in the test).
+    fn run_passphrase(&self, args: &[&str]) -> Output {
+        self.run_custom(
+            args,
+            "",
+            &[("SUBSC_CLI_DB_PASSPHRASE", "rekey-passphrase")],
+            &[],
+        )
+    }
+}
+
+/// Create the on-disk shape of a passphrase install created before the KDF
+/// marker existed: explicit Legacy marker and a persisted salt.
+fn legacy_passphrase_dir(env: &Env) {
+    std::fs::write(env.dir.join(".key.kdf"), b"1\n").unwrap();
+    std::fs::write(env.dir.join(".key.salt"), vec![7u8; 32]).unwrap();
+}
+
+fn passphrase_add_args(name: &str) -> Vec<&str> {
+    vec![
+        "add",
+        "--name",
+        name,
+        "--price",
+        "12.34",
+        "--currency",
+        "USD",
+        "--cycle",
+        "monthly",
+        "--tags",
+        "test",
+        "--billingDay",
+        "8",
+        "--status",
+        "active",
+    ]
 }
 
 impl Drop for Env {
@@ -717,11 +755,10 @@ fn bare_parent_commands_default_to_list_and_forecast_runs() {
 #[test]
 fn config_language_switches_common_ui_to_japanese() {
     let env = Env::new("language-ja");
-    assert!(
-        env.run(&["config", "set", "language", "ja"])
-            .status
-            .success()
-    );
+    assert!(env
+        .run(&["config", "set", "language", "ja"])
+        .status
+        .success());
 
     let help = env.text(&["--help"]);
     assert!(help.contains("使い方:"), "help: {help}");
@@ -765,19 +802,17 @@ fn config_log_level_controls_status_chatter() {
     );
     assert!(!stdout.contains("not found — skip"), "normal: {stdout}");
 
-    assert!(
-        env.run(&["config", "set", "logLevel", "quiet"])
-            .status
-            .success()
-    );
+    assert!(env
+        .run(&["config", "set", "logLevel", "quiet"])
+        .status
+        .success());
     let quiet = env.text(&["profile"]);
     assert!(!quiet.contains("No saved profiles"), "quiet: {quiet}");
 
-    assert!(
-        env.run(&["config", "set", "logLevel", "verbose"])
-            .status
-            .success()
-    );
+    assert!(env
+        .run(&["config", "set", "logLevel", "verbose"])
+        .status
+        .success());
     let verbose = env.run_custom(&["usage", "refresh"], "", &extra, &[]);
     let stdout = String::from_utf8_lossy(&verbose.stdout);
     assert!(stdout.contains("not found — skip"), "verbose: {stdout}");
@@ -943,8 +978,8 @@ fn expense_add_list_total_and_item_edits() {
     assert_eq!(total["totals"][0]["amount"], 1500.0);
     assert_eq!(total["groups"][0]["key"], "food");
 
-    assert!(
-        env.run(&[
+    assert!(env
+        .run(&[
             "expense",
             "item",
             "edit",
@@ -955,17 +990,15 @@ fn expense_add_list_total_and_item_edits() {
             "--clear-note",
         ])
         .status
-        .success()
-    );
+        .success());
     let edited = expense_json(&env, &["expense", "list", "--json"]);
     assert_eq!(edited[0]["items"][0]["amount"], 1500.0);
     assert!(edited[0]["items"][0]["note"].is_null());
 
-    assert!(
-        env.run(&["expense", "item", "delete", TODAY, "2"])
-            .status
-            .success()
-    );
+    assert!(env
+        .run(&["expense", "item", "delete", TODAY, "2"])
+        .status
+        .success());
     assert_eq!(
         expense_json(&env, &["expense", "list", "--json"])[0]["items"]
             .as_array()
@@ -974,11 +1007,10 @@ fn expense_add_list_total_and_item_edits() {
         1
     );
 
-    assert!(
-        env.run(&["expense", "delete", TODAY, "--force"])
-            .status
-            .success()
-    );
+    assert!(env
+        .run(&["expense", "delete", TODAY, "--force"])
+        .status
+        .success());
     assert_eq!(
         expense_json(&env, &["expense", "list", "--json"]),
         serde_json::json!([])
@@ -1008,6 +1040,153 @@ fn tag_merge_missing_source_is_rejected() {
     assert_eq!(out.status.code(), Some(1));
     let message = String::from_utf8_lossy(&out.stderr);
     assert!(message.contains("not found"), "output: {message}");
+}
+
+#[test]
+fn maintenance_rekey_kdf_migrates_legacy_data_and_keeps_backups_readable() {
+    let env = Env::new("rekey-kdf");
+    legacy_passphrase_dir(&env);
+
+    let first = passphrase_add_args("Netflix");
+    assert!(
+        env.run_passphrase(&first).status.success(),
+        "first add failed"
+    );
+    assert!(
+        env.run_passphrase(&["config", "set", "language", "ja"])
+            .status
+            .success(),
+        "config write failed"
+    );
+    assert_eq!(
+        std::fs::read_to_string(env.dir.join(".key.kdf"))
+            .unwrap()
+            .trim(),
+        "1"
+    );
+
+    let out = env.run_passphrase(&["maintenance", "rekey-kdf", "--json"]);
+    assert!(
+        out.status.success(),
+        "rekey failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let body = String::from_utf8_lossy(&out.stdout);
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap_or_else(|e| {
+        panic!("invalid rekey JSON ({e}): {body}");
+    });
+    assert_eq!(json["from"], "legacy");
+    assert_eq!(json["to"], "fast");
+    assert_eq!(json["databaseRekeyed"], true);
+    assert_eq!(json["configRekeyed"], true);
+    assert_eq!(
+        std::fs::read_to_string(env.dir.join(".key.kdf"))
+            .unwrap()
+            .trim(),
+        "2"
+    );
+
+    let listed = env.run_passphrase(&["list", "--json"]);
+    assert!(listed.status.success());
+    let listed = String::from_utf8_lossy(&listed.stdout);
+    assert!(
+        listed.contains("Netflix"),
+        "database unreadable after rekey: {listed}"
+    );
+    let config = env.run_passphrase(&["config", "get", "language"]);
+    let config = String::from_utf8_lossy(&config.stdout);
+    assert!(
+        config.contains("ja"),
+        "config unreadable after rekey: {config}"
+    );
+
+    let backup = std::fs::read_dir(env.dir.join("backups"))
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .find(|p| {
+            p.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .contains("before_rekey-kdf")
+                && p.to_string_lossy().ends_with(".db.enc")
+        })
+        .expect("safety backup missing");
+    let again = env.run_passphrase(&["maintenance", "rekey-kdf", "--json"]);
+    let again = String::from_utf8_lossy(&again.stdout);
+    let again: serde_json::Value = serde_json::from_str(&again).unwrap();
+    assert_eq!(again["from"], "fast", "rekey not idempotent: {again}");
+
+    let second = passphrase_add_args("Spotify");
+    assert!(env.run_passphrase(&second).status.success());
+    let backup_arg = backup.to_string_lossy().into_owned();
+    let restored = env.run_passphrase(&["restore", &backup_arg, "--force"]);
+    assert!(
+        restored.status.success(),
+        "legacy-format backup not restorable: {}",
+        format!(
+            "{} {}",
+            String::from_utf8_lossy(&restored.stdout),
+            String::from_utf8_lossy(&restored.stderr)
+        )
+    );
+    let listed = env.run_passphrase(&["list", "--json"]);
+    let listed = String::from_utf8_lossy(&listed.stdout);
+    assert!(
+        listed.contains("Netflix"),
+        "restored data missing: {listed}"
+    );
+    assert!(
+        !listed.contains("Spotify"),
+        "restore did not roll back: {listed}"
+    );
+}
+
+#[test]
+fn first_interactive_add_offers_and_applies_rekey() {
+    let env = Env::new("rekey-prompt");
+    legacy_passphrase_dir(&env);
+
+    let args = passphrase_add_args("Netflix");
+    // One answer for the rekey prompt, then the optional add wizard fields.
+    let input = "\n".repeat(12);
+    let out = env.run_custom(
+        &args,
+        &input,
+        &[
+            ("SUBSC_CLI_DB_PASSPHRASE", "rekey-passphrase"),
+            ("SUBTRACK_ASSUME_TTY", "1"),
+        ],
+        &[],
+    );
+    assert!(
+        out.status.success(),
+        "add failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(text.contains("Legacy KDF"), "no rekey warning: {text}");
+    assert!(
+        text.contains("Switch to the Fast KDF now"),
+        "no rekey prompt: {text}"
+    );
+    assert!(
+        text.contains("KDF rekey complete"),
+        "rekey not applied: {text}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(env.dir.join(".key.kdf"))
+            .unwrap()
+            .trim(),
+        "2"
+    );
+    let listed = env.run_passphrase(&["list", "--json"]);
+    let listed = String::from_utf8_lossy(&listed.stdout);
+    assert!(listed.contains("Netflix"), "add did not complete: {listed}");
 }
 
 #[test]

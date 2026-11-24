@@ -2,10 +2,10 @@
 //! function) and the version fast path + lazy banner logic of `src/index.ts`.
 
 use crate::ansi;
-use crate::commands::{COMMANDS, CommandDef, TOP_SUBCOMMANDS};
-use crate::help::{ArgKind, ArgSpec, CallMode, render_usage};
+use crate::commands::{CommandDef, COMMANDS, TOP_SUBCOMMANDS};
+use crate::help::{render_usage, ArgKind, ArgSpec, CallMode};
 use crate::logger::{self};
-use crate::parser::{ParsedArgs, Token, resolve_args, tokenize};
+use crate::parser::{resolve_args, tokenize, ParsedArgs, Token};
 use crate::router::{get_command_positionals, resolve_command};
 use crate::table;
 use crate::ui;
@@ -189,6 +189,9 @@ pub fn run(args: &[String]) -> i32 {
 
     // ── 9. run ──
     let path = resolved.path.join(" ");
+    if path == "add" {
+        crate::maintenance::maybe_prompt_rekey();
+    }
     let code = match resolved.command {
         Some(_) => match path.as_str() {
             "list" => crate::list::run_list(&parsed),
@@ -266,6 +269,7 @@ pub fn run(args: &[String]) -> i32 {
             "audit prune" => crate::audit::run_audit(&parsed, resolved.depth, &resolved.path),
             "audit" => crate::audit::run_audit(&parsed, resolved.depth, &resolved.path),
             "maintenance" => crate::maintenance::run_maintenance(&parsed),
+            "maintenance rekey-kdf" => crate::maintenance::run_rekey_kdf(&parsed),
             "cleanup" => crate::cleanup::run_cleanup(&parsed),
             "review" => crate::review::run_review(&parsed),
             "budget" => crate::budget::run_budget(&parsed),

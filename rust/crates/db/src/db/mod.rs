@@ -34,7 +34,7 @@ pub use expenses::{
 };
 pub use history::{get_all_price_changes, get_price_changes_recent, get_price_history};
 pub use migrations::{open_db, run_migrations};
-pub use store::{db_file_size, db_path, integrity_check, save_db, vacuum_db};
+pub use store::{db_file_size, db_path, integrity_check, rekey_db_to_fast, save_db, vacuum_db};
 pub use subscriptions::{
     archive_subscription, find_subscription_by_name, get_subscription_by_id, get_subscriptions,
     remove_subscription, replace_tags, search_subscriptions, set_subscription_tags,

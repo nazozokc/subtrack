@@ -12,8 +12,8 @@ pub fn open_db() -> std::io::Result<Connection> {
             && !raw[..16].eq(subtrack_core::crypto::SQLITE_MAGIC)
             && raw.len() > 32
         {
-            let key = subtrack_core::crypto::decryption_key()?;
-            subtrack_core::crypto::decrypt_buffer(&key, &raw)
+            // The KDF marker can be ahead of the database during a rekey.
+            subtrack_core::crypto::decrypt_with_fallback(&raw)?
                 .ok_or_else(|| std::io::Error::other("database decryption failed"))?
         } else {
             raw

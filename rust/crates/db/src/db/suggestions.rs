@@ -1,6 +1,6 @@
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
-use super::{NewSuggestion, Suggestion, open_db, save_db};
+use super::{open_db, save_db, NewSuggestion, Suggestion};
 
 fn suggestion_from_row(row: &rusqlite::Row) -> rusqlite::Result<Suggestion> {
     use subtrack_core::validation::sanitize_text;
