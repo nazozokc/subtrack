@@ -87,10 +87,16 @@ jobs:
       - name: Resolve version
         id: version
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            version="${{ github.event.release.tag_name }}"
-            version="${version#v}"
+          if [ "$EVENT_NAME" = "release" ]; then
+            if ! [[ "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::Invalid release tag: $RELEASE_TAG"
+              exit 1
+            fi
+            version="${RELEASE_TAG#v}"
           else
             version="$(node -p "require('./packages/subtrack/package.json').version")"
           fi
@@ -125,10 +131,12 @@ jobs:
 
       - name: Verify version
         shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           bin="rust/target/${{ matrix.target }}/release/subtrack"
           if [ "${{ matrix.platform }}" = "win32" ]; then bin="$bin.exe"; fi
-          version="${{ steps.version.outputs.version }}"
+          version="$VERSION"
           if [ "${{ matrix.target }}" = "aarch64-pc-windows-msvc" ]; then
             # x64 Windows runners cannot execute ARM64 binaries, so verify the
             # baked-in version literal instead of running the binary.
@@ -208,17 +216,26 @@ jobs:
 
       - name: Resolve version
         id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            version="${{ github.event.release.tag_name }}"
-            version="${version#v}"
+          if [ "$EVENT_NAME" = "release" ]; then
+            if ! [[ "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::Invalid release tag: $RELEASE_TAG"
+              exit 1
+            fi
+            version="${RELEASE_TAG#v}"
             echo "version=$version" >> "$GITHUB_OUTPUT"
           else
             echo "version=$(node -p "require('./packages/subtrack/package.json').version")" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Set package versions
-        run: node scripts/set-version.mjs "${{ steps.version.outputs.version }}"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: node scripts/set-version.mjs "$VERSION"
 
       - run: pnpm install --frozen-lockfile
 

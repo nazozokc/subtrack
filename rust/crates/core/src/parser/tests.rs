@@ -105,6 +105,32 @@ fn tokenize_marks_terminator_and_positionals() {
 }
 
 #[test]
+fn tokenize_handles_multibyte_arguments_without_hanging() {
+    // A multibyte short-option group used to re-emit `-é` forever.
+    let t = tokenize(&argv(&["-é"]));
+    assert_eq!(t.len(), 1);
+    assert!(matches!(&t[0], Token::Positional { value } if value == "é"));
+
+    let t = tokenize(&argv(&["-aé"]));
+    assert_eq!(t.len(), 2);
+    assert!(matches!(&t[0], Token::Option { name, .. } if name == "a"));
+    assert!(matches!(&t[1], Token::Positional { value } if value == "é"));
+
+    // Slice-based long-option detection used to panic on a char boundary.
+    let t = tokenize(&argv(&["--é=v"]));
+    assert_eq!(t.len(), 1);
+    assert!(matches!(
+        &t[0],
+        Token::Option {
+            name,
+            value,
+            inline_value,
+            ..
+        } if name == "é" && value.as_deref() == Some("v") && *inline_value
+    ));
+}
+
+#[test]
 fn resolve_maps_kebab_long_and_short_values() {
     let specs = [
         spec("minPrice", ArgKind::String, Some('m')),

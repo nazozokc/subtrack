@@ -109,10 +109,16 @@ pub fn run_receipt(parsed: &ParsedArgs) -> i32 {
             return 1;
         }
     };
+    // Every other file-reading command goes through the home/temp allowlist;
+    // receipts parse third-party files too, so apply the same boundary.
+    let Some(safe_file) = crate::safe_path::safe_path(&file) else {
+        fail("File not found or path not allowed — must be within home or temp directory");
+        return 1;
+    };
     let json = parsed.flag("json");
     let dry_run = parsed.flag("dryRun");
 
-    let candidates = match read_receipts(&file) {
+    let candidates = match read_receipts(&safe_file.to_string_lossy()) {
         Ok(rows) => parse_email_candidates(rows),
         Err(msg) => {
             fail(&format!("Failed to read receipt: {}", msg));

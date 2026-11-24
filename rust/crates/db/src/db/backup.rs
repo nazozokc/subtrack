@@ -275,6 +275,23 @@ fn validate_restored_database(conn: &Connection) -> std::io::Result<()> {
         )));
     }
 
+    // Triggers and views are executable schema objects: a backed-up DB can
+    // otherwise plant SQL that runs on the victim's next ordinary write.
+    let mut stmt = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type IN ('trigger', 'view')")
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let objects: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| std::io::Error::other(e.to_string()))?
+        .filter_map(|row| row.ok())
+        .collect();
+    if !objects.is_empty() {
+        return Err(std::io::Error::other(format!(
+            "Invalid backup file: executable schema objects are not allowed: {}",
+            objects.join(", ")
+        )));
+    }
+
     for (table, columns) in required_columns {
         let present = table_columns(conn, table)?;
         let missing: Vec<&str> = columns
@@ -467,5 +484,18 @@ mod tests {
         .unwrap();
         let err = validate_restored_database(&conn).unwrap_err();
         assert!(err.to_string().contains("foreign key"), "{err}");
+    }
+
+    #[test]
+    fn rejects_executable_schema_objects() {
+        let conn = current_db();
+        conn.execute_batch(
+            "CREATE TRIGGER evil AFTER INSERT ON subscriptions BEGIN
+                 UPDATE llm_usage SET cost = -1;
+             END;",
+        )
+        .unwrap();
+        let err = validate_restored_database(&conn).unwrap_err();
+        assert!(err.to_string().contains("executable schema"), "{err}");
     }
 }

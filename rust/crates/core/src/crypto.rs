@@ -36,6 +36,7 @@ const SCRYPT_LOG_N_BALANCED: u8 = 14; // 16 MiB, ~40 ms — current default
 const SCRYPT_R: u32 = 8;
 const SCRYPT_P: u32 = 1;
 const KDF_MARKER_FILE: &str = ".key.kdf";
+const SALT_FILE: &str = ".key.salt";
 const KDF_MARKER_LEGACY: &str = "1";
 const KDF_MARKER_FAST: &str = "2";
 const KDF_MARKER_BALANCED: &str = "3";
@@ -369,6 +370,38 @@ fn verify_key_integrity(dir: &std::path::Path, key: &[u8]) -> std::io::Result<()
     Ok(())
 }
 
+/// Sidecar path for an immutable KDF metadata file (marker or salt).
+fn metadata_integrity_path(dir: &Path, file_name: &str) -> std::path::PathBuf {
+    dir.join(format!("{file_name}.sha256"))
+}
+
+fn write_metadata_integrity(dir: &Path, file_name: &str, data: &[u8]) -> std::io::Result<()> {
+    write_secret_file(
+        &metadata_integrity_path(dir, file_name),
+        format!("{}\n", sha256_hex(data)).as_bytes(),
+    )
+}
+
+/// Verify a checksum sidecar for KDF metadata. Missing sidecars are created so
+/// pre-sidecar installations stay readable; a mismatch fails closed because a
+/// downgraded marker or replaced salt would silently weaken the key.
+fn verify_metadata_integrity(dir: &Path, file_name: &str, data: &[u8]) -> std::io::Result<()> {
+    let path = metadata_integrity_path(dir, file_name);
+    let actual = sha256_hex(data);
+    match std::fs::read_to_string(&path) {
+        Ok(expected) if expected.trim() == actual => Ok(()),
+        Ok(_) => Err(std::io::Error::other(format!(
+            "Integrity check failed: {file_name} does not match {}.sha256. \
+             Restore the original KDF metadata before continuing.",
+            file_name
+        ))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            write_secret_file(&path, format!("{}\n", actual).as_bytes())
+        }
+        Err(e) => Err(e),
+    }
+}
+
 /// Hex-encoded random bytes, used for collision-resistant temp file names.
 pub fn random_hex(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
@@ -389,7 +422,9 @@ pub fn track_temp_file(path: &std::path::Path) {
 /// Remove every tracked temp file (best effort).
 pub fn cleanup_temp_files() {
     let files = {
-        let mut files = TEMP_FILES.lock().unwrap();
+        // A poisoned lock must not panic here: this function also runs from the
+        // panic hook, where a second panic would abort before cleanup finishes.
+        let mut files = TEMP_FILES.lock().unwrap_or_else(|e| e.into_inner());
         std::mem::take(&mut *files)
     };
     for path in files {
@@ -505,16 +540,20 @@ fn derive_key_with_params(
 /// before versioning existed must keep deriving the exact same key.
 fn kdf_version_for_dir(dir: &Path) -> std::io::Result<KdfVersion> {
     let path = dir.join(KDF_MARKER_FILE);
-    match std::fs::read_to_string(&path) {
-        Ok(marker) => match marker.trim() {
-            KDF_MARKER_LEGACY => Ok(KdfVersion::Legacy),
-            KDF_MARKER_FAST => Ok(KdfVersion::Fast),
-            KDF_MARKER_BALANCED => Ok(KdfVersion::Balanced),
-            other => Err(std::io::Error::other(format!(
-                "Unrecognized KDF version in {}: {other:?}",
-                path.display()
-            ))),
-        },
+    match std::fs::read(&path) {
+        Ok(raw) => {
+            verify_metadata_integrity(dir, KDF_MARKER_FILE, &raw)?;
+            let marker = String::from_utf8_lossy(&raw);
+            match marker.trim() {
+                KDF_MARKER_LEGACY => Ok(KdfVersion::Legacy),
+                KDF_MARKER_FAST => Ok(KdfVersion::Fast),
+                KDF_MARKER_BALANCED => Ok(KdfVersion::Balanced),
+                other => Err(std::io::Error::other(format!(
+                    "Unrecognized KDF version in {}: {other:?}",
+                    path.display()
+                ))),
+            }
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(KdfVersion::Legacy),
         Err(e) => Err(e),
     }
@@ -590,7 +629,7 @@ fn decrypt_with_fallback_in(
 /// Salt used by an existing installation, without creating any files.
 /// A database without `.key.salt` is the pre-versioning zero-salt format.
 fn existing_salt(dir: &std::path::Path) -> std::io::Result<Option<Vec<u8>>> {
-    let salt_path = dir.join(".key.salt");
+    let salt_path = dir.join(SALT_FILE);
     match read_secret_file(&salt_path) {
         Ok(salt) => {
             if salt.len() != SALT_LENGTH {
@@ -601,6 +640,7 @@ fn existing_salt(dir: &std::path::Path) -> std::io::Result<Option<Vec<u8>>> {
                     SALT_LENGTH
                 )));
             }
+            verify_metadata_integrity(dir, SALT_FILE, &salt)?;
             Ok(Some(salt))
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -621,20 +661,22 @@ fn salt_for_dir(dir: &std::path::Path) -> std::io::Result<Vec<u8>> {
     if let Some(salt) = existing_salt(dir)? {
         return Ok(salt);
     }
-    let salt_path = dir.join(".key.salt");
+    let salt_path = dir.join(SALT_FILE);
     ensure_private_dir(dir)?;
     let mut salt = vec![0u8; SALT_LENGTH];
     getrandom_fill(&mut salt)
         .map_err(|e| std::io::Error::other(format!("OS CSPRNG is unavailable: {e}")))?;
     write_secret_file(&salt_path, &salt)?;
+    write_metadata_integrity(dir, SALT_FILE, &salt)?;
     // New installation: record the current work factor so this key stays
     // reproducible. Existing directories never reach this branch, so their
     // recorded work factor is preserved.
     set_kdf_version_in(dir, KdfVersion::LATEST)?;
     crate::logger::warn(&format!(
         "Encryption salt created at: {}\n  \
-         Back up .key.salt and .key.kdf together with .key — without them, \
-         passphrase-encrypted data cannot be recovered on another machine.",
+         Back up .key.salt, .key.kdf and their .sha256 sidecars together with \
+          .key — without them, passphrase-encrypted data cannot be recovered \
+          on another machine.",
         salt_path.display()
     ));
     Ok(salt)
@@ -642,10 +684,9 @@ fn salt_for_dir(dir: &std::path::Path) -> std::io::Result<Vec<u8>> {
 
 fn set_kdf_version_in(dir: &std::path::Path, version: KdfVersion) -> std::io::Result<()> {
     ensure_private_dir(dir)?;
-    write_secret_file_atomic(
-        &dir.join(KDF_MARKER_FILE),
-        format!("{}\n", version.as_str()).as_bytes(),
-    )
+    let marker = format!("{}\n", version.as_str());
+    write_secret_file_atomic(&dir.join(KDF_MARKER_FILE), marker.as_bytes())?;
+    write_metadata_integrity(dir, KDF_MARKER_FILE, marker.as_bytes())
 }
 
 /// Switch the current directory to the latest KDF. The marker is written first
@@ -1095,6 +1136,50 @@ mod tests {
         let err = load_or_create_key_file(&dir).unwrap_err();
         assert!(err.to_string().contains("symbolic link"), "{err}");
         assert_eq!(std::fs::read(&target).unwrap(), vec![7u8; KEY_LENGTH]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn new_install_writes_kdf_metadata_sidecars() {
+        let dir = scratch("kdf-metadata-sidecars");
+        derive_key_from_passphrase_in(&dir, "hello world").unwrap();
+
+        let marker = std::fs::read(dir.join(KDF_MARKER_FILE)).unwrap();
+        let salt = std::fs::read(dir.join(SALT_FILE)).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.join(format!("{KDF_MARKER_FILE}.sha256")))
+                .unwrap()
+                .trim(),
+            sha256_hex(&marker)
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.join(format!("{SALT_FILE}.sha256")))
+                .unwrap()
+                .trim(),
+            sha256_hex(&salt)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tampered_kdf_marker_fails_closed() {
+        let dir = scratch("kdf-marker-integrity");
+        derive_key_from_passphrase_in(&dir, "hello world").unwrap();
+        write_secret_file(&dir.join(KDF_MARKER_FILE), b"1\n").unwrap();
+
+        let err = derive_key_from_passphrase_in(&dir, "hello world").unwrap_err();
+        assert!(err.to_string().contains("Integrity check failed"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tampered_salt_fails_closed() {
+        let dir = scratch("salt-integrity");
+        derive_key_from_passphrase_in(&dir, "hello world").unwrap();
+        write_secret_file(&dir.join(SALT_FILE), &generate_key()).unwrap();
+
+        let err = derive_key_from_passphrase_in(&dir, "hello world").unwrap_err();
+        assert!(err.to_string().contains("Integrity check failed"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
