@@ -1430,6 +1430,19 @@ subtrack maintenance --vacuum
 subtrack maintenance --json
 ```
 
+#### `maintenance rekey-kdf`
+
+Re-encrypt a passphrase-protected database and config from the Legacy scrypt work factor (`N=2^17`) to the Fast one (`N=2^15`). A timestamped safety backup is created before the marker changes, and older backups stay restorable. Re-running on an already-Fast install is a no-op. Key-file installs do not use a KDF and are rejected.
+
+| Option | Description |
+|--------|-------------|
+| `-j, --json` | Output as JSON |
+
+```bash
+subtrack maintenance rekey-kdf
+subtrack maintenance rekey-kdf --json
+```
+
 ### `cleanup`
 
 One-command database cleanup: runs integrity check, VACUUM, prunes old audit entries and orphaned tags.

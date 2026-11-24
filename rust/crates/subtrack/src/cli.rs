@@ -189,6 +189,9 @@ pub fn run(args: &[String]) -> i32 {
 
     // ── 9. run ──
     let path = resolved.path.join(" ");
+    if path == "add" {
+        crate::maintenance::maybe_prompt_rekey();
+    }
     let code = match resolved.command {
         Some(_) => match path.as_str() {
             "list" => crate::list::run_list(&parsed),
@@ -266,6 +269,7 @@ pub fn run(args: &[String]) -> i32 {
             "audit prune" => crate::audit::run_audit(&parsed, resolved.depth, &resolved.path),
             "audit" => crate::audit::run_audit(&parsed, resolved.depth, &resolved.path),
             "maintenance" => crate::maintenance::run_maintenance(&parsed),
+            "maintenance rekey-kdf" => crate::maintenance::run_rekey_kdf(&parsed),
             "cleanup" => crate::cleanup::run_cleanup(&parsed),
             "review" => crate::review::run_review(&parsed),
             "budget" => crate::budget::run_budget(&parsed),

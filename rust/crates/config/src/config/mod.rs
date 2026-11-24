@@ -473,6 +473,29 @@ fn save_config_raw(raw: &serde_json::Map<String, serde_json::Value>) -> std::io:
     subtrack_core::crypto::write_secret_file(&dir.join("config.json"), &bytes)
 }
 
+/// Re-encrypt `config.json` with the active (Fast) key. Returns `true` when a
+/// rewrite happened. The caller must switch the KDF marker first.
+pub fn rekey_config_to_fast() -> std::io::Result<bool> {
+    let dir = subtrack_core::crypto::config_dir_checked()?;
+    let path = dir.join("config.json");
+    let Ok(raw) = std::fs::read(&path) else {
+        return Ok(false);
+    };
+    if raw.len() < subtrack_core::crypto::CONFIG_MAGIC.len()
+        || !raw.starts_with(subtrack_core::crypto::CONFIG_MAGIC)
+    {
+        return Ok(false);
+    }
+    let ciphertext = &raw[subtrack_core::crypto::CONFIG_MAGIC.len()..];
+    let Some(encrypted) = subtrack_core::crypto::rekey_ciphertext(ciphertext)? else {
+        return Ok(false);
+    };
+    let mut bytes = subtrack_core::crypto::CONFIG_MAGIC.to_vec();
+    bytes.extend(encrypted);
+    subtrack_core::crypto::write_secret_file_atomic(&path, &bytes)?;
+    Ok(true)
+}
+
 /// Port of `handleConfigReset`.
 pub fn handle_config_reset() -> i32 {
     let dir = subtrack_core::crypto::config_dir();

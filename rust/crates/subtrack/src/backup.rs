@@ -101,8 +101,9 @@ fn write_compressed_backup(dest: &std::path::Path, encrypt: bool) -> bool {
     true
 }
 
-/// Create an automatic safety backup before a restore. Port of `safeAutoBackup`.
-fn safe_auto_backup() -> bool {
+/// Create an automatic safety backup before a destructive operation.
+/// Port of `safeAutoBackup` (used by restore and KDF rekey).
+pub fn create_safety_backup(reason: &str, log: bool) -> bool {
     if let Ok(conn) = crate::db::open_db() {
         let _ = crate::db::save_db(&conn);
     }
@@ -114,17 +115,23 @@ fn safe_auto_backup() -> bool {
     let ts = timestamp();
     let encrypt = crate::crypto::has_encryption_key();
     let ext = if encrypt { ".db.enc" } else { ".db.gz" };
-    let dest = backup_dir.join(format!("subtrack_{}_before_restore{}", ts, ext));
+    let dest = backup_dir.join(format!("subtrack_{}_before_{}{}", ts, reason, ext));
 
     if !write_compressed_backup(&dest, encrypt) {
         return false;
     }
-    logger::info(&format!(
-        "Auto-backup created: {}{}",
-        dest.display(),
-        if encrypt { " (encrypted)" } else { "" }
-    ));
+    if log {
+        logger::info(&format!(
+            "Auto-backup created: {}{}",
+            dest.display(),
+            if encrypt { " (encrypted)" } else { "" }
+        ));
+    }
     true
+}
+
+fn safe_auto_backup() -> bool {
+    create_safety_backup("restore", true)
 }
 
 fn restore_from_file(file_path: &std::path::Path, force: bool) {

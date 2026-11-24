@@ -85,3 +85,19 @@ pub(crate) fn write_db_atomic(dir: &std::path::Path, encrypted: &[u8]) -> std::i
     }
     Ok(())
 }
+
+/// Re-encrypt the on-disk database with the active (Fast) key.
+/// Returns `true` when a rewrite happened. The caller must switch the KDF
+/// marker first so the active key is the Fast one.
+pub fn rekey_db_to_fast() -> std::io::Result<bool> {
+    let raw = std::fs::read(db_path())?;
+    if !subtrack_core::crypto::is_encrypted(&raw) {
+        return Ok(false);
+    }
+    let Some(encrypted) = subtrack_core::crypto::rekey_ciphertext(&raw)? else {
+        return Ok(false);
+    };
+    let dir = subtrack_core::crypto::config_dir_checked()?;
+    write_db_atomic(&dir, &encrypted)?;
+    Ok(true)
+}

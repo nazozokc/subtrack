@@ -38,8 +38,10 @@ const KDF_MARKER_FILE: &str = ".key.kdf";
 const KDF_MARKER_FAST: &str = "2";
 const KDF_MARKER_LEGACY: &str = "1";
 
+/// scrypt work factor recorded for a passphrase-protected installation.
+/// Missing marker files mean `Legacy` for backward compatibility.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum KdfVersion {
+pub enum KdfVersion {
     Legacy,
     Fast,
 }
@@ -49,6 +51,14 @@ impl KdfVersion {
         match self {
             Self::Legacy => SCRYPT_LOG_N_LEGACY,
             Self::Fast => SCRYPT_LOG_N_FAST,
+        }
+    }
+
+    /// Value written to `.key.kdf`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Legacy => KDF_MARKER_LEGACY,
+            Self::Fast => KDF_MARKER_FAST,
         }
     }
 }
@@ -184,9 +194,24 @@ fn passphrase_env() -> Option<String> {
         .filter(|p| !p.is_empty())
 }
 
+/// True when the encryption key is derived from `SUBSC_CLI_DB_PASSPHRASE`.
+pub fn passphrase_encryption() -> bool {
+    passphrase_env().is_some()
+}
+
 /// True when an encryption key is available (passphrase or `.key` file).
 pub fn has_encryption_key() -> bool {
-    passphrase_env().is_some() || config_dir().join(".key").exists()
+    passphrase_encryption() || config_dir().join(".key").exists()
+}
+
+/// Work factor recorded for the current database directory.
+pub fn kdf_version() -> std::io::Result<KdfVersion> {
+    kdf_version_for_dir(&config_dir_checked()?)
+}
+
+/// True when a passphrase installation still uses the expensive Legacy KDF.
+pub fn passphrase_uses_legacy_kdf() -> std::io::Result<bool> {
+    Ok(passphrase_encryption() && kdf_version()? == KdfVersion::Legacy)
 }
 
 /// Raw encryption key: from the passphrase via scrypt, else from `.key`.
@@ -405,6 +430,26 @@ pub fn write_secret_file(path: &std::path::Path, data: &[u8]) -> std::io::Result
     }
 }
 
+/// Replace `path` with `data` via a same-directory temp file and rename.
+/// Unlike `write_secret_file`, a crash cannot leave a truncated file behind.
+pub fn write_secret_file_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "secret".to_string());
+    let tmp = path.with_file_name(format!(".{name}.{}.tmp", random_hex(8)));
+    track_temp_file(&tmp);
+    if let Err(e) = write_secret_file(&tmp, data) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    if let Err(e) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    Ok(())
+}
+
 /// scrypt(passphrase, salt, 32, N, r=8, p=1). `N` depends on the installation's
 /// KDF version: brand-new installs use `Fast`, existing ones keep `Legacy`.
 ///
@@ -510,7 +555,9 @@ fn decrypt_with_fallback_in(
     Ok(None)
 }
 
-fn salt_for_dir(dir: &std::path::Path) -> std::io::Result<Vec<u8>> {
+/// Salt used by an existing installation, without creating any files.
+/// A database without `.key.salt` is the pre-versioning zero-salt format.
+fn existing_salt(dir: &std::path::Path) -> std::io::Result<Option<Vec<u8>>> {
     let salt_path = dir.join(".key.salt");
     match read_secret_file(&salt_path) {
         Ok(salt) => {
@@ -522,35 +569,83 @@ fn salt_for_dir(dir: &std::path::Path) -> std::io::Result<Vec<u8>> {
                     SALT_LENGTH
                 )));
             }
-            Ok(salt)
+            Ok(Some(salt))
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             if dir.join("subtrack.db").exists() {
                 // Legacy Rust releases derived keys with a zero salt and did
                 // not persist one. Keep that behavior so existing databases
                 // remain decryptable.
-                return Ok(legacy_salt());
+                Ok(Some(legacy_salt()))
+            } else {
+                Ok(None)
             }
-            ensure_private_dir(dir)?;
-            let mut salt = vec![0u8; SALT_LENGTH];
-            getrandom_fill(&mut salt)
-                .map_err(|e| std::io::Error::other(format!("OS CSPRNG is unavailable: {e}")))?;
-            write_secret_file(&salt_path, &salt)?;
-            // New installation: record the fast work factor so this key stays
-            // reproducible. Existing directories never reach this branch, so
-            // their legacy work factor is preserved by the missing marker.
-            let marker_path = dir.join(KDF_MARKER_FILE);
-            write_secret_file(&marker_path, format!("{KDF_MARKER_FAST}\n").as_bytes())?;
-            crate::logger::warn(&format!(
-                "Encryption salt created at: {}\n  \
-                 Back up .key.salt and .key.kdf together with .key — without them, \
-                 passphrase-encrypted data cannot be recovered on another machine.",
-                salt_path.display()
-            ));
-            Ok(salt)
         }
         Err(e) => Err(e),
     }
+}
+
+fn salt_for_dir(dir: &std::path::Path) -> std::io::Result<Vec<u8>> {
+    if let Some(salt) = existing_salt(dir)? {
+        return Ok(salt);
+    }
+    let salt_path = dir.join(".key.salt");
+    ensure_private_dir(dir)?;
+    let mut salt = vec![0u8; SALT_LENGTH];
+    getrandom_fill(&mut salt)
+        .map_err(|e| std::io::Error::other(format!("OS CSPRNG is unavailable: {e}")))?;
+    write_secret_file(&salt_path, &salt)?;
+    // New installation: record the fast work factor so this key stays
+    // reproducible. Existing directories never reach this branch, so their
+    // legacy work factor is preserved by the missing marker.
+    set_kdf_version_in(dir, KdfVersion::Fast)?;
+    crate::logger::warn(&format!(
+        "Encryption salt created at: {}\n  \
+         Back up .key.salt and .key.kdf together with .key — without them, \
+         passphrase-encrypted data cannot be recovered on another machine.",
+        salt_path.display()
+    ));
+    Ok(salt)
+}
+
+fn set_kdf_version_in(dir: &std::path::Path, version: KdfVersion) -> std::io::Result<()> {
+    ensure_private_dir(dir)?;
+    write_secret_file_atomic(
+        &dir.join(KDF_MARKER_FILE),
+        format!("{}\n", version.as_str()).as_bytes(),
+    )
+}
+
+/// Switch the current directory to the Fast KDF. The marker is written first
+/// so a crash mid-rekey leaves data that `decrypt_with_fallback` can still read.
+pub fn set_kdf_version_fast() -> std::io::Result<()> {
+    set_kdf_version_in(&config_dir_checked()?, KdfVersion::Fast)
+}
+
+/// Re-encrypt ciphertext with the active key when it still uses an older
+/// work factor. `None` means it was already encrypted with the active key.
+/// Callers must switch the marker first; otherwise the active key is still the
+/// old one and no rewrite is detected.
+pub fn rekey_ciphertext(ciphertext: &[u8]) -> std::io::Result<Option<Vec<u8>>> {
+    let dir = config_dir_checked()?;
+    let passphrase =
+        passphrase_env().ok_or_else(|| std::io::Error::other("KDF rekey requires a passphrase"))?;
+    let active = decryption_key()?;
+    rekey_ciphertext_in(&dir, &passphrase, &active, ciphertext)
+}
+
+fn rekey_ciphertext_in(
+    dir: &Path,
+    passphrase: &str,
+    active_key: &[u8],
+    ciphertext: &[u8],
+) -> std::io::Result<Option<Vec<u8>>> {
+    if decrypt_buffer(active_key, ciphertext).is_some() {
+        return Ok(None);
+    }
+    let plain = decrypt_with_fallback_in(dir, passphrase, ciphertext, active_key)?
+        .ok_or_else(|| std::io::Error::other("Cannot decrypt data for KDF rekey"))?;
+    Ok(Some(encrypt_buffer(active_key, &plain)))
 }
 
 fn aesgcm(key: &[u8]) -> Aes256Gcm {
@@ -612,14 +707,14 @@ pub fn decrypt_file_if_needed(path: &std::path::Path) -> std::io::Result<Vec<u8>
         return Ok(raw);
     }
     if raw[..15].eq(CONFIG_MAGIC) {
-        let key = decryption_key()?;
-        return decrypt_buffer(&key, &raw[15..])
+        // A rekey can switch the marker before every encrypted file has been
+        // rewritten; the fallback keeps old ciphertext readable in that state.
+        return decrypt_with_fallback(&raw[15..])?
             .ok_or_else(|| std::io::Error::other("config decryption failed"));
     }
     if is_encrypted(&raw) && raw.len() > 32 {
         // DB file (no magic header) — decrypt when it is not plaintext SQLite.
-        let key = decryption_key()?;
-        return decrypt_buffer(&key, &raw)
+        return decrypt_with_fallback(&raw)?
             .ok_or_else(|| std::io::Error::other("database decryption failed"));
     }
     Ok(raw)
@@ -821,6 +916,48 @@ mod tests {
         let active = derive_key_from_passphrase_in(&dir, "hello world").unwrap();
         let plain = decrypt_with_fallback_in(&dir, "hello world", &sealed, &active).unwrap();
         assert_eq!(plain.as_deref(), Some(b"old backup".as_slice()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rekey_rewrites_old_ciphertext_for_the_active_key() {
+        let dir = scratch("rekey-ciphertext");
+        let salt = generate_key();
+        write_secret_file(&dir.join(".key.salt"), &salt).unwrap();
+        write_secret_file(&dir.join(KDF_MARKER_FILE), b"1\n").unwrap();
+
+        let legacy = derive_cached(&dir, "hello world", &salt, KdfVersion::Legacy).unwrap();
+        let sealed = encrypt_buffer(&legacy, b"payload");
+        set_kdf_version_in(&dir, KdfVersion::Fast).unwrap();
+        let active = derive_cached(&dir, "hello world", &salt, KdfVersion::Fast).unwrap();
+
+        let rekeyed = rekey_ciphertext_in(&dir, "hello world", &active, &sealed)
+            .unwrap()
+            .expect("legacy ciphertext must be rewritten");
+        assert_eq!(decrypt_buffer(&active, &rekeyed).unwrap(), b"payload");
+        assert!(decrypt_buffer(&legacy, &rekeyed).is_none());
+        assert_eq!(
+            rekey_ciphertext_in(&dir, "hello world", &active, &rekeyed).unwrap(),
+            None
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fallback_accepts_pre_salt_database_after_marker_flip() {
+        use scrypt::{Params, scrypt as scrypt_kdf};
+        let dir = scratch("fallback-presalt");
+        std::fs::write(dir.join("subtrack.db"), b"existing").unwrap();
+        write_secret_file(&dir.join(KDF_MARKER_FILE), b"2\n").unwrap();
+
+        let params = Params::new(SCRYPT_LOG_N_LEGACY, SCRYPT_R, SCRYPT_P).unwrap();
+        let mut legacy = generate_key();
+        scrypt_kdf(b"hello world", &legacy_salt(), &params, &mut legacy).unwrap();
+        let sealed = encrypt_buffer(&legacy, b"old db");
+
+        let active = derive_key_from_passphrase_in(&dir, "hello world").unwrap();
+        let plain = decrypt_with_fallback_in(&dir, "hello world", &sealed, &active).unwrap();
+        assert_eq!(plain.as_deref(), Some(b"old db".as_slice()));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
