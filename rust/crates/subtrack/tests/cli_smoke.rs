@@ -1121,14 +1121,14 @@ fn maintenance_rekey_kdf_migrates_legacy_data_and_keeps_backups_readable() {
     assert!(env.run_passphrase(&second).status.success());
     let backup_arg = backup.to_string_lossy().into_owned();
     let restored = env.run_passphrase(&["restore", &backup_arg, "--force"]);
+    let restore_output = format!(
+        "{} {}",
+        String::from_utf8_lossy(&restored.stdout),
+        String::from_utf8_lossy(&restored.stderr)
+    );
     assert!(
         restored.status.success(),
-        "legacy-format backup not restorable: {}",
-        format!(
-            "{} {}",
-            String::from_utf8_lossy(&restored.stdout),
-            String::from_utf8_lossy(&restored.stderr)
-        )
+        "legacy-format backup not restorable: {restore_output}"
     );
     let listed = env.run_passphrase(&["list", "--json"]);
     let listed = String::from_utf8_lossy(&listed.stdout);

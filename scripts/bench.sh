@@ -106,3 +106,9 @@ DB_DIR="$TMP/passphrase-legacy"
 echo "passphrase encryption (Legacy, N=2^17):"
 measure "list --json" list --json
 measure "report --json" report --json
+
+# Migrate the same Legacy fixture in place so the rekey path itself is covered.
+run_with_env maintenance rekey-kdf --json >/dev/null 2>&1
+echo "passphrase encryption (Legacy -> Fast rekeyed):"
+measure "list --json" list --json
+measure "report --json" report --json

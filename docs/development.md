@@ -65,7 +65,7 @@ Add a unit test next to the function it covers; extend `cli_smoke.rs` when a new
 
 ## Benchmarks
 
-`scripts/bench.sh` measures the release binary against temporary databases with three key modes (`.key` file, passphrase with the Fast KDF, passphrase with the Legacy KDF). It has no dependencies beyond bash/coreutils.
+`scripts/bench.sh` measures the release binary against temporary databases with four scenarios: `.key` file, passphrase with the Fast KDF, passphrase with the Legacy KDF, and the same Legacy fixture after `maintenance rekey-kdf`. It has no dependencies beyond bash/coreutils.
 
 ```bash
 cargo build --release --manifest-path rust/Cargo.toml
@@ -75,13 +75,14 @@ SUBTRACK_BENCH_COUNT=1000 scripts/bench.sh
 
 `SUBTRACK_BENCH_RUNS`, `SUBTRACK_TODAY`, `SUBTRACK_BIN`, and `SUBTRACK_BENCH_KEEP=1` (keep fixtures) are also supported. The Legacy fixture intentionally takes ~4x longer to populate because it derives the scrypt key with `N=2^17`.
 
-Baseline on commit `7d659ba` (100 subscriptions, warm runs):
+Baseline on commit `7d659ba` (100 subscriptions, warm runs; the rekeyed row was measured after Phase 1):
 
 | Scenario | `list --json` | `report --json` |
 | --- | ---: | ---: |
 | `.key` file (no KDF) | 4.5 ms | 6.5 ms |
 | Passphrase, Fast (`N=2^15`) | 102 ms | 104 ms |
 | Passphrase, Legacy (`N=2^17`) | 407–421 ms | 414–417 ms |
+| Passphrase, Legacy → Fast rekeyed | 101–104 ms | 100–110 ms |
 
 `--version` and `--help` stay at 2–3 ms. At 1000 subscriptions with a `.key` file, `list --json` is ~14 ms and text `list` is ~26 ms. Passphrase commands are dominated by the KDF, not by SQLite or rendering.
 

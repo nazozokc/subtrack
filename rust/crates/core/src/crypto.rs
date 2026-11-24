@@ -628,8 +628,8 @@ pub fn set_kdf_version_fast() -> std::io::Result<()> {
 /// old one and no rewrite is detected.
 pub fn rekey_ciphertext(ciphertext: &[u8]) -> std::io::Result<Option<Vec<u8>>> {
     let dir = config_dir_checked()?;
-    let passphrase = passphrase_env()
-        .ok_or_else(|| std::io::Error::other("KDF rekey requires a passphrase"))?;
+    let passphrase =
+        passphrase_env().ok_or_else(|| std::io::Error::other("KDF rekey requires a passphrase"))?;
     let active = decryption_key()?;
     rekey_ciphertext_in(&dir, &passphrase, &active, ciphertext)
 }

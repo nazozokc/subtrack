@@ -166,6 +166,8 @@ Passphrase installs store a random salt in `.key.salt` and a work-factor marker 
 
 Backups created with the older work factor can still be restored: `restore` tries the current key, the previous work factor with the current salt, then the pre-salt key.
 
+Run `subtrack maintenance rekey-kdf` to re-encrypt the database and encrypted config with the Fast work factor. The marker is switched first, then both files are rewritten; a crash in between is safe because reads fall back to the old key. A safety backup is written before the marker changes, and the command is idempotent.
+
 > ⚠️ **Back up `.key.salt` and `.key.kdf` together with `.key`.** The passphrase alone is not enough to reproduce the key on another machine.
 
 ### Key integrity verification

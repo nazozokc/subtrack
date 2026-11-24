@@ -51,6 +51,8 @@ subtrack automatically encrypts the SQLite database file on disk using **AES-256
 
 Alternatively, you can set `SUBSC_CLI_DB_PASSPHRASE` to derive the encryption key from a passphrase (using scrypt key derivation). This is useful for CI environments or when you want to avoid storing a key file. New installs use the faster `N=2^15` work factor; existing installs keep the legacy `N=2^17` factor so their data stays readable. The derived key is computed once per command.
 
+Legacy passphrase installs can migrate with `subtrack maintenance rekey-kdf` (or accept the prompt on the first interactive `add`). It creates a safety backup first; older backups remain restorable.
+
 Backups can also be encrypted with `subtrack backup --encrypt`.
 
 ## Configuration management (`subtrack config`)

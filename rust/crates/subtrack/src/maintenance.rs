@@ -71,7 +71,9 @@ pub fn run_rekey_kdf(parsed: &ParsedArgs) -> i32 {
         }
         Ok(None) => {
             if json {
-                logger::log("{\n  \"from\": \"fast\",\n  \"to\": \"fast\",\n  \"databaseRekeyed\": false,\n  \"configRekeyed\": false\n}");
+                logger::log(
+                    "{\n  \"from\": \"fast\",\n  \"to\": \"fast\",\n  \"databaseRekeyed\": false,\n  \"configRekeyed\": false\n}",
+                );
             } else {
                 info("KDF already uses the Fast work factor — nothing to do.");
             }

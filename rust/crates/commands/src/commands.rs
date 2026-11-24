@@ -3330,16 +3330,14 @@ pub static COMMANDS: &[CommandDef] = &[
         name: "rekey-kdf",
         description: "Re-encrypt data with the fast KDF (passphrase only)",
         to_kebab: false,
-        args: &[
-            ArgSpec {
-                name: "json",
-                kind: ArgKind::Boolean,
-                short: Some('j'),
-                description: "Output as JSON",
-                array: false,
-                required: None,
-            },
-        ],
+        args: &[ArgSpec {
+            name: "json",
+            kind: ArgKind::Boolean,
+            short: Some('j'),
+            description: "Output as JSON",
+            array: false,
+            required: None,
+        }],
         subcommands: &[],
     },
 ];
