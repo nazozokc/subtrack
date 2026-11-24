@@ -1,6 +1,6 @@
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
-use super::{open_db, save_db, Trial};
+use super::{Trial, open_db, save_db};
 
 fn trial_from_row(row: &rusqlite::Row) -> rusqlite::Result<Trial> {
     use subtrack_core::validation::sanitize_text;

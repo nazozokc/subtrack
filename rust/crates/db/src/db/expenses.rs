@@ -1,7 +1,7 @@
 //! Daily expense summaries: one row per day, line items stored as JSON.
 //! Aggregates use SQLite's `json_each` so no extra item table is needed.
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 use subtrack_core::models::{Expense, ExpenseItem, NewExpenseItem};
 

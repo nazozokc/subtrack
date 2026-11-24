@@ -2,10 +2,10 @@
 //! function) and the version fast path + lazy banner logic of `src/index.ts`.
 
 use crate::ansi;
-use crate::commands::{CommandDef, COMMANDS, TOP_SUBCOMMANDS};
-use crate::help::{render_usage, ArgKind, ArgSpec, CallMode};
+use crate::commands::{COMMANDS, CommandDef, TOP_SUBCOMMANDS};
+use crate::help::{ArgKind, ArgSpec, CallMode, render_usage};
 use crate::logger::{self};
-use crate::parser::{resolve_args, tokenize, ParsedArgs, Token};
+use crate::parser::{ParsedArgs, Token, resolve_args, tokenize};
 use crate::router::{get_command_positionals, resolve_command};
 use crate::table;
 use crate::ui;

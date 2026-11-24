@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use subtrack_core::domain::SortField;
 use subtrack_core::models::{NewSubscription, QueryOptions, SqlValue, Subscription};
 

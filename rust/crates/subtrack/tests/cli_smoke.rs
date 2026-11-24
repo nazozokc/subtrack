@@ -755,10 +755,11 @@ fn bare_parent_commands_default_to_list_and_forecast_runs() {
 #[test]
 fn config_language_switches_common_ui_to_japanese() {
     let env = Env::new("language-ja");
-    assert!(env
-        .run(&["config", "set", "language", "ja"])
-        .status
-        .success());
+    assert!(
+        env.run(&["config", "set", "language", "ja"])
+            .status
+            .success()
+    );
 
     let help = env.text(&["--help"]);
     assert!(help.contains("使い方:"), "help: {help}");
@@ -802,17 +803,19 @@ fn config_log_level_controls_status_chatter() {
     );
     assert!(!stdout.contains("not found — skip"), "normal: {stdout}");
 
-    assert!(env
-        .run(&["config", "set", "logLevel", "quiet"])
-        .status
-        .success());
+    assert!(
+        env.run(&["config", "set", "logLevel", "quiet"])
+            .status
+            .success()
+    );
     let quiet = env.text(&["profile"]);
     assert!(!quiet.contains("No saved profiles"), "quiet: {quiet}");
 
-    assert!(env
-        .run(&["config", "set", "logLevel", "verbose"])
-        .status
-        .success());
+    assert!(
+        env.run(&["config", "set", "logLevel", "verbose"])
+            .status
+            .success()
+    );
     let verbose = env.run_custom(&["usage", "refresh"], "", &extra, &[]);
     let stdout = String::from_utf8_lossy(&verbose.stdout);
     assert!(stdout.contains("not found — skip"), "verbose: {stdout}");
@@ -978,8 +981,8 @@ fn expense_add_list_total_and_item_edits() {
     assert_eq!(total["totals"][0]["amount"], 1500.0);
     assert_eq!(total["groups"][0]["key"], "food");
 
-    assert!(env
-        .run(&[
+    assert!(
+        env.run(&[
             "expense",
             "item",
             "edit",
@@ -990,15 +993,17 @@ fn expense_add_list_total_and_item_edits() {
             "--clear-note",
         ])
         .status
-        .success());
+        .success()
+    );
     let edited = expense_json(&env, &["expense", "list", "--json"]);
     assert_eq!(edited[0]["items"][0]["amount"], 1500.0);
     assert!(edited[0]["items"][0]["note"].is_null());
 
-    assert!(env
-        .run(&["expense", "item", "delete", TODAY, "2"])
-        .status
-        .success());
+    assert!(
+        env.run(&["expense", "item", "delete", TODAY, "2"])
+            .status
+            .success()
+    );
     assert_eq!(
         expense_json(&env, &["expense", "list", "--json"])[0]["items"]
             .as_array()
@@ -1007,10 +1012,11 @@ fn expense_add_list_total_and_item_edits() {
         1
     );
 
-    assert!(env
-        .run(&["expense", "delete", TODAY, "--force"])
-        .status
-        .success());
+    assert!(
+        env.run(&["expense", "delete", TODAY, "--force"])
+            .status
+            .success()
+    );
     assert_eq!(
         expense_json(&env, &["expense", "list", "--json"]),
         serde_json::json!([])
