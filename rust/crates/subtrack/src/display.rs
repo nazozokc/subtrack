@@ -226,11 +226,11 @@ pub fn render_table(
 
     let theme = config::display_theme();
     let mut table = TableBuilder::new(table_style(&theme));
-    table.col_widths = widths.clone();
+    table.col_widths = widths;
     table.head = headers.to_vec();
     table.word_wrap = true;
     table.wrap_on_word_boundary = true;
-    table.col_aligns = col_aligns.clone();
+    table.col_aligns = col_aligns;
 
     for (i, row) in rows.iter().enumerate() {
         if i % 2 == 0 {
@@ -316,13 +316,14 @@ pub fn spread_subscription(
         return;
     }
 
-    // Display subscriptions grouped by currency (insertion order).
-    let mut groups: Vec<(String, Vec<Subscription>)> = Vec::new();
+    // Display subscriptions grouped by currency (insertion order). Borrow the
+    // rows instead of cloning every subscription into a group.
+    let mut groups: Vec<(&str, Vec<&Subscription>)> = Vec::new();
     for sub in list {
-        if let Some(g) = groups.iter_mut().find(|(c, _)| *c == sub.currency) {
-            g.1.push(sub.clone())
+        if let Some(g) = groups.iter_mut().find(|(c, _)| *c == sub.currency.as_str()) {
+            g.1.push(sub)
         } else {
-            groups.push((sub.currency.clone(), vec![sub.clone()]))
+            groups.push((sub.currency.as_str(), vec![sub]))
         }
     }
 

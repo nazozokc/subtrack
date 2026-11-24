@@ -65,26 +65,29 @@ Add a unit test next to the function it covers; extend `cli_smoke.rs` when a new
 
 ## Benchmarks
 
-`scripts/bench.sh` measures the release binary against temporary databases with four scenarios: `.key` file, passphrase with the Fast KDF, passphrase with the Legacy KDF, and the same Legacy fixture after `maintenance rekey-kdf`. It has no dependencies beyond bash/coreutils.
+`scripts/bench.sh` measures the release binary against temporary databases with six scenarios: `.key` file, passphrase with the Balanced KDF (new default), passphrase with the Fast KDF and the same fixture after `maintenance rekey-kdf`, and passphrase with the Legacy KDF and the same fixture after rekeying. It has no dependencies beyond bash/coreutils.
 
 ```bash
 cargo build --release --manifest-path rust/Cargo.toml
 scripts/bench.sh                       # 60 subscriptions, 7 runs per case
 SUBTRACK_BENCH_COUNT=1000 scripts/bench.sh
+SUBTRACK_BENCH_SKIP_LEGACY=1 SUBTRACK_BENCH_COUNT=1000 scripts/bench.sh
 ```
 
-`SUBTRACK_BENCH_RUNS`, `SUBTRACK_TODAY`, `SUBTRACK_BIN`, and `SUBTRACK_BENCH_KEEP=1` (keep fixtures) are also supported. The Legacy fixture intentionally takes ~4x longer to populate because it derives the scrypt key with `N=2^17`.
+`SUBTRACK_BENCH_RUNS`, `SUBTRACK_TODAY`, `SUBTRACK_BIN`, and `SUBTRACK_BENCH_KEEP=1` (keep fixtures) are also supported. The Legacy fixture intentionally takes ~12x longer to populate than Balanced because it derives the scrypt key with `N=2^17`; set `SUBTRACK_BENCH_SKIP_LEGACY=1` to skip that fixture for large counts.
 
-Baseline on commit `7d659ba37d45f4c4809df2616ad396d69682a653` (100 subscriptions, warm runs; the rekeyed row was measured after Phase 1):
+Current measurements (100 subscriptions, 7 runs per case; warm runs after the KDF/save/display changes):
 
 | Scenario | `list --json` | `report --json` |
 | --- | ---: | ---: |
-| `.key` file (no KDF) | 4.5 ms | 6.5 ms |
-| Passphrase, Fast (`N=2^15`) | 102 ms | 104 ms |
-| Passphrase, Legacy (`N=2^17`) | 407–421 ms | 414–417 ms |
-| Passphrase, Legacy → Fast rekeyed | 101–104 ms | 100–110 ms |
+| `.key` file (no KDF) | 0–1 ms | 0–2 ms |
+| Passphrase, Balanced (`N=2^14`, new default) | 47–50 ms | 48–50 ms |
+| Passphrase, Fast (`N=2^15`) | 101–106 ms | 102–108 ms |
+| Passphrase, Fast → Balanced rekeyed | 45–49 ms | 49–52 ms |
+| Passphrase, Legacy (`N=2^17`) | 412–420 ms | 413–422 ms |
+| Passphrase, Legacy → Balanced rekeyed | 47–50 ms | 50–55 ms |
 
-`--version` and `--help` stay at 2–3 ms. At 1000 subscriptions with a `.key` file, `list --json` is ~14 ms and text `list` is ~26 ms. Passphrase commands are dominated by the KDF, not by SQLite or rendering.
+At 1000 subscriptions (Legacy fixture skipped), `.key` `list --json` is 15–19 ms and text `list` is 21–26 ms; Balanced passphrase `list --json` is 62–66 ms. `--version` and `--help` stay at 0–3 ms. Passphrase commands are still dominated by the KDF, but the Balanced default cuts that cost by roughly half versus Fast and by ~8x versus Legacy.
 
 ## Release packaging
 

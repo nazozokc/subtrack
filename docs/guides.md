@@ -589,7 +589,7 @@ subtrack maintenance --vacuum
 # One-command cleanup (integrity check + VACUUM + prune audit + prune tags)
 subtrack cleanup
 
-# Migrate a passphrase install from the Legacy to the Fast KDF
+# Migrate a passphrase install from Legacy/Fast to the Balanced KDF
 subtrack maintenance rekey-kdf
 ```
 

@@ -161,12 +161,12 @@ This means your subscription data is encrypted at rest. Backups can also be encr
 
 Passphrase installs store a random salt in `.key.salt` and a work-factor marker in `.key.kdf` next to the database:
 
-- New installations use scrypt `N=2^15, r=8, p=1` (marker `2`).
-- Installations created before the marker existed keep `N=2^17, r=8, p=1` so their existing database and backups remain readable. The derived key is cached in memory for the lifetime of a command, so normal commands perform a single derivation.
+- New installations use scrypt `N=2^14, r=8, p=1` (marker `3`, Balanced).
+- Marker `2` uses `N=2^15, r=8, p=1` (Fast), and installs created before the marker existed keep `N=2^17, r=8, p=1` (Legacy) so their existing database and backups remain readable. Reads try the recorded marker first and fall back to older work factors and the pre-salt key. The derived key is cached in memory for the lifetime of a command, so normal commands perform a single derivation.
 
-Backups created with the older work factor can still be restored: `restore` tries the current key, the previous work factor with the current salt, then the pre-salt key.
+Backups created with older work factors can still be restored: `restore` tries the current key, then older work factors with the current salt, then the pre-salt key.
 
-Run `subtrack maintenance rekey-kdf` to re-encrypt the database and encrypted config with the Fast work factor. The marker is switched first, then both files are rewritten; a crash in between is safe because reads fall back to the old key. A safety backup is written before the marker changes, and the command is idempotent.
+Run `subtrack maintenance rekey-kdf` to re-encrypt the database and encrypted config with the Balanced work factor. The marker is switched first, then both files are rewritten; a crash in between is safe because reads fall back to the old key. A safety backup is written before the marker changes, and the command is idempotent.
 
 > ⚠️ **Back up `.key.salt` and `.key.kdf` together with `.key`.** The passphrase alone is not enough to reproduce the key on another machine.
 
