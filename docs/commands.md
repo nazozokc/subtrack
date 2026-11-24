@@ -1432,7 +1432,7 @@ subtrack maintenance --json
 
 #### `maintenance rekey-kdf`
 
-Re-encrypt a passphrase-protected database and config from the Legacy scrypt work factor (`N=2^17`) to the Fast one (`N=2^15`). A timestamped safety backup is created before the marker changes, and older backups stay restorable. Re-running on an already-Fast install is a no-op. Key-file installs do not use a KDF and are rejected.
+Re-encrypt a passphrase-protected database and config from any older scrypt work factor (Legacy `N=2^17`, marker `1`; Fast `N=2^15`, marker `2`) to the Balanced default (`N=2^14`, marker `3`). A timestamped safety backup is created before the marker changes, and older backups stay restorable. Re-running on an already-Balanced install is a no-op. Key-file installs do not use a KDF and are rejected.
 
 | Option | Description |
 |--------|-------------|

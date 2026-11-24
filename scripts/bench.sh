@@ -6,7 +6,8 @@
 #   scripts/bench.sh
 #
 # Overrides: SUBTRACK_BIN, SUBTRACK_BENCH_COUNT, SUBTRACK_BENCH_RUNS,
-#            SUBTRACK_TODAY, SUBTRACK_BENCH_KEEP=1
+#            SUBTRACK_TODAY, SUBTRACK_BENCH_KEEP=1,
+#            SUBTRACK_BENCH_SKIP_LEGACY=1 (skip the slow N=2^17 fixture)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -93,6 +94,13 @@ measure "list (text)" list
 measure "summary" summary
 measure "report --json" report --json
 
+populate "$TMP/passphrase-balanced" "3"
+MODE_PASSPHRASE="1"
+DB_DIR="$TMP/passphrase-balanced"
+echo "passphrase encryption (Balanced, N=2^14, new default):"
+measure "list --json" list --json
+measure "report --json" report --json
+
 populate "$TMP/passphrase-fast" "2"
 MODE_PASSPHRASE="1"
 DB_DIR="$TMP/passphrase-fast"
@@ -100,15 +108,23 @@ echo "passphrase encryption (Fast, N=2^15):"
 measure "list --json" list --json
 measure "report --json" report --json
 
-populate "$TMP/passphrase-legacy" "1"
-MODE_PASSPHRASE="1"
-DB_DIR="$TMP/passphrase-legacy"
-echo "passphrase encryption (Legacy, N=2^17):"
+# Migrate the same Fast fixture in place so the rekey path itself is covered.
+run_with_env maintenance rekey-kdf --json >/dev/null 2>&1
+echo "passphrase encryption (Fast -> Balanced rekeyed):"
 measure "list --json" list --json
 measure "report --json" report --json
 
-# Migrate the same Legacy fixture in place so the rekey path itself is covered.
-run_with_env maintenance rekey-kdf --json >/dev/null 2>&1
-echo "passphrase encryption (Legacy -> Fast rekeyed):"
-measure "list --json" list --json
-measure "report --json" report --json
+if [[ "${SUBTRACK_BENCH_SKIP_LEGACY:-0}" != "1" ]]; then
+  populate "$TMP/passphrase-legacy" "1"
+  MODE_PASSPHRASE="1"
+  DB_DIR="$TMP/passphrase-legacy"
+  echo "passphrase encryption (Legacy, N=2^17):"
+  measure "list --json" list --json
+  measure "report --json" report --json
+
+  # Migrate the same Legacy fixture in place so the rekey path itself is covered.
+  run_with_env maintenance rekey-kdf --json >/dev/null 2>&1
+  echo "passphrase encryption (Legacy -> Balanced rekeyed):"
+  measure "list --json" list --json
+  measure "report --json" report --json
+fi

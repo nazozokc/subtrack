@@ -11,38 +11,30 @@ fn is_wide(ch: char) -> bool {
         | 0xff00..=0xff60 | 0xffe0..=0xffe6)
 }
 
-/// Strip SGR (CSI ... m) sequences from a string.
-fn strip_ansi(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let bytes = s.as_bytes();
+/// Visible width of a string: ANSI codes stripped, wide (CJK) chars count 2.
+///
+/// Stripping SGR sequences while scanning avoids allocating a second string for
+/// every cell of a large table.
+pub fn strlen(str: &str) -> i64 {
+    let bytes = str.as_bytes();
     let mut i = 0;
+    let mut width = 0;
     while i < bytes.len() {
         if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
-            let mut j = i + 2;
-            while j < bytes.len() {
-                if bytes[j] == b'm' {
-                    break;
-                }
-                j += 1
+            let mut end = i + 2;
+            while end < bytes.len() && bytes[end] != b'm' {
+                end += 1;
             }
-            if j < bytes.len() && bytes[j] == b'm' {
-                i = j + 1;
+            if end < bytes.len() {
+                i = end + 1;
                 continue;
             }
         }
-        let ch = s[i..].chars().next().unwrap();
-        out.push(ch);
-        i += ch.len_utf8()
+        let ch = str[i..].chars().next().unwrap();
+        width += if is_wide(ch) { 2 } else { 1 };
+        i += ch.len_utf8();
     }
-    out
-}
-
-/// Visible width of a string: ANSI codes stripped, wide (CJK) chars count 2.
-pub fn strlen(str: &str) -> i64 {
-    strip_ansi(str)
-        .chars()
-        .map(|ch| if is_wide(ch) { 2 } else { 1 })
-        .sum()
+    width
 }
 
 pub(super) fn repeat(str: &str, times: usize) -> String {

@@ -27,27 +27,54 @@ pub fn vacuum_db(conn: &Connection) -> std::io::Result<()> {
 // ── Write layer (port of db/connection.ts saveDb + writeSubscription + audit) ──
 
 /// Serialize the open connection to `subtrack.db`, encrypting it.
-/// Port of `saveDb()`: `VACUUM INTO` a temp file, then encrypt + replace.
+///
+/// The normal path reads the already-committed plaintext working file
+/// (`.subtrack.open.db`) instead of running `VACUUM INTO` on every write. A
+/// compaction is only needed once free pages exceed a quarter of the database;
+/// `maintenance --vacuum` can also compact explicitly. Connections that do not
+/// own that file (in-memory tests, for example) keep the VACUUM snapshot path.
 pub fn save_db(conn: &Connection) -> std::io::Result<()> {
     let dir = subtrack_core::crypto::config_dir_checked()?;
     subtrack_core::crypto::ensure_private_dir(&dir)?;
-    // A random name prevents clobbering another process or following a
-    // pre-created symlink, and the 0700 directory hides the plaintext dump.
-    let tmp = dir.join(format!(
-        ".subtrack.save.{}.db",
-        subtrack_core::crypto::random_hex(8)
-    ));
-    subtrack_core::crypto::track_temp_file(&tmp);
-    let quoted = tmp.to_string_lossy().replace('\'', "''");
-    conn.execute_batch(&format!("VACUUM INTO '{}'", quoted))
-        .map_err(|e| std::io::Error::other(e.to_string()))?;
-    subtrack_core::crypto::restrict_file_permissions(&tmp)?;
-    let data = std::fs::read(&tmp)?;
-    let _ = std::fs::remove_file(&tmp);
+    let open_path = dir.join(".subtrack.open.db");
+    let direct = conn
+        .path()
+        .is_some_and(|path| std::path::Path::new(path) == open_path)
+        && conn.is_autocommit()
+        && !needs_compaction(conn)?;
+    let data = if direct {
+        std::fs::read(&open_path)?
+    } else {
+        // A random name prevents clobbering another process or following a
+        // pre-created symlink, and the 0700 directory hides the plaintext dump.
+        let tmp = dir.join(format!(
+            ".subtrack.save.{}.db",
+            subtrack_core::crypto::random_hex(8)
+        ));
+        subtrack_core::crypto::track_temp_file(&tmp);
+        let quoted = tmp.to_string_lossy().replace('\'', "''");
+        conn.execute_batch(&format!("VACUUM INTO '{}'", quoted))
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        subtrack_core::crypto::restrict_file_permissions(&tmp)?;
+        let data = std::fs::read(&tmp)?;
+        let _ = std::fs::remove_file(&tmp);
+        data
+    };
 
     let key = subtrack_core::crypto::get_or_create_key()?;
     let encrypted = subtrack_core::crypto::encrypt_buffer(&key, &data);
     write_db_atomic(&dir, &encrypted)
+}
+
+/// True when enough pages are free to justify a compacting snapshot.
+fn needs_compaction(conn: &Connection) -> std::io::Result<bool> {
+    let page_count: i64 = conn
+        .query_row("PRAGMA page_count", [], |row| row.get(0))
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    let freelist: i64 = conn
+        .query_row("PRAGMA freelist_count", [], |row| row.get(0))
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    Ok(freelist.saturating_mul(4) > page_count)
 }
 
 /// Write the encrypted database and its hash sidecar, then atomically rename
@@ -86,10 +113,10 @@ pub(crate) fn write_db_atomic(dir: &std::path::Path, encrypted: &[u8]) -> std::i
     Ok(())
 }
 
-/// Re-encrypt the on-disk database with the active (Fast) key.
+/// Re-encrypt the on-disk database with the active (latest) key.
 /// Returns `true` when a rewrite happened. The caller must switch the KDF
-/// marker first so the active key is the Fast one.
-pub fn rekey_db_to_fast() -> std::io::Result<bool> {
+/// marker first so the active key is the latest one.
+pub fn rekey_db_to_latest() -> std::io::Result<bool> {
     let raw = std::fs::read(db_path())?;
     if !subtrack_core::crypto::is_encrypted(&raw) {
         return Ok(false);

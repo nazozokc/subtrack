@@ -28,15 +28,17 @@ const MAX_CONFIG_DIR_LEN: usize = 4096;
 /// directory as the database directory.
 const FORBIDDEN_CONFIG_DIRS: [&str; 5] = ["/etc", "/dev", "/proc", "/sys", "/tmp"];
 
-// scrypt work factors. `Legacy` is kept verbatim so databases and backups from
-// older releases stay decryptable; `Fast` applies only to new installations.
-const SCRYPT_LOG_N_LEGACY: u8 = 17; // 128 MiB, ~0.5-1 s per derivation here
-const SCRYPT_LOG_N_FAST: u8 = 15; // 32 MiB, ~1/4 the cost
+// scrypt work factors. Older levels are kept verbatim so databases and backups
+// from earlier releases stay decryptable; only new installations use `Balanced`.
+const SCRYPT_LOG_N_LEGACY: u8 = 17; // 128 MiB, ~470 ms per derivation here
+const SCRYPT_LOG_N_FAST: u8 = 15; // 32 MiB, ~110 ms
+const SCRYPT_LOG_N_BALANCED: u8 = 14; // 16 MiB, ~40 ms — current default
 const SCRYPT_R: u32 = 8;
 const SCRYPT_P: u32 = 1;
 const KDF_MARKER_FILE: &str = ".key.kdf";
-const KDF_MARKER_FAST: &str = "2";
 const KDF_MARKER_LEGACY: &str = "1";
+const KDF_MARKER_FAST: &str = "2";
+const KDF_MARKER_BALANCED: &str = "3";
 
 /// scrypt work factor recorded for a passphrase-protected installation.
 /// Missing marker files mean `Legacy` for backward compatibility.
@@ -44,13 +46,18 @@ const KDF_MARKER_LEGACY: &str = "1";
 pub enum KdfVersion {
     Legacy,
     Fast,
+    Balanced,
 }
 
 impl KdfVersion {
+    /// The work factor used for new installations and after a rekey.
+    pub const LATEST: Self = Self::Balanced;
+
     fn log_n(self) -> u8 {
         match self {
             Self::Legacy => SCRYPT_LOG_N_LEGACY,
             Self::Fast => SCRYPT_LOG_N_FAST,
+            Self::Balanced => SCRYPT_LOG_N_BALANCED,
         }
     }
 
@@ -59,7 +66,13 @@ impl KdfVersion {
         match self {
             Self::Legacy => KDF_MARKER_LEGACY,
             Self::Fast => KDF_MARKER_FAST,
+            Self::Balanced => KDF_MARKER_BALANCED,
         }
+    }
+
+    /// Newest first — the order used when probing ciphertext after a rekey.
+    const fn probe_order() -> [Self; 3] {
+        [Self::Balanced, Self::Fast, Self::Legacy]
     }
 }
 
@@ -209,9 +222,18 @@ pub fn kdf_version() -> std::io::Result<KdfVersion> {
     kdf_version_for_dir(&config_dir_checked()?)
 }
 
-/// True when a passphrase installation still uses the expensive Legacy KDF.
-pub fn passphrase_uses_legacy_kdf() -> std::io::Result<bool> {
-    Ok(passphrase_encryption() && kdf_version()? == KdfVersion::Legacy)
+/// True when a passphrase installation can be sped up by a rekey.
+pub fn passphrase_needs_rekey() -> std::io::Result<bool> {
+    Ok(passphrase_encryption() && kdf_version()? != KdfVersion::LATEST)
+}
+
+/// Human-readable name of the active work factor (`legacy`, `fast`, `balanced`).
+pub fn kdf_version_name(version: KdfVersion) -> &'static str {
+    match version {
+        KdfVersion::Legacy => "legacy",
+        KdfVersion::Fast => "fast",
+        KdfVersion::Balanced => "balanced",
+    }
 }
 
 /// Raw encryption key: from the passphrase via scrypt, else from `.key`.
@@ -451,7 +473,8 @@ pub fn write_secret_file_atomic(path: &Path, data: &[u8]) -> std::io::Result<()>
 }
 
 /// scrypt(passphrase, salt, 32, N, r=8, p=1). `N` depends on the installation's
-/// KDF version: brand-new installs use `Fast`, existing ones keep `Legacy`.
+/// KDF version: brand-new installs use `Balanced`, existing ones keep their
+/// recorded work factor until `maintenance rekey-kdf` migrates them.
 ///
 /// A random salt is generated for new installations. Databases created by
 /// earlier Rust releases always used an all-zero salt and never wrote
@@ -484,8 +507,9 @@ fn kdf_version_for_dir(dir: &Path) -> std::io::Result<KdfVersion> {
     let path = dir.join(KDF_MARKER_FILE);
     match std::fs::read_to_string(&path) {
         Ok(marker) => match marker.trim() {
-            KDF_MARKER_FAST => Ok(KdfVersion::Fast),
             KDF_MARKER_LEGACY => Ok(KdfVersion::Legacy),
+            KDF_MARKER_FAST => Ok(KdfVersion::Fast),
+            KDF_MARKER_BALANCED => Ok(KdfVersion::Balanced),
             other => Err(std::io::Error::other(format!(
                 "Unrecognized KDF version in {}: {other:?}",
                 path.display()
@@ -539,13 +563,21 @@ fn decrypt_with_fallback_in(
     data: &[u8],
     active_key: &[u8],
 ) -> std::io::Result<Option<Vec<u8>>> {
-    if kdf_version_for_dir(dir)? == KdfVersion::Fast {
-        let salt = salt_for_dir(dir)?;
-        let previous = derive_cached(dir, passphrase, &salt, KdfVersion::Legacy)?;
-        if let Some(plain) = decrypt_buffer(&previous, data) {
-            return Ok(Some(plain));
+    // A rekey writes the marker before every encrypted file is rewritten, so
+    // ciphertext may still use any previous work factor with the current salt.
+    let active_version = kdf_version_for_dir(dir)?;
+    if let Some(salt) = existing_salt(dir)? {
+        for version in KdfVersion::probe_order() {
+            if version == active_version {
+                continue;
+            }
+            let key = derive_cached(dir, passphrase, &salt, version)?;
+            if let Some(plain) = decrypt_buffer(&key, data) {
+                return Ok(Some(plain));
+            }
         }
     }
+    // Releases before `.key.salt` existed derived with an all-zero salt.
     let legacy = derive_cached(dir, passphrase, &legacy_salt(), KdfVersion::Legacy)?;
     if legacy != active_key
         && let Some(plain) = decrypt_buffer(&legacy, data)
@@ -595,10 +627,10 @@ fn salt_for_dir(dir: &std::path::Path) -> std::io::Result<Vec<u8>> {
     getrandom_fill(&mut salt)
         .map_err(|e| std::io::Error::other(format!("OS CSPRNG is unavailable: {e}")))?;
     write_secret_file(&salt_path, &salt)?;
-    // New installation: record the fast work factor so this key stays
+    // New installation: record the current work factor so this key stays
     // reproducible. Existing directories never reach this branch, so their
-    // legacy work factor is preserved by the missing marker.
-    set_kdf_version_in(dir, KdfVersion::Fast)?;
+    // recorded work factor is preserved.
+    set_kdf_version_in(dir, KdfVersion::LATEST)?;
     crate::logger::warn(&format!(
         "Encryption salt created at: {}\n  \
          Back up .key.salt and .key.kdf together with .key — without them, \
@@ -616,10 +648,10 @@ fn set_kdf_version_in(dir: &std::path::Path, version: KdfVersion) -> std::io::Re
     )
 }
 
-/// Switch the current directory to the Fast KDF. The marker is written first
+/// Switch the current directory to the latest KDF. The marker is written first
 /// so a crash mid-rekey leaves data that `decrypt_with_fallback` can still read.
-pub fn set_kdf_version_fast() -> std::io::Result<()> {
-    set_kdf_version_in(&config_dir_checked()?, KdfVersion::Fast)
+pub fn set_kdf_version_latest() -> std::io::Result<()> {
+    set_kdf_version_in(&config_dir_checked()?, KdfVersion::LATEST)
 }
 
 /// Re-encrypt ciphertext with the active key when it still uses an older
@@ -811,20 +843,20 @@ mod tests {
         let salt = std::fs::read(dir.join(".key.salt")).unwrap();
         assert_eq!(salt.len(), SALT_LENGTH);
         assert_ne!(salt, vec![0u8; SALT_LENGTH]);
-        // new installs record the fast work factor
+        // new installs record the current work factor
         let marker = std::fs::read_to_string(dir.join(KDF_MARKER_FILE)).unwrap();
-        assert_eq!(marker.trim(), KDF_MARKER_FAST);
+        assert_eq!(marker.trim(), KDF_MARKER_BALANCED);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn new_install_uses_the_fast_work_factor() {
+    fn new_install_uses_the_balanced_work_factor() {
         use scrypt::{Params, scrypt as scrypt_kdf};
-        let dir = scratch("fast-kdf");
+        let dir = scratch("balanced-kdf");
         let key = derive_key_from_passphrase_in(&dir, "hello world").unwrap();
         let salt = std::fs::read(dir.join(".key.salt")).unwrap();
 
-        let params = Params::new(SCRYPT_LOG_N_FAST, SCRYPT_R, SCRYPT_P).unwrap();
+        let params = Params::new(SCRYPT_LOG_N_BALANCED, SCRYPT_R, SCRYPT_P).unwrap();
         let mut expected = generate_key();
         scrypt_kdf(b"hello world", &salt, &params, &mut expected).unwrap();
         assert_eq!(key, expected.to_vec());
@@ -899,12 +931,12 @@ mod tests {
     fn restore_fallback_accepts_previous_work_factor_with_current_salt() {
         use scrypt::{Params, scrypt as scrypt_kdf};
         let dir = scratch("fallback-kdf");
-        // Force the fast (new) marker, but encrypt with the legacy work factor.
+        // Force the current marker, but encrypt with the legacy work factor.
         let salt = generate_key();
         write_secret_file(&dir.join(".key.salt"), &salt).unwrap();
         write_secret_file(
             &dir.join(KDF_MARKER_FILE),
-            format!("{KDF_MARKER_FAST}\n").as_bytes(),
+            format!("{KDF_MARKER_BALANCED}\n").as_bytes(),
         )
         .unwrap();
         let params = Params::new(SCRYPT_LOG_N_LEGACY, SCRYPT_R, SCRYPT_P).unwrap();
@@ -920,6 +952,28 @@ mod tests {
     }
 
     #[test]
+    fn restore_fallback_accepts_fast_work_factor_after_second_rekey() {
+        use scrypt::{Params, scrypt as scrypt_kdf};
+        let dir = scratch("fallback-fast");
+        let salt = generate_key();
+        write_secret_file(&dir.join(".key.salt"), &salt).unwrap();
+        write_secret_file(
+            &dir.join(KDF_MARKER_FILE),
+            format!("{KDF_MARKER_BALANCED}\n").as_bytes(),
+        )
+        .unwrap();
+        let params = Params::new(SCRYPT_LOG_N_FAST, SCRYPT_R, SCRYPT_P).unwrap();
+        let mut fast_key = generate_key();
+        scrypt_kdf(b"hello world", &salt, &params, &mut fast_key).unwrap();
+        let sealed = encrypt_buffer(&fast_key, b"fast backup");
+
+        let active = derive_key_from_passphrase_in(&dir, "hello world").unwrap();
+        let plain = decrypt_with_fallback_in(&dir, "hello world", &sealed, &active).unwrap();
+        assert_eq!(plain.as_deref(), Some(b"fast backup".as_slice()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn rekey_rewrites_old_ciphertext_for_the_active_key() {
         let dir = scratch("rekey-ciphertext");
         let salt = generate_key();
@@ -928,8 +982,8 @@ mod tests {
 
         let legacy = derive_cached(&dir, "hello world", &salt, KdfVersion::Legacy).unwrap();
         let sealed = encrypt_buffer(&legacy, b"payload");
-        set_kdf_version_in(&dir, KdfVersion::Fast).unwrap();
-        let active = derive_cached(&dir, "hello world", &salt, KdfVersion::Fast).unwrap();
+        set_kdf_version_in(&dir, KdfVersion::Balanced).unwrap();
+        let active = derive_cached(&dir, "hello world", &salt, KdfVersion::Balanced).unwrap();
 
         let rekeyed = rekey_ciphertext_in(&dir, "hello world", &active, &sealed)
             .unwrap()
@@ -948,7 +1002,7 @@ mod tests {
         use scrypt::{Params, scrypt as scrypt_kdf};
         let dir = scratch("fallback-presalt");
         std::fs::write(dir.join("subtrack.db"), b"existing").unwrap();
-        write_secret_file(&dir.join(KDF_MARKER_FILE), b"2\n").unwrap();
+        write_secret_file(&dir.join(KDF_MARKER_FILE), KDF_MARKER_BALANCED.as_bytes()).unwrap();
 
         let params = Params::new(SCRYPT_LOG_N_LEGACY, SCRYPT_R, SCRYPT_P).unwrap();
         let mut legacy = generate_key();
