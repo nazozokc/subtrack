@@ -75,7 +75,7 @@ SUBTRACK_BENCH_COUNT=1000 scripts/bench.sh
 
 `SUBTRACK_BENCH_RUNS`, `SUBTRACK_TODAY`, `SUBTRACK_BIN`, and `SUBTRACK_BENCH_KEEP=1` (keep fixtures) are also supported. The Legacy fixture intentionally takes ~4x longer to populate because it derives the scrypt key with `N=2^17`.
 
-Baseline on commit `7d659ba` (100 subscriptions, warm runs; the rekeyed row was measured after Phase 1):
+Baseline on commit `7d659ba37d45f4c4809df2616ad396d69682a653` (100 subscriptions, warm runs; the rekeyed row was measured after Phase 1):
 
 | Scenario | `list --json` | `report --json` |
 | --- | ---: | ---: |
