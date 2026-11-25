@@ -56,6 +56,72 @@ fn out(text: &str) {
     let _ = handle.flush();
 }
 
+/// Cursor control is for real terminals only. `SUBTRACK_ASSUME_TTY` makes
+/// prompts run with piped answers in tests; those byte streams must stay
+/// plain, or the smoke snapshots would fill up with escape codes.
+fn cursor_control() -> bool {
+    io::stdin().is_terminal() && crate::ui::is_stdout_tty()
+}
+
+/// Erase `lines` already-drawn prompt lines and leave the cursor where the
+/// first line started. Called before redrawing or after a choice is made so
+/// spent selection screens do not pile up in the console.
+fn clear_lines(lines: usize) {
+    if cursor_control() {
+        crate::flush();
+        let stdout = io::stdout();
+        let mut handle = stdout.lock();
+        let _ = write_clear(&mut handle, lines);
+    }
+}
+
+fn write_clear(writer: &mut impl Write, lines: usize) -> io::Result<()> {
+    if lines == 0 {
+        return Ok(());
+    }
+    writer.write_all(format!("\x1b[{lines}A\x1b[0J").as_bytes())?;
+    writer.flush()
+}
+
+/// Approximate terminal columns (CJK/fullwidth chars take two) so a drawn
+/// frame never wraps: a wrapped logical line would break the cursor-up count.
+fn char_width(c: char) -> usize {
+    let n = c as u32;
+    if (0x300..=0x36f).contains(&n) || (0x7f..0xa0).contains(&n) {
+        return 0;
+    }
+    if matches!(
+        n,
+        0x1100..=0x115f
+            | 0x2e80..=0xa4cf
+            | 0xac00..=0xd7a3
+            | 0xf900..=0xfaff
+            | 0xfe10..=0xfe19
+            | 0xfe30..=0xfe6f
+            | 0xff00..=0xff60
+            | 0xffe0..=0xffe6
+            | 0x1f300..=0x1faff
+    ) {
+        2
+    } else {
+        1
+    }
+}
+
+fn truncate_to_width(text: &str, max: usize) -> String {
+    let mut out = String::new();
+    let mut width = 0;
+    for c in text.chars() {
+        let w = char_width(c);
+        if width + w > max {
+            break;
+        }
+        out.push(c);
+        width += w;
+    }
+    out
+}
+
 fn ask(message: &str) -> Option<String> {
     out(&format!("{} {} \u{203a} ", ansi::cyan("?"), tr(message)));
     let mut line = String::new();
@@ -102,7 +168,11 @@ fn cancel(message: &str) {
 /// the question leaves the default discoverable without scanning list text.
 /// `visible` holds indices into `choices`; `highlight` is a position in
 /// `visible`, so filtered lists can be renumbered from 1.
-fn render_numbered_choices(choices: &[Choice], visible: &[usize], highlight: Option<usize>) {
+fn render_numbered_choices(
+    choices: &[Choice],
+    visible: &[usize],
+    highlight: Option<usize>,
+) -> usize {
     let number_width = visible.len().to_string().len();
     for (position, &index) in visible.iter().enumerate() {
         let choice = &choices[index];
@@ -112,10 +182,17 @@ fn render_numbered_choices(choices: &[Choice], visible: &[usize], highlight: Opt
         } else {
             "  ".to_string()
         };
-        let label = if is_pointer {
-            ansi::bold(&choice.label)
+        let plain_label = if cursor_control() {
+            let available =
+                (crate::ui::term_width().max(20) as usize).saturating_sub(number_width + 7);
+            truncate_to_width(&choice.label, available)
         } else {
             choice.label.clone()
+        };
+        let label = if is_pointer {
+            ansi::bold(&plain_label)
+        } else {
+            plain_label
         };
         let number = format!(
             "{number:>width$}",
@@ -124,12 +201,13 @@ fn render_numbered_choices(choices: &[Choice], visible: &[usize], highlight: Opt
         );
         out(&format!("{gutter}{}) {}\n", ansi::dim(&number), label));
     }
+    visible.len()
 }
 
 /// Full list used by `checkbox` (short lists: subscriptions, trials, fields).
-fn render_choices(choices: &[Choice], highlight: Option<usize>) {
+fn render_choices(choices: &[Choice], highlight: Option<usize>) -> usize {
     let indices: Vec<usize> = (0..choices.len()).collect();
-    render_numbered_choices(choices, &indices, highlight);
+    render_numbered_choices(choices, &indices, highlight)
 }
 
 /// Render the (possibly filtered, capped) choices used by `select`.
@@ -138,18 +216,22 @@ fn render_select_choices(
     visible: &[usize],
     highlight: Option<usize>,
     filtered: bool,
-) {
+) -> usize {
     let shown = visible.len().min(MAX_VISIBLE_CHOICES);
     render_numbered_choices(choices, &visible[..shown], highlight);
+    let mut lines = shown;
     if visible.len() > MAX_VISIBLE_CHOICES {
         out(&format!(
             "  … {} more — type to narrow down\n",
             visible.len() - MAX_VISIBLE_CHOICES
         ));
+        lines += 1;
     }
     if filtered && visible.len() <= MAX_VISIBLE_CHOICES {
         out(&format!("  ({} matching)\n", visible.len()));
+        lines += 1;
     }
+    lines
 }
 
 /// Prompt for a line of text.
@@ -259,8 +341,13 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
     }
 
     let mut filter: Option<String> = None;
+    // Lines written by the current frame (choice list, question, error line).
+    // They are erased before a redraw and once a choice is made.
+    let mut drawn: usize = 0;
 
     loop {
+        clear_lines(drawn);
+
         let visible: Vec<usize> = match &filter {
             Some(needle) => choices
                 .iter()
@@ -273,6 +360,7 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
         if visible.is_empty() {
             filter = None;
             cancel("No matches — showing all choices");
+            drawn = 1;
             continue;
         }
 
@@ -281,7 +369,8 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
         } else {
             None
         };
-        render_select_choices(choices, &visible, highlight, filter.is_some());
+        // The answer line is echoed by the terminal when Enter is pressed.
+        drawn = render_select_choices(choices, &visible, highlight, filter.is_some()) + 1;
 
         let hint = match &filter {
             Some(needle) => format!(
@@ -300,8 +389,22 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
                 None => format!("{} [1-{}] (type to filter)", message, choices.len()),
             },
         };
+        // Leave room for "?  › " plus a short answer so the question stays on
+        // one physical line; wrapped lines would defeat the cursor-up count.
+        let hint = if cursor_control() {
+            let available = (crate::ui::term_width().max(20) as usize).saturating_sub(12);
+            truncate_to_width(&hint, available)
+        } else {
+            hint
+        };
 
-        let answer = ask(&hint)?;
+        let answer = match ask(&hint) {
+            Some(answer) => answer,
+            None => {
+                clear_lines(drawn);
+                return None;
+            }
+        };
         let trimmed = answer.trim();
 
         if trimmed.is_empty() {
@@ -310,26 +413,33 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
                 continue;
             }
             if let Some(i) = highlight {
+                clear_lines(drawn);
                 finish(message, &choices[i].label);
                 return Some(choices[i].value.clone());
             }
+            clear_lines(drawn);
             cancel("Please choose a number");
+            drawn = 1;
             continue;
         }
 
         if let Ok(number) = trimmed.parse::<usize>() {
             if let Some(&index) = visible.get(number.saturating_sub(1)) {
                 let choice = &choices[index];
+                clear_lines(drawn);
                 finish(message, &choice.label);
                 return Some(choice.value.clone());
             }
+            clear_lines(drawn);
             cancel("Invalid choice");
+            drawn = 1;
             continue;
         }
 
         let needle = trimmed.to_lowercase();
         if let Some(index) = choices.iter().position(|c| choice_equals(c, &needle)) {
             let choice = &choices[index];
+            clear_lines(drawn);
             finish(message, &choice.label);
             return Some(choice.value.clone());
         }
@@ -343,11 +453,16 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
         match matches.len() {
             1 => {
                 let choice = &choices[matches[0]];
+                clear_lines(drawn);
                 finish(message, &choice.label);
                 return Some(choice.value.clone());
             }
             n if n > 1 => filter = Some(needle),
-            _ => cancel("Invalid choice"),
+            _ => {
+                clear_lines(drawn);
+                cancel("Invalid choice");
+                drawn = 1;
+            }
         }
     }
 }
@@ -489,4 +604,29 @@ pub fn pick_subscription(
     }
     let value = select(message, &choices, None)?;
     value.parse::<i64>().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{truncate_to_width, write_clear};
+
+    #[test]
+    fn clear_sequence_erases_the_drawn_frame() {
+        let mut buffer = Vec::new();
+        write_clear(&mut buffer, 12).unwrap();
+        assert_eq!(buffer, b"\x1b[12A\x1b[0J");
+    }
+
+    #[test]
+    fn clear_sequence_is_empty_without_a_frame() {
+        let mut buffer = Vec::new();
+        write_clear(&mut buffer, 0).unwrap();
+        assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn truncation_counts_fullwidth_characters_as_two_columns() {
+        assert_eq!(truncate_to_width("abcde", 3), "abc");
+        assert_eq!(truncate_to_width("日ab", 3), "日a");
+    }
 }
