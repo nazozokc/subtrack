@@ -43,11 +43,11 @@ jobs:
             platform: linux
             arch: arm64
             target: aarch64-unknown-linux-musl
-          - os: macos-14
+          - os: macos-15
             platform: darwin
             arch: arm64
             target: aarch64-apple-darwin
-          - os: macos-14
+          - os: macos-15
             platform: darwin
             arch: x64
             target: x86_64-apple-darwin
