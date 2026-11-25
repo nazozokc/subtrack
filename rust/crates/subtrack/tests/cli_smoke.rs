@@ -669,6 +669,9 @@ fn bare_invocation_shows_menu() {
         "output: {text}"
     );
     assert!(text.contains("Netflix"), "output: {text}");
+    // Cursor control belongs to real terminals only; piped answers must stay
+    // byte-stable even with SUBTRACK_ASSUME_TTY forcing the interactive path.
+    assert!(!text.contains("\x1b[0J"), "output: {text}");
 }
 
 #[test]
