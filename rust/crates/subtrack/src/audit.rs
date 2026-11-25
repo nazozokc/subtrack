@@ -269,7 +269,7 @@ fn run_audit_prune(parsed: &ParsedArgs) -> i32 {
             if count != 1 { "ies" } else { "y" },
             days
         ));
-        return 0;
+        return 1;
     }
     let conn = match db::open_db() {
         Ok(c) => c,

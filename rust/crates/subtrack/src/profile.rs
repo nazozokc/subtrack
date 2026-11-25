@@ -311,7 +311,9 @@ pub fn run_profile_delete(parsed: &ParsedArgs) -> i32 {
         logger::fail(&format!("Profile \"{}\" not found", name));
         return 1;
     }
-    if crate::prompt::confirm(&format!("Delete profile \"{}\"?", name), false) != Some(true) {
+    if !parsed.flag("force")
+        && crate::prompt::confirm(&format!("Delete profile \"{}\"?", name), false) != Some(true)
+    {
         logger::info("Cancelled");
         return 0;
     }

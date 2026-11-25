@@ -40,6 +40,14 @@ fn is_long_option_and_value(arg: &str) -> bool {
     !s.is_empty() && s.chars().skip(1).any(|c| c == '=')
 }
 
+/// Negative numbers are values, never short-option groups (`-5`, `-12.5`).
+fn is_negative_number(arg: &str) -> bool {
+    let Some(rest) = arg.strip_prefix('-') else {
+        return false;
+    };
+    rest.starts_with(|c: char| c.is_ascii_digit()) && rest.parse::<f64>().is_ok()
+}
+
 /// Split argv into tokens (port of tokenize).
 pub fn tokenize(argv: &[String]) -> Vec<Token> {
     let mut tokens: Vec<Token> = Vec::new();
@@ -56,6 +64,10 @@ pub fn tokenize(argv: &[String]) -> Vec<Token> {
         if arg == "--" {
             tokens.push(Token::Terminator);
             terminated = true;
+            continue;
+        }
+        if is_negative_number(&arg) {
+            tokens.push(Token::Positional { value: arg });
             continue;
         }
         if is_short_option(&arg) {

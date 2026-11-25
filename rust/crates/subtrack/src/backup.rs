@@ -29,6 +29,37 @@ fn basename(path: &std::path::Path) -> String {
         .unwrap_or_default()
 }
 
+/// Avoid same-second filename collisions (`subtrack_...`, `subtrack_...-2`, …).
+fn unique_path(path: &std::path::Path) -> PathBuf {
+    if !path.exists() {
+        return path.to_path_buf();
+    }
+
+    let name = basename(path);
+    let (prefix, suffix) = if let Some(i) = name.find(".db") {
+        (name[..i].to_string(), name[i..].to_string())
+    } else {
+        let p = std::path::Path::new(&name);
+        let stem = p
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let ext = p
+            .extension()
+            .map(|e| format!(".{}", e.to_string_lossy()))
+            .unwrap_or_default();
+        (stem, ext)
+    };
+
+    for seq in 2..u32::MAX {
+        let candidate = path.with_file_name(format!("{}-{}{}", prefix, seq, suffix));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    path.to_path_buf()
+}
+
 /// Compress the current DB and write it (exclusive create). Returns success.
 fn write_compressed_backup(dest: &std::path::Path, encrypt: bool) -> bool {
     let conn = match crate::db::open_db() {
@@ -115,7 +146,8 @@ pub fn create_safety_backup(reason: &str, log: bool) -> bool {
     let ts = timestamp();
     let encrypt = crate::crypto::has_encryption_key();
     let ext = if encrypt { ".db.enc" } else { ".db.gz" };
-    let dest = backup_dir.join(format!("subtrack_{}_before_{}{}", ts, reason, ext));
+    let base = backup_dir.join(format!("subtrack_{}_before_{}{}", ts, reason, ext));
+    let dest = unique_path(&base);
 
     if !write_compressed_backup(&dest, encrypt) {
         return false;
@@ -211,11 +243,12 @@ pub fn run_backup(parsed: &ParsedArgs) -> i32 {
     }
 
     let ts = timestamp();
-    let dest_path = if encrypt {
+    let base_path = if encrypt {
         dest.join(format!("subtrack_{}.db.enc", ts))
     } else {
         dest.join(format!("subtrack_{}.db.gz", ts))
     };
+    let dest_path = unique_path(&base_path);
 
     if write_compressed_backup(&dest_path, encrypt) {
         logger::success(&format!(
@@ -325,4 +358,35 @@ pub fn get_backup_files(dir: &std::path::Path) -> Vec<BackupFileInfo> {
     }
     out.sort_by(|a, b| b.name.cmp(&a.name));
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unique_path_adds_sequence_before_db_extension() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .subsec_nanos();
+        let dir = std::env::temp_dir().join(format!("subtrack-backup-seq-{nanos}"));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let base = dir.join("subtrack_20261125_090252.db.gz");
+        std::fs::write(&base, b"one").unwrap();
+        assert_eq!(
+            basename(&unique_path(&base)),
+            "subtrack_20261125_090252-2.db.gz"
+        );
+
+        let second = unique_path(&base);
+        std::fs::write(&second, b"two").unwrap();
+        assert_eq!(
+            basename(&unique_path(&base)),
+            "subtrack_20261125_090252-3.db.gz"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -433,6 +433,8 @@ fn version_and_help_output() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("USAGE"), "help: {stdout}");
     assert!(stdout.contains("subtrack"), "help: {stdout}");
+    assert!(stdout.contains("[OPTIONS]"), "help: {stdout}");
+    assert!(!stdout.contains("<OPTIONS>"), "help: {stdout}");
 }
 
 #[test]
@@ -451,6 +453,16 @@ fn mcp_tools_list_probe() {
     assert!(stdout.contains("\"tools\""), "mcp output: {stdout}");
     assert!(stdout.contains("list_subscriptions"), "mcp tool: {stdout}");
     assert!(stdout.contains("subtrack-mcp"), "mcp server info: {stdout}");
+}
+
+#[test]
+fn mcp_help_prints_usage_without_starting_server() {
+    let env = Env::new("mcp-help");
+    let out = env.run(&["mcp", "--help"]);
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("USAGE"), "mcp help: {stdout}");
+    assert!(stdout.contains("mcp"), "mcp help: {stdout}");
 }
 
 #[test]
@@ -1293,5 +1305,139 @@ fn expense_add_rejects_unknown_currency() {
     assert_eq!(
         expense_json(&env, &["expense", "list", "--json"]),
         serde_json::json!([])
+    );
+}
+
+#[test]
+fn expense_rejects_negative_amount_as_value_error() {
+    let env = Env::new("expense-negative-amount");
+    let out = env.run(&[
+        "expense",
+        "add",
+        "--date",
+        TODAY,
+        "--amount",
+        "-5",
+        "--currency",
+        "USD",
+        "--category",
+        "food",
+        "--method",
+        "card",
+    ]);
+    assert_eq!(out.status.code(), Some(1));
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        text.contains("Amount must be greater than 0"),
+        "negative amount: {text}"
+    );
+    assert!(!text.contains("Unknown option"), "negative amount: {text}");
+}
+
+#[test]
+fn expense_item_edit_without_changes_fails() {
+    let env = Env::new("expense-noop-edit");
+    let add = env.run(&[
+        "expense",
+        "add",
+        "--date",
+        TODAY,
+        "--amount",
+        "1200",
+        "--currency",
+        "JPY",
+        "--category",
+        "food",
+        "--method",
+        "cash",
+    ]);
+    assert!(add.status.success(), "add failed");
+
+    let no_flags = env.run(&["expense", "item", "edit", TODAY, "1"]);
+    assert_eq!(no_flags.status.code(), Some(1));
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&no_flags.stdout),
+        String::from_utf8_lossy(&no_flags.stderr)
+    );
+    assert!(text.contains("No changes found"), "no-op edit: {text}");
+
+    let same_value = env.run(&["expense", "item", "edit", TODAY, "1", "--amount", "1200"]);
+    assert_eq!(same_value.status.code(), Some(1));
+}
+
+#[test]
+fn profile_and_template_delete_accept_force() {
+    let env = Env::new("force-delete");
+
+    assert!(env.run(&["profile", "save", "demo"]).status.success());
+    let profile = env.run(&["profile", "delete", "demo", "--force"]);
+    assert_eq!(profile.status.code(), Some(0));
+    assert!(!env.text(&["profile", "list"]).contains("demo"));
+
+    let template = env.run(&[
+        "template",
+        "add",
+        "tmp",
+        "--price",
+        "10",
+        "--currency",
+        "USD",
+        "--cycle",
+        "monthly",
+    ]);
+    assert!(template.status.success(), "template add failed");
+    let deleted = env.run(&["template", "delete", "tmp", "--force"]);
+    assert_eq!(deleted.status.code(), Some(0));
+    assert!(!env.text(&["template", "list"]).contains("tmp"));
+}
+
+#[test]
+fn audit_prune_abort_exits_nonzero() {
+    let env = Env::new("audit-prune-abort");
+    seed(&env);
+    // The audit log uses wall-clock timestamps; give `days=0` a strictly
+    // older entry without touching production time.
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+    let out = env.run(&["audit", "prune", "--days", "0"]);
+    assert_eq!(out.status.code(), Some(1));
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        text.contains("Use --force to proceed"),
+        "audit prune: {text}"
+    );
+}
+
+#[test]
+fn backup_twice_in_same_second_uses_unique_names() {
+    let env = Env::new("backup-twice");
+    let dir = env.dir.join("backups");
+    let dir_s = dir.to_string_lossy();
+    let args = vec!["backup", dir_s.as_ref()];
+
+    assert!(env.run(&args).status.success());
+    assert!(env.run(&args).status.success());
+
+    let names: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.ends_with(".db.gz"))
+        .collect();
+    assert_eq!(names.len(), 2, "backups: {names:?}");
+    let unique: std::collections::BTreeSet<&String> = names.iter().collect();
+    assert_eq!(
+        unique.len(),
+        2,
+        "backups must have distinct names: {names:?}"
     );
 }

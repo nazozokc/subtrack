@@ -81,6 +81,14 @@ fn tokenize_expands_short_groups_in_order() {
 }
 
 #[test]
+fn tokenize_keeps_negative_numbers_as_values() {
+    let t = tokenize(&argv(&["-5", "-12.5", "-x"]));
+    assert!(matches!(&t[0], Token::Positional { value } if value == "-5"));
+    assert!(matches!(&t[1], Token::Positional { value } if value == "-12.5"));
+    assert!(matches!(&t[2], Token::Option { name, .. } if name == "x"));
+}
+
+#[test]
 fn tokenize_keeps_inline_short_value() {
     let t = tokenize(&argv(&["-x=v"]));
     assert!(matches!(
@@ -148,6 +156,18 @@ fn resolve_maps_kebab_long_and_short_values() {
 
     // boolean without value → true
     assert_eq!(r.values.get("json"), Some(&ArgValue::Bool(true)));
+}
+
+#[test]
+fn resolve_attaches_negative_number_to_string_option() {
+    let specs = [spec("amount", ArgKind::String, None)];
+    let r = resolve_args(&argv(&["--amount", "-5"]), &specs, 0, true, true);
+    assert!(r.errors.is_empty());
+    assert_eq!(r.values.get("amount"), Some(&ArgValue::Str("-5".into())));
+
+    let r = resolve_args(&argv(&["--amount=-12.5"]), &specs, 0, true, true);
+    assert!(r.errors.is_empty());
+    assert_eq!(r.values.get("amount"), Some(&ArgValue::Str("-12.5".into())));
 }
 
 #[test]
