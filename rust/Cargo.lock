@@ -692,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "subtrack"
-version = "12.0.0"
+version = "13.0.0"
 dependencies = [
  "chrono",
  "flate2",
@@ -710,14 +710,14 @@ dependencies = [
 
 [[package]]
 name = "subtrack-commands"
-version = "12.0.0"
+version = "13.0.0"
 dependencies = [
  "subtrack-core",
 ]
 
 [[package]]
 name = "subtrack-config"
-version = "12.0.0"
+version = "13.0.0"
 dependencies = [
  "serde_json",
  "subtrack-core",
@@ -727,7 +727,7 @@ dependencies = [
 
 [[package]]
 name = "subtrack-core"
-version = "12.0.0"
+version = "13.0.0"
 dependencies = [
  "aes-gcm",
  "chrono",
@@ -743,7 +743,7 @@ dependencies = [
 
 [[package]]
 name = "subtrack-db"
-version = "12.0.0"
+version = "13.0.0"
 dependencies = [
  "chrono",
  "flate2",
@@ -754,7 +754,7 @@ dependencies = [
 
 [[package]]
 name = "subtrack-mcp"
-version = "12.0.0"
+version = "13.0.0"
 dependencies = [
  "chrono",
  "serde_json",
@@ -764,7 +764,7 @@ dependencies = [
 
 [[package]]
 name = "subtrack-ui"
-version = "12.0.0"
+version = "13.0.0"
 dependencies = [
  "subtrack-core",
 ]

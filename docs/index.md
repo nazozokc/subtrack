@@ -22,7 +22,7 @@ features:
   - title: Local & private
     details: All data stays on your machine in a single SQLite file. No servers, no accounts, no telemetry.
   - title: Multi-currency
-    details: Track subscriptions in any ISO 4217 currency and view totals in 37 common currencies with live exchange rates.
+    details: Track subscriptions in any ISO 4217 currency and view totals in 37 common currencies with embedded exchange rates.
   - title: Automation ready
     details: JSON output, predictable exit codes, and a built-in MCP server for AI assistants and other tools.
 ---

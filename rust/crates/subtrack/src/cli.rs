@@ -72,7 +72,12 @@ fn is_standalone_version(args: &[String]) -> bool {
 /// named "json"/"j" (short groups and `--flag=value` collapse via tokenize).
 fn should_suppress_usage(args: &[String]) -> bool {
     if args.first().map(|s| s.as_str()) == Some("mcp") {
-        return true;
+        // MCP stdio transport must stay silent, but explicit help/version
+        // requests are interactive and should print normally.
+        let explicit_meta = args
+            .iter()
+            .any(|a| matches!(a.as_str(), "-h" | "--help" | "-v" | "--version"));
+        return !explicit_meta;
     }
     tokenize(args).iter().any(|t| match t {
         Token::Option { name, .. } => name == "json" || name == "j",

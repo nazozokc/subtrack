@@ -114,7 +114,7 @@ fn generate_positional_symbols(args: &[ArgSpec]) -> String {
 
 fn generate_options_symbols(args: &[ArgSpec]) -> &'static str {
     if has_optional_args(args) {
-        "<OPTIONS>"
+        "[OPTIONS]"
     } else {
         ""
     }

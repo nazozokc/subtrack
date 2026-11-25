@@ -683,6 +683,14 @@ pub fn run_expense_item_delete(parsed: &ParsedArgs) -> i32 {
     }
 }
 
+fn item_has_changes(current: &ExpenseItem, updated: &ExpenseItem) -> bool {
+    current.amount != updated.amount
+        || current.currency != updated.currency
+        || current.category != updated.category
+        || current.method != updated.method
+        || current.note != updated.note
+}
+
 pub fn run_expense_item_edit(parsed: &ParsedArgs) -> i32 {
     let Some(selector) = parsed.str("day") else {
         return fail("Specify a day ID or date");
@@ -730,6 +738,9 @@ pub fn run_expense_item_edit(parsed: &ParsedArgs) -> i32 {
     } else if let Some(raw) = parsed.str("note") {
         updated.note = normalize_note(&raw);
     }
+    if !item_has_changes(&current, &updated) {
+        return fail(&t("No changes found"));
+    }
     match update_expense_item(&selector, item_id, &updated) {
         Ok(true) => {
             logger::success(&t("Expense item updated"));
@@ -751,6 +762,27 @@ mod tests {
         assert!(parse_amount("100000000").is_err());
         assert_eq!(normalize_currency(" jpy ").unwrap(), "JPY");
         assert!(normalize_currency("JP").is_err());
+    }
+
+    #[test]
+    fn item_has_changes_detects_only_real_edits() {
+        let item = ExpenseItem {
+            id: 1,
+            amount: 12.5,
+            currency: "USD".to_string(),
+            category: "food".to_string(),
+            method: "card".to_string(),
+            note: Some("lunch".to_string()),
+        };
+        let mut same = item.clone();
+        assert!(!item_has_changes(&item, &same));
+
+        same.note = None;
+        assert!(item_has_changes(&item, &same));
+
+        let mut same = item.clone();
+        same.amount = 13.0;
+        assert!(item_has_changes(&item, &same));
     }
 
     #[test]

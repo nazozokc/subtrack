@@ -1,5 +1,24 @@
 # Changelog
 
+## 13.0.0 (unreleased)
+
+### ✨ Features
+
+- `-f, --force` added to `profile delete` and `template delete` for scripted cleanup.
+
+### 🐛 Bug Fixes
+
+- Accept negative numeric values such as `--amount -5` / `--days -1`; the parser now treats them as values so validation reports the real error instead of `Unknown option`.
+- `expense item edit` now fails with `No changes found` when a no-op edit is requested.
+- `audit prune --days 0` without `--force` now exits with code 1 when it refuses to proceed.
+- `mcp --help` and `mcp --version` now print help/version while plain `subtrack mcp` stays silent for JSON-RPC stdio.
+- Same-second backups no longer overwrite earlier files; a `-2`, `-3`, … suffix is added before `.db`.
+- Help output now uses `[OPTIONS]` instead of `<OPTIONS>` for optional flags.
+
+### 📝 Documentation
+
+- Correct currency conversion docs: the Rust CLI uses embedded exchange rates and makes no FX network requests.
+
 ## 10.0.0 (unreleased)
 
 ### ✨ Features

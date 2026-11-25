@@ -102,7 +102,7 @@ Lists all subscriptions in a formatted table. Subscriptions are grouped by curre
 
 | Option | Description |
 |--------|-------------|
-| `-c, --currency <C>` | Convert all prices to the given currency using live exchange rates |
+| `-c, --currency <C>` | Convert all prices to the given currency using embedded exchange rates |
 | `--sort <field>` | Sort by field: `name`, `price`, `currency`, `cycle`, `status`, `id` (default) |
 | `-d, --desc` | Sort in descending order (use with `--sort`) |
 | `-a, --api` | Include LLM API usage costs for the current month |
@@ -165,7 +165,7 @@ subtrack list --json
 subtrack list --include-archived
 ```
 
-When `--currency` is used, all prices are converted to the target currency (fetched from [open.er-api.com](https://open.er-api.com)) and displayed as a single group with a grand total.
+When `--currency` is used, all prices are converted to the target currency using the rates embedded in the binary and displayed as a single group with a grand total.
 
 When `--api` is used, LLM API usage costs for the current month are fetched from the `llm_usage` table and displayed in a separate table below the subscription list, including a provider breakdown.
 
@@ -479,7 +479,7 @@ The `period` argument defaults to `monthly`. Valid values:
 
 | Option | Description |
 |--------|-------------|
-| `-c, --currency <C>` | Convert all prices to the given currency using live exchange rates |
+| `-c, --currency <C>` | Convert all prices to the given currency using embedded exchange rates |
 | `-a, --api` | Include LLM API usage costs in the total |
 | `-m, --method` | Group by payment method |
 | `-j, --json` | Output as JSON |
@@ -513,7 +513,7 @@ When `--currency` is used, the total is displayed as a single amount in the targ
 
 When `--api` is used, API usage costs for the current period are fetched from the `llm_usage` table and added to the subscription totals. API costs are stored in USD cents and are shown both individually and as part of the grand total.
 
-If exchange rates cannot be fetched (e.g. offline), the command falls back to per-currency display without conversion.
+If a currency has no embedded exchange rate, that amount stays in its original currency instead of being converted.
 
 ### `expense`
 

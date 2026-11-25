@@ -84,7 +84,9 @@ pub fn run_template_delete(parsed: &ParsedArgs) -> i32 {
         logger::fail(&format!("Template not found: {}", name));
         return 1;
     }
-    if crate::prompt::confirm(&format!("Delete template \"{}\"?", name), false) != Some(true) {
+    if !parsed.flag("force")
+        && crate::prompt::confirm(&format!("Delete template \"{}\"?", name), false) != Some(true)
+    {
         logger::info("Cancelled");
         return 0;
     }

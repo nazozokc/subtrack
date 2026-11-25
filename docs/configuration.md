@@ -143,7 +143,7 @@ subtrack does not use configuration files (`.subtrackrc`, `subtrack.json`, etc.)
 
 ### Supported currencies (37)
 
-The curated list contains 37 currencies — view it with `subtrack currency`. The `--currency` flag accepts any valid ISO 4217 3-letter code supported by [open.er-api.com](https://open.er-api.com).
+The curated list contains 37 currencies with exchange rates embedded in the binary — view it with `subtrack currency`. The `--currency` flag accepts any valid ISO 4217 3-letter code; codes without an embedded rate are left unconverted.
 
 ```
 AED  ARS  AUD  BRL  CAD  CHF  CLP  CNY  COP  CZK

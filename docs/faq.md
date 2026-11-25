@@ -52,7 +52,7 @@ Ensure no subtrack processes are running during the restore — the database is 
 
 ### Is my data sent anywhere?
 
-**No.** All data is stored locally in a SQLite file on your machine. There are no accounts, no telemetry, and no cloud sync. The only external request subtrack makes is to [open.er-api.com](https://open.er-api.com) for currency exchange rates — and only when you use the `--currency` flag.
+**No.** All subscription data is stored locally in a SQLite file on your machine. There are no accounts, no telemetry, and no cloud sync. Currency conversion uses rates embedded in the binary, so `--currency` makes no network request. `subtrack usage refresh` fetches public [LiteLLM](https://github.com/BerriAI/litellm) pricing data, but it does not upload your data.
 
 ### Is the database encrypted?
 
@@ -92,9 +92,9 @@ Check `subtrack <command> --help` for the authoritative list.
 
 ### Does subtrack work offline?
 
-Yes. Listing, adding, editing, deleting, importing, exporting, and filtering all work fully offline. The only feature that requires internet is `--currency` conversion, which fetches live exchange rates from [open.er-api.com](https://open.er-api.com).
+Yes. Listing, adding, editing, deleting, importing, exporting, filtering, and `--currency` conversion all work fully offline because exchange rates are embedded in the binary.
 
-When offline, `--currency` falls back to per-currency display without conversion.
+`subtrack usage refresh` is the only command that needs the internet: it refreshes the local LiteLLM pricing cache.
 
 ### Can I use subtrack in Docker or CI?
 
@@ -164,7 +164,7 @@ Currencies, analytics, budgets, forecasts, and notifications.
 
 ### Can I add support for more currencies?
 
-The `Currency` type now accepts any ISO 4217 3-letter code, so all currencies supported by [open.er-api.com](https://open.er-api.com) work out of the box. Run `subtrack currency` for the curated list of 37 commonly used currencies. If you need a currency not in the list, use the `--currency` flag directly with any valid code.
+The `Currency` type accepts any ISO 4217 3-letter code. Run `subtrack currency` for the 37 currencies with embedded exchange rates. If you use a code without an embedded rate, its subscriptions are kept in their original currency instead of being converted.
 
 ### How many currencies does subtrack support?
 

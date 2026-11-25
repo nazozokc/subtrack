@@ -72,7 +72,7 @@ static JA: &[(&str, &str)] = &[
     ("ARGUMENTS:", "引数:"),
     ("OPTIONS:", "オプション:"),
     ("[COMMANDS]", "[コマンド]"),
-    ("<OPTIONS>", "<オプション>"),
+    ("[OPTIONS]", "[オプション]"),
     (
         "For more info, run any command with the `--help` flag:",
         "詳細は各コマンドを `--help` 付きで実行してください:",
