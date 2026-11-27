@@ -251,7 +251,20 @@ jobs:
         with:
           path: ./
           artifact-name: subtrack-sbom-${{ steps.version.outputs.version || 'dev' }}
+          output-file: subtrack-sbom-${{ steps.version.outputs.version || 'dev' }}.spdx.json
           format: spdx-json
+          # The action's release attachment path re-downloads the artifact
+          # through the legacy REST API, which returns 404 for artifacts
+          # uploaded by actions/upload-artifact v7. Upload the local file below.
+          upload-release-assets: false
+
+      - name: Attach SBOM to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          SBOM_FILE: subtrack-sbom-${{ steps.version.outputs.version || 'dev' }}.spdx.json
+        run: gh release upload "$RELEASE_TAG" "$SBOM_FILE" --clobber
 
       - name: Dry run publish
         if: github.event_name == 'release' || inputs.dry-run == true
