@@ -9,7 +9,7 @@
 //! banner and any content printed before the question is visible before the
 //! user is asked to type.
 
-use std::io::{self, BufRead, IsTerminal, Write};
+use std::io::{self, BufRead, IsTerminal, Read, Write};
 
 use crate::ansi;
 use crate::i18n::tr;
@@ -61,6 +61,10 @@ fn out(text: &str) {
 /// plain, or the smoke snapshots would fill up with escape codes.
 fn cursor_control() -> bool {
     io::stdin().is_terminal() && crate::ui::is_stdout_tty()
+}
+
+fn arrow_mode() -> bool {
+    interactive() && cursor_control()
 }
 
 /// Erase `lines` already-drawn prompt lines and leave the cursor where the
@@ -159,6 +163,116 @@ fn finish(message: &str, value: &str) {
 
 fn cancel(message: &str) {
     out(&format!("{} {}\n", ansi::red("\u{2716}"), tr(message)));
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Key {
+    Up,
+    Down,
+    Left,
+    Right,
+    Enter,
+    Esc,
+    Space,
+    Backspace,
+    CtrlC,
+    CtrlU,
+    Char(char),
+}
+
+#[cfg(unix)]
+struct RawModeGuard {
+    fd: i32,
+    original: libc::termios,
+}
+
+#[cfg(unix)]
+impl RawModeGuard {
+    fn enable() -> Option<Self> {
+        unsafe {
+            let fd = libc::STDIN_FILENO;
+            let mut original: libc::termios = std::mem::zeroed();
+            if libc::tcgetattr(fd, &mut original) != 0 {
+                return None;
+            }
+            let mut raw = original;
+            raw.c_lflag &= !(libc::ICANON | libc::ECHO | libc::ISIG);
+            raw.c_iflag &= !(libc::IXON | libc::ICRNL);
+            raw.c_cc[libc::VMIN] = 1;
+            raw.c_cc[libc::VTIME] = 0;
+            if libc::tcsetattr(fd, libc::TCSANOW, &raw) != 0 {
+                return None;
+            }
+            Some(Self { fd, original })
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = libc::tcsetattr(self.fd, libc::TCSANOW, &self.original);
+        }
+    }
+}
+
+#[cfg(not(unix))]
+struct RawModeGuard;
+
+#[cfg(not(unix))]
+impl RawModeGuard {
+    fn enable() -> Option<Self> {
+        None
+    }
+}
+
+fn read_key() -> Option<Key> {
+    let mut stdin = io::stdin().lock();
+    let mut buf = [0u8; 1];
+    if stdin.read_exact(&mut buf).is_err() {
+        return None;
+    }
+    match buf[0] {
+        b'\r' | b'\n' => Some(Key::Enter),
+        3 => Some(Key::CtrlC),
+        21 => Some(Key::CtrlU),
+        127 | 8 => Some(Key::Backspace),
+        27 => {
+            let mut seq = [0u8; 2];
+            if stdin.read_exact(&mut seq[0..1]).is_err() {
+                return Some(Key::Esc);
+            }
+            if seq[0] != b'[' && seq[0] != b'O' {
+                return Some(Key::Esc);
+            }
+            if stdin.read_exact(&mut seq[1..2]).is_err() {
+                return Some(Key::Esc);
+            }
+            match seq[1] {
+                b'A' => Some(Key::Up),
+                b'B' => Some(Key::Down),
+                b'C' => Some(Key::Right),
+                b'D' => Some(Key::Left),
+                _ => Some(Key::Esc),
+            }
+        }
+        b' ' => Some(Key::Space),
+        c if c.is_ascii_graphic() => Some(Key::Char(c as char)),
+        _ => None,
+    }
+}
+
+fn visible_indices(choices: &[Choice], filter: &Option<String>) -> Vec<usize> {
+    match filter {
+        Some(needle) => choices
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| choice_matches(c, needle))
+            .map(|(i, _)| i)
+            .collect(),
+        None => (0..choices.len()).collect(),
+    }
 }
 
 /// Render a numbered choice list.
@@ -323,13 +437,147 @@ fn input_inner(
     }
 }
 
-/// Pick one entry from a numbered list.
+fn select_filter_hint(
+    message: &str,
+    filter: &Option<String>,
+    visible_len: usize,
+    choices_len: usize,
+    highlight: Option<usize>,
+) -> String {
+    match filter {
+        Some(needle) => format!(
+            "{} [{} matching \"{}\"] (↑↓ move, Enter select, type to filter, Esc cancel)",
+            message, visible_len, needle
+        ),
+        None => match highlight {
+            Some(i) => format!(
+                "{} [1-{}] (default {}, ↑↓ move, Enter select, type to filter)",
+                message,
+                choices_len,
+                i + 1
+            ),
+            None => format!(
+                "{} [1-{}] (↑↓ move, Enter select, type to filter)",
+                message, choices_len
+            ),
+        },
+    }
+}
+
+fn select_arrow(message: &str, choices: &[Choice], default: Option<usize>) -> Option<String> {
+    let _raw = RawModeGuard::enable()?;
+    let mut filter: Option<String> = None;
+    let mut cursor: usize = default.unwrap_or(0).min(choices.len().saturating_sub(1));
+    let mut drawn: usize = 0;
+    loop {
+        clear_lines(drawn);
+        let visible = visible_indices(choices, &filter);
+        if visible.is_empty() {
+            filter = None;
+            cursor = 0;
+            out(&format!(
+                "  {}\n",
+                ansi::dim(&tr("No matches — type to filter"))
+            ));
+            drawn = 1;
+            continue;
+        }
+        if cursor >= visible.len() {
+            cursor = visible.len() - 1;
+        }
+        let shown = visible.len().min(MAX_VISIBLE_CHOICES);
+        let page_start = if cursor >= MAX_VISIBLE_CHOICES {
+            cursor + 1 - MAX_VISIBLE_CHOICES
+        } else {
+            0
+        };
+        let page_end = (page_start + MAX_VISIBLE_CHOICES).min(visible.len());
+        let page = &visible[page_start..page_end];
+        drawn = render_numbered_choices(choices, page, Some(cursor - page_start));
+        if visible.len() > MAX_VISIBLE_CHOICES {
+            out(&format!(
+                "  … {} more — type to narrow down\n",
+                visible.len() - shown
+            ));
+            drawn += 1;
+        }
+        let filter_text = filter.as_deref().unwrap_or("");
+        let hint = select_filter_hint(
+            message,
+            &filter,
+            visible.len(),
+            choices.len(),
+            default.filter(|_| filter.is_none()),
+        );
+        let hint = truncate_to_width(
+            &hint,
+            (crate::ui::term_width().max(20) as usize).saturating_sub(12),
+        );
+        out(&format!(
+            "{} {} \u{203a} {}\n",
+            ansi::cyan("?"),
+            tr(&hint),
+            filter_text
+        ));
+        drawn += 1;
+
+        match read_key()? {
+            Key::Up => cursor = cursor.saturating_sub(1),
+            Key::Down => {
+                if cursor + 1 < visible.len() {
+                    cursor += 1;
+                }
+            }
+            Key::Enter => {
+                let index = visible[cursor];
+                let choice = &choices[index];
+                clear_lines(drawn);
+                finish(message, &choice.label);
+                return Some(choice.value.clone());
+            }
+            Key::Esc | Key::CtrlC => {
+                clear_lines(drawn);
+                cancel("Cancelled");
+                return None;
+            }
+            Key::Backspace => {
+                if let Some(s) = filter.as_mut() {
+                    s.pop();
+                }
+                if filter.as_ref().is_some_and(|s| s.is_empty()) {
+                    filter = None;
+                }
+                cursor = 0;
+            }
+            Key::CtrlU => {
+                filter = None;
+                cursor = 0;
+            }
+            Key::Char(c) => {
+                {
+                    let f = filter.get_or_insert_with(String::new);
+                    f.push(c);
+                }
+                cursor = 0;
+                let f = filter.as_deref().unwrap_or("");
+                let v = visible_indices(choices, &filter);
+                if v.len() == 1 && choice_equals(&choices[v[0]], f) {
+                    let choice = &choices[v[0]];
+                    clear_lines(drawn);
+                    finish(message, &choice.label);
+                    return Some(choice.value.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Pick one entry from a list.
 ///
-/// Short lists are shown in full; long ones are capped at
-/// `MAX_VISIBLE_CHOICES` and can be narrowed by typing part of a label. An
-/// exact value/label (or a unique substring match) selects immediately; a
-/// query matching several entries re-renders just those entries, numbered
-/// from 1. Empty input clears the filter, then falls back to `default`.
+/// On a real terminal this uses arrow-key navigation with optional type-to-filter.
+/// In piped/test environments it falls back to the line-based numbered input so
+/// existing scripts and smoke tests keep working.
 pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Option<String> {
     if choices.is_empty() {
         return None;
@@ -339,24 +587,19 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
             .filter(|i| *i < choices.len())
             .map(|i| choices[i].value.clone());
     }
+    if arrow_mode()
+        && let Some(value) = select_arrow(message, choices, default)
+    {
+        return Some(value);
+    }
+    // If raw mode could not be enabled, fall through to line mode.
 
     let mut filter: Option<String> = None;
-    // Lines written by the current frame (choice list, question, error line).
-    // They are erased before a redraw and once a choice is made.
     let mut drawn: usize = 0;
 
     loop {
         clear_lines(drawn);
-
-        let visible: Vec<usize> = match &filter {
-            Some(needle) => choices
-                .iter()
-                .enumerate()
-                .filter(|(_, c)| choice_matches(c, needle))
-                .map(|(i, _)| i)
-                .collect(),
-            None => (0..choices.len()).collect(),
-        };
+        let visible = visible_indices(choices, &filter);
         if visible.is_empty() {
             filter = None;
             cancel("No matches — showing all choices");
@@ -369,7 +612,6 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
         } else {
             None
         };
-        // The answer line is echoed by the terminal when Enter is pressed.
         drawn = render_select_choices(choices, &visible, highlight, filter.is_some()) + 1;
 
         let hint = match &filter {
@@ -389,8 +631,6 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
                 None => format!("{} [1-{}] (type to filter)", message, choices.len()),
             },
         };
-        // Leave room for "?  › " plus a short answer so the question stays on
-        // one physical line; wrapped lines would defeat the cursor-up count.
         let hint = if cursor_control() {
             let available = (crate::ui::term_width().max(20) as usize).saturating_sub(12);
             truncate_to_width(&hint, available)
@@ -467,10 +707,69 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
     }
 }
 
+fn confirm_arrow(message: &str, default: bool) -> Option<bool> {
+    let _raw = RawModeGuard::enable()?;
+    let mut value = default;
+    let mut drawn = 0usize;
+    loop {
+        clear_lines(drawn);
+        let yes = if value {
+            ansi::bold(&ansi::green("Yes"))
+        } else {
+            tr("Yes").to_string()
+        };
+        let no = if !value {
+            ansi::bold(&ansi::green("No"))
+        } else {
+            tr("No").to_string()
+        };
+        out(&format!(
+            "{} {}  {}/{}  {}\n",
+            ansi::cyan("?"),
+            tr(message),
+            yes,
+            no,
+            ansi::dim("(←/→, Enter, y/n, Esc)")
+        ));
+        drawn = 1;
+        match read_key()? {
+            Key::Left | Key::Up | Key::Char('h') | Key::Char('H') => value = true,
+            Key::Right | Key::Down | Key::Char('l') | Key::Char('L') => value = false,
+            Key::Char('y') | Key::Char('Y') => {
+                clear_lines(drawn);
+                finish(message, &tr("yes"));
+                return Some(true);
+            }
+            Key::Char('n') | Key::Char('N') => {
+                clear_lines(drawn);
+                finish(message, &tr("no"));
+                return Some(false);
+            }
+            Key::Enter => {
+                clear_lines(drawn);
+                let label = if value { tr("yes") } else { tr("no") };
+                finish(message, &label);
+                return Some(value);
+            }
+            Key::Esc | Key::CtrlC => {
+                clear_lines(drawn);
+                cancel("Cancelled");
+                return None;
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Yes/no confirmation. `None` means EOF/cancel, never an implicit answer.
 pub fn confirm(message: &str, default: bool) -> Option<bool> {
     if !interactive() {
         return None;
+    }
+    if arrow_mode()
+        && let Some(v) = confirm_arrow(message, default)
+    {
+        return Some(v);
     }
     let hint = if default {
         format!("{} (Y/n)", message)
@@ -495,15 +794,101 @@ pub fn confirm(message: &str, default: bool) -> Option<bool> {
     }
 }
 
-/// Pick zero or more entries by number (`1,3`), name, or `all`.
+fn render_checkbox_choices(choices: &[Choice], selected: &[bool], cursor: usize) -> usize {
+    for (i, choice) in choices.iter().enumerate() {
+        let pointer = if i == cursor {
+            ansi::cyan("\u{203a}")
+        } else {
+            " ".to_string()
+        };
+        let mark = if selected[i] {
+            ansi::green("[x]")
+        } else {
+            ansi::dim("[ ]")
+        };
+        let label = if i == cursor {
+            ansi::bold(&choice.label)
+        } else {
+            choice.label.clone()
+        };
+        out(&format!("{} {} {}\n", pointer, mark, label));
+    }
+    choices.len()
+}
+
+fn checkbox_arrow(message: &str, choices: &[Choice]) -> Option<Vec<String>> {
+    let _raw = RawModeGuard::enable()?;
+    let mut selected = vec![false; choices.len()];
+    let mut cursor = 0usize;
+    let mut drawn = 0usize;
+    loop {
+        clear_lines(drawn);
+        drawn = render_checkbox_choices(choices, &selected, cursor);
+        out(&format!(
+            "{} {} {}\n",
+            ansi::cyan("?"),
+            tr(message),
+            ansi::dim("(↑↓ move, Space toggle, a all, Enter confirm, Esc cancel)")
+        ));
+        drawn += 1;
+        match read_key()? {
+            Key::Up => cursor = cursor.saturating_sub(1),
+            Key::Down => {
+                if cursor + 1 < choices.len() {
+                    cursor += 1;
+                }
+            }
+            Key::Space => selected[cursor] = !selected[cursor],
+            Key::Char('a') | Key::Char('A') => {
+                let all = selected.iter().all(|v| *v);
+                selected.fill(!all);
+            }
+            Key::Enter => {
+                clear_lines(drawn);
+                let values: Vec<String> = choices
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| selected[*i])
+                    .map(|(_, c)| c.value.clone())
+                    .collect();
+                let labels: Vec<String> = choices
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| selected[*i])
+                    .map(|(_, c)| c.label.clone())
+                    .collect();
+                if labels.is_empty() {
+                    finish(message, &tr("none"));
+                } else {
+                    finish(message, &labels.join(", "));
+                }
+                return Some(values);
+            }
+            Key::Esc | Key::CtrlC => {
+                clear_lines(drawn);
+                cancel("Cancelled");
+                return None;
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Pick zero or more entries.
 ///
-/// An empty answer returns an empty selection (caller treats it as a cancel).
+/// On a real terminal this uses arrow-key navigation + Space toggle.
+/// In piped/test environments it falls back to line-based numbered input.
 pub fn checkbox(message: &str, choices: &[Choice]) -> Option<Vec<String>> {
     if choices.is_empty() {
         return Some(Vec::new());
     }
     if !interactive() {
         return None;
+    }
+    if arrow_mode()
+        && let Some(v) = checkbox_arrow(message, choices)
+    {
+        return Some(v);
     }
 
     render_choices(choices, None);

@@ -734,6 +734,7 @@ dependencies = [
  "flate2",
  "getrandom",
  "hex",
+ "libc",
  "libz-sys",
  "scrypt",
  "serde_json",

@@ -16,3 +16,6 @@ getrandom.workspace = true
 flate2.workspace = true
 libz-sys.workspace = true
 terminal_size.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
