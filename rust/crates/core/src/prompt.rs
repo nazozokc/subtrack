@@ -9,6 +9,7 @@
 //! banner and any content printed before the question is visible before the
 //! user is asked to type.
 
+use std::cell::RefCell;
 use std::io::{self, BufRead, IsTerminal, Read, Write};
 
 use crate::ansi;
@@ -48,12 +49,18 @@ pub fn interactive() -> bool {
 }
 
 fn out(text: &str) {
+    let _ = out_checked(text);
+}
+
+/// Like [`out`], but lets raw-mode callers abort when the terminal cannot be
+/// written (a closed stdout would otherwise look like a hung prompt).
+fn out_checked(text: &str) -> io::Result<()> {
     // flush pending logger output before drawing the prompt
     crate::flush();
     let stdout = io::stdout();
     let mut handle = stdout.lock();
-    let _ = handle.write_all(text.as_bytes());
-    let _ = handle.flush();
+    handle.write_all(text.as_bytes())?;
+    handle.flush()
 }
 
 /// Cursor control is for real terminals only. `SUBTRACK_ASSUME_TTY` makes
@@ -71,11 +78,17 @@ fn arrow_mode() -> bool {
 /// first line started. Called before redrawing or after a choice is made so
 /// spent selection screens do not pile up in the console.
 fn clear_lines(lines: usize) {
+    let _ = clear_lines_checked(lines);
+}
+
+fn clear_lines_checked(lines: usize) -> io::Result<()> {
     if cursor_control() {
         crate::flush();
         let stdout = io::stdout();
         let mut handle = stdout.lock();
-        let _ = write_clear(&mut handle, lines);
+        write_clear(&mut handle, lines)
+    } else {
+        Ok(())
     }
 }
 
@@ -89,9 +102,24 @@ fn write_clear(writer: &mut impl Write, lines: usize) -> io::Result<()> {
 
 /// Approximate terminal columns (CJK/fullwidth chars take two) so a drawn
 /// frame never wraps: a wrapped logical line would break the cursor-up count.
+fn is_emoji_modifier(c: char) -> bool {
+    (0x1f3fb..=0x1f3ff).contains(&(c as u32))
+}
+
+fn is_emoji_base(c: char) -> bool {
+    (0x1f000..=0x1faff).contains(&(c as u32))
+}
+
 fn char_width(c: char) -> usize {
     let n = c as u32;
-    if (0x300..=0x36f).contains(&n) || (0x7f..0xa0).contains(&n) {
+    if (0x300..=0x36f).contains(&n)
+        || (0x7f..0xa0).contains(&n)
+        || (0x1ab0..=0x1aff).contains(&n)
+        || (0x1dc0..=0x1dff).contains(&n)
+        || (0x20d0..=0x20ff).contains(&n)
+        || (0xfe00..=0xfe0f).contains(&n)
+        || n == 0x200d
+    {
         return 0;
     }
     if matches!(
@@ -105,6 +133,7 @@ fn char_width(c: char) -> usize {
             | 0xff00..=0xff60
             | 0xffe0..=0xffe6
             | 0x1f300..=0x1faff
+            | 0x20000..=0x3fffd
     ) {
         2
     } else {
@@ -112,16 +141,45 @@ fn char_width(c: char) -> usize {
     }
 }
 
+/// Skin-tone modifiers are double-width on their own but add no column after
+/// an emoji base (the terminal renders one combined glyph).
+fn width_after(previous: Option<char>, c: char) -> usize {
+    if is_emoji_modifier(c) && previous.is_some_and(is_emoji_base) {
+        0
+    } else {
+        char_width(c)
+    }
+}
+
+fn display_width(text: &str) -> usize {
+    let mut previous = None;
+    let mut width = 0;
+    for c in text.chars() {
+        width += width_after(previous, c);
+        previous = Some(c);
+    }
+    width
+}
+
+/// Number of physical terminal rows a plain (ANSI-free) line occupies.
+fn wrapped_lines(plain: &str, width: usize) -> usize {
+    let width = width.max(1);
+    let columns = display_width(plain).max(1);
+    columns.div_ceil(width)
+}
+
 fn truncate_to_width(text: &str, max: usize) -> String {
     let mut out = String::new();
     let mut width = 0;
+    let mut previous = None;
     for c in text.chars() {
-        let w = char_width(c);
+        let w = width_after(previous, c);
         if width + w > max {
             break;
         }
         out.push(c);
         width += w;
+        previous = Some(c);
     }
     out
 }
@@ -145,10 +203,12 @@ fn finish_only(message: &str) {
 const MAX_VISIBLE_CHOICES: usize = 10;
 
 fn choice_matches(choice: &Choice, needle: &str) -> bool {
-    choice.label.to_lowercase().contains(needle) || choice.value.to_lowercase().contains(needle)
+    let needle = needle.to_lowercase();
+    choice.label.to_lowercase().contains(&needle) || choice.value.to_lowercase().contains(&needle)
 }
 
 fn choice_equals(choice: &Choice, needle: &str) -> bool {
+    let needle = needle.to_lowercase();
     choice.value.to_lowercase() == needle || choice.label.to_lowercase() == needle
 }
 
@@ -176,8 +236,38 @@ enum Key {
     Space,
     Backspace,
     CtrlC,
+    CtrlD,
     CtrlU,
     Char(char),
+    Ignored,
+}
+
+/// Why an arrow-key prompt stopped.
+///
+/// `Unavailable` must stay distinct from `Cancelled`: the line-mode fallback
+/// is only appropriate when raw mode could not be enabled, never when the
+/// user explicitly cancelled or stdin reached EOF.
+#[derive(Debug, PartialEq, Eq)]
+enum ArrowOutcome<T> {
+    Value(T),
+    Cancelled,
+    Unavailable,
+}
+
+enum ArrowKey {
+    Key(Key),
+    Abort,
+}
+
+fn read_arrow_key(drawn: usize) -> ArrowKey {
+    match read_key() {
+        Some(Key::Esc | Key::CtrlC | Key::CtrlD) | None => {
+            let _ = clear_lines_checked(drawn);
+            cancel("Cancelled");
+            ArrowKey::Abort
+        }
+        Some(key) => ArrowKey::Key(key),
+    }
 }
 
 #[cfg(unix)]
@@ -227,40 +317,171 @@ impl RawModeGuard {
     }
 }
 
-fn read_key() -> Option<Key> {
-    let mut stdin = io::stdin().lock();
+#[cfg(unix)]
+fn stdin_has_byte(timeout_ms: i32) -> bool {
+    let mut descriptor = libc::pollfd {
+        fd: libc::STDIN_FILENO,
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    let ready = unsafe { libc::poll(&mut descriptor, 1, timeout_ms) };
+    ready > 0 && descriptor.revents & libc::POLLIN != 0
+}
+
+#[cfg(not(unix))]
+fn stdin_has_byte(_timeout_ms: i32) -> bool {
+    true
+}
+
+/// Decode one key from `reader`. `more` reports whether another byte is
+/// available before an escape sequence continues; standalone `Esc` therefore
+/// never blocks waiting for a second byte.
+/// A byte source that can put back a byte when `Esc` turns out to be
+/// standalone instead of an escape-sequence prefix.
+trait KeyInput: Read {
+    fn unread(&mut self, byte: u8);
+}
+
+impl KeyInput for &[u8] {
+    fn unread(&mut self, _byte: u8) {}
+}
+
+fn read_key_from<R: KeyInput>(reader: &mut R, more: impl Fn() -> bool) -> Option<Key> {
     let mut buf = [0u8; 1];
-    if stdin.read_exact(&mut buf).is_err() {
+    if reader.read_exact(&mut buf).is_err() {
         return None;
     }
     match buf[0] {
         b'\r' | b'\n' => Some(Key::Enter),
         3 => Some(Key::CtrlC),
+        4 => Some(Key::CtrlD),
         21 => Some(Key::CtrlU),
         127 | 8 => Some(Key::Backspace),
         27 => {
-            let mut seq = [0u8; 2];
-            if stdin.read_exact(&mut seq[0..1]).is_err() {
+            if !more() {
                 return Some(Key::Esc);
             }
-            if seq[0] != b'[' && seq[0] != b'O' {
+            let mut next = [0u8; 1];
+            if reader.read_exact(&mut next).is_err() {
                 return Some(Key::Esc);
             }
-            if stdin.read_exact(&mut seq[1..2]).is_err() {
+            if next[0] != b'[' && next[0] != b'O' {
+                reader.unread(next[0]);
                 return Some(Key::Esc);
             }
-            match seq[1] {
-                b'A' => Some(Key::Up),
-                b'B' => Some(Key::Down),
-                b'C' => Some(Key::Right),
-                b'D' => Some(Key::Left),
-                _ => Some(Key::Esc),
+            let mut terminator = None;
+            for _ in 0..8 {
+                if !more() {
+                    break;
+                }
+                let mut byte = [0u8; 1];
+                if reader.read_exact(&mut byte).is_err() {
+                    break;
+                }
+                if (0x40..=0x7e).contains(&byte[0]) {
+                    terminator = Some(byte[0]);
+                    break;
+                }
             }
+            Some(match terminator {
+                Some(b'A') => Key::Up,
+                Some(b'B') => Key::Down,
+                Some(b'C') => Key::Right,
+                Some(b'D') => Key::Left,
+                _ => Key::Ignored,
+            })
         }
         b' ' => Some(Key::Space),
         c if c.is_ascii_graphic() => Some(Key::Char(c as char)),
-        _ => None,
+        c if c >= 0x80 => {
+            let length = if c & 0xe0 == 0xc0 {
+                2
+            } else if c & 0xf0 == 0xe0 {
+                3
+            } else if c & 0xf8 == 0xf0 {
+                4
+            } else {
+                1
+            };
+            let mut bytes = [0u8; 4];
+            bytes[0] = c;
+            for index in 1..length {
+                if !more() {
+                    return Some(Key::Ignored);
+                }
+                if reader.read_exact(&mut bytes[index..=index]).is_err() {
+                    return Some(Key::Ignored);
+                }
+            }
+            match std::str::from_utf8(&bytes[..length]) {
+                Ok(text) => {
+                    let mut chars = text.chars();
+                    match (chars.next(), chars.next()) {
+                        (Some(ch), None) => Some(Key::Char(ch)),
+                        _ => Some(Key::Ignored),
+                    }
+                }
+                Err(_) => Some(Key::Ignored),
+            }
+        }
+        _ => Some(Key::Ignored),
     }
+}
+
+/// Byte-at-a-time stdin for raw mode. `StdinLock` buffers ahead, which would
+/// hide the rest of an escape sequence from `poll` and make arrows look like a
+/// standalone `Esc`.
+struct RawStdin;
+
+thread_local! {
+    static PENDING_KEY_BYTE: RefCell<Option<u8>> = const { RefCell::new(None) };
+}
+
+impl KeyInput for RawStdin {
+    fn unread(&mut self, byte: u8) {
+        PENDING_KEY_BYTE.with(|pending| *pending.borrow_mut() = Some(byte));
+    }
+}
+
+impl Read for RawStdin {
+    #[cfg(unix)]
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        if let Some(byte) = PENDING_KEY_BYTE.with(|pending| pending.borrow_mut().take()) {
+            if buffer.is_empty() {
+                return Ok(0);
+            }
+            buffer[0] = byte;
+            return Ok(1);
+        }
+        let count = unsafe {
+            libc::read(
+                libc::STDIN_FILENO,
+                buffer.as_mut_ptr().cast::<libc::c_void>(),
+                buffer.len(),
+            )
+        };
+        if count < 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(count as usize)
+        }
+    }
+
+    #[cfg(not(unix))]
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        if let Some(byte) = PENDING_KEY_BYTE.with(|pending| pending.borrow_mut().take()) {
+            if buffer.is_empty() {
+                return Ok(0);
+            }
+            buffer[0] = byte;
+            return Ok(1);
+        }
+        io::stdin().read(buffer)
+    }
+}
+
+fn read_key() -> Option<Key> {
+    read_key_from(&mut RawStdin, || stdin_has_byte(80))
 }
 
 fn visible_indices(choices: &[Choice], filter: &Option<String>) -> Vec<usize> {
@@ -275,30 +496,84 @@ fn visible_indices(choices: &[Choice], filter: &Option<String>) -> Vec<usize> {
     }
 }
 
+fn push_filter(filter: &mut Option<String>, c: char) {
+    filter.get_or_insert_with(String::new).push(c);
+}
+
+fn pop_filter(filter: &mut Option<String>) {
+    if let Some(value) = filter.as_mut() {
+        value.pop();
+        if value.is_empty() {
+            *filter = None;
+        }
+    }
+}
+
+/// Keep the default selected while it remains visible after a filter edit.
+fn cursor_for_filter(visible: &[usize], default: Option<usize>) -> usize {
+    default
+        .and_then(|choice| visible.iter().position(|&index| index == choice))
+        .unwrap_or(0)
+}
+
+/// Append a typed character to the typeahead filter. Returns the exact match
+/// when the new filter names one choice unambiguously.
+fn push_filter_char<'a>(
+    choices: &'a [Choice],
+    filter: &mut Option<String>,
+    cursor: &mut usize,
+    default: Option<usize>,
+    c: char,
+) -> Option<&'a Choice> {
+    push_filter(filter, c);
+    let next = visible_indices(choices, filter);
+    *cursor = cursor_for_filter(&next, default);
+    if next.len() == 1 && choice_equals(&choices[next[0]], filter.as_deref().unwrap_or("")) {
+        Some(&choices[next[0]])
+    } else {
+        None
+    }
+}
+
+/// Line-mode numbers refer to the displayed (filtered) positions.
+fn number_to_index(number: usize, visible: &[usize]) -> Option<usize> {
+    number
+        .checked_sub(1)
+        .and_then(|position| visible.get(position).copied())
+}
+
 /// Render a numbered choice list.
 ///
 /// Numbers are dimmed and right-aligned so they line up on long lists, and
 /// the pre-selected choice carries a `›` pointer — the "(default)" suffix in
 /// the question leaves the default discoverable without scanning list text.
-/// `visible` holds indices into `choices`; `highlight` is a position in
-/// `visible`, so filtered lists can be renumbered from 1.
+/// `visible` holds indices into `choices`; `highlight` is an absolute choice
+/// index. Paged arrow lists display absolute numbers, while line-mode lists
+/// number the currently visible entries so typed positions stay predictable.
 fn render_numbered_choices(
     choices: &[Choice],
     visible: &[usize],
     highlight: Option<usize>,
-) -> usize {
-    let number_width = visible.len().to_string().len();
+    absolute_numbers: bool,
+) -> io::Result<usize> {
+    let number_width = if absolute_numbers {
+        choices.len().to_string().len()
+    } else {
+        visible.len().to_string().len()
+    };
+    let width = crate::ui::term_width().max(20) as usize;
+    let mut lines = 0;
     for (position, &index) in visible.iter().enumerate() {
         let choice = &choices[index];
-        let is_pointer = Some(position) == highlight;
+        let is_pointer = Some(index) == highlight;
         let gutter = if is_pointer {
             format!("{} ", ansi::cyan("\u{203a}"))
         } else {
             "  ".to_string()
         };
+        let gutter_plain = if is_pointer { "\u{203a} " } else { "  " };
         let plain_label = if cursor_control() {
-            let available =
-                (crate::ui::term_width().max(20) as usize).saturating_sub(number_width + 7);
+            let available = width.saturating_sub(number_width + 7);
             truncate_to_width(&choice.label, available)
         } else {
             choice.label.clone()
@@ -306,22 +581,27 @@ fn render_numbered_choices(
         let label = if is_pointer {
             ansi::bold(&plain_label)
         } else {
-            plain_label
+            plain_label.clone()
         };
         let number = format!(
             "{number:>width$}",
-            number = position + 1,
+            number = if absolute_numbers {
+                index + 1
+            } else {
+                position + 1
+            },
             width = number_width + 1
         );
-        out(&format!("{gutter}{}) {}\n", ansi::dim(&number), label));
+        lines += wrapped_lines(&format!("{gutter_plain}{number}) {plain_label}"), width);
+        out_checked(&format!("{gutter}{number}) {label}\n"))?;
     }
-    visible.len()
+    Ok(lines)
 }
 
 /// Full list used by `checkbox` (short lists: subscriptions, trials, fields).
-fn render_choices(choices: &[Choice], highlight: Option<usize>) -> usize {
+fn render_choices(choices: &[Choice], highlight: Option<usize>) -> io::Result<usize> {
     let indices: Vec<usize> = (0..choices.len()).collect();
-    render_numbered_choices(choices, &indices, highlight)
+    render_numbered_choices(choices, &indices, highlight, false)
 }
 
 /// Render the (possibly filtered, capped) choices used by `select`.
@@ -330,22 +610,24 @@ fn render_select_choices(
     visible: &[usize],
     highlight: Option<usize>,
     filtered: bool,
-) -> usize {
+) -> io::Result<usize> {
+    let width = crate::ui::term_width().max(20) as usize;
     let shown = visible.len().min(MAX_VISIBLE_CHOICES);
-    render_numbered_choices(choices, &visible[..shown], highlight);
-    let mut lines = shown;
+    let mut lines = render_numbered_choices(choices, &visible[..shown], highlight, false)?;
     if visible.len() > MAX_VISIBLE_CHOICES {
-        out(&format!(
-            "  … {} more — type to narrow down\n",
+        let text = format!(
+            "  … {} more — type to narrow down",
             visible.len() - MAX_VISIBLE_CHOICES
-        ));
-        lines += 1;
+        );
+        lines += wrapped_lines(&text, width);
+        out_checked(&format!("{text}\n"))?;
     }
     if filtered && visible.len() <= MAX_VISIBLE_CHOICES {
-        out(&format!("  ({} matching)\n", visible.len()));
-        lines += 1;
+        let text = format!("  ({} matching)", visible.len());
+        lines += wrapped_lines(&text, width);
+        out_checked(&format!("{text}\n"))?;
     }
-    lines
+    Ok(lines)
 }
 
 /// Prompt for a line of text.
@@ -464,22 +746,49 @@ fn select_filter_hint(
     }
 }
 
-fn select_arrow(message: &str, choices: &[Choice], default: Option<usize>) -> Option<String> {
-    let _raw = RawModeGuard::enable()?;
+fn select_arrow(message: &str, choices: &[Choice], default: Option<usize>) -> ArrowOutcome<String> {
+    let _raw = match RawModeGuard::enable() {
+        Some(raw) => raw,
+        None => return ArrowOutcome::Unavailable,
+    };
+    let width = crate::ui::term_width().max(20) as usize;
     let mut filter: Option<String> = None;
-    let mut cursor: usize = default.unwrap_or(0).min(choices.len().saturating_sub(1));
+    let mut cursor = cursor_for_filter(&visible_indices(choices, &None), default);
     let mut drawn: usize = 0;
+
     loop {
-        clear_lines(drawn);
+        if clear_lines_checked(drawn).is_err() {
+            return ArrowOutcome::Unavailable;
+        }
         let visible = visible_indices(choices, &filter);
         if visible.is_empty() {
-            filter = None;
-            cursor = 0;
-            out(&format!(
-                "  {}\n",
-                ansi::dim(&tr("No matches — type to filter"))
-            ));
-            drawn = 1;
+            let text = tr("No matches — type to filter");
+            if out_checked(&format!("  {}\n", ansi::dim(&text))).is_err() {
+                return ArrowOutcome::Unavailable;
+            }
+            drawn = wrapped_lines(&format!("  {text}"), width);
+            let key = match read_arrow_key(drawn) {
+                ArrowKey::Key(key) => key,
+                ArrowKey::Abort => return ArrowOutcome::Cancelled,
+            };
+            let exact = match key {
+                Key::Backspace => {
+                    pop_filter(&mut filter);
+                    None
+                }
+                Key::CtrlU => {
+                    filter = None;
+                    None
+                }
+                Key::Char(c) => push_filter_char(choices, &mut filter, &mut cursor, default, c),
+                Key::Space => push_filter_char(choices, &mut filter, &mut cursor, default, ' '),
+                _ => None,
+            };
+            if let Some(choice) = exact {
+                let _ = clear_lines_checked(drawn);
+                finish(message, &choice.label);
+                return ArrowOutcome::Value(choice.value.clone());
+            }
             continue;
         }
         if cursor >= visible.len() {
@@ -493,13 +802,16 @@ fn select_arrow(message: &str, choices: &[Choice], default: Option<usize>) -> Op
         };
         let page_end = (page_start + MAX_VISIBLE_CHOICES).min(visible.len());
         let page = &visible[page_start..page_end];
-        drawn = render_numbered_choices(choices, page, Some(cursor - page_start));
+        drawn = match render_numbered_choices(choices, page, Some(visible[cursor]), true) {
+            Ok(lines) => lines,
+            Err(_) => return ArrowOutcome::Unavailable,
+        };
         if visible.len() > MAX_VISIBLE_CHOICES {
-            out(&format!(
-                "  … {} more — type to narrow down\n",
-                visible.len() - shown
-            ));
-            drawn += 1;
+            let text = format!("  … {} more — type to narrow down", visible.len() - shown);
+            drawn += wrapped_lines(&text, width);
+            if out_checked(&format!("{text}\n")).is_err() {
+                return ArrowOutcome::Unavailable;
+            }
         }
         let filter_text = filter.as_deref().unwrap_or("");
         let hint = select_filter_hint(
@@ -510,18 +822,19 @@ fn select_arrow(message: &str, choices: &[Choice], default: Option<usize>) -> Op
             default.filter(|_| filter.is_none()),
         );
         let hint = truncate_to_width(
-            &hint,
-            (crate::ui::term_width().max(20) as usize).saturating_sub(12),
+            &format!("{} \u{203a} {}", tr(&hint), filter_text),
+            width.saturating_sub(2),
         );
-        out(&format!(
-            "{} {} \u{203a} {}\n",
-            ansi::cyan("?"),
-            tr(&hint),
-            filter_text
-        ));
-        drawn += 1;
+        if out_checked(&format!("{} {}\n", ansi::cyan("?"), hint)).is_err() {
+            return ArrowOutcome::Unavailable;
+        }
+        drawn += wrapped_lines(&format!("? {hint}"), width);
 
-        match read_key()? {
+        let key = match read_arrow_key(drawn) {
+            ArrowKey::Key(key) => key,
+            ArrowKey::Abort => return ArrowOutcome::Cancelled,
+        };
+        match key {
             Key::Up => cursor = cursor.saturating_sub(1),
             Key::Down => {
                 if cursor + 1 < visible.len() {
@@ -531,43 +844,37 @@ fn select_arrow(message: &str, choices: &[Choice], default: Option<usize>) -> Op
             Key::Enter => {
                 let index = visible[cursor];
                 let choice = &choices[index];
-                clear_lines(drawn);
+                let _ = clear_lines_checked(drawn);
                 finish(message, &choice.label);
-                return Some(choice.value.clone());
-            }
-            Key::Esc | Key::CtrlC => {
-                clear_lines(drawn);
-                cancel("Cancelled");
-                return None;
+                return ArrowOutcome::Value(choice.value.clone());
             }
             Key::Backspace => {
-                if let Some(s) = filter.as_mut() {
-                    s.pop();
-                }
-                if filter.as_ref().is_some_and(|s| s.is_empty()) {
-                    filter = None;
-                }
-                cursor = 0;
+                pop_filter(&mut filter);
+                cursor = cursor_for_filter(&visible_indices(choices, &filter), default);
             }
             Key::CtrlU => {
                 filter = None;
-                cursor = 0;
+                cursor = cursor_for_filter(&visible_indices(choices, &None), default);
             }
             Key::Char(c) => {
+                if let Some(choice) =
+                    push_filter_char(choices, &mut filter, &mut cursor, default, c)
                 {
-                    let f = filter.get_or_insert_with(String::new);
-                    f.push(c);
-                }
-                cursor = 0;
-                let f = filter.as_deref().unwrap_or("");
-                let v = visible_indices(choices, &filter);
-                if v.len() == 1 && choice_equals(&choices[v[0]], f) {
-                    let choice = &choices[v[0]];
-                    clear_lines(drawn);
+                    let _ = clear_lines_checked(drawn);
                     finish(message, &choice.label);
-                    return Some(choice.value.clone());
+                    return ArrowOutcome::Value(choice.value.clone());
                 }
             }
+            Key::Space => {
+                if let Some(choice) =
+                    push_filter_char(choices, &mut filter, &mut cursor, default, ' ')
+                {
+                    let _ = clear_lines_checked(drawn);
+                    finish(message, &choice.label);
+                    return ArrowOutcome::Value(choice.value.clone());
+                }
+            }
+            Key::Ignored => {}
             _ => {}
         }
     }
@@ -587,12 +894,14 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
             .filter(|i| *i < choices.len())
             .map(|i| choices[i].value.clone());
     }
-    if arrow_mode()
-        && let Some(value) = select_arrow(message, choices, default)
-    {
-        return Some(value);
+    if arrow_mode() {
+        match select_arrow(message, choices, default) {
+            ArrowOutcome::Value(value) => return Some(value),
+            ArrowOutcome::Cancelled => return None,
+            ArrowOutcome::Unavailable => {}
+        }
     }
-    // If raw mode could not be enabled, fall through to line mode.
+    // Only raw-mode setup failures fall through to line mode.
 
     let mut filter: Option<String> = None;
     let mut drawn: usize = 0;
@@ -612,7 +921,10 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
         } else {
             None
         };
-        drawn = render_select_choices(choices, &visible, highlight, filter.is_some()) + 1;
+        drawn = match render_select_choices(choices, &visible, highlight, filter.is_some()) {
+            Ok(lines) => lines + 1,
+            Err(_) => return None,
+        };
 
         let hint = match &filter {
             Some(needle) => format!(
@@ -664,7 +976,7 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
         }
 
         if let Ok(number) = trimmed.parse::<usize>() {
-            if let Some(&index) = visible.get(number.saturating_sub(1)) {
+            if let Some(index) = number_to_index(number, &visible) {
                 let choice = &choices[index];
                 clear_lines(drawn);
                 finish(message, &choice.label);
@@ -707,54 +1019,68 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
     }
 }
 
-fn confirm_arrow(message: &str, default: bool) -> Option<bool> {
-    let _raw = RawModeGuard::enable()?;
+fn confirm_arrow(message: &str, default: bool) -> ArrowOutcome<bool> {
+    let _raw = match RawModeGuard::enable() {
+        Some(raw) => raw,
+        None => return ArrowOutcome::Unavailable,
+    };
+    let width = crate::ui::term_width().max(20) as usize;
     let mut value = default;
     let mut drawn = 0usize;
     loop {
-        clear_lines(drawn);
+        if clear_lines_checked(drawn).is_err() {
+            return ArrowOutcome::Unavailable;
+        }
+        let yes_text = tr("Yes");
+        let no_text = tr("No");
         let yes = if value {
-            ansi::bold(&ansi::green("Yes"))
+            ansi::bold(&ansi::green(&yes_text))
         } else {
-            tr("Yes").to_string()
+            yes_text.to_string()
         };
         let no = if !value {
-            ansi::bold(&ansi::green("No"))
+            ansi::bold(&ansi::green(&no_text))
         } else {
-            tr("No").to_string()
+            no_text.to_string()
         };
-        out(&format!(
+        let hint = "(←/→, Enter, y/n, Esc)";
+        let plain = format!("? {}  {}/{}  {hint}", tr(message), yes_text, no_text);
+        drawn = wrapped_lines(&plain, width);
+        if out_checked(&format!(
             "{} {}  {}/{}  {}\n",
             ansi::cyan("?"),
             tr(message),
             yes,
             no,
-            ansi::dim("(←/→, Enter, y/n, Esc)")
-        ));
-        drawn = 1;
-        match read_key()? {
+            ansi::dim(hint)
+        ))
+        .is_err()
+        {
+            return ArrowOutcome::Unavailable;
+        }
+
+        let key = match read_arrow_key(drawn) {
+            ArrowKey::Key(key) => key,
+            ArrowKey::Abort => return ArrowOutcome::Cancelled,
+        };
+        match key {
             Key::Left | Key::Up | Key::Char('h') | Key::Char('H') => value = true,
             Key::Right | Key::Down | Key::Char('l') | Key::Char('L') => value = false,
             Key::Char('y') | Key::Char('Y') => {
-                clear_lines(drawn);
+                let _ = clear_lines_checked(drawn);
                 finish(message, &tr("yes"));
-                return Some(true);
+                return ArrowOutcome::Value(true);
             }
             Key::Char('n') | Key::Char('N') => {
-                clear_lines(drawn);
+                let _ = clear_lines_checked(drawn);
                 finish(message, &tr("no"));
-                return Some(false);
+                return ArrowOutcome::Value(false);
             }
             Key::Enter => {
-                clear_lines(drawn);
+                let _ = clear_lines_checked(drawn);
                 let label = if value { tr("yes") } else { tr("no") };
                 finish(message, &label);
-                return Some(value);
-            }
-            Key::Esc | Key::CtrlC => {
-                clear_lines(drawn);
-                cancel("Cancelled");
-                return None;
+                return ArrowOutcome::Value(value);
             }
             _ => {}
         }
@@ -766,10 +1092,12 @@ pub fn confirm(message: &str, default: bool) -> Option<bool> {
     if !interactive() {
         return None;
     }
-    if arrow_mode()
-        && let Some(v) = confirm_arrow(message, default)
-    {
-        return Some(v);
+    if arrow_mode() {
+        match confirm_arrow(message, default) {
+            ArrowOutcome::Value(value) => return Some(value),
+            ArrowOutcome::Cancelled => return None,
+            ArrowOutcome::Unavailable => {}
+        }
     }
     let hint = if default {
         format!("{} (Y/n)", message)
@@ -794,44 +1122,97 @@ pub fn confirm(message: &str, default: bool) -> Option<bool> {
     }
 }
 
-fn render_checkbox_choices(choices: &[Choice], selected: &[bool], cursor: usize) -> usize {
-    for (i, choice) in choices.iter().enumerate() {
-        let pointer = if i == cursor {
+fn render_checkbox_choices(
+    choices: &[Choice],
+    visible: &[usize],
+    selected: &[bool],
+    cursor: usize,
+) -> io::Result<usize> {
+    let width = crate::ui::term_width().max(20) as usize;
+    let mut lines = 0;
+    for &index in visible {
+        let is_cursor = index == cursor;
+        let pointer = if is_cursor {
             ansi::cyan("\u{203a}")
         } else {
             " ".to_string()
         };
-        let mark = if selected[i] {
+        let pointer_plain = if is_cursor { "\u{203a}" } else { " " };
+        let mark = if selected[index] {
             ansi::green("[x]")
         } else {
             ansi::dim("[ ]")
         };
-        let label = if i == cursor {
-            ansi::bold(&choice.label)
+        let mark_plain = if selected[index] { "[x]" } else { "[ ]" };
+        let label = if is_cursor {
+            ansi::bold(&choices[index].label)
         } else {
-            choice.label.clone()
+            choices[index].label.clone()
         };
-        out(&format!("{} {} {}\n", pointer, mark, label));
+        let plain = format!("{pointer_plain} {mark_plain} {}", choices[index].label);
+        lines += wrapped_lines(&plain, width);
+        out_checked(&format!("{pointer} {mark} {label}\n"))?;
     }
-    choices.len()
+    Ok(lines)
 }
 
-fn checkbox_arrow(message: &str, choices: &[Choice]) -> Option<Vec<String>> {
-    let _raw = RawModeGuard::enable()?;
+fn checkbox_arrow(message: &str, choices: &[Choice]) -> ArrowOutcome<Vec<String>> {
+    let _raw = match RawModeGuard::enable() {
+        Some(raw) => raw,
+        None => return ArrowOutcome::Unavailable,
+    };
+    let width = crate::ui::term_width().max(20) as usize;
     let mut selected = vec![false; choices.len()];
     let mut cursor = 0usize;
     let mut drawn = 0usize;
     loop {
-        clear_lines(drawn);
-        drawn = render_checkbox_choices(choices, &selected, cursor);
-        out(&format!(
-            "{} {} {}\n",
+        if clear_lines_checked(drawn).is_err() {
+            return ArrowOutcome::Unavailable;
+        }
+        let page_start = if cursor >= MAX_VISIBLE_CHOICES {
+            cursor + 1 - MAX_VISIBLE_CHOICES
+        } else {
+            0
+        };
+        let page_end = (page_start + MAX_VISIBLE_CHOICES).min(choices.len());
+        let page: Vec<usize> = (page_start..page_end).collect();
+        drawn = match render_checkbox_choices(choices, &page, &selected, cursor) {
+            Ok(lines) => lines,
+            Err(_) => return ArrowOutcome::Unavailable,
+        };
+        if choices.len() > page.len() {
+            let text = format!("  … {} more — ↑↓ scroll", choices.len() - page.len());
+            drawn += wrapped_lines(&text, width);
+            if out_checked(&format!("{text}\n")).is_err() {
+                return ArrowOutcome::Unavailable;
+            }
+        }
+        let hint = "(↑↓ move, Space toggle, a all, Enter confirm, Esc cancel)";
+        let plain = format!(
+            "? {} [{}/{}] {hint}",
+            tr(message),
+            cursor + 1,
+            choices.len()
+        );
+        drawn += wrapped_lines(&plain, width);
+        if out_checked(&format!(
+            "{} {} [{}/{}] {}\n",
             ansi::cyan("?"),
             tr(message),
-            ansi::dim("(↑↓ move, Space toggle, a all, Enter confirm, Esc cancel)")
-        ));
-        drawn += 1;
-        match read_key()? {
+            cursor + 1,
+            choices.len(),
+            ansi::dim(hint)
+        ))
+        .is_err()
+        {
+            return ArrowOutcome::Unavailable;
+        }
+
+        let key = match read_arrow_key(drawn) {
+            ArrowKey::Key(key) => key,
+            ArrowKey::Abort => return ArrowOutcome::Cancelled,
+        };
+        match key {
             Key::Up => cursor = cursor.saturating_sub(1),
             Key::Down => {
                 if cursor + 1 < choices.len() {
@@ -844,7 +1225,7 @@ fn checkbox_arrow(message: &str, choices: &[Choice]) -> Option<Vec<String>> {
                 selected.fill(!all);
             }
             Key::Enter => {
-                clear_lines(drawn);
+                let _ = clear_lines_checked(drawn);
                 let values: Vec<String> = choices
                     .iter()
                     .enumerate()
@@ -862,12 +1243,7 @@ fn checkbox_arrow(message: &str, choices: &[Choice]) -> Option<Vec<String>> {
                 } else {
                     finish(message, &labels.join(", "));
                 }
-                return Some(values);
-            }
-            Key::Esc | Key::CtrlC => {
-                clear_lines(drawn);
-                cancel("Cancelled");
-                return None;
+                return ArrowOutcome::Value(values);
             }
             _ => {}
         }
@@ -885,13 +1261,17 @@ pub fn checkbox(message: &str, choices: &[Choice]) -> Option<Vec<String>> {
     if !interactive() {
         return None;
     }
-    if arrow_mode()
-        && let Some(v) = checkbox_arrow(message, choices)
-    {
-        return Some(v);
+    if arrow_mode() {
+        match checkbox_arrow(message, choices) {
+            ArrowOutcome::Value(values) => return Some(values),
+            ArrowOutcome::Cancelled => return None,
+            ArrowOutcome::Unavailable => {}
+        }
     }
 
-    render_choices(choices, None);
+    if render_choices(choices, None).is_err() {
+        return None;
+    }
 
     loop {
         let answer = ask(&format!("{} (numbers, 'all', empty = cancel)", message))?;
@@ -993,7 +1373,14 @@ pub fn pick_subscription(
 
 #[cfg(test)]
 mod tests {
-    use super::{truncate_to_width, write_clear};
+    use super::{
+        Choice, Key, choice_matches, cursor_for_filter, display_width, number_to_index,
+        read_key_from, truncate_to_width, wrapped_lines, write_clear,
+    };
+
+    fn decode(bytes: &[u8]) -> Option<Key> {
+        read_key_from(&mut &bytes[..], || true)
+    }
 
     #[test]
     fn clear_sequence_erases_the_drawn_frame() {
@@ -1013,5 +1400,64 @@ mod tests {
     fn truncation_counts_fullwidth_characters_as_two_columns() {
         assert_eq!(truncate_to_width("abcde", 3), "abc");
         assert_eq!(truncate_to_width("日ab", 3), "日a");
+    }
+
+    #[test]
+    fn typeahead_filter_ignores_input_case() {
+        let choice = Choice::plain("Add subscription");
+        assert!(choice_matches(&choice, "a"));
+        assert!(choice_matches(&choice, "A"));
+        assert!(!choice_matches(&choice, "z"));
+    }
+
+    #[test]
+    fn standalone_esc_returns_without_waiting_for_a_second_byte() {
+        assert_eq!(read_key_from(&mut &[27][..], || false), Some(Key::Esc));
+    }
+
+    #[test]
+    fn standard_and_extended_escape_sequences_are_consumed() {
+        assert_eq!(decode(b"\x1b[B"), Some(Key::Down));
+        assert_eq!(decode(b"\x1bOA"), Some(Key::Up));
+        assert_eq!(decode(b"\x1b[1;5A"), Some(Key::Up));
+        assert_eq!(decode(b"\x1b[3~"), Some(Key::Ignored));
+        assert_eq!(decode(b" "), Some(Key::Space));
+    }
+
+    #[test]
+    fn utf8_typed_char_is_kept_in_arrow_mode() {
+        assert_eq!(decode("情".as_bytes()), Some(Key::Char('情')));
+        assert_eq!(decode(b"\t"), Some(Key::Ignored));
+        assert_eq!(decode(b"\x04"), Some(Key::CtrlD));
+    }
+
+    #[test]
+    fn wrapped_lines_counts_physical_rows() {
+        assert_eq!(wrapped_lines("abcdef", 3), 2);
+        assert_eq!(wrapped_lines("", 3), 1);
+        assert_eq!(wrapped_lines("abc", 3), 1);
+    }
+
+    #[test]
+    fn filtering_keeps_default_when_it_is_still_visible() {
+        let visible = vec![0, 2];
+        assert_eq!(cursor_for_filter(&visible, Some(2)), 1);
+        assert_eq!(cursor_for_filter(&visible, Some(1)), 0);
+    }
+
+    #[test]
+    fn typed_number_uses_displayed_position() {
+        let visible = vec![0, 2, 3];
+        assert_eq!(number_to_index(1, &visible), Some(0));
+        assert_eq!(number_to_index(3, &visible), Some(3));
+        assert_eq!(number_to_index(4, &visible), None);
+        assert_eq!(number_to_index(0, &visible), None);
+    }
+
+    #[test]
+    fn emoji_modifier_keeps_combined_glyph_width() {
+        assert_eq!(display_width("👍"), 2);
+        assert_eq!(display_width("👍🏽"), 2);
+        assert_eq!(display_width("🏽"), 2);
     }
 }
