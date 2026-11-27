@@ -587,12 +587,12 @@ pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Opti
             .filter(|i| *i < choices.len())
             .map(|i| choices[i].value.clone());
     }
-    if arrow_mode() {
-        if let Some(value) = select_arrow(message, choices, default) {
-            return Some(value);
-        }
-        // If raw mode could not be enabled, fall through to line mode.
+    if arrow_mode()
+        && let Some(value) = select_arrow(message, choices, default)
+    {
+        return Some(value);
     }
+    // If raw mode could not be enabled, fall through to line mode.
 
     let mut filter: Option<String> = None;
     let mut drawn: usize = 0;
@@ -766,10 +766,10 @@ pub fn confirm(message: &str, default: bool) -> Option<bool> {
     if !interactive() {
         return None;
     }
-    if arrow_mode() {
-        if let Some(v) = confirm_arrow(message, default) {
-            return Some(v);
-        }
+    if arrow_mode()
+        && let Some(v) = confirm_arrow(message, default)
+    {
+        return Some(v);
     }
     let hint = if default {
         format!("{} (Y/n)", message)
@@ -841,9 +841,7 @@ fn checkbox_arrow(message: &str, choices: &[Choice]) -> Option<Vec<String>> {
             Key::Space => selected[cursor] = !selected[cursor],
             Key::Char('a') | Key::Char('A') => {
                 let all = selected.iter().all(|v| *v);
-                for v in &mut selected {
-                    *v = !all;
-                }
+                selected.fill(!all);
             }
             Key::Enter => {
                 clear_lines(drawn);
@@ -887,10 +885,10 @@ pub fn checkbox(message: &str, choices: &[Choice]) -> Option<Vec<String>> {
     if !interactive() {
         return None;
     }
-    if arrow_mode() {
-        if let Some(v) = checkbox_arrow(message, choices) {
-            return Some(v);
-        }
+    if arrow_mode()
+        && let Some(v) = checkbox_arrow(message, choices)
+    {
+        return Some(v);
     }
 
     render_choices(choices, None);
