@@ -1,9 +1,9 @@
-//! Interactive line-based prompts.
+//! Interactive prompts: menus for choices, line input for free-form values.
 //!
-//! The native CLI used to skip every guided flow because the port only
-//! implemented the flag paths. These helpers restore the prompts while
-//! staying dependency-free and cross-platform: they read whole lines from
-//! stdin instead of switching the terminal into raw mode.
+//! Choice prompts (select/confirm/checkbox) draw a proper selection menu on a
+//! terminal — a heading, highlighted rows and a key-hint footer, navigated with
+//! arrow keys. No numbered question is printed and no answer has to be typed.
+//! Piped/test flows keep the line-based numbered input so scripts still work.
 //!
 //! Every prompt flushes the buffered logger first (`crate::flush()`), so the
 //! banner and any content printed before the question is visible before the
@@ -70,8 +70,11 @@ fn cursor_control() -> bool {
     io::stdin().is_terminal() && crate::ui::is_stdout_tty()
 }
 
+/// Choice prompts need only stdin in raw mode to become a real selection UI.
+/// Requiring a TTY on stdout as well pushed redirected terminals back into the
+/// numbered question flow, which looked like a menu but still asked for input.
 fn arrow_mode() -> bool {
-    interactive() && cursor_control()
+    io::stdin().is_terminal()
 }
 
 /// Erase `lines` already-drawn prompt lines and leave the cursor where the
@@ -719,30 +722,92 @@ fn input_inner(
     }
 }
 
-fn select_filter_hint(
-    message: &str,
-    filter: &Option<String>,
-    visible_len: usize,
-    choices_len: usize,
-    highlight: Option<usize>,
-) -> String {
-    match filter {
-        Some(needle) => format!(
-            "{} [{} matching \"{}\"] (↑↓ move, Enter select, type to filter, Esc cancel)",
-            message, visible_len, needle
-        ),
-        None => match highlight {
-            Some(i) => format!(
-                "{} [1-{}] (default {}, ↑↓ move, Enter select, type to filter)",
-                message,
-                choices_len,
-                i + 1
-            ),
-            None => format!(
-                "{} [1-{}] (↑↓ move, Enter select, type to filter)",
-                message, choices_len
-            ),
-        },
+/// One rendered line of a selection menu. `styled` is written to the terminal;
+/// `plain` is used only to count the physical rows a line occupies so redraws
+/// clear the whole frame.
+struct MenuLine {
+    styled: String,
+    plain: String,
+}
+
+fn draw_menu(lines: &[MenuLine]) -> io::Result<usize> {
+    let width = crate::ui::term_width().max(20) as usize;
+    for line in lines {
+        out_checked(&format!("{}\n", line.styled))?;
+    }
+    Ok(lines
+        .iter()
+        .map(|line| wrapped_lines(&line.plain, width))
+        .sum())
+}
+
+/// A menu heading, never a `?` question with an input cursor.
+fn title_line(message: &str, suffix: Option<&str>) -> MenuLine {
+    let text = tr(message);
+    let plain = match suffix {
+        Some(value) => format!("{text} {value}"),
+        None => text.to_string(),
+    };
+    let styled = match suffix {
+        Some(value) => format!("{} {}", ansi::bold(&text), ansi::dim(value)),
+        None => ansi::bold(&text),
+    };
+    MenuLine { styled, plain }
+}
+
+fn choice_line(label: &str, highlighted: bool) -> MenuLine {
+    let width = crate::ui::term_width().max(20) as usize;
+    let label = truncate_to_width(label, width.saturating_sub(4));
+    let (pointer, styled) = if highlighted {
+        (
+            "\u{203a}",
+            format!("{} {}", ansi::cyan("\u{203a}"), ansi::bold(&label)),
+        )
+    } else {
+        (" ", format!("  {}", ansi::dim(&label)))
+    };
+    MenuLine {
+        styled,
+        plain: format!("{pointer} {label}"),
+    }
+}
+
+fn checkbox_line(label: &str, selected: bool, highlighted: bool) -> MenuLine {
+    let width = crate::ui::term_width().max(20) as usize;
+    let label = truncate_to_width(label, width.saturating_sub(8));
+    let mark = if selected { "[x]" } else { "[ ]" };
+    let (pointer, mark_style, label_style) = if highlighted {
+        (
+            "\u{203a}",
+            if selected {
+                ansi::green(mark)
+            } else {
+                ansi::dim(mark)
+            },
+            ansi::bold(&label),
+        )
+    } else {
+        (
+            " ",
+            if selected {
+                ansi::green(mark)
+            } else {
+                ansi::dim(mark)
+            },
+            ansi::dim(&label),
+        )
+    };
+    MenuLine {
+        styled: format!("{} {} {}", ansi::cyan(pointer), mark_style, label_style),
+        plain: format!("{pointer} {mark} {label}"),
+    }
+}
+
+/// Secondary information (overflow counts, active filter) and key hints.
+fn note_line(text: &str) -> MenuLine {
+    MenuLine {
+        styled: format!("  {}", ansi::dim(text)),
+        plain: format!("  {text}"),
     }
 }
 
@@ -751,7 +816,6 @@ fn select_arrow(message: &str, choices: &[Choice], default: Option<usize>) -> Ar
         Some(raw) => raw,
         None => return ArrowOutcome::Unavailable,
     };
-    let width = crate::ui::term_width().max(20) as usize;
     let mut filter: Option<String> = None;
     let mut cursor = cursor_for_filter(&visible_indices(choices, &None), default);
     let mut drawn: usize = 0;
@@ -762,11 +826,15 @@ fn select_arrow(message: &str, choices: &[Choice], default: Option<usize>) -> Ar
         }
         let visible = visible_indices(choices, &filter);
         if visible.is_empty() {
-            let text = tr("No matches — type to filter");
-            if out_checked(&format!("  {}\n", ansi::dim(&text))).is_err() {
-                return ArrowOutcome::Unavailable;
-            }
-            drawn = wrapped_lines(&format!("  {text}"), width);
+            let lines = vec![
+                title_line(message, None),
+                note_line(&tr("No matches — type to filter")),
+                note_line("↑↓ move · type to filter · Esc cancel"),
+            ];
+            drawn = match draw_menu(&lines) {
+                Ok(lines) => lines,
+                Err(_) => return ArrowOutcome::Unavailable,
+            };
             let key = match read_arrow_key(drawn) {
                 ArrowKey::Key(key) => key,
                 ArrowKey::Abort => return ArrowOutcome::Cancelled,
@@ -802,33 +870,31 @@ fn select_arrow(message: &str, choices: &[Choice], default: Option<usize>) -> Ar
         };
         let page_end = (page_start + MAX_VISIBLE_CHOICES).min(visible.len());
         let page = &visible[page_start..page_end];
-        drawn = match render_numbered_choices(choices, page, Some(visible[cursor]), true) {
+
+        let mut lines = vec![title_line(message, None)];
+        lines.extend(
+            page.iter()
+                .map(|&index| choice_line(&choices[index].label, index == visible[cursor])),
+        );
+        if visible.len() > shown {
+            lines.push(note_line(&format!(
+                "… {} more — type to narrow down",
+                visible.len() - shown
+            )));
+        }
+        if let Some(needle) = &filter {
+            lines.push(note_line(&format!("Filter: {needle}")));
+        }
+        let hint = if filter.is_some() || visible.len() > shown {
+            "↑↓ move · Enter select · type to filter · Esc cancel"
+        } else {
+            "↑↓ move · Enter select · Esc cancel"
+        };
+        lines.push(note_line(hint));
+        drawn = match draw_menu(&lines) {
             Ok(lines) => lines,
             Err(_) => return ArrowOutcome::Unavailable,
         };
-        if visible.len() > MAX_VISIBLE_CHOICES {
-            let text = format!("  … {} more — type to narrow down", visible.len() - shown);
-            drawn += wrapped_lines(&text, width);
-            if out_checked(&format!("{text}\n")).is_err() {
-                return ArrowOutcome::Unavailable;
-            }
-        }
-        let filter_text = filter.as_deref().unwrap_or("");
-        let hint = select_filter_hint(
-            message,
-            &filter,
-            visible.len(),
-            choices.len(),
-            default.filter(|_| filter.is_none()),
-        );
-        let hint = truncate_to_width(
-            &format!("{} \u{203a} {}", tr(&hint), filter_text),
-            width.saturating_sub(2),
-        );
-        if out_checked(&format!("{} {}\n", ansi::cyan("?"), hint)).is_err() {
-            return ArrowOutcome::Unavailable;
-        }
-        drawn += wrapped_lines(&format!("? {hint}"), width);
 
         let key = match read_arrow_key(drawn) {
             ArrowKey::Key(key) => key,
@@ -880,10 +946,10 @@ fn select_arrow(message: &str, choices: &[Choice], default: Option<usize>) -> Ar
     }
 }
 
-/// Pick one entry from a list.
+/// Pick one entry from a selection menu.
 ///
-/// On a real terminal this uses arrow-key navigation with optional type-to-filter.
-/// In piped/test environments it falls back to the line-based numbered input so
+/// On a terminal the choices are highlighted rows driven by ↑↓/Enter; typing
+/// narrows long lists. Piped/test environments keep the numbered line input so
 /// existing scripts and smoke tests keep working.
 pub fn select(message: &str, choices: &[Choice], default: Option<usize>) -> Option<String> {
     if choices.is_empty() {
@@ -1024,58 +1090,30 @@ fn confirm_arrow(message: &str, default: bool) -> ArrowOutcome<bool> {
         Some(raw) => raw,
         None => return ArrowOutcome::Unavailable,
     };
-    let width = crate::ui::term_width().max(20) as usize;
     let mut value = default;
     let mut drawn = 0usize;
     loop {
         if clear_lines_checked(drawn).is_err() {
             return ArrowOutcome::Unavailable;
         }
-        let yes_text = tr("Yes");
-        let no_text = tr("No");
-        let yes = if value {
-            ansi::bold(&ansi::green(&yes_text))
-        } else {
-            yes_text.to_string()
+        let lines = vec![
+            title_line(message, None),
+            choice_line(&tr("Yes"), value),
+            choice_line(&tr("No"), !value),
+            note_line("←/→ move · Enter select · Esc cancel"),
+        ];
+        drawn = match draw_menu(&lines) {
+            Ok(lines) => lines,
+            Err(_) => return ArrowOutcome::Unavailable,
         };
-        let no = if !value {
-            ansi::bold(&ansi::green(&no_text))
-        } else {
-            no_text.to_string()
-        };
-        let hint = "(←/→, Enter, y/n, Esc)";
-        let plain = format!("? {}  {}/{}  {hint}", tr(message), yes_text, no_text);
-        drawn = wrapped_lines(&plain, width);
-        if out_checked(&format!(
-            "{} {}  {}/{}  {}\n",
-            ansi::cyan("?"),
-            tr(message),
-            yes,
-            no,
-            ansi::dim(hint)
-        ))
-        .is_err()
-        {
-            return ArrowOutcome::Unavailable;
-        }
 
         let key = match read_arrow_key(drawn) {
             ArrowKey::Key(key) => key,
             ArrowKey::Abort => return ArrowOutcome::Cancelled,
         };
         match key {
-            Key::Left | Key::Up | Key::Char('h') | Key::Char('H') => value = true,
-            Key::Right | Key::Down | Key::Char('l') | Key::Char('L') => value = false,
-            Key::Char('y') | Key::Char('Y') => {
-                let _ = clear_lines_checked(drawn);
-                finish(message, &tr("yes"));
-                return ArrowOutcome::Value(true);
-            }
-            Key::Char('n') | Key::Char('N') => {
-                let _ = clear_lines_checked(drawn);
-                finish(message, &tr("no"));
-                return ArrowOutcome::Value(false);
-            }
+            Key::Left | Key::Up => value = true,
+            Key::Right | Key::Down => value = false,
             Key::Enter => {
                 let _ = clear_lines_checked(drawn);
                 let label = if value { tr("yes") } else { tr("no") };
@@ -1087,7 +1125,8 @@ fn confirm_arrow(message: &str, default: bool) -> ArrowOutcome<bool> {
     }
 }
 
-/// Yes/no confirmation. `None` means EOF/cancel, never an implicit answer.
+/// Yes/no confirmation shown as a two-choice menu on a terminal.
+/// `None` means EOF/cancel, never an implicit answer.
 pub fn confirm(message: &str, default: bool) -> Option<bool> {
     if !interactive() {
         return None;
@@ -1122,46 +1161,11 @@ pub fn confirm(message: &str, default: bool) -> Option<bool> {
     }
 }
 
-fn render_checkbox_choices(
-    choices: &[Choice],
-    visible: &[usize],
-    selected: &[bool],
-    cursor: usize,
-) -> io::Result<usize> {
-    let width = crate::ui::term_width().max(20) as usize;
-    let mut lines = 0;
-    for &index in visible {
-        let is_cursor = index == cursor;
-        let pointer = if is_cursor {
-            ansi::cyan("\u{203a}")
-        } else {
-            " ".to_string()
-        };
-        let pointer_plain = if is_cursor { "\u{203a}" } else { " " };
-        let mark = if selected[index] {
-            ansi::green("[x]")
-        } else {
-            ansi::dim("[ ]")
-        };
-        let mark_plain = if selected[index] { "[x]" } else { "[ ]" };
-        let label = if is_cursor {
-            ansi::bold(&choices[index].label)
-        } else {
-            choices[index].label.clone()
-        };
-        let plain = format!("{pointer_plain} {mark_plain} {}", choices[index].label);
-        lines += wrapped_lines(&plain, width);
-        out_checked(&format!("{pointer} {mark} {label}\n"))?;
-    }
-    Ok(lines)
-}
-
 fn checkbox_arrow(message: &str, choices: &[Choice]) -> ArrowOutcome<Vec<String>> {
     let _raw = match RawModeGuard::enable() {
         Some(raw) => raw,
         None => return ArrowOutcome::Unavailable,
     };
-    let width = crate::ui::term_width().max(20) as usize;
     let mut selected = vec![false; choices.len()];
     let mut cursor = 0usize;
     let mut drawn = 0usize;
@@ -1176,37 +1180,29 @@ fn checkbox_arrow(message: &str, choices: &[Choice]) -> ArrowOutcome<Vec<String>
         };
         let page_end = (page_start + MAX_VISIBLE_CHOICES).min(choices.len());
         let page: Vec<usize> = (page_start..page_end).collect();
-        drawn = match render_checkbox_choices(choices, &page, &selected, cursor) {
+
+        let mut lines = vec![title_line(
+            message,
+            Some(&format!("[{}/{}]", cursor + 1, choices.len())),
+        )];
+        lines.extend(
+            page.iter().map(|&index| {
+                checkbox_line(&choices[index].label, selected[index], index == cursor)
+            }),
+        );
+        if choices.len() > page.len() {
+            lines.push(note_line(&format!(
+                "… {} more — ↑↓ scroll",
+                choices.len() - page.len()
+            )));
+        }
+        lines.push(note_line(
+            "↑↓ move · Space toggle · a all · Enter confirm · Esc cancel",
+        ));
+        drawn = match draw_menu(&lines) {
             Ok(lines) => lines,
             Err(_) => return ArrowOutcome::Unavailable,
         };
-        if choices.len() > page.len() {
-            let text = format!("  … {} more — ↑↓ scroll", choices.len() - page.len());
-            drawn += wrapped_lines(&text, width);
-            if out_checked(&format!("{text}\n")).is_err() {
-                return ArrowOutcome::Unavailable;
-            }
-        }
-        let hint = "(↑↓ move, Space toggle, a all, Enter confirm, Esc cancel)";
-        let plain = format!(
-            "? {} [{}/{}] {hint}",
-            tr(message),
-            cursor + 1,
-            choices.len()
-        );
-        drawn += wrapped_lines(&plain, width);
-        if out_checked(&format!(
-            "{} {} [{}/{}] {}\n",
-            ansi::cyan("?"),
-            tr(message),
-            cursor + 1,
-            choices.len(),
-            ansi::dim(hint)
-        ))
-        .is_err()
-        {
-            return ArrowOutcome::Unavailable;
-        }
 
         let key = match read_arrow_key(drawn) {
             ArrowKey::Key(key) => key,
@@ -1250,9 +1246,9 @@ fn checkbox_arrow(message: &str, choices: &[Choice]) -> ArrowOutcome<Vec<String>
     }
 }
 
-/// Pick zero or more entries.
+/// Pick zero or more entries from a checkbox menu.
 ///
-/// On a real terminal this uses arrow-key navigation + Space toggle.
+/// On a terminal rows are toggled with Space and confirmed with Enter.
 /// In piped/test environments it falls back to line-based numbered input.
 pub fn checkbox(message: &str, choices: &[Choice]) -> Option<Vec<String>> {
     if choices.is_empty() {
@@ -1374,8 +1370,8 @@ pub fn pick_subscription(
 #[cfg(test)]
 mod tests {
     use super::{
-        Choice, Key, choice_matches, cursor_for_filter, display_width, number_to_index,
-        read_key_from, truncate_to_width, wrapped_lines, write_clear,
+        Choice, Key, checkbox_line, choice_line, choice_matches, cursor_for_filter, display_width,
+        number_to_index, read_key_from, title_line, truncate_to_width, wrapped_lines, write_clear,
     };
 
     fn decode(bytes: &[u8]) -> Option<Key> {
@@ -1400,6 +1396,29 @@ mod tests {
     fn truncation_counts_fullwidth_characters_as_two_columns() {
         assert_eq!(truncate_to_width("abcde", 3), "abc");
         assert_eq!(truncate_to_width("日ab", 3), "日a");
+    }
+
+    #[test]
+    fn menu_choice_is_a_highlighted_row_not_a_numbered_question() {
+        let row = choice_line("Add subscription", true);
+        assert_eq!(row.plain, "\u{203a} Add subscription");
+        assert!(!row.plain.contains(')'));
+
+        let other = choice_line("Delete subscription", false);
+        assert_eq!(other.plain, "  Delete subscription");
+    }
+
+    #[test]
+    fn menu_title_is_a_heading_not_an_input_line() {
+        let title = title_line("What would you like to do?", None);
+        assert_eq!(title.plain, "What would you like to do?");
+        assert!(!title.styled.starts_with("? "));
+    }
+
+    #[test]
+    fn checkbox_rows_show_selection_state() {
+        assert_eq!(checkbox_line("Name", true, true).plain, "\u{203a} [x] Name");
+        assert_eq!(checkbox_line("Price", false, false).plain, "  [ ] Price");
     }
 
     #[test]
